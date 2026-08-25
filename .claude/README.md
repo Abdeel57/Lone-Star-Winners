@@ -24,17 +24,15 @@ previa con Agent Teams.
 
 | Archivo | Agente | Color | Modelo | De qué se encarga |
 |---|---|---|---|---|
-| `agents/frontend-ux.md` | `frontend-ux` | azul | Fable 5 | Frontend, UX/UI, experiencia bilingüe, e-commerce visual, portal del participante, capa de presentación del admin. |
+| `agents/frontend-ux.md` | `frontend-ux` | azul | Opus 5 | Frontend, UX/UI, experiencia bilingüe, e-commerce visual, portal del participante, capa de presentación del admin. |
 | `agents/backend-sweepstakes.md` | `backend-sweepstakes` | verde | Opus 5 | Backend, base de datos, APIs, commerce logic, sweepstakes engine, entry ledger, AMOE, servicios administrativos. |
 | `agents/security-integration.md` | `security-integration` | naranja | Opus 5 | Seguridad, compliance, auditoría, exportaciones, integración con third-party administrator, QA e integración final. |
 
 Cuando se levante el equipo, cada agente se convierte en un **teammate** con
 nombre corto: `frontend`, `backend` y `security`.
 
-> **Modelos.** `backend` y `security` llevan `model: opus` fijado en su
-> frontmatter. `frontend` **no** puede fijarlo ahí (el frontmatter solo acepta
-> `sonnet`/`opus`/`haiku`/`inherit`, no `fable`), así que Fable 5 se le asigna
-> al crear el teammate. `ORCHESTRATOR.md` ya se lo indica al Team Lead.
+> **Modelos.** Los tres agentes llevan `model: opus` fijado en su frontmatter.
+> No hay que configurar nada al crear los teammates.
 
 ---
 

@@ -54,26 +54,17 @@ usuario de que falta pegar ese prompt. No inventes las instrucciones faltantes.
 
 Ni más ni menos:
 
-| Teammate   | Agente                 | Modelo      |
-|------------|------------------------|-------------|
-| `frontend` | `frontend-ux`          | **Fable 5** |
-| `backend`  | `backend-sweepstakes`  | **Opus 5**  |
-| `security` | `security-integration` | **Opus 5**  |
+| Teammate   | Agente                 | Modelo     |
+|------------|------------------------|------------|
+| `frontend` | `frontend-ux`          | **Opus 5** |
+| `backend`  | `backend-sweepstakes`  | **Opus 5** |
+| `security` | `security-integration` | **Opus 5** |
 
 ### Asignación de modelos
 
-Decisión del usuario, vinculante:
-
-- **`frontend` debe ejecutarse con Fable 5.**
-  El frontmatter `model:` de los subagentes **no acepta** el valor `fable`
-  (solo `sonnet`, `opus`, `haiku`, `inherit`), por lo que este modelo **no**
-  está fijado en `.claude/agents/frontend-ux.md`. **Debes asignarlo tú al
-  crear el teammate**, pasando el modelo explícitamente.
-- **`backend` y `security` usan Opus 5.** Estos sí están fijados como
-  `model: opus` en su frontmatter y no requieren acción adicional.
-
-Si al crear el teammate `frontend` no puedes seleccionar Fable 5, **detente y
-avisa al usuario** en lugar de crearlo con otro modelo silenciosamente.
+Los tres agentes usan **Opus 5**. Cada uno lleva `model: opus` fijado en el
+frontmatter de su archivo en `.claude/agents/`, por lo que **no tienes que
+hacer nada**: el modelo se aplica solo al crear los teammates.
 
 ---
 

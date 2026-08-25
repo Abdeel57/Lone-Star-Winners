@@ -2,14 +2,8 @@
 name: frontend-ux
 description: Responsable del frontend, UX/UI, experiencia bilingüe, e-commerce visual, portal del participante y presentation layer de Lone Star Winners.
 color: blue
+model: opus
 ---
-
-<!-- MODELO: este agente debe ejecutarse con **Fable 5**.
-     `fable` no es un valor aceptado en el frontmatter `model:`
-     (solo admite sonnet / opus / haiku / inherit), por lo que el
-     modelo se asigna al CREAR el teammate, no aquí.
-     Ver ORCHESTRATOR.md, seccion "Asignacion de modelos". -->
-
 
 # INSTRUCCIONES DEL AGENTE
 
