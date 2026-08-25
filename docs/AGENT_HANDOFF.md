@@ -313,3 +313,191 @@ Cálculo de saldo, reversals, retención de datos.
 
 Blocking:
 NO para empezar, YES para cerrar B1 y para activar cualquier promoción.
+
+---
+
+## HO-007
+
+Status: OPEN
+
+## Handoff
+
+Date: 2026-08-25
+From: security
+To: backend
+
+Context:
+**Dos registros de permisos coexisten.** `security` creó el catálogo canónico
+en `packages/security` (8 roles, 51 capacidades con formato
+`dominio.recurso.accion`, más metadatos de step-up, segunda aprobación,
+dependencia de flag y separación de funciones). En paralelo, `backend` creó
+otro en `packages/database/src/domain/permissions.ts` y en la migración
+`0001_identity_and_rbac.sql` (6 roles, convención de claves distinta:
+`entry.adjust_request` frente a `entry.adjust.create`).
+
+Es exactamente el anti-patrón de dos fuentes de verdad que prohíbe
+`CLAUDE.md` §4.
+
+What changed:
+Ambos catálogos existen hoy en el repositorio. Ninguno es incorrecto en sí;
+son incompatibles entre sí.
+
+What I need from you:
+Adoptar el catálogo de `packages/security` como canónico e importarlo desde
+`packages/database` para la semilla y para un test de paridad. Dos diferencias
+son **sustantivas, no cosméticas**:
+
+- **Falta `EXPORT_OFFICER`.** En el modelo de `backend`, `COMPLIANCE_OFFICER`
+  acumula `export.finalize` y `export.download`, de modo que la separación
+  entre finalizar y entregar que exige DEC-016 **no es representable**.
+- **Falta el actor `SYSTEM`**, así que la auditoría no puede distinguir por rol
+  un job automático de una persona.
+
+Reconocimiento explícito de `security`: el diseño de `backend` es bueno
+(`SUPER_ADMIN` excluido de `export.finalize` y `draw.execute`, conflicto de
+roles impuesto por trigger) y esos aciertos deben conservarse en la fusión.
+
+Affected files:
+`packages/security/src/{roles,capabilities,permissions}.ts`,
+`packages/database/src/domain/permissions.ts`,
+`packages/database/drizzle/0001_identity_and_rbac.sql`
+
+Affected APIs:
+Todas las de admin (DEC-015: `Authorization` obligatorio por ruta).
+
+Blocking:
+YES — bloquea que `apps/api` declare permisos por ruta.
+
+---
+
+## HO-008
+
+Status: OPEN
+
+## Handoff
+
+Date: 2026-08-25
+From: security
+To: backend
+
+Context:
+Los hooks de pre-commit (`lefthook.yml` + `.gitleaks.toml`) ya existen, pero
+`lefthook` no está declarado como dependencia.
+
+What I need from you:
+Añadir `lefthook` como devDependency de la raíz y `"prepare": "lefthook
+install"` en el `package.json` raíz.
+
+Hasta entonces los hooks exigen `pnpm dlx lefthook install` a mano, y **CI es
+la única red garantizada** contra secretos commiteados.
+
+Affected files: `package.json` (raíz)
+
+Blocking: NO
+
+---
+
+## HO-009
+
+Status: OPEN
+
+## Handoff
+
+Date: 2026-08-25
+From: security
+To: backend
+
+Context:
+`security` necesita el **esquema del ledger congelado** para implementar la
+hash chain de DEC-008 y el generador de snapshots de DEC-016.
+
+What I need from you:
+Congelar el esquema de `EntryTransaction` antes de que `security` escriba la
+canonicalización. Escribirla ahora fijaría el orden de campos de una tabla que
+todavía no existe, y ese orden forma parte del hash reproducible.
+
+Dependencia cruzada: el diseño del ledger depende a su vez de `HO-006`
+(¿pueden expirar las entries?), pendiente del abogado.
+
+Affected files: `packages/audit/**`, `packages/tpa/**`, `packages/database/**`
+
+Blocking: YES para los hitos S3 y S4.
+
+---
+
+## HO-010
+
+Status: OPEN
+
+## Handoff
+
+Date: 2026-08-25
+From: security
+To: backend
+
+Context:
+**Dos esquemas de variables de entorno.** `apps/api/src/config/env.ts` declara
+25 variables con Zod; el registro declarativo de `packages/security` declara 66.
+Divergencia ya detectada: `LOG_LEVEL` admite `fatal` en `apps/api` pero no en
+`.env.example`. `security` alineó el suyo al conjunto amplio.
+
+What I need from you:
+Que el validador de `apps/api` se construya **sobre** el registro de
+`packages/security`, o como mínimo un test que exija que toda variable de uno
+esté declarada en el otro.
+
+Affected files: `apps/api/src/config/env.ts`, `packages/security/src/env/**`
+
+Blocking: NO
+
+---
+
+## HO-011
+
+Status: OPEN
+
+## Handoff
+
+Date: 2026-08-25
+From: security
+To: Team Lead
+
+Context:
+`prettier --check .` **fallará en su primera ejecución** por deriva
+preexistente: las tablas markdown de `docs/TASK_OWNERSHIP.md`,
+`docs/ARCHITECTURE.md` y `CLAUDE.md` nunca pasaron por prettier, y los
+ficheros nuevos de `security` tampoco.
+
+What I need from you:
+Un `pnpm format` único sobre todo el repositorio, ejecutado por el Team Lead.
+
+`security` **no lo ejecutó a propósito**: habría reescrito ficheros que no son
+suyos mientras `frontend` y `backend` trabajaban en paralelo.
+
+Affected files: todo el repositorio.
+
+Blocking: YES para que CI pase en verde por primera vez.
+
+---
+
+## HO-012
+
+Status: OPEN
+
+## Handoff
+
+Date: 2026-08-25
+From: security
+To: backend
+
+Context:
+`@types/node` está fijado en `^22` mientras el proyecto corre Node 24
+(DEC-025). `security` replicó `^22` en sus paquetes deliberadamente, para no
+crear dos versiones de tipos en el mismo workspace.
+
+What I need from you:
+Subir `@types/node` a `^24` en la raíz. `security` alineará los suyos después.
+
+Affected files: `package.json` (raíz), manifiestos de los paquetes.
+
+Blocking: NO
