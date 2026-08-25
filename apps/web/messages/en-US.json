@@ -1,0 +1,85 @@
+{
+  "brand": {
+    "name": "Lone Star Winners"
+  },
+  "localeName": {
+    "en": "English",
+    "es": "Español"
+  },
+  "a11y": {
+    "skipToContent": "Skip to main content",
+    "mainLandmark": "Main content",
+    "primaryNavigation": "Primary",
+    "languageSwitcher": "Language",
+    "currentLanguage": "Current language"
+  },
+  "metadata": {
+    "title": "Lone Star Winners",
+    "description": "Eligible merchandise and promotional sweepstakes entries, governed by the Official Rules."
+  },
+  "home": {
+    "eyebrow": "Current promotion",
+    "prizeValueLabel": "Prize value",
+    "opensLabel": "Opens",
+    "closesLabel": "Closes",
+    "timeZoneNote": "Times are shown in the official time zone of the promotion.",
+    "entriesDisclaimer": "Promotional entries are awarded and governed by the Official Rules of each promotion.",
+    "rulesNotPublished": "The Official Rules for this promotion have not been published yet.",
+    "howItWorks": {
+      "title": "How it works",
+      "step1": {
+        "title": "Browse eligible merchandise",
+        "body": "Every product page shows whether it is part of the current promotion."
+      },
+      "step2": {
+        "title": "Place your order",
+        "body": "You are buying merchandise. Any entries are promotional and follow the Official Rules."
+      },
+      "step3": {
+        "title": "Follow your entries",
+        "body": "Your account shows where each entry came from and its current status."
+      }
+    }
+  },
+  "promotionStatus": {
+    "upcoming": "Opens soon",
+    "active": "Open",
+    "ended": "Closed",
+    "administrator_processing": "With the independent administrator",
+    "winner_verification": "Winner verification in progress",
+    "completed": "Completed"
+  },
+  "states": {
+    "loading": "Loading",
+    "noActivePromotion": {
+      "title": "No promotion is open right now",
+      "body": "When the next promotion opens, it will appear here."
+    },
+    "loadFailed": {
+      "title": "We could not load this section",
+      "retry": "Try again",
+      "requestIdLabel": "Reference"
+    }
+  },
+  "apiErrors": {
+    "fallback": "Something went wrong on our side. Please try again in a moment.",
+    "NETWORK_UNAVAILABLE": "We could not reach the service. Check your connection and try again.",
+    "MALFORMED_RESPONSE": "We received an unexpected response. Our team has been notified.",
+    "INTERNAL_ERROR": "Something went wrong on our side. Please try again in a moment.",
+    "PROMOTION_NOT_FOUND": "That promotion is no longer available."
+  },
+  "notFound": {
+    "title": "We could not find that page",
+    "body": "The link may be out of date, or the page may have moved.",
+    "backHome": "Go to the home page"
+  },
+  "error": {
+    "title": "Something went wrong",
+    "body": "The page could not be displayed. You can try loading it again.",
+    "retry": "Try again"
+  },
+  "footer": {
+    "copyright": "© {year} Lone Star Winners",
+    "mockDataNotice": "Development build. The data on this page comes from a simulated API and is not real."
+  }
+}

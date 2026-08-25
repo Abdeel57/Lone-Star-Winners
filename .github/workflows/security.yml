@@ -1,0 +1,274 @@
+# ---------------------------------------------------------------------------
+# Lone Star Winners - gates de seguridad (DEC-018)
+#
+# Propietario: security-integration (DEC-024).
+#
+# Separado de ci.yml a proposito: estos gates deben poder ejecutarse ANTES de
+# instalar dependencias. Un secreto commiteado o un `.env` trackeado debe
+# detectarse aunque `pnpm install` este roto.
+# ---------------------------------------------------------------------------
+name: Security
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    # Lunes 04:00 UTC: las vulnerabilidades aparecen sin que nadie haga push.
+    - cron: "0 4 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # -------------------------------------------------------------------------
+  # 1. Higiene del repositorio.
+  #
+  # Principios #19 y #20 de CLAUDE.md, y DEC-026 (finales de linea LF).
+  # Falla si:
+  #   - hay un `.env` real trackeado;
+  #   - hay material criptografico o credenciales trackeadas;
+  #   - `.env.example` contiene algo con pinta de secreto real;
+  #   - una variable expuesta al navegador tiene pinta de secreto o de flag
+  #     legalmente material (DEC-013);
+  #   - un fichero de texto entra al indice con CRLF (romperia DEC-016).
+  # -------------------------------------------------------------------------
+  repo-hygiene:
+    name: "Gate: higiene del repositorio"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Ningun .env real trackeado
+        run: |
+          set -euo pipefail
+          tracked="$(git ls-files | grep -E '(^|/)\.env($|\.)' | grep -vE '\.example$' || true)"
+          if [ -n "${tracked}" ]; then
+            echo "::error title=env-trackeado::Un fichero .env real esta versionado. Sacalo del indice y rota lo que contuviera."
+            echo "${tracked}"
+            exit 1
+          fi
+          echo "OK: no hay ficheros .env reales en el indice."
+
+      - name: .env.example existe y no esta ignorado
+        run: |
+          set -euo pipefail
+          if ! git ls-files --error-unmatch .env.example > /dev/null 2>&1; then
+            echo "::error title=env-example::.env.example debe estar versionado (CLAUDE.md seccion 8)."
+            exit 1
+          fi
+          echo "OK: .env.example esta versionado."
+
+      - name: Ningun material criptografico ni credencial trackeada
+        run: |
+          set -euo pipefail
+          pattern='\.(pem|key|p12|pfx|jks|keystore|asc|gpg)$|(^|/)id_(rsa|dsa|ecdsa|ed25519)$'
+          pattern="${pattern}"'|(^|/)service-account.*\.json$|(^|/)(credentials|secrets)\.json$'
+          pattern="${pattern}"'|(^|/)\.npmrc$|(^|/)\.htpasswd$'
+          tracked="$(git ls-files | grep -E "${pattern}" || true)"
+          if [ -n "${tracked}" ]; then
+            echo "::error title=material-sensible::Hay ficheros de clave o credencial versionados."
+            echo "${tracked}"
+            exit 1
+          fi
+          echo "OK: no hay material criptografico versionado."
+
+      - name: .env.example no contiene secretos con pinta de reales
+        run: |
+          set -euo pipefail
+
+          # Marcadores que identifican un valor como deliberadamente falso.
+          placeholder='FAKE|CHANGE_ME|CHANGEME|PLACEHOLDER|REPLACE|EXAMPLE|EJEMPLO|DUMMY'
+          placeholder="${placeholder}"'|localhost|127\.0\.0\.1|local-dev|LOCAL_ONLY|TU_|YOUR_'
+          # Nombres cuyo valor solo puede ser un secreto.
+          secretish='(SECRET|PASSWORD|PASSWD|PRIVATE_KEY|API_KEY|ACCESS_KEY|SIGNING_KEY|TOKEN|CREDENTIAL|CREDENTIALS)$'
+          # Prefijos de proveedores conocidos: si aparecen, es un secreto real.
+          known='^(sk_live_|sk_test_|pk_live_|rk_live_|whsec_|AKIA|ASIA|ghp_|gho_|ghs_)'
+          known="${known}"'|^(github_pat_|xox[baprs]-|glpat-|AIza|SG\.|-----BEGIN)'
+          # Valor con forma de material aleatorio codificado.
+          entropyish='^[A-Za-z0-9+/=_-]{24,}$'
+
+          fail=0
+          lineno=0
+          while IFS= read -r line || [ -n "${line}" ]; do
+            lineno=$((lineno + 1))
+            case "${line}" in
+              \#*) continue ;;
+              "") continue ;;
+              *=*) ;;
+              *) continue ;;
+            esac
+            key="${line%%=*}"
+            value="${line#*=}"
+            if [ -z "${value}" ]; then
+              continue
+            fi
+
+            # 1. Nada expuesto al navegador puede ser secreto...
+            if printf '%s' "${key}" | grep -qE '^NEXT_PUBLIC_'; then
+              if printf '%s' "${key}" | grep -qE "${secretish}"; then
+                echo "::error file=.env.example,line=${lineno}::${key} se sirve al navegador y tiene nombre de secreto."
+                fail=1
+              fi
+              # ...ni un flag legalmente material (DEC-013: viven en base de datos).
+              if printf '%s' "${key}" | grep -qE '_(ENABLED|DISABLED|MODE)$'; then
+                echo "::error file=.env.example,line=${lineno}::${key} parece un feature flag expuesto al navegador. DEC-013: los flags legalmente materiales viven en base de datos, con cambio auditado."
+                fail=1
+              fi
+            fi
+
+            if printf '%s' "${value}" | grep -qE "${known}"; then
+              echo "::error file=.env.example,line=${lineno}::${key} tiene un valor con prefijo de proveedor real. Rotalo y sustituyelo por un valor falso."
+              fail=1
+              continue
+            fi
+
+            # Los valores marcados como falsos no se analizan mas.
+            if printf '%s' "${value}" | grep -qiE "${placeholder}"; then
+              continue
+            fi
+
+            if printf '%s' "${key}" | grep -qE "${secretish}"; then
+              echo "::error file=.env.example,line=${lineno}::${key} es un secreto y su valor no esta marcado como falso (usa FAKE_..., CHANGE_ME, ...)."
+              fail=1
+            fi
+
+            if printf '%s' "${value}" | grep -qE "${entropyish}"; then
+              echo "::error file=.env.example,line=${lineno}::${key} tiene un valor con forma de material aleatorio real."
+              fail=1
+            fi
+
+            # URL con credenciales embebidas sin marcar como falsas.
+            if printf '%s' "${value}" | grep -qE '://[^:@/]+:[^@/]+@'; then
+              echo "::error file=.env.example,line=${lineno}::${key} lleva credenciales embebidas en una URL sin marcar como falsas."
+              fail=1
+            fi
+          done < .env.example
+
+          if [ "${fail}" -ne 0 ]; then
+            echo "::error title=env-example::Hay valores con pinta de secreto real. .env.example es publico."
+            exit 1
+          fi
+          echo "OK: .env.example solo contiene valores falsos."
+
+      - name: Finales de linea LF en el indice (DEC-026)
+        run: |
+          set -euo pipefail
+          offenders="$(git ls-files --eol | grep -E '^i/crlf' | grep -vE '\.(bat|cmd|ps1)$' || true)"
+          if [ -n "${offenders}" ]; then
+            echo "::error title=CRLF::Hay ficheros de texto con CRLF en el indice. DEC-016 exige artefactos reproducibles byte a byte."
+            echo "${offenders}"
+            exit 1
+          fi
+          echo "OK: el indice esta normalizado a LF."
+
+  # -------------------------------------------------------------------------
+  # 2. Escaneo de secretos sobre TODO el historial (DEC-018).
+  #
+  # Se ejecuta en contenedor y no via action de marketplace: la action oficial
+  # exige licencia para repositorios de organizacion, y un gate que depende de
+  # una licencia no es un gate fiable.
+  # -------------------------------------------------------------------------
+  secret-scan:
+    name: "Gate: gitleaks"
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # gitleaks necesita el historial completo: un secreto borrado en el
+          # commit siguiente sigue estando en el repositorio.
+          fetch-depth: 0
+
+      - name: gitleaks detect (historial completo)
+        env:
+          # Version fijada a proposito: un escaner de secretos solo debe cambiar
+          # de reglas cuando alguien lo decide (Renovate abre el PR).
+          GITLEAKS_IMAGE: ghcr.io/gitleaks/gitleaks:v8.18.4
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            -v "${GITHUB_WORKSPACE}:/repo" \
+            -w /repo \
+            "${GITLEAKS_IMAGE}" \
+            detect \
+            --source=/repo \
+            --config=/repo/.gitleaks.toml \
+            --redact \
+            --no-banner \
+            --report-format=sarif \
+            --report-path=/repo/gitleaks-report.sarif \
+            --exit-code=1
+
+      - name: Publicar informe
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gitleaks-report
+          path: gitleaks-report.sarif
+          if-no-files-found: ignore
+          retention-days: 14
+
+  # -------------------------------------------------------------------------
+  # 3. Vulnerabilidades conocidas en dependencias (DEC-018: osv-scanner).
+  #
+  # Se salta mientras no exista lockfile: no hay nada que escanear, y un fallo
+  # por repositorio vacio no aporta senal.
+  # -------------------------------------------------------------------------
+  dependency-audit:
+    name: "Gate: osv-scanner"
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Hay lockfile?
+        id: lock
+        run: |
+          set -euo pipefail
+          if [ -f pnpm-lock.yaml ]; then
+            echo "exists=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "exists=false" >> "${GITHUB_OUTPUT}"
+            echo "::notice title=osv-scanner::Sin pnpm-lock.yaml todavia; no hay dependencias que escanear."
+          fi
+
+      - name: osv-scanner
+        if: steps.lock.outputs.exists == 'true'
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            -v "${GITHUB_WORKSPACE}:/src" \
+            ghcr.io/google/osv-scanner:latest \
+            scan source --recursive /src
+
+  # -------------------------------------------------------------------------
+  # Puerta unica de seguridad para la proteccion de rama.
+  # -------------------------------------------------------------------------
+  security-gates:
+    name: "Security gates"
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: [repo-hygiene, secret-scan, dependency-audit]
+    if: always()
+    steps:
+      - name: Verificar que ningun gate ha fallado
+        run: |
+          set -euo pipefail
+          results="${{ join(needs.*.result, ' ') }}"
+          echo "Resultados: ${results}"
+          for r in ${results}; do
+            if [ "${r}" != "success" ] && [ "${r}" != "skipped" ]; then
+              echo "::error title=Security::Al menos un gate de seguridad no ha pasado (${results})."
+              exit 1
+            fi
+          done
+          echo "Todos los gates de seguridad han pasado."

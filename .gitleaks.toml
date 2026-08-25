@@ -1,0 +1,87 @@
+# ---------------------------------------------------------------------------
+# Lone Star Winners - configuracion de gitleaks
+#
+# Propietario: security-integration.
+# DEC-018: gitleaks es gate bloqueante en CI y hook de pre-commit.
+#
+# Filosofia:
+#   - Se parte del conjunto de reglas por defecto (`useDefault = true`) y se
+#     AMPLIA. Nunca se sustituye: perder una regla por defecto es perder
+#     deteccion de un proveedor entero.
+#   - Las excepciones se declaran una por una y con motivo. Un allowlist amplio
+#     ("ignora todo docs/") convierte el escaner en decoracion.
+#   - `.env.example` NO esta excluido a proposito. Es el fichero con mas
+#     probabilidad de recibir un secreto real por error, precisamente porque
+#     esta versionado y parece inofensivo.
+# ---------------------------------------------------------------------------
+
+title = "Lone Star Winners"
+
+[extend]
+useDefault = true
+
+# ---------------------------------------------------------------------------
+# Reglas propias
+# ---------------------------------------------------------------------------
+
+# Asignacion de un secreto con valor de alta entropia, en cualquier fichero.
+# Cubre el caso realista: alguien pega el valor bueno en .env.example, en un
+# test o en un fichero de configuracion.
+[[rules]]
+id = "lsw-secret-assignment"
+description = "Asignacion de secreto con valor de alta entropia"
+regex = '''(?i)\b(?:[A-Z0-9_]*(?:SECRET|PASSWORD|PASSWD|PRIVATE_KEY|API_KEY|ACCESS_KEY|SIGNING_KEY|AUTH_TOKEN|ACCESS_TOKEN|SESSION_SECRET|WEBHOOK_SECRET))\b\s*[:=]\s*["']?([A-Za-z0-9+/=_\-]{20,})["']?'''
+secretGroup = 1
+entropy = 3.5
+tags = ["lsw", "secret", "generic"]
+
+[rules.allowlist]
+regexTarget = "match"
+regexes = [
+  '''(?i)(fake|change_?me|placeholder|replace|example|ejemplo|dummy|local[_-]?only|local-dev|your[_-]|tu[_-])''',
+  # Node y su ecosistema usan literalmente estas palabras en documentacion.
+  '''(?i)=\s*["']?(undefined|null|none|console|todo|tbd)["']?''',
+]
+
+# Credenciales embebidas en una URL de conexion (postgres, redis, amqp, http).
+[[rules]]
+id = "lsw-url-embedded-credentials"
+description = "Credenciales embebidas en una URL de conexion"
+regex = '''\b(?:postgres(?:ql)?|mysql|mongodb(?:\+srv)?|redis|rediss|amqps?|https?)://[^\s:@/]+:([^\s@/'"]{8,})@'''
+secretGroup = 1
+entropy = 3.0
+tags = ["lsw", "database", "credentials"]
+
+[rules.allowlist]
+regexTarget = "match"
+regexes = [
+  '''(?i)(fake|change_?me|placeholder|replace|example|ejemplo|dummy|local[_-]?only|local-dev|password|postgres:postgres)''',
+]
+
+# ---------------------------------------------------------------------------
+# Allowlist global
+# ---------------------------------------------------------------------------
+
+[allowlist]
+description = "Excepciones deliberadas, cada una con motivo"
+
+paths = [
+  # Artefactos generados o dependencias: no son fuente y generan ruido.
+  '''(^|/)node_modules/''',
+  '''(^|/)pnpm-lock\.yaml$''',
+  '''(^|/)(dist|build|out|coverage|\.next|\.turbo)/''',
+  # Informes del propio escaner.
+  '''(^|/)gitleaks-report\.(sarif|json)$''',
+  # Esta misma configuracion contiene los patrones, no secretos.
+  '''(^|/)\.gitleaks\.toml$''',
+]
+
+regexes = [
+  # Valores marcados explicitamente como falsos (CLAUDE.md seccion 8).
+  '''FAKE_[A-Z0-9_]+''',
+  '''LOCAL_DEV_PASSWORD_CHANGE_ME''',
+  '''CHANGE_?ME''',
+  # Hashes de ejemplo en documentacion de auditoria: SHA-256 de valores
+  # conocidos, no secretos. Se permiten solo si van precedidos de "sha256:".
+  '''sha256:[a-f0-9]{64}''',
+]

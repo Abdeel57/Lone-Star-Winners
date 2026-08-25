@@ -1,0 +1,31 @@
+{
+  "name": "@lsw/design-system",
+  "version": "0.0.0",
+  "private": true,
+  "license": "UNLICENSED",
+  "type": "module",
+  "description": "Tokens semanticos y preset de Tailwind de Lone Star Winners (propiedad de frontend-ux).",
+  "sideEffects": ["*.css"],
+  "exports": {
+    ".": "./src/index.ts",
+    "./tokens.css": "./src/styles/tokens.css",
+    "./tailwind-preset": "./tailwind-preset.mjs"
+  },
+  "scripts": {
+    "clean": "node -e \"require('node:fs').rmSync('.turbo',{recursive:true,force:true})\"",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.9.2"
+  },
+  "peerDependencies": {
+    "tailwindcss": "^3.4.0"
+  },
+  "peerDependenciesMeta": {
+    "tailwindcss": {
+      "optional": true
+    }
+  }
+}

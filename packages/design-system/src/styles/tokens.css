@@ -1,0 +1,324 @@
+/* ---------------------------------------------------------------------------
+ * Lone Star Winners - tokens semanticos (@lsw/design-system)
+ *
+ * Este archivo contiene UNICAMENTE custom properties. No aplica estilos a
+ * ningun elemento: la aplicacion decide como consumirlos (apps/web/src/app/
+ * globals.css). Asi el paquete puede usarse desde cualquier superficie
+ * (storefront, portal del participante, admin) sin arrastrar decisiones de
+ * layout.
+ *
+ * Convenciones
+ * ------------
+ * 1. Los tokens de color se declaran como CANALES RGB separados por espacio
+ *    (15 42 74), no como notacion hexadecimal. Es lo que permite a Tailwind
+ *    aplicar modificadores de opacidad (bg-brand/10) mediante <alpha-value>.
+ *    En CSS plano se consumen como rgb(var(--lsw-color-brand)).
+ * 2. Los nombres son SEMANTICOS (surface, text-muted, danger), nunca
+ *    literales (azul-oscuro). Cambiar la marca no debe obligar a tocar ningun
+ *    componente.
+ * 3. El tema oscuro redefine tokens; nunca redefine componentes.
+ *
+ * Direccion de marca: marca americana premium y sobria. Azul marino profundo
+ * como color primario, carmesi contenido como acento, neutros calidos.
+ * Prohibido explicitamente: oro brillante, degradados neon, sombras de brillo
+ * y cualquier otro recurso de estetica de casino (CLAUDE.md, seccion 1).
+ * ------------------------------------------------------------------------- */
+
+:root {
+  color-scheme: light dark;
+
+  /* --- Tipografia: familias ---------------------------------------------- */
+  --lsw-font-sans:
+    ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial,
+    "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+  /* La familia de display se separa desde el principio para poder introducir
+     una tipografia de marca con next/font sin tocar ni un componente. */
+  --lsw-font-display: var(--lsw-font-sans);
+  --lsw-font-mono:
+    ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+
+  /* --- Tipografia: escala (mobile-first mediante clamp) ------------------- */
+  --lsw-text-display-lg-size: clamp(2.125rem, 1.55rem + 2.6vw, 3.5rem);
+  --lsw-text-display-lg-line: 1.06;
+  --lsw-text-display-lg-tracking: -0.022em;
+
+  --lsw-text-display-md-size: clamp(1.75rem, 1.35rem + 1.8vw, 2.5rem);
+  --lsw-text-display-md-line: 1.12;
+  --lsw-text-display-md-tracking: -0.018em;
+
+  --lsw-text-heading-lg-size: clamp(1.5rem, 1.3rem + 0.9vw, 1.875rem);
+  --lsw-text-heading-lg-line: 1.2;
+  --lsw-text-heading-lg-tracking: -0.012em;
+
+  --lsw-text-heading-md-size: 1.25rem;
+  --lsw-text-heading-md-line: 1.3;
+  --lsw-text-heading-md-tracking: -0.008em;
+
+  --lsw-text-heading-sm-size: 1.0625rem;
+  --lsw-text-heading-sm-line: 1.35;
+  --lsw-text-heading-sm-tracking: -0.004em;
+
+  --lsw-text-body-lg-size: 1.125rem;
+  --lsw-text-body-lg-line: 1.65;
+  --lsw-text-body-lg-tracking: 0em;
+
+  --lsw-text-body-md-size: 1rem;
+  --lsw-text-body-md-line: 1.6;
+  --lsw-text-body-md-tracking: 0em;
+
+  --lsw-text-body-sm-size: 0.875rem;
+  --lsw-text-body-sm-line: 1.55;
+  --lsw-text-body-sm-tracking: 0.002em;
+
+  --lsw-text-label-size: 0.8125rem;
+  --lsw-text-label-line: 1.4;
+  --lsw-text-label-tracking: 0.01em;
+
+  --lsw-text-caption-size: 0.75rem;
+  --lsw-text-caption-line: 1.45;
+  --lsw-text-caption-tracking: 0.015em;
+
+  --lsw-text-overline-size: 0.6875rem;
+  --lsw-text-overline-line: 1.3;
+  --lsw-text-overline-tracking: 0.12em;
+
+  --lsw-font-weight-regular: 400;
+  --lsw-font-weight-medium: 500;
+  --lsw-font-weight-semibold: 600;
+  --lsw-font-weight-bold: 700;
+
+  /* --- Espaciado ---------------------------------------------------------- */
+  --lsw-space-0: 0rem;
+  --lsw-space-1: 0.25rem;
+  --lsw-space-2: 0.5rem;
+  --lsw-space-3: 0.75rem;
+  --lsw-space-4: 1rem;
+  --lsw-space-5: 1.25rem;
+  --lsw-space-6: 1.5rem;
+  --lsw-space-8: 2rem;
+  --lsw-space-10: 2.5rem;
+  --lsw-space-12: 3rem;
+  --lsw-space-16: 4rem;
+  --lsw-space-20: 5rem;
+  --lsw-space-24: 6rem;
+
+  /* --- Radios ------------------------------------------------------------- */
+  --lsw-radius-none: 0rem;
+  --lsw-radius-sm: 0.25rem;
+  --lsw-radius-md: 0.5rem;
+  --lsw-radius-lg: 0.75rem;
+  --lsw-radius-xl: 1rem;
+  --lsw-radius-2xl: 1.5rem;
+  --lsw-radius-pill: 9999px;
+
+  /* --- Superficies y contenedores ---------------------------------------- */
+  --lsw-container-max: 80rem;
+  --lsw-container-narrow: 46rem;
+  --lsw-gutter: var(--lsw-space-4);
+  /* La altura por defecto (`md`) son 44px: el minimo comodo de area tactil en
+     movil (principio #13). `sm` queda por debajo a proposito y esta reservada a
+     superficies densas de escritorio, como las tablas del admin, donde sigue
+     cumpliendo el minimo de 24px de WCAG 2.5.8. */
+  --lsw-control-height-sm: 2rem;
+  --lsw-control-height-md: 2.75rem;
+  --lsw-control-height-lg: 3.25rem;
+
+  /* --- Movimiento --------------------------------------------------------- */
+  --lsw-duration-instant: 80ms;
+  --lsw-duration-fast: 140ms;
+  --lsw-duration-base: 220ms;
+  --lsw-duration-slow: 340ms;
+  --lsw-ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --lsw-ease-emphasized: cubic-bezier(0.3, 0, 0, 1);
+
+  /* --- Capas -------------------------------------------------------------- */
+  --lsw-z-base: 0;
+  --lsw-z-sticky: 100;
+  --lsw-z-dropdown: 200;
+  --lsw-z-overlay: 300;
+  --lsw-z-modal: 400;
+  --lsw-z-toast: 500;
+
+  /* --- Foco --------------------------------------------------------------- */
+  --lsw-focus-ring-width: 2px;
+  --lsw-focus-ring-offset: 2px;
+
+  /* --- Color: tema claro -------------------------------------------------- */
+  --lsw-color-bg: 250 249 246;
+  --lsw-color-surface: 255 255 255;
+  --lsw-color-surface-raised: 255 255 255;
+  --lsw-color-surface-sunken: 243 242 238;
+
+  --lsw-color-border: 224 221 214;
+  --lsw-color-border-strong: 190 186 177;
+
+  --lsw-color-text: 23 28 35;
+  --lsw-color-text-muted: 82 89 99;
+  --lsw-color-text-subtle: 110 118 129;
+  --lsw-color-text-inverse: 255 255 255;
+
+  --lsw-color-brand: 15 42 74;
+  --lsw-color-brand-hover: 11 32 58;
+  --lsw-color-brand-active: 8 24 44;
+  --lsw-color-brand-subtle: 232 238 246;
+  --lsw-color-on-brand: 255 255 255;
+
+  --lsw-color-accent: 164 32 43;
+  --lsw-color-accent-hover: 138 25 35;
+  --lsw-color-accent-subtle: 251 235 236;
+  --lsw-color-on-accent: 255 255 255;
+
+  --lsw-color-success: 21 94 51;
+  --lsw-color-success-subtle: 235 247 239;
+  --lsw-color-on-success: 255 255 255;
+
+  --lsw-color-warning: 140 80 12;
+  --lsw-color-warning-subtle: 253 246 230;
+  --lsw-color-on-warning: 255 255 255;
+
+  --lsw-color-danger: 173 30 34;
+  --lsw-color-danger-subtle: 253 236 236;
+  --lsw-color-on-danger: 255 255 255;
+
+  --lsw-color-info: 28 72 120;
+  --lsw-color-info-subtle: 234 241 250;
+  --lsw-color-on-info: 255 255 255;
+
+  --lsw-color-focus: 22 90 168;
+  --lsw-color-overlay: 12 16 22;
+  --lsw-color-skeleton: 231 229 223;
+
+  /* --- Elevacion ---------------------------------------------------------- */
+  --lsw-shadow-none: none;
+  --lsw-shadow-sm: 0 1px 2px 0 rgb(16 24 40 / 0.05);
+  --lsw-shadow-md: 0 1px 3px 0 rgb(16 24 40 / 0.08), 0 1px 2px -1px rgb(16 24 40 / 0.06);
+  --lsw-shadow-lg: 0 8px 20px -6px rgb(16 24 40 / 0.12), 0 2px 6px -2px rgb(16 24 40 / 0.06);
+  --lsw-shadow-xl: 0 20px 40px -12px rgb(16 24 40 / 0.18), 0 4px 10px -4px rgb(16 24 40 / 0.08);
+}
+
+/* ---------------------------------------------------------------------------
+ * Tema oscuro.
+ *
+ * Se aplica de dos formas:
+ *   1. prefers-color-scheme: dark, salvo que el usuario haya elegido claro
+ *      explicitamente ([data-theme="light"]).
+ *   2. [data-theme="dark"], que siempre gana.
+ *
+ * Nunca se define un color UNICAMENTE dentro de un bloque de tema: todos los
+ * tokens existen ya en :root, aqui solo se reasignan.
+ * ------------------------------------------------------------------------- */
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --lsw-color-bg: 14 17 22;
+    --lsw-color-surface: 20 24 31;
+    --lsw-color-surface-raised: 27 32 40;
+    --lsw-color-surface-sunken: 11 14 18;
+
+    --lsw-color-border: 44 51 61;
+    --lsw-color-border-strong: 70 79 92;
+
+    --lsw-color-text: 236 238 241;
+    --lsw-color-text-muted: 166 173 183;
+    --lsw-color-text-subtle: 138 146 158;
+    --lsw-color-text-inverse: 14 17 22;
+
+    --lsw-color-brand: 141 180 232;
+    --lsw-color-brand-hover: 163 196 240;
+    --lsw-color-brand-active: 184 210 245;
+    --lsw-color-brand-subtle: 24 36 54;
+    --lsw-color-on-brand: 10 20 34;
+
+    --lsw-color-accent: 233 137 144;
+    --lsw-color-accent-hover: 243 160 166;
+    --lsw-color-accent-subtle: 56 24 28;
+    --lsw-color-on-accent: 40 8 12;
+
+    --lsw-color-success: 118 197 148;
+    --lsw-color-success-subtle: 19 40 29;
+    --lsw-color-on-success: 8 26 16;
+
+    --lsw-color-warning: 227 178 96;
+    --lsw-color-warning-subtle: 48 38 18;
+    --lsw-color-on-warning: 34 24 6;
+
+    --lsw-color-danger: 240 141 143;
+    --lsw-color-danger-subtle: 56 24 26;
+    --lsw-color-on-danger: 40 8 10;
+
+    --lsw-color-info: 142 181 226;
+    --lsw-color-info-subtle: 22 36 54;
+    --lsw-color-on-info: 10 20 34;
+
+    --lsw-color-focus: 141 180 232;
+    --lsw-color-overlay: 4 6 9;
+    --lsw-color-skeleton: 36 42 51;
+
+    --lsw-shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.4);
+    --lsw-shadow-md: 0 1px 3px 0 rgb(0 0 0 / 0.5), 0 1px 2px -1px rgb(0 0 0 / 0.4);
+    --lsw-shadow-lg: 0 8px 20px -6px rgb(0 0 0 / 0.55), 0 2px 6px -2px rgb(0 0 0 / 0.4);
+    --lsw-shadow-xl: 0 20px 40px -12px rgb(0 0 0 / 0.65), 0 4px 10px -4px rgb(0 0 0 / 0.45);
+  }
+}
+
+:root[data-theme="dark"] {
+  --lsw-color-bg: 14 17 22;
+  --lsw-color-surface: 20 24 31;
+  --lsw-color-surface-raised: 27 32 40;
+  --lsw-color-surface-sunken: 11 14 18;
+
+  --lsw-color-border: 44 51 61;
+  --lsw-color-border-strong: 70 79 92;
+
+  --lsw-color-text: 236 238 241;
+  --lsw-color-text-muted: 166 173 183;
+  --lsw-color-text-subtle: 138 146 158;
+  --lsw-color-text-inverse: 14 17 22;
+
+  --lsw-color-brand: 141 180 232;
+  --lsw-color-brand-hover: 163 196 240;
+  --lsw-color-brand-active: 184 210 245;
+  --lsw-color-brand-subtle: 24 36 54;
+  --lsw-color-on-brand: 10 20 34;
+
+  --lsw-color-accent: 233 137 144;
+  --lsw-color-accent-hover: 243 160 166;
+  --lsw-color-accent-subtle: 56 24 28;
+  --lsw-color-on-accent: 40 8 12;
+
+  --lsw-color-success: 118 197 148;
+  --lsw-color-success-subtle: 19 40 29;
+  --lsw-color-on-success: 8 26 16;
+
+  --lsw-color-warning: 227 178 96;
+  --lsw-color-warning-subtle: 48 38 18;
+  --lsw-color-on-warning: 34 24 6;
+
+  --lsw-color-danger: 240 141 143;
+  --lsw-color-danger-subtle: 56 24 26;
+  --lsw-color-on-danger: 40 8 10;
+
+  --lsw-color-info: 142 181 226;
+  --lsw-color-info-subtle: 22 36 54;
+  --lsw-color-on-info: 10 20 34;
+
+  --lsw-color-focus: 141 180 232;
+  --lsw-color-overlay: 4 6 9;
+  --lsw-color-skeleton: 36 42 51;
+
+  --lsw-shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.4);
+  --lsw-shadow-md: 0 1px 3px 0 rgb(0 0 0 / 0.5), 0 1px 2px -1px rgb(0 0 0 / 0.4);
+  --lsw-shadow-lg: 0 8px 20px -6px rgb(0 0 0 / 0.55), 0 2px 6px -2px rgb(0 0 0 / 0.4);
+  --lsw-shadow-xl: 0 20px 40px -12px rgb(0 0 0 / 0.65), 0 4px 10px -4px rgb(0 0 0 / 0.45);
+}
+
+/* Preferencia de movimiento reducido: los tokens de duracion se anulan en el
+ * origen, de modo que ningun componente tiene que acordarse de respetarla. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --lsw-duration-instant: 0ms;
+    --lsw-duration-fast: 0ms;
+    --lsw-duration-base: 0ms;
+    --lsw-duration-slow: 0ms;
+  }
+}

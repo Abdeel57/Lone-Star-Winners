@@ -1,0 +1,85 @@
+{
+  "brand": {
+    "name": "Lone Star Winners"
+  },
+  "localeName": {
+    "en": "English",
+    "es": "Español"
+  },
+  "a11y": {
+    "skipToContent": "Saltar al contenido principal",
+    "mainLandmark": "Contenido principal",
+    "primaryNavigation": "Principal",
+    "languageSwitcher": "Idioma",
+    "currentLanguage": "Idioma actual"
+  },
+  "metadata": {
+    "title": "Lone Star Winners",
+    "description": "Mercancía elegible y participaciones promocionales, sujetas a las Reglas Oficiales."
+  },
+  "home": {
+    "eyebrow": "Promoción vigente",
+    "prizeValueLabel": "Valor del premio",
+    "opensLabel": "Abre",
+    "closesLabel": "Cierra",
+    "timeZoneNote": "Los horarios se muestran en la zona horaria oficial de la promoción.",
+    "entriesDisclaimer": "Las participaciones promocionales se otorgan conforme a las Reglas Oficiales de cada promoción.",
+    "rulesNotPublished": "Las Reglas Oficiales de esta promoción todavía no se han publicado.",
+    "howItWorks": {
+      "title": "Cómo funciona",
+      "step1": {
+        "title": "Explora la mercancía elegible",
+        "body": "Cada página de producto indica si forma parte de la promoción vigente."
+      },
+      "step2": {
+        "title": "Haz tu pedido",
+        "body": "Lo que compras es mercancía. Las participaciones son promocionales y siguen las Reglas Oficiales."
+      },
+      "step3": {
+        "title": "Sigue tus participaciones",
+        "body": "Tu cuenta muestra de dónde viene cada participación y en qué estado está."
+      }
+    }
+  },
+  "promotionStatus": {
+    "upcoming": "Abre pronto",
+    "active": "Abierta",
+    "ended": "Cerrada",
+    "administrator_processing": "En manos del administrador independiente",
+    "winner_verification": "Verificación del ganador potencial en curso",
+    "completed": "Finalizada"
+  },
+  "states": {
+    "loading": "Cargando",
+    "noActivePromotion": {
+      "title": "Ahora mismo no hay ninguna promoción abierta",
+      "body": "Cuando abra la siguiente promoción, aparecerá aquí."
+    },
+    "loadFailed": {
+      "title": "No hemos podido cargar esta sección",
+      "retry": "Reintentar",
+      "requestIdLabel": "Referencia"
+    }
+  },
+  "apiErrors": {
+    "fallback": "Ha ocurrido un problema por nuestra parte. Inténtalo de nuevo en un momento.",
+    "NETWORK_UNAVAILABLE": "No hemos podido conectar con el servicio. Revisa tu conexión e inténtalo de nuevo.",
+    "MALFORMED_RESPONSE": "Hemos recibido una respuesta inesperada. Nuestro equipo ya está avisado.",
+    "INTERNAL_ERROR": "Ha ocurrido un problema por nuestra parte. Inténtalo de nuevo en un momento.",
+    "PROMOTION_NOT_FOUND": "Esa promoción ya no está disponible."
+  },
+  "notFound": {
+    "title": "No hemos encontrado esa página",
+    "body": "Puede que el enlace esté desactualizado o que la página haya cambiado de dirección.",
+    "backHome": "Ir a la página de inicio"
+  },
+  "error": {
+    "title": "Algo ha salido mal",
+    "body": "No hemos podido mostrar la página. Puedes intentar cargarla de nuevo.",
+    "retry": "Reintentar"
+  },
+  "footer": {
+    "copyright": "© {year} Lone Star Winners",
+    "mockDataNotice": "Compilación de desarrollo. Los datos de esta página vienen de una API simulada y no son reales."
+  }
+}

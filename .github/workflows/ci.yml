@@ -1,0 +1,188 @@
+# ---------------------------------------------------------------------------
+# Lone Star Winners - CI (quality gates de DEC-018)
+#
+# Propietario: security-integration (DEC-024).
+#
+# Estos gates son BLOQUEANTES en `main`. Un gate que se puede saltar no es un
+# gate: es documentacion. Si uno estorba, se cambia con un DEC nuevo, no
+# anadiendo `continue-on-error`.
+#
+# Los gates de DEC-018 que todavia NO estan aqui, y por que, se listan en
+# docs/SECURITY.md seccion "Gates pendientes". No se han omitido en silencio.
+#
+# El repositorio esta a medio construir: los pasos toleran que un paquete o el
+# lockfile todavia no existan, pero NUNCA toleran que un gate falle.
+# ---------------------------------------------------------------------------
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # DEC-011: el proceso corre en UTC. La zona legal es un dato de la promocion.
+  TZ: UTC
+  NODE_ENV: test
+  CI: "true"
+
+jobs:
+  # -------------------------------------------------------------------------
+  # Prettier. DEC-016/DEC-026: el formato no es cosmetico. Un CRLF o un BOM
+  # filtrado cambia el hash de un artefacto que un tercero debe poder verificar.
+  # -------------------------------------------------------------------------
+  format:
+    name: "Gate: formato (Prettier)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      - name: Instalar dependencias
+        run: |
+          set -euo pipefail
+          if [ -f pnpm-lock.yaml ]; then
+            pnpm install --frozen-lockfile
+          else
+            echo "::warning title=Sin lockfile::pnpm-lock.yaml no existe todavia; se instala sin lockfile. Congelarlo en cuanto exista."
+            pnpm install --no-frozen-lockfile
+          fi
+
+      - name: prettier --check
+        run: |
+          set -euo pipefail
+          if ! pnpm run format:check; then
+            echo "::error title=Formato::Hay ficheros sin formatear. Ejecuta 'pnpm run format' y vuelve a commitear."
+            exit 1
+          fi
+
+  # -------------------------------------------------------------------------
+  # ESLint type-aware (DEC-002, DEC-017, DEC-018).
+  # `lint:root` cubre apps/** y packages/**; `lint` recorre los workspaces que
+  # definan su propio script.
+  # -------------------------------------------------------------------------
+  lint:
+    name: "Gate: ESLint"
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      - name: Instalar dependencias
+        run: |
+          set -euo pipefail
+          if [ -f pnpm-lock.yaml ]; then
+            pnpm install --frozen-lockfile
+          else
+            pnpm install --no-frozen-lockfile
+          fi
+
+      - name: eslint (raiz, type-aware)
+        run: pnpm run lint:root
+
+      - name: eslint (por workspace)
+        run: pnpm run lint
+
+  # -------------------------------------------------------------------------
+  # tsc --noEmit strict (DEC-002).
+  # -------------------------------------------------------------------------
+  typecheck:
+    name: "Gate: TypeScript strict"
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      - name: Instalar dependencias
+        run: |
+          set -euo pipefail
+          if [ -f pnpm-lock.yaml ]; then
+            pnpm install --frozen-lockfile
+          else
+            pnpm install --no-frozen-lockfile
+          fi
+
+      - name: turbo run typecheck
+        run: pnpm run typecheck
+
+  # -------------------------------------------------------------------------
+  # Tests unitarios y de invariante (DEC-018).
+  #
+  # Los tests que exigen PostgreSQL real via Testcontainers (ledger append-only,
+  # concurrencia, rangos sin solapamiento) viven en `test:integration` y se
+  # anadiran cuando packages/database exista. Ver docs/SECURITY.md.
+  # -------------------------------------------------------------------------
+  test:
+    name: "Gate: tests"
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      - name: Instalar dependencias
+        run: |
+          set -euo pipefail
+          if [ -f pnpm-lock.yaml ]; then
+            pnpm install --frozen-lockfile
+          else
+            pnpm install --no-frozen-lockfile
+          fi
+
+      - name: turbo run test
+        run: pnpm run test
+
+  # -------------------------------------------------------------------------
+  # Puerta unica para la proteccion de rama: exigir SOLO este check en `main`
+  # evita tener que reconfigurar la proteccion cada vez que se anade un gate.
+  # -------------------------------------------------------------------------
+  ci-gates:
+    name: "CI gates"
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: [format, lint, typecheck, test]
+    if: always()
+    steps:
+      - name: Verificar que ningun gate ha fallado
+        run: |
+          set -euo pipefail
+          results="${{ join(needs.*.result, ' ') }}"
+          echo "Resultados: ${results}"
+          for r in ${results}; do
+            if [ "${r}" != "success" ]; then
+              echo "::error title=CI::Al menos un gate no ha pasado (${results})."
+              exit 1
+            fi
+          done
+          echo "Todos los gates de CI han pasado."

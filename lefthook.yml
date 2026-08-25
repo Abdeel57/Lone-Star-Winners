@@ -1,0 +1,92 @@
+# ---------------------------------------------------------------------------
+# Lone Star Winners - hooks de Git (lefthook)
+#
+# Propietario: security-integration.
+# DEC-018: gitleaks con hook de pre-commit.
+#
+# ACTIVACION (todavia manual, ver handoff HO-008):
+#
+#   pnpm dlx lefthook install
+#
+# Mientras `lefthook` no sea devDependency de la raiz y `prepare` no ejecute
+# `lefthook install`, estos hooks NO se instalan solos al clonar. La raiz del
+# monorepo pertenece a `backend-sweepstakes` (DEC-024), asi que el cambio se
+# solicita por handoff en vez de aplicarlo aqui.
+#
+# POR QUE FALLA EN CERRADO
+# Si gitleaks no esta instalado, el hook falla en vez de dejar pasar el commit.
+# Un hook de seguridad que se salta solo cuando falta la herramienta es peor que
+# no tenerlo: da una sensacion de cobertura que no existe. CI vuelve a escanear
+# el historial completo de todas formas, asi que saltarse el hook con
+# `--no-verify` no evita la deteccion, solo la retrasa.
+# ---------------------------------------------------------------------------
+
+min_version: 1.7.0
+
+pre-commit:
+  parallel: true
+  jobs:
+    # -----------------------------------------------------------------------
+    # 1. Secretos en lo que se esta a punto de commitear.
+    # -----------------------------------------------------------------------
+    - name: gitleaks
+      run: |
+        if command -v gitleaks > /dev/null 2>&1; then
+          gitleaks protect --staged --config .gitleaks.toml --redact --no-banner --verbose
+        elif command -v docker > /dev/null 2>&1; then
+          docker run --rm -v "$(pwd):/repo" -w /repo ghcr.io/gitleaks/gitleaks:v8.18.4 \
+            protect --staged --config /repo/.gitleaks.toml --redact --no-banner --verbose
+        else
+          echo "gitleaks no esta instalado y docker tampoco."
+          echo "Instalalo: https://github.com/gitleaks/gitleaks#installing"
+          echo "Este hook falla en cerrado a proposito (CLAUDE.md, principios 19 y 20)."
+          exit 1
+        fi
+
+    # -----------------------------------------------------------------------
+    # 2. Ningun .env real, clave privada o credencial en el commit.
+    #    Es la misma comprobacion que hace CI, adelantada al pre-commit.
+    # -----------------------------------------------------------------------
+    - name: no-secret-files
+      glob: "*"
+      run: |
+        offenders=""
+        for f in {staged_files}; do
+          case "$f" in
+            *.example|*.example.*) continue ;;
+          esac
+          case "$f" in
+            .env|.env.*|*/.env|*/.env.*) offenders="$offenders $f" ;;
+            *.pem|*.key|*.p12|*.pfx|*.jks|*.keystore) offenders="$offenders $f" ;;
+            id_rsa|id_dsa|id_ecdsa|id_ed25519|*/id_rsa|*/id_ed25519) offenders="$offenders $f" ;;
+            credentials.json|secrets.json|*/credentials.json|*/secrets.json) offenders="$offenders $f" ;;
+            service-account*.json|*/service-account*.json) offenders="$offenders $f" ;;
+          esac
+        done
+        if [ -n "$offenders" ]; then
+          echo "Estos ficheros no pueden versionarse:$offenders"
+          echo "Si alguno contenia un valor real, rotalo: ya paso por tu disco."
+          exit 1
+        fi
+
+    # -----------------------------------------------------------------------
+    # 3. Formato. DEC-016 y DEC-026: un CRLF o un fichero sin formatear cambia
+    #    el hash de artefactos que un tercero debe poder reproducir.
+    # -----------------------------------------------------------------------
+    - name: prettier
+      glob: "*.{ts,tsx,mts,cts,js,mjs,cjs,json,jsonc,md,mdx,yml,yaml,css}"
+      run: pnpm exec prettier --check {staged_files}
+
+pre-push:
+  parallel: false
+  jobs:
+    # El pre-push mira el historial completo, no solo lo que se acaba de
+    # escribir: un secreto commiteado hace tres commits sigue estando ahi.
+    - name: gitleaks-historial
+      run: |
+        if command -v gitleaks > /dev/null 2>&1; then
+          gitleaks detect --config .gitleaks.toml --redact --no-banner
+        else
+          echo "gitleaks no esta instalado; CI lo escaneara de todas formas."
+          exit 1
+        fi

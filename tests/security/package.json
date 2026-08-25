@@ -1,0 +1,25 @@
+{
+  "name": "@lsw/tests-security",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Tests de invariante de seguridad y compliance de Lone Star Winners.",
+  "license": "UNLICENSED",
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint .",
+    "clean": "node -e \"require('node:fs').rmSync('coverage',{recursive:true,force:true})\""
+  },
+  "devDependencies": {
+    "@lsw/audit": "workspace:*",
+    "@lsw/security": "workspace:*",
+    "@lsw/tpa": "workspace:*",
+    "@types/node": "^22.18.1",
+    "eslint": "^9.35.0",
+    "typescript": "^5.9.2",
+    "typescript-eslint": "^8.44.0",
+    "vitest": "^3.2.4"
+  }
+}

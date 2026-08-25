@@ -1,0 +1,45 @@
+{
+  "name": "@lsw/database",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Esquema PostgreSQL, migraciones SQL forward-only y conexion por rol (DEC-003, DEC-005).",
+  "license": "UNLICENSED",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./testing": {
+      "types": "./dist/testing/postgres-container.d.ts",
+      "default": "./dist/testing/postgres-container.js"
+    }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": ["dist", "drizzle", "sql"],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
+    "lint": "eslint src test drizzle.config.ts",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run --project unit",
+    "test:integration": "vitest run --project integration",
+    "db:generate": "drizzle-kit generate --name manual-review-only",
+    "db:check": "drizzle-kit check",
+    "db:migrate": "tsc -p tsconfig.build.json && node dist/scripts/migrate-cli.js",
+    "db:seed": "tsc -p tsconfig.build.json && node dist/scripts/seed-cli.js"
+  },
+  "dependencies": {
+    "@lsw/sweepstakes": "workspace:*",
+    "drizzle-orm": "^0.44.4",
+    "pg": "^8.16.3"
+  },
+  "devDependencies": {
+    "@testcontainers/postgresql": "^11.0.3",
+    "@types/pg": "^8.15.5",
+    "drizzle-kit": "^0.31.4",
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
+  }
+}
