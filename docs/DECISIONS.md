@@ -951,3 +951,75 @@ Affected areas: `docs/TASK_OWNERSHIP.md`, raíz del repositorio, CI.
 
 Proposed by: Team Lead (resolviendo HO-004)
 Agreed by: aprobado por el usuario el 2026-08-25
+
+---
+
+## DEC-025
+
+Status: Accepted
+
+Date: 2026-08-25
+
+Decision:
+**Node.js 24 LTS**, no Node 22. `engines.node` queda en `>=24.0.0 <25` y
+`.nvmrc` en `24.12.0`.
+
+Context:
+La propuesta original de `backend` en la FASE 1 decía "Node 22 LTS". Al crear
+la zona neutral raíz, el propio agente detectó dos problemas: la máquina de
+desarrollo corre **Node v24.12.0**, de modo que `pnpm install` habría fallado
+con `engine-strict`; y a fecha de hoy Node 22 ya está en mantenimiento mientras
+que **Node 24 es Active LTS**.
+
+Alternatives:
+Mantener Node 22 y forzar un cambio de versión con nvm en cada máquina
+(descartado: fricción diaria y una LTS en mantenimiento para un proyecto que
+empieza hoy).
+
+Reason:
+Fijar una versión que ni siquiera es la instalada habría bloqueado la
+instalación de dependencias en el primer paso. El agente lo reportó en vez de
+cambiarlo por su cuenta, que es exactamente el comportamiento correcto.
+
+Affected areas: `package.json`, `.nvmrc`, CI.
+
+Proposed by: backend (detectado durante la implementación)
+Agreed by: Team Lead; supersede el "Node 22 LTS" de la propuesta original
+
+---
+
+## DEC-026
+
+Status: Accepted
+
+Date: 2026-08-25
+
+Decision:
+Se añade **`.gitattributes`** en la raíz con `* text=auto eol=lf`, más reglas
+explícitas para los tipos que participan en hashes (`.sql`, `.json`, `.jsonl`,
+`.csv`), `eol=crlf` para scripts de Windows y `binary` para los formatos que
+nunca deben normalizarse. Propietario: **Team Lead**, junto a `.gitignore`.
+
+Además, el glob `tests/*` se añade a `pnpm-workspace.yaml`, para que
+`tests/security/**` —asignado a `security` en `docs/TASK_OWNERSHIP.md`— pueda
+tener su propio `package.json` y dependencias.
+
+Context:
+El desarrollo ocurre en Windows con `core.autocrlf = true` **verificado**. Sin
+`.gitattributes`, Git convierte los finales de línea a CRLF en el checkout.
+
+Alternatives:
+Confiar en `.editorconfig` y Prettier (descartado: solo aplican a quien tenga
+el plugin instalado, y no gobiernan lo que hace Git al hacer checkout).
+
+Reason:
+Un `ExportSnapshot` cuyo hash depende del sistema operativo del desarrollador
+**no es reproducible**, y por tanto no es auditable por el third-party
+administrator. Esto convertía DEC-016 en inaplicable en la práctica. Detectado
+por `backend` al crear la zona neutral.
+
+Affected areas: raíz del repositorio, `packages/tpa`, `packages/database`,
+`pnpm-workspace.yaml`, CI.
+
+Proposed by: backend (detectado durante la implementación)
+Agreed by: Team Lead

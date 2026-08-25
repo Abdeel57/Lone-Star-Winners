@@ -1,0 +1,30 @@
+# ---------------------------------------------------------------------------
+# Lone Star Winners - workspaces de pnpm
+#
+# DEC-001: monorepo con pnpm workspaces + Turborepo, con la disposicion de
+# rutas prevista en docs/TASK_OWNERSHIP.md.
+#
+# Ownership de cada glob (docs/TASK_OWNERSHIP.md):
+#   apps/web ............... frontend-ux
+#   apps/api ............... backend-sweepstakes
+#   packages/ui, packages/design-system .......... frontend-ux
+#   packages/database, packages/sweepstakes,
+#   packages/commerce, packages/api-types ........ backend-sweepstakes (DEC-014)
+#   packages/security, packages/audit,
+#   packages/tpa ................................. security-integration
+#
+# Ningun agente crea paquetes fuera de su ownership.
+# ---------------------------------------------------------------------------
+
+packages:
+  - "apps/*"
+  - "packages/*"
+  - "tests/*"
+
+# Nota para quien instale por primera vez: pnpm 10 no ejecuta scripts de
+# postinstall de dependencias salvo que se declaren aqui explicitamente.
+# Cuando se elijan las dependencias reales (Next.js, drizzle-kit, playwright,
+# etc.) hay que anadir las que lo requieran:
+#
+# onlyBuiltDependencies:
+#   - esbuild

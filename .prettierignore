@@ -1,0 +1,25 @@
+# Dependencias y artefactos
+node_modules/
+dist/
+build/
+out/
+.next/
+.turbo/
+coverage/
+playwright-report/
+test-results/
+*.min.js
+pnpm-lock.yaml
+
+# Evidencia regulatoria: no se reformatea automaticamente (DEC-005, DEC-016)
+**/drizzle/**
+**/migrations/**
+**/*.sql
+**/exports/**
+**/__snapshots__/**
+**/fixtures/**/*.csv
+**/fixtures/**/*.json
+
+# Generado a partir del contrato (DEC-014)
+**/generated/**
+openapi.json

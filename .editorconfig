@@ -1,0 +1,26 @@
+# ---------------------------------------------------------------------------
+# Lone Star Winners
+# LF y UTF-8 en todo el repositorio: DEC-016 exige exports reproducibles byte a
+# byte, y el equipo trabaja sobre Windows.
+# ---------------------------------------------------------------------------
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 2
+
+[*.md]
+trim_trailing_whitespace = false
+
+[*.{sql,ddl}]
+indent_size = 2
+
+[Makefile]
+indent_style = tab
+
+[*.{bat,cmd,ps1}]
+end_of_line = crlf

@@ -1,0 +1,65 @@
+# ---------------------------------------------------------------
+# Lone Star Winners - .gitattributes
+#
+# CRITICO PARA DEC-016 (ExportSnapshot reproducible byte a byte).
+#
+# Se desarrolla en Windows, donde `core.autocrlf` suele estar en `true`.
+# Sin este archivo, Git convierte los finales de linea a CRLF al hacer
+# checkout, y eso cambia el hash de cualquier fichero que forme parte de un
+# snapshot exportado al third-party administrator. Un snapshot cuyo hash
+# depende del sistema operativo del desarrollador no es reproducible, y por
+# tanto no es auditable.
+#
+# `.gitattributes` gana sobre `core.autocrlf`, asi que esto normaliza el
+# repositorio con independencia de la configuracion local de cada maquina.
+# ---------------------------------------------------------------
+
+# Por defecto: normalizar a LF en el repositorio y en el working tree.
+* text=auto eol=lf
+
+# Explicito para los tipos que participan en hashes, migraciones o fixtures.
+*.sql      text eol=lf
+*.json     text eol=lf
+*.jsonl    text eol=lf
+*.csv      text eol=lf
+*.md       text eol=lf
+*.yaml     text eol=lf
+*.yml      text eol=lf
+*.ts       text eol=lf
+*.tsx      text eol=lf
+*.js       text eol=lf
+*.mjs      text eol=lf
+*.cjs      text eol=lf
+*.css      text eol=lf
+*.html     text eol=lf
+*.sh       text eol=lf
+*.toml     text eol=lf
+.env.example text eol=lf
+
+# Scripts de Windows: deben conservar CRLF o no se ejecutan.
+*.bat      text eol=crlf
+*.cmd      text eol=crlf
+*.ps1      text eol=crlf
+
+# Binarios: nunca normalizar.
+*.png      binary
+*.jpg      binary
+*.jpeg     binary
+*.gif      binary
+*.webp     binary
+*.avif     binary
+*.ico      binary
+*.pdf      binary
+*.zip      binary
+*.gz       binary
+*.woff     binary
+*.woff2    binary
+*.ttf      binary
+*.otf      binary
+*.eot      binary
+*.mp4      binary
+*.webm     binary
+*.sig      binary
+
+# Lockfiles: generados, no revisar en diffs.
+pnpm-lock.yaml linguist-generated=true -diff
