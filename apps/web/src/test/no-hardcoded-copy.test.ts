@@ -80,7 +80,8 @@ function findHardcodedText(source: string): string[] {
 
     const words = candidate.match(/[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]{2,}/g) ?? [];
     const looksLikeSentence = words.length >= 2;
-    const looksLikeLabel = words.length === 1 && /^[A-ZÁÉÍÓÚÜÑ][A-Za-zÁÉÍÓÚÜÑáéíóúüñ]{2,}$/.test(candidate);
+    const looksLikeLabel =
+      words.length === 1 && /^[A-ZÁÉÍÓÚÜÑ][A-Za-zÁÉÍÓÚÜÑáéíóúüñ]{2,}$/.test(candidate);
 
     if (looksLikeSentence || looksLikeLabel) found.push(candidate);
   }

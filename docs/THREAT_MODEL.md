@@ -131,7 +131,7 @@ Mitigacion: los cinco cerrojos de DEC-017 (flag apagado por defecto,
 `DrawAuthorization` viva con referencia documental, separacion de funciones,
 snapshot `FINALIZED` con hash recalculado en el momento, CSPRNG con rechazo de
 muestreo) y registro inmutable de cada sorteo, incluidos los que no producen
-ganador. La propuesta *commit-reveal* sigue sobre la mesa y requiere decision
+ganador. La propuesta _commit-reveal_ sigue sobre la mesa y requiere decision
 del cliente.
 
 Estado: PARCIAL. Cerrojos 1 y 3 verificados por test hoy; el resto llega con el

@@ -24,8 +24,8 @@ import { getCorrelationId } from "./request-context.js";
  * que el campo existia es informacion util al depurar; su valor, no.
  */
 const REDACTED_PATHS = [
-  'req.headers.authorization',
-  'req.headers.cookie',
+  "req.headers.authorization",
+  "req.headers.cookie",
   'req.headers["set-cookie"]',
   'req.headers["x-api-key"]',
   'req.headers["stripe-signature"]',

@@ -75,7 +75,10 @@ export function buildHealthRoutes(dependencies: AppDependencies): RouteDefinitio
         } catch (error) {
           // El detalle va al log, con `correlation_id`; al cliente solo le
           // llega `ok: false`.
-          request.log.error({ event: "health.database.failed", err: error }, "readiness: base de datos no disponible");
+          request.log.error(
+            { event: "health.database.failed", err: error },
+            "readiness: base de datos no disponible",
+          );
         }
 
         const body = {

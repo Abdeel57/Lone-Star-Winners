@@ -42,7 +42,8 @@ export type CanonicalEntity = (typeof CANONICAL_ENTITIES)[number];
  * legalmente distinto del que se esta construyendo.
  */
 export const FORBIDDEN_TERMS: Readonly<Record<string, string>> = Object.freeze({
-  ticket: "Una entry promocional no es un boleto. Un boleto se compra; una entry se gana conforme a las Official Rules.",
+  ticket:
+    "Una entry promocional no es un boleto. Un boleto se compra; una entry se gana conforme a las Official Rules.",
   boleto: "Una entry promocional no es un boleto (CLAUDE.md seccion 1).",
   rifa: "Una rifa es un producto legalmente distinto de un sweepstakes.",
   raffle: "A raffle is a legally distinct product from a sweepstakes.",

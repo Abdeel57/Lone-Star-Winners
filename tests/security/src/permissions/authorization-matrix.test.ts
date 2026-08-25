@@ -149,7 +149,10 @@ describe("DEC-017: separacion de funciones", () => {
   it("ningun rol acumula por si solo las dos mitades de una restriccion", () => {
     for (const role of ROLE_IDS) {
       const violations = findSeparationOfDutiesViolationsForRoles([role]);
-      expect(violations.map((constraint) => constraint.id), role).toStrictEqual([]);
+      expect(
+        violations.map((constraint) => constraint.id),
+        role,
+      ).toStrictEqual([]);
     }
   });
 

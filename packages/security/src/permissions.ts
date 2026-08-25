@@ -331,7 +331,11 @@ export function authorize(context: AuthorizationContext): AuthorizationDecision 
   }
 
   if (definition.requiresReason && !context.reasonProvided) {
-    return deny(capability, "REASON_REQUIRED", "La accion exige un motivo, que se guarda auditado.");
+    return deny(
+      capability,
+      "REASON_REQUIRED",
+      "La accion exige un motivo, que se guarda auditado.",
+    );
   }
 
   if (definition.requiresSecondApproval && !context.secondApprovalGranted) {

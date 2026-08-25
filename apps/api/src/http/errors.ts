@@ -67,7 +67,11 @@ export class ApiError extends Error {
 
 export const ApiErrors = {
   unauthenticated: (): ApiError =>
-    new ApiError({ statusCode: 401, code: "UNAUTHENTICATED", messageKey: "errors.auth.unauthenticated" }),
+    new ApiError({
+      statusCode: 401,
+      code: "UNAUTHENTICATED",
+      messageKey: "errors.auth.unauthenticated",
+    }),
 
   forbidden: (requiredPermission: string): ApiError =>
     new ApiError({
@@ -115,5 +119,9 @@ export const ApiErrors = {
     new ApiError({ statusCode: 500, code: "INTERNAL_ERROR", messageKey: "errors.common.internal" }),
 
   serviceUnavailable: (): ApiError =>
-    new ApiError({ statusCode: 503, code: "SERVICE_UNAVAILABLE", messageKey: "errors.common.service_unavailable" }),
+    new ApiError({
+      statusCode: 503,
+      code: "SERVICE_UNAVAILABLE",
+      messageKey: "errors.common.service_unavailable",
+    }),
 } as const;

@@ -53,7 +53,9 @@ describe("declaracion de autorizacion (DEC-015)", () => {
 
   it("acepta un permiso que existe en el catalogo de la base de datos", () => {
     expect(() =>
-      assertRouteIsAuthorized(baseRoute({ authorization: { kind: "PERMISSION", permission: "promotion.read" } })),
+      assertRouteIsAuthorized(
+        baseRoute({ authorization: { kind: "PERMISSION", permission: "promotion.read" } }),
+      ),
     ).not.toThrow();
   });
 
@@ -67,11 +69,15 @@ describe("declaracion de autorizacion (DEC-015)", () => {
   });
 
   it("rechaza una ruta sin ninguna respuesta declarada (DEC-014)", () => {
-    expect(() => assertRouteIsAuthorized(baseRoute({ schema: { response: {} } }))).toThrow(RouteRegistrationError);
+    expect(() => assertRouteIsAuthorized(baseRoute({ schema: { response: {} } }))).toThrow(
+      RouteRegistrationError,
+    );
   });
 
   it("rechaza una ruta sin operationId", () => {
-    expect(() => assertRouteIsAuthorized(baseRoute({ operationId: "  " }))).toThrow(RouteRegistrationError);
+    expect(() => assertRouteIsAuthorized(baseRoute({ operationId: "  " }))).toThrow(
+      RouteRegistrationError,
+    );
   });
 });
 
@@ -141,7 +147,11 @@ describe("autorizador por defecto: falla cerrado", () => {
       { kind: "PERMISSION", permission: "promotion.read" },
       { kind: "PERMISSION", permission: "draw.execute" },
     ] as const) {
-      const outcome = denyAllAuthorizer({ request: {} as never, authorization, requiresStepUp: false });
+      const outcome = denyAllAuthorizer({
+        request: {} as never,
+        authorization,
+        requiresStepUp: false,
+      });
       expect(outcome).toEqual({ allowed: false, reason: "UNAUTHENTICATED" });
     }
   });
@@ -150,7 +160,11 @@ describe("autorizador por defecto: falla cerrado", () => {
 describe("manifiesto de rutas (evidencia para DEC-015)", () => {
   it("expone el permiso de cada ruta y si exige step-up", () => {
     const manifest = buildRouteManifest([
-      baseRoute({ url: "/api/v1/b", operationId: "b", authorization: { kind: "PERMISSION", permission: "draw.execute" } }),
+      baseRoute({
+        url: "/api/v1/b",
+        operationId: "b",
+        authorization: { kind: "PERMISSION", permission: "draw.execute" },
+      }),
       baseRoute({ url: "/api/v1/a", operationId: "a" }),
       baseRoute({
         url: "/api/v1/c",

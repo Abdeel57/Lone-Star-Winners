@@ -332,7 +332,13 @@ const INTEGRATION_VARS: readonly EnvVarSpec[] = Object.freeze([
     ["test"],
     "Imagen de PostgreSQL real para los tests de ledger. Mocks y SQLite estan descartados.",
   ),
-  v("TESTCONTAINERS_RYUK_DISABLED", "test", "boolean", NO_ENVIRONMENT, "Recolector de contenedores."),
+  v(
+    "TESTCONTAINERS_RYUK_DISABLED",
+    "test",
+    "boolean",
+    NO_ENVIRONMENT,
+    "Recolector de contenedores.",
+  ),
   v("E2E_BASE_URL", "test", "url", NO_ENVIRONMENT, "Base para Playwright."),
 ]);
 
@@ -403,6 +409,7 @@ export const PRODUCTION_HARDENING_RULES: readonly ProductionHardeningRule[] = Ob
     requirement: "MUST_NOT_EQUAL",
     value: "true",
     appliesTo: ["test"],
-    rationale: "Sin Ryuk, los contenedores de test sobreviven al runner y contaminan la siguiente ejecucion.",
+    rationale:
+      "Sin Ryuk, los contenedores de test sobreviven al runner y contaminan la siguiente ejecucion.",
   },
 ]);

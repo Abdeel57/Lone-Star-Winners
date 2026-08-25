@@ -51,10 +51,14 @@ describe("migraciones: forma y legibilidad (DEC-005)", () => {
   });
 
   it("todas estan referenciadas en el journal de drizzle, en el mismo orden", () => {
-    const journal = JSON.parse(readFileSync(path.join(MIGRATIONS_DIR, "meta", "_journal.json"), "utf8")) as {
+    const journal = JSON.parse(
+      readFileSync(path.join(MIGRATIONS_DIR, "meta", "_journal.json"), "utf8"),
+    ) as {
       entries: { idx: number; tag: string }[];
     };
-    expect(journal.entries.map((entry) => `${entry.tag}.sql`)).toEqual(migrations.map((m) => m.name));
+    expect(journal.entries.map((entry) => `${entry.tag}.sql`)).toEqual(
+      migrations.map((m) => m.name),
+    );
     journal.entries.forEach((entry, index) => {
       expect(entry.idx).toBe(index);
     });
@@ -69,7 +73,10 @@ describe("migraciones: invariantes de permisos (DEC-003, DEC-007)", () => {
           String.raw`GRANT[^;]*\b(UPDATE|DELETE)\b[^;]*\bON\b[^;]*\b${table}\b[^;]*\blsw_app\b`,
           "isu",
         );
-        expect(offending.test(migration.sql), `${migration.name} concede escritura sobre ${table}`).toBe(false);
+        expect(
+          offending.test(migration.sql),
+          `${migration.name} concede escritura sobre ${table}`,
+        ).toBe(false);
       }
     }
   });
@@ -108,10 +115,14 @@ describe("migraciones: invariantes de permisos (DEC-003, DEC-007)", () => {
 
   it("ningun rol se crea con contrasena escrita en el repositorio (principios 19 y 20)", () => {
     for (const migration of migrations) {
-      expect(/CREATE\s+ROLE[^;]*PASSWORD/iu.test(migration.sql), `${migration.name} fija una contrasena`).toBe(false);
-      expect(/ALTER\s+ROLE[^;]*PASSWORD\s+'/iu.test(migration.sql), `${migration.name} fija una contrasena`).toBe(
-        false,
-      );
+      expect(
+        /CREATE\s+ROLE[^;]*PASSWORD/iu.test(migration.sql),
+        `${migration.name} fija una contrasena`,
+      ).toBe(false);
+      expect(
+        /ALTER\s+ROLE[^;]*PASSWORD\s+'/iu.test(migration.sql),
+        `${migration.name} fija una contrasena`,
+      ).toBe(false);
     }
   });
 });
@@ -119,9 +130,12 @@ describe("migraciones: invariantes de permisos (DEC-003, DEC-007)", () => {
 describe("migraciones: invariantes de dominio", () => {
   it("no hay ninguna columna monetaria en coma flotante (DEC-010)", () => {
     for (const migration of migrations) {
-      expect(/\b(amount|price|total|subtotal)\w*\s+(numeric|decimal|real|double\s+precision|float)/iu.test(migration.sql), migration.name).toBe(
-        false,
-      );
+      expect(
+        /\b(amount|price|total|subtotal)\w*\s+(numeric|decimal|real|double\s+precision|float)/iu.test(
+          migration.sql,
+        ),
+        migration.name,
+      ).toBe(false);
     }
   });
 
@@ -129,7 +143,10 @@ describe("migraciones: invariantes de dominio", () => {
     for (const migration of migrations) {
       const naive = /\b\w+\s+timestamp(?!tz)\b(?!\s+with\s+time\s+zone)/giu;
       const matches = migration.sql.match(naive) ?? [];
-      expect(matches, `${migration.name} usa timestamp sin zona: ${matches.join(", ")}`).toHaveLength(0);
+      expect(
+        matches,
+        `${migration.name} usa timestamp sin zona: ${matches.join(", ")}`,
+      ).toHaveLength(0);
     }
   });
 
@@ -141,10 +158,13 @@ describe("migraciones: invariantes de dominio", () => {
 
   it("ninguna migracion activa un sorteo interno ni siembra una autorizacion de sorteo (DEC-017)", () => {
     for (const migration of migrations) {
-      expect(/internal_draw_enabled\s*(boolean\s*)?(NOT NULL\s*)?DEFAULT\s+true/iu.test(migration.sql), migration.name).toBe(
+      expect(
+        /internal_draw_enabled\s*(boolean\s*)?(NOT NULL\s*)?DEFAULT\s+true/iu.test(migration.sql),
+        migration.name,
+      ).toBe(false);
+      expect(/INSERT\s+INTO\s+draw_authorizations/iu.test(migration.sql), migration.name).toBe(
         false,
       );
-      expect(/INSERT\s+INTO\s+draw_authorizations/iu.test(migration.sql), migration.name).toBe(false);
     }
   });
 
@@ -156,6 +176,8 @@ describe("migraciones: invariantes de dominio", () => {
     const promotionsMigration = migrations.find((m) => m.name.includes("promotions"));
     expect(promotionsMigration).toBeDefined();
     expect(/minimum_age\s*'?\s*[:=]\s*\d/iu.test(promotionsMigration?.sql ?? "")).toBe(false);
-    expect(/INSERT\s+INTO\s+promotion_rules_versions/iu.test(promotionsMigration?.sql ?? "")).toBe(false);
+    expect(/INSERT\s+INTO\s+promotion_rules_versions/iu.test(promotionsMigration?.sql ?? "")).toBe(
+      false,
+    );
   });
 });

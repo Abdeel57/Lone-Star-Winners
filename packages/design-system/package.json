@@ -5,7 +5,9 @@
   "license": "UNLICENSED",
   "type": "module",
   "description": "Tokens semanticos y preset de Tailwind de Lone Star Winners (propiedad de frontend-ux).",
-  "sideEffects": ["*.css"],
+  "sideEffects": [
+    "*.css"
+  ],
   "exports": {
     ".": "./src/index.ts",
     "./tokens.css": "./src/styles/tokens.css",

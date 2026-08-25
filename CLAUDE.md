@@ -128,10 +128,10 @@ solicita el cambio mediante handoff.
 
 ## 5. Equipo
 
-| Teammate   | Agente                 | Dominio                                                      |
-|------------|------------------------|--------------------------------------------------------------|
-| `frontend` | `frontend-ux`          | Frontend, UX/UI, bilingüe, storefront, portal, admin UI       |
-| `backend`  | `backend-sweepstakes`  | Base de datos, APIs, commerce, sweepstakes engine, AMOE       |
+| Teammate   | Agente                 | Dominio                                                         |
+| ---------- | ---------------------- | --------------------------------------------------------------- |
+| `frontend` | `frontend-ux`          | Frontend, UX/UI, bilingüe, storefront, portal, admin UI         |
+| `backend`  | `backend-sweepstakes`  | Base de datos, APIs, commerce, sweepstakes engine, AMOE         |
 | `security` | `security-integration` | Seguridad, compliance, auditoría, exports, TPA, QA, integración |
 
 El Team Lead coordina; no implementa en lugar de los agentes.
@@ -140,16 +140,16 @@ El Team Lead coordina; no implementa en lugar de los agentes.
 
 ## 6. Documentación compartida
 
-| Archivo                   | Propósito                                                |
-|---------------------------|-----------------------------------------------------------|
-| `CLAUDE.md`               | Este documento. Constitución y principios.                |
-| `ORCHESTRATOR.md`         | Prompt de arranque para la sesión principal (Team Lead).  |
-| `docs/ARCHITECTURE.md`    | Arquitectura y fronteras de responsabilidad.              |
-| `docs/API_CONTRACT.md`    | Fuente de verdad de las APIs.                             |
-| `docs/DECISIONS.md`       | Registro ADR de decisiones.                               |
-| `docs/AGENT_HANDOFF.md`   | Comunicación entre agentes.                               |
-| `docs/TASK_OWNERSHIP.md`  | Propiedad de archivos y responsabilidades.                |
-| `docs/LEGAL_PENDING.md`   | Decisiones pendientes del abogado.                        |
+| Archivo                  | Propósito                                                |
+| ------------------------ | -------------------------------------------------------- |
+| `CLAUDE.md`              | Este documento. Constitución y principios.               |
+| `ORCHESTRATOR.md`        | Prompt de arranque para la sesión principal (Team Lead). |
+| `docs/ARCHITECTURE.md`   | Arquitectura y fronteras de responsabilidad.             |
+| `docs/API_CONTRACT.md`   | Fuente de verdad de las APIs.                            |
+| `docs/DECISIONS.md`      | Registro ADR de decisiones.                              |
+| `docs/AGENT_HANDOFF.md`  | Comunicación entre agentes.                              |
+| `docs/TASK_OWNERSHIP.md` | Propiedad de archivos y responsabilidades.               |
+| `docs/LEGAL_PENDING.md`  | Decisiones pendientes del abogado.                       |
 
 ---
 

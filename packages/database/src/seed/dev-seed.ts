@@ -113,12 +113,36 @@ export async function seedDevelopmentData(db: Database): Promise<SeedResult> {
     // PERSONAS DISTINTAS: el trigger de DEC-017 impide que sean la misma, y
     // esta semilla sirve tambien para comprobarlo a mano.
     const adminSpecs = [
-      { email: `admin.super.ficticio@${FICTITIOUS_EMAIL_DOMAIN}`, name: "Fictitious Super Admin", role: "SUPER_ADMIN" },
-      { email: `admin.ops.ficticio@${FICTITIOUS_EMAIL_DOMAIN}`, name: "Fictitious Operations Admin", role: "OPERATIONS_ADMIN" },
-      { email: `admin.soporte.ficticio@${FICTITIOUS_EMAIL_DOMAIN}`, name: "Fictitious Support Agent", role: "CUSTOMER_SUPPORT" },
-      { email: `admin.compliance.ficticio@${FICTITIOUS_EMAIL_DOMAIN}`, name: "Fictitious Compliance Officer", role: "COMPLIANCE_OFFICER" },
-      { email: `admin.sorteo.ficticio@${FICTITIOUS_EMAIL_DOMAIN}`, name: "Fictitious Draw Officer", role: "DRAW_OFFICER" },
-      { email: `admin.auditor.ficticio@${FICTITIOUS_EMAIL_DOMAIN}`, name: "Fictitious Read-Only Auditor", role: "READ_ONLY_AUDITOR" },
+      {
+        email: `admin.super.ficticio@${FICTITIOUS_EMAIL_DOMAIN}`,
+        name: "Fictitious Super Admin",
+        role: "SUPER_ADMIN",
+      },
+      {
+        email: `admin.ops.ficticio@${FICTITIOUS_EMAIL_DOMAIN}`,
+        name: "Fictitious Operations Admin",
+        role: "OPERATIONS_ADMIN",
+      },
+      {
+        email: `admin.soporte.ficticio@${FICTITIOUS_EMAIL_DOMAIN}`,
+        name: "Fictitious Support Agent",
+        role: "CUSTOMER_SUPPORT",
+      },
+      {
+        email: `admin.compliance.ficticio@${FICTITIOUS_EMAIL_DOMAIN}`,
+        name: "Fictitious Compliance Officer",
+        role: "COMPLIANCE_OFFICER",
+      },
+      {
+        email: `admin.sorteo.ficticio@${FICTITIOUS_EMAIL_DOMAIN}`,
+        name: "Fictitious Draw Officer",
+        role: "DRAW_OFFICER",
+      },
+      {
+        email: `admin.auditor.ficticio@${FICTITIOUS_EMAIL_DOMAIN}`,
+        name: "Fictitious Read-Only Auditor",
+        role: "READ_ONLY_AUDITOR",
+      },
     ] as const;
 
     const adminIds: string[] = [];
@@ -158,7 +182,8 @@ export async function seedDevelopmentData(db: Database): Promise<SeedResult> {
       await tx.insert(adminUserRoles).values({
         adminUserId: admin.id,
         roleKey: spec.role,
-        grantReason: "Semilla de desarrollo. Ninguna de estas cuentas existe fuera de un entorno local.",
+        grantReason:
+          "Semilla de desarrollo. Ninguna de estas cuentas existe fuera de un entorno local.",
       });
     }
 
@@ -179,22 +204,40 @@ export async function seedDevelopmentData(db: Database): Promise<SeedResult> {
         sku: "DEV-TEE-001",
         slug: "dev-camiseta-lone-star",
         priceMinor: 2500n,
-        en: { name: "Development Sample T-Shirt", description: "Fictitious catalog item used for local development only." },
-        es: { name: "Camiseta de muestra para desarrollo", description: "Articulo ficticio de catalogo, solo para desarrollo local." },
+        en: {
+          name: "Development Sample T-Shirt",
+          description: "Fictitious catalog item used for local development only.",
+        },
+        es: {
+          name: "Camiseta de muestra para desarrollo",
+          description: "Articulo ficticio de catalogo, solo para desarrollo local.",
+        },
       },
       {
         sku: "DEV-CAP-002",
         slug: "dev-gorra-lone-star",
         priceMinor: 1800n,
-        en: { name: "Development Sample Cap", description: "Fictitious catalog item used for local development only." },
-        es: { name: "Gorra de muestra para desarrollo", description: "Articulo ficticio de catalogo, solo para desarrollo local." },
+        en: {
+          name: "Development Sample Cap",
+          description: "Fictitious catalog item used for local development only.",
+        },
+        es: {
+          name: "Gorra de muestra para desarrollo",
+          description: "Articulo ficticio de catalogo, solo para desarrollo local.",
+        },
       },
       {
         sku: "DEV-MUG-003",
         slug: "dev-taza-lone-star",
         priceMinor: 1200n,
-        en: { name: "Development Sample Mug", description: "Fictitious catalog item used for local development only." },
-        es: { name: "Taza de muestra para desarrollo", description: "Articulo ficticio de catalogo, solo para desarrollo local." },
+        en: {
+          name: "Development Sample Mug",
+          description: "Fictitious catalog item used for local development only.",
+        },
+        es: {
+          name: "Taza de muestra para desarrollo",
+          description: "Articulo ficticio de catalogo, solo para desarrollo local.",
+        },
       },
     ] as const;
 
@@ -209,8 +252,18 @@ export async function seedDevelopmentData(db: Database): Promise<SeedResult> {
       }
 
       await tx.insert(productTranslations).values([
-        { productId: product.id, locale: "en-US", name: spec.en.name, description: spec.en.description },
-        { productId: product.id, locale: "es-US", name: spec.es.name, description: spec.es.description },
+        {
+          productId: product.id,
+          locale: "en-US",
+          name: spec.en.name,
+          description: spec.en.description,
+        },
+        {
+          productId: product.id,
+          locale: "es-US",
+          name: spec.es.name,
+          description: spec.es.description,
+        },
       ]);
 
       await tx.insert(productVariants).values({
@@ -235,8 +288,14 @@ export async function seedDevelopmentData(db: Database): Promise<SeedResult> {
         startsAt: null,
         endsAt: null,
         schedule: false,
-        en: { publicName: "Development Draft Promotion", tagline: "Local development only. Not a real promotion." },
-        es: { publicName: "Promocion de desarrollo en borrador", tagline: "Solo desarrollo local. No es una promocion real." },
+        en: {
+          publicName: "Development Draft Promotion",
+          tagline: "Local development only. Not a real promotion.",
+        },
+        es: {
+          publicName: "Promocion de desarrollo en borrador",
+          tagline: "Solo desarrollo local. No es una promocion real.",
+        },
       },
       {
         slug: "dev-promocion-programada",
@@ -245,8 +304,14 @@ export async function seedDevelopmentData(db: Database): Promise<SeedResult> {
         startsAt: new Date("2026-09-01T05:00:00.000Z"),
         endsAt: new Date("2026-10-01T04:59:59.000Z"),
         schedule: true,
-        en: { publicName: "Development Scheduled Promotion", tagline: "Local development only. Not a real promotion." },
-        es: { publicName: "Promocion de desarrollo programada", tagline: "Solo desarrollo local. No es una promocion real." },
+        en: {
+          publicName: "Development Scheduled Promotion",
+          tagline: "Local development only. Not a real promotion.",
+        },
+        es: {
+          publicName: "Promocion de desarrollo programada",
+          tagline: "Solo desarrollo local. No es una promocion real.",
+        },
       },
     ] as const;
 
@@ -267,8 +332,18 @@ export async function seedDevelopmentData(db: Database): Promise<SeedResult> {
       }
 
       await tx.insert(promotionTranslations).values([
-        { promotionId: promotion.id, locale: "en-US", publicName: spec.en.publicName, tagline: spec.en.tagline },
-        { promotionId: promotion.id, locale: "es-US", publicName: spec.es.publicName, tagline: spec.es.tagline },
+        {
+          promotionId: promotion.id,
+          locale: "en-US",
+          publicName: spec.en.publicName,
+          tagline: spec.en.tagline,
+        },
+        {
+          promotionId: promotion.id,
+          locale: "es-US",
+          publicName: spec.es.publicName,
+          tagline: spec.es.tagline,
+        },
       ]);
 
       // Version de reglas en DRAFT con TODAS las claves requeridas en `TBD`.
@@ -296,7 +371,10 @@ export async function seedDevelopmentData(db: Database): Promise<SeedResult> {
             winner_drawing_method: "TBD",
             partial_refund_rounding_policy: "TBD",
             entry_expiration: "TBD",
-            amoe: { mode: "DISABLED", note: "DEC-013: apagado por defecto. La modalidad la decide el abogado." },
+            amoe: {
+              mode: "DISABLED",
+              note: "DEC-013: apagado por defecto. La modalidad la decide el abogado.",
+            },
           },
           createdByAdminUserId: operationsAdminId,
         })
@@ -328,14 +406,19 @@ export async function seedDevelopmentData(db: Database): Promise<SeedResult> {
       ]);
 
       if (spec.schedule) {
-        await tx.update(promotions).set({ status: "SCHEDULED" }).where(eq(promotions.id, promotion.id));
+        await tx
+          .update(promotions)
+          .set({ status: "SCHEDULED" })
+          .where(eq(promotions.id, promotion.id));
       }
     }
 
     warnings.push(
       "No se ha creado ninguna promocion ACTIVE: DEC-012 lo impide mientras las claves legales requeridas sigan en TBD (docs/LEGAL_PENDING.md).",
     );
-    warnings.push("No se ha creado ninguna entry: el ledger todavia no existe (HO-006, expiracion de entries).");
+    warnings.push(
+      "No se ha creado ninguna entry: el ledger todavia no existe (HO-006, expiracion de entries).",
+    );
     warnings.push(
       "Ninguna cuenta administrativa tiene credencial: el hash Argon2id y el TOTP los implementa packages/security (DEC-006).",
     );

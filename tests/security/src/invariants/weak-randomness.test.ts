@@ -21,7 +21,10 @@ const CRITICAL_PACKAGES = ["packages/security", "packages/tpa", "packages/sweeps
 const WEAK_SOURCES: readonly { readonly id: string; readonly pattern: RegExp }[] = [
   { id: "math-random", pattern: new RegExp(`Math\s*\.\s*${"random"}\s*\(`) },
   { id: "pseudo-random-bytes", pattern: new RegExp(`${"pseudoRandom"}Bytes\s*\(`) },
-  { id: "prng-sembrado", pattern: /from\s+["'](seedrandom|chance|random-seed|@faker-js\/faker)["']/ },
+  {
+    id: "prng-sembrado",
+    pattern: /from\s+["'](seedrandom|chance|random-seed|@faker-js\/faker)["']/,
+  },
   // Un timestamp no es entropia. Aparece como semilla mas veces de lo que
   // deberia, precisamente porque parece inofensivo.
   { id: "timestamp-como-semilla", pattern: /seed\s*[:=]\s*Date\s*\.\s*now\s*\(/i },

@@ -79,9 +79,7 @@ describe("formatZonedDateTime (DEC-011)", () => {
     });
 
     expect(withZone).not.toBeNull();
-    expect(withZone).not.toBe(
-      formatZonedDateTime(instant, "en", { timeZone: "America/Chicago" }),
-    );
+    expect(withZone).not.toBe(formatZonedDateTime(instant, "en", { timeZone: "America/Chicago" }));
   });
 
   it("devuelve null ante una fecha invalida en vez de pintar 'Invalid Date'", () => {

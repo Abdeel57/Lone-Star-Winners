@@ -67,7 +67,11 @@ describe("fallo duro (DEC-018)", () => {
   });
 
   it("informa de TODOS los problemas a la vez, no del primero", () => {
-    const broken = withEnv({ API_PORT: "no-es-un-puerto", LOG_LEVEL: "verboso", DEFAULT_CURRENCY: "dolares" });
+    const broken = withEnv({
+      API_PORT: "no-es-un-puerto",
+      LOG_LEVEL: "verboso",
+      DEFAULT_CURRENCY: "dolares",
+    });
     try {
       loadConfig(broken);
       expect.unreachable("deberia haber fallado");
@@ -83,11 +87,15 @@ describe("fallo duro (DEC-018)", () => {
   });
 
   it("rechaza un secreto de sesion demasiado corto", () => {
-    expect(() => loadConfig(withEnv({ SESSION_SECRET: "corto" }))).toThrow(EnvironmentValidationError);
+    expect(() => loadConfig(withEnv({ SESSION_SECRET: "corto" }))).toThrow(
+      EnvironmentValidationError,
+    );
   });
 
   it("rechaza una ventana de step-up mayor que la que fija DEC-006", () => {
-    expect(() => loadConfig(withEnv({ STEP_UP_MAX_AGE_SECONDS: "600" }))).toThrow(EnvironmentValidationError);
+    expect(() => loadConfig(withEnv({ STEP_UP_MAX_AGE_SECONDS: "600" }))).toThrow(
+      EnvironmentValidationError,
+    );
   });
 });
 
@@ -107,19 +115,27 @@ describe("refuerzos que solo aplican en produccion", () => {
   });
 
   it("rechaza una cookie de sesion sin Secure (DEC-006)", () => {
-    expect(() => loadConfig({ ...PRODUCTION_BASE, SESSION_COOKIE_SECURE: "false" })).toThrow(/Secure/iu);
+    expect(() => loadConfig({ ...PRODUCTION_BASE, SESSION_COOKIE_SECURE: "false" })).toThrow(
+      /Secure/iu,
+    );
   });
 
   it("rechaza una conexion a PostgreSQL sin verificar el certificado", () => {
-    expect(() => loadConfig({ ...PRODUCTION_BASE, DATABASE_SSL_MODE: "require" })).toThrow(/verify-full/iu);
+    expect(() => loadConfig({ ...PRODUCTION_BASE, DATABASE_SSL_MODE: "require" })).toThrow(
+      /verify-full/iu,
+    );
   });
 
   it("rechaza CORS con comodin", () => {
-    expect(() => loadConfig({ ...PRODUCTION_BASE, API_CORS_ALLOWED_ORIGINS: "*" })).toThrow(/CORS/iu);
+    expect(() => loadConfig({ ...PRODUCTION_BASE, API_CORS_ALLOWED_ORIGINS: "*" })).toThrow(
+      /CORS/iu,
+    );
   });
 
   it("rechaza HTTP plano", () => {
-    expect(() => loadConfig({ ...PRODUCTION_BASE, API_PUBLIC_URL: "http://api.ejemplo.invalid" })).toThrow(/HTTPS/iu);
+    expect(() =>
+      loadConfig({ ...PRODUCTION_BASE, API_PUBLIC_URL: "http://api.ejemplo.invalid" }),
+    ).toThrow(/HTTPS/iu);
   });
 
   it("detecta un secreto que sigue siendo el marcador de .env.example", () => {
@@ -127,7 +143,10 @@ describe("refuerzos que solo aplican en produccion", () => {
     // servidor, arranca, y el proceso funciona con un secreto publicado en el
     // repositorio.
     expect(() =>
-      loadConfig({ ...PRODUCTION_BASE, SESSION_SECRET: "FAKE_LOCAL_ONLY_replace_with_48_random_bytes" }),
+      loadConfig({
+        ...PRODUCTION_BASE,
+        SESSION_SECRET: "FAKE_LOCAL_ONLY_replace_with_48_random_bytes",
+      }),
     ).toThrow(/marcador/iu);
   });
 
@@ -135,7 +154,8 @@ describe("refuerzos que solo aplican en produccion", () => {
     expect(() =>
       loadConfig({
         ...PRODUCTION_BASE,
-        DATABASE_URL_APP: "postgresql://lsw_app:LOCAL_DEV_PASSWORD_CHANGE_ME@127.0.0.1:5432/lone_star_winners",
+        DATABASE_URL_APP:
+          "postgresql://lsw_app:LOCAL_DEV_PASSWORD_CHANGE_ME@127.0.0.1:5432/lone_star_winners",
       }),
     ).toThrow(/marcador/iu);
   });

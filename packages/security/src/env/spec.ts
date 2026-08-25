@@ -20,15 +20,7 @@ export const DEPLOYED_ENVIRONMENTS: readonly EnvName[] = ["staging", "production
 export const NO_ENVIRONMENT: readonly EnvName[] = [];
 
 export type EnvVarKind =
-  | "string"
-  | "integer"
-  | "boolean"
-  | "url"
-  | "postgres_url"
-  | "enum"
-  | "cron"
-  | "path"
-  | "email";
+  "string" | "integer" | "boolean" | "url" | "postgres_url" | "enum" | "cron" | "path" | "email";
 
 /** Que proceso la lee. `web` implica navegador si el nombre es `NEXT_PUBLIC_`. */
 export type EnvVarScope = "shared" | "api" | "web" | "test";
@@ -49,10 +41,7 @@ export interface EnvVarSpec {
 }
 
 export type ProductionRequirement =
-  | "MUST_EQUAL"
-  | "MUST_NOT_EQUAL"
-  | "MUST_NOT_CONTAIN"
-  | "MUST_START_WITH";
+  "MUST_EQUAL" | "MUST_NOT_EQUAL" | "MUST_NOT_CONTAIN" | "MUST_START_WITH";
 
 /**
  * Endurecimiento obligatorio en entornos desplegados. Son las diferencias entre

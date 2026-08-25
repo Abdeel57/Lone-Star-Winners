@@ -26,7 +26,9 @@ const DEFAULT_API_BASE_URL = "http://localhost:4000/api/v1";
  * es la unica que hoy declara `.env.example`.
  */
 export function apiBaseUrl(): string {
-  return process.env["API_BASE_URL"] ?? process.env["NEXT_PUBLIC_API_BASE_URL"] ?? DEFAULT_API_BASE_URL;
+  return (
+    process.env["API_BASE_URL"] ?? process.env["NEXT_PUBLIC_API_BASE_URL"] ?? DEFAULT_API_BASE_URL
+  );
 }
 
 export interface ApiRequestOptions {
@@ -46,7 +48,10 @@ export interface ApiRequestOptions {
   readonly signal?: AbortSignal;
 }
 
-export async function apiGet<T>(path: string, options: ApiRequestOptions = {}): Promise<ApiResult<T>> {
+export async function apiGet<T>(
+  path: string,
+  options: ApiRequestOptions = {},
+): Promise<ApiResult<T>> {
   const url = `${apiBaseUrl().replace(/\/+$/, "")}/${path.replace(/^\/+/, "")}`;
 
   const headers = new Headers({ accept: "application/json" });

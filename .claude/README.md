@@ -22,10 +22,10 @@ previa con Agent Teams.
 
 ## 2. Qué es cada agente
 
-| Archivo | Agente | Color | Modelo | De qué se encarga |
-|---|---|---|---|---|
-| `agents/frontend-ux.md` | `frontend-ux` | azul | Opus 5 | Frontend, UX/UI, experiencia bilingüe, e-commerce visual, portal del participante, capa de presentación del admin. |
-| `agents/backend-sweepstakes.md` | `backend-sweepstakes` | verde | Opus 5 | Backend, base de datos, APIs, commerce logic, sweepstakes engine, entry ledger, AMOE, servicios administrativos. |
+| Archivo                          | Agente                 | Color   | Modelo | De qué se encarga                                                                                                   |
+| -------------------------------- | ---------------------- | ------- | ------ | ------------------------------------------------------------------------------------------------------------------- |
+| `agents/frontend-ux.md`          | `frontend-ux`          | azul    | Opus 5 | Frontend, UX/UI, experiencia bilingüe, e-commerce visual, portal del participante, capa de presentación del admin.  |
+| `agents/backend-sweepstakes.md`  | `backend-sweepstakes`  | verde   | Opus 5 | Backend, base de datos, APIs, commerce logic, sweepstakes engine, entry ledger, AMOE, servicios administrativos.    |
 | `agents/security-integration.md` | `security-integration` | naranja | Opus 5 | Seguridad, compliance, auditoría, exportaciones, integración con third-party administrator, QA e integración final. |
 
 Cuando se levante el equipo, cada agente se convierte en un **teammate** con
@@ -41,10 +41,10 @@ nombre corto: `frontend`, `backend` y `security`.
 Cada archivo de agente tiene una **zona de pegado** marcada con comentarios
 `<!-- ZONA DE PEGADO -->`. Dentro hay una línea placeholder:
 
-| Prompt | Archivo | Línea a reemplazar |
-|---|---|---|
-| **Prompt 1 — Frontend + UX/UI** | `.claude/agents/frontend-ux.md` | `[Pegar aquí el Prompt 1 — Frontend + UX/UI]` |
-| **Prompt 2 — Backend + Sweepstakes Engine** | `.claude/agents/backend-sweepstakes.md` | `[Pegar aquí el Prompt 2 — Backend + Sweepstakes Engine]` |
+| Prompt                                             | Archivo                                  | Línea a reemplazar                                               |
+| -------------------------------------------------- | ---------------------------------------- | ---------------------------------------------------------------- |
+| **Prompt 1 — Frontend + UX/UI**                    | `.claude/agents/frontend-ux.md`          | `[Pegar aquí el Prompt 1 — Frontend + UX/UI]`                    |
+| **Prompt 2 — Backend + Sweepstakes Engine**        | `.claude/agents/backend-sweepstakes.md`  | `[Pegar aquí el Prompt 2 — Backend + Sweepstakes Engine]`        |
 | **Prompt 3 — Security + Compliance + Integration** | `.claude/agents/security-integration.md` | `[Pegar aquí el Prompt 3 — Security + Compliance + Integration]` |
 
 ### Reglas al pegar
@@ -107,14 +107,14 @@ Para ver el estado real del proyecto de un vistazo, busca ahí:
 
 ## 7. Otros archivos que conviene conocer
 
-| Archivo | Para qué sirve |
-|---|---|
-| `CLAUDE.md` | Constitución del proyecto: qué es, 20 principios globales, protocolo. |
-| `ORCHESTRATOR.md` | Prompt de arranque del Team Lead. |
-| `docs/ARCHITECTURE.md` | Módulos, fronteras y lo que sigue sin decidir. |
-| `docs/API_CONTRACT.md` | Todas las APIs. El frontend no puede usar una que no esté ahí. |
-| `docs/TASK_OWNERSHIP.md` | Qué archivos puede tocar cada agente. |
-| `docs/LEGAL_PENDING.md` | Lo que falta por decidir el abogado del cliente. |
+| Archivo                  | Para qué sirve                                                        |
+| ------------------------ | --------------------------------------------------------------------- |
+| `CLAUDE.md`              | Constitución del proyecto: qué es, 20 principios globales, protocolo. |
+| `ORCHESTRATOR.md`        | Prompt de arranque del Team Lead.                                     |
+| `docs/ARCHITECTURE.md`   | Módulos, fronteras y lo que sigue sin decidir.                        |
+| `docs/API_CONTRACT.md`   | Todas las APIs. El frontend no puede usar una que no esté ahí.        |
+| `docs/TASK_OWNERSHIP.md` | Qué archivos puede tocar cada agente.                                 |
+| `docs/LEGAL_PENDING.md`  | Lo que falta por decidir el abogado del cliente.                      |
 
 ---
 

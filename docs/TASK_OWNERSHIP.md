@@ -36,13 +36,13 @@ packages/design-system/**
 
 Responsabilidades:
 
-* frontend;
-* UX/UI;
-* responsive;
-* i18n presentation;
-* storefront;
-* portal del participante;
-* presentation layer del admin.
+- frontend;
+- UX/UI;
+- responsive;
+- i18n presentation;
+- storefront;
+- portal del participante;
+- presentation layer del admin.
 
 ---
 
@@ -61,14 +61,14 @@ packages/commerce/**
 
 Responsabilidades:
 
-* database;
-* APIs;
-* commerce;
-* orders;
-* sweepstakes;
-* entries;
-* AMOE;
-* business logic.
+- database;
+- APIs;
+- commerce;
+- orders;
+- sweepstakes;
+- entries;
+- AMOE;
+- business logic.
 
 ---
 
@@ -87,15 +87,15 @@ tests/security/**
 
 Responsabilidades:
 
-* security;
-* audit;
-* authorization review;
-* snapshots;
-* exports;
-* TPA integration;
-* drawing controls;
-* quality gates;
-* final integration review.
+- security;
+- audit;
+- authorization review;
+- snapshots;
+- exports;
+- TPA integration;
+- drawing controls;
+- quality gates;
+- final integration review.
 
 Además, y de forma transversal: **derecho de lectura sobre todo el
 repositorio** y rol de **auditor técnico final**. Ese derecho es de lectura y
@@ -109,13 +109,13 @@ Estos archivos los escriben los tres agentes. Para evitar conflictos:
 **se añade al final, no se reescribe lo existente**, y cada entrada indica su
 autor.
 
-| Archivo | Uso |
-|---|---|
-| `docs/AGENT_HANDOFF.md` | Anadir handoffs al final; actualizar solo el `Status` de los propios. |
-| `docs/DECISIONS.md` | Anadir `DEC-xxx` al final. |
-| `docs/API_CONTRACT.md` | El **owner** del endpoint edita su entrada; los demas proponen por handoff. |
-| `docs/LEGAL_PENDING.md` | Cualquiera anade preguntas; **nadie inventa respuestas**. |
-| `docs/ARCHITECTURE.md` | Lo mantiene el Team Lead con acuerdo de los tres. |
+| Archivo                 | Uso                                                                         |
+| ----------------------- | --------------------------------------------------------------------------- |
+| `docs/AGENT_HANDOFF.md` | Anadir handoffs al final; actualizar solo el `Status` de los propios.       |
+| `docs/DECISIONS.md`     | Anadir `DEC-xxx` al final.                                                  |
+| `docs/API_CONTRACT.md`  | El **owner** del endpoint edita su entrada; los demas proponen por handoff. |
+| `docs/LEGAL_PENDING.md` | Cualquiera anade preguntas; **nadie inventa respuestas**.                   |
+| `docs/ARCHITECTURE.md`  | Lo mantiene el Team Lead con acuerdo de los tres.                           |
 
 ---
 

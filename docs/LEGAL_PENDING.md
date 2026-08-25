@@ -29,36 +29,47 @@ Impact: <DEC-xxx si aplica>
 ---
 
 ## Eligibility
+
 TBD
 
 ## Allowed states
+
 TBD
 
 ## Minimum age
+
 TBD
 
 ## Promotion start/end rules
+
 TBD
 
 ## AMOE mechanism
+
 TBD
 
 ## Entry limits
+
 TBD
 
 ## Multipliers
+
 TBD
 
 ## Product eligibility
+
 TBD
 
 ## Winner drawing method
+
 TBD
 
 ## Third-party administrator requirements
+
 TBD
 
 ## Official Rules
+
 TBD
 
 ---
@@ -67,10 +78,11 @@ TBD
 
 Estas cinco preguntas **no estaban en la lista original**. Las detectaron los
 agentes `backend` y `security` durante la planificación, al descubrir que
-afectan al diseño del sistema *antes* de escribir código. Ver `HO-006` en
+afectan al diseño del sistema _antes_ de escribir código. Ver `HO-006` en
 `docs/AGENT_HANDOFF.md`.
 
 ## Entry expiration
+
 TBD
 
 ¿Las Official Rules contemplan que las entries expiren?
@@ -81,6 +93,7 @@ Eso cambia el diseño del entry ledger y del export al third-party
 administrator. Detectado por `backend`; debe resolverse **antes del hito B1**.
 
 ## Rounding policy for partial refunds
+
 TBD
 
 Cuando se reembolsa parcialmente una orden, ¿cómo se redondea la cantidad de
@@ -92,6 +105,7 @@ la política elegida. `backend` señala explícitamente que **no debe elegirla u
 ingeniero**: tiene consecuencias legales y la debe aprobar el abogado.
 
 ## Record retention and right of erasure
+
 TBD
 
 ¿Cuánto tiempo deben conservarse los registros? ¿Cómo se atiende una solicitud
@@ -104,6 +118,7 @@ ledger. Así los conteos y la reconciliación histórica sobreviven intactos.
 Detectado por `security`.
 
 ## Email verification before earning entries
+
 TBD
 
 ¿Exigen las Official Rules que un participante verifique su email antes de
@@ -114,6 +129,7 @@ generan las entries de una compra. Se implementa como feature flag, nunca como
 supuesto. Detectado por `security`.
 
 ## Controlling language of the Official Rules
+
 TBD
 
 ¿Qué idioma es el legalmente controlante, y cuál es traducción informativa?

@@ -28,7 +28,9 @@ export const promotions = pgTable(
     slug: text("slug").notNull().unique(),
     internalName: text("internal_name").notNull(),
     status: promotionStatusEnum("status").notNull().default("DRAFT"),
-    statusChangedAt: timestamp("status_changed_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+    statusChangedAt: timestamp("status_changed_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
     /**
      * DEC-011: zona horaria legal IANA. Todos los deadlines se evaluan en el
      * servidor contra esta zona, nunca contra la del navegador ni la del
@@ -60,7 +62,9 @@ export const promotionTranslations = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
   },
-  (table) => [primaryKey({ name: "promotion_translations_pkey", columns: [table.promotionId, table.locale] })],
+  (table) => [
+    primaryKey({ name: "promotion_translations_pkey", columns: [table.promotionId, table.locale] }),
+  ],
 );
 
 /**
@@ -88,7 +92,9 @@ export const promotionRulesVersions = pgTable(
     attorneyApprovalReference: text("attorney_approval_reference"),
     effectiveAt: timestamp("effective_at", { withTimezone: true, mode: "date" }),
     createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
-    createdByAdminUserId: uuid("created_by_admin_user_id").references(() => adminUsers.id, { onDelete: "restrict" }),
+    createdByAdminUserId: uuid("created_by_admin_user_id").references(() => adminUsers.id, {
+      onDelete: "restrict",
+    }),
     activatedAt: timestamp("activated_at", { withTimezone: true, mode: "date" }),
     activatedByAdminUserId: uuid("activated_by_admin_user_id").references(() => adminUsers.id, {
       onDelete: "restrict",
@@ -145,6 +151,9 @@ export const promotionStatusTransitions = pgTable(
     note: text("note").notNull(),
   },
   (table) => [
-    primaryKey({ name: "promotion_status_transitions_pkey", columns: [table.fromStatus, table.toStatus] }),
+    primaryKey({
+      name: "promotion_status_transitions_pkey",
+      columns: [table.fromStatus, table.toStatus],
+    }),
   ],
 );

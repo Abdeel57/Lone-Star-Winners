@@ -75,7 +75,10 @@ describe("paridad de diccionarios (DEC-021)", () => {
 
     for (const locale of LOCALES) {
       const messages = await loadMessages(locale);
-      expect(Object.keys(messages).length, `diccionario vacio para ${localeTag(locale)}`).toBeGreaterThan(0);
+      expect(
+        Object.keys(messages).length,
+        `diccionario vacio para ${localeTag(locale)}`,
+      ).toBeGreaterThan(0);
     }
   });
 

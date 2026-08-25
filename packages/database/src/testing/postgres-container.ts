@@ -69,9 +69,13 @@ export async function startTestDatabase(): Promise<TestDatabase> {
 
   try {
     const { sql } = await import("drizzle-orm");
-    await admin.db.execute(sql.raw(`ALTER ROLE lsw_migrator WITH PASSWORD '${passwords.migrator}'`));
+    await admin.db.execute(
+      sql.raw(`ALTER ROLE lsw_migrator WITH PASSWORD '${passwords.migrator}'`),
+    );
     await admin.db.execute(sql.raw(`ALTER ROLE lsw_app WITH PASSWORD '${passwords.app}'`));
-    await admin.db.execute(sql.raw(`ALTER ROLE lsw_readonly_report WITH PASSWORD '${passwords.readonly_report}'`));
+    await admin.db.execute(
+      sql.raw(`ALTER ROLE lsw_readonly_report WITH PASSWORD '${passwords.readonly_report}'`),
+    );
   } finally {
     await admin.close();
   }

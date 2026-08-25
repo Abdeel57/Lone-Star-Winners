@@ -63,7 +63,9 @@ export const ianaTimeZoneSchema = z
   .string()
   .min(1)
   .max(64)
-  .regex(/^[A-Za-z][A-Za-z0-9+_-]*(?:\/[A-Za-z0-9+._-]+)*$/u, { error: "must_look_like_iana_timezone" })
+  .regex(/^[A-Za-z][A-Za-z0-9+_-]*(?:\/[A-Za-z0-9+._-]+)*$/u, {
+    error: "must_look_like_iana_timezone",
+  })
   .transform((s) => s as IanaTimeZone);
 
 export const rationalMultiplierSchema = z

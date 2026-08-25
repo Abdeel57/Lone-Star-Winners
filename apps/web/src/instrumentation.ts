@@ -22,7 +22,8 @@ export async function register(): Promise<void> {
   if (process.env["NEXT_RUNTIME"] !== "nodejs") return;
 
   const explicit = process.env["WEB_ENABLE_API_MOCKS"];
-  const enabled = explicit === undefined ? process.env.NODE_ENV === "development" : explicit === "true";
+  const enabled =
+    explicit === undefined ? process.env.NODE_ENV === "development" : explicit === "true";
   if (!enabled) return;
 
   const { mockApiServer } = await import("./mocks/node");

@@ -39,8 +39,10 @@ const inputVariants = cva(
 
 export type InputSize = NonNullable<VariantProps<typeof inputVariants>["inputSize"]>;
 
-export interface InputProps
-  extends Omit<InputHTMLAttributes<HTMLInputElement>, "className" | "size"> {
+export interface InputProps extends Omit<
+  InputHTMLAttributes<HTMLInputElement>,
+  "className" | "size"
+> {
   readonly inputSize?: InputSize;
   readonly className?: string;
   readonly ref?: Ref<HTMLInputElement>;

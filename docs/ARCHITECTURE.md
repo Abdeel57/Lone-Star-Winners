@@ -29,20 +29,20 @@ implementación:
 
 Nombres funcionales, no paquetes definitivos.
 
-| Módulo | Responsabilidad |
-|---|---|
-| **Storefront** | Catálogo, producto, carrito, checkout (capa visual). |
-| **Commerce** | Productos, precios, órdenes, pagos, refunds, chargebacks. |
-| **Identity & Auth** | Registro, sesión, verificación, roles. **Un solo sistema.** |
-| **Sweepstakes Engine** | Promociones, elegibilidad, reglas configurables, límites, multiplicadores. |
-| **Entry Ledger** | Registro append-only de entries y sus reversals. **Una sola fuente de verdad.** |
-| **AMOE** | Vía de participación sin compra, con la misma procedencia registrada. |
-| **Participant Portal** | Vista del participante sobre sus entries y su historial. |
-| **Admin** | Operación interna: promociones, productos, órdenes, revisiones. |
-| **Audit & Snapshots** | Evidencia inmutable, snapshots del universo de entries. |
-| **Exports / TPA** | Exportaciones reproducibles para el administrador externo. |
-| **Drawing Controls** | Controles y autorizaciones de cualquier sorteo interno. |
-| **i18n** | Español e inglés como idiomas de primera clase. |
+| Módulo                 | Responsabilidad                                                                 |
+| ---------------------- | ------------------------------------------------------------------------------- |
+| **Storefront**         | Catálogo, producto, carrito, checkout (capa visual).                            |
+| **Commerce**           | Productos, precios, órdenes, pagos, refunds, chargebacks.                       |
+| **Identity & Auth**    | Registro, sesión, verificación, roles. **Un solo sistema.**                     |
+| **Sweepstakes Engine** | Promociones, elegibilidad, reglas configurables, límites, multiplicadores.      |
+| **Entry Ledger**       | Registro append-only de entries y sus reversals. **Una sola fuente de verdad.** |
+| **AMOE**               | Vía de participación sin compra, con la misma procedencia registrada.           |
+| **Participant Portal** | Vista del participante sobre sus entries y su historial.                        |
+| **Admin**              | Operación interna: promociones, productos, órdenes, revisiones.                 |
+| **Audit & Snapshots**  | Evidencia inmutable, snapshots del universo de entries.                         |
+| **Exports / TPA**      | Exportaciones reproducibles para el administrador externo.                      |
+| **Drawing Controls**   | Controles y autorizaciones de cualquier sorteo interno.                         |
+| **i18n**               | Español e inglés como idiomas de primera clase.                                 |
 
 ---
 
@@ -80,13 +80,13 @@ Reglas de frontera:
 
 ## 4. Dependencias entre agentes
 
-| Depende de | para |
-|---|---|
-| `frontend` hacia `backend` | Contratos de API, formas de datos, estados, errores. |
-| `backend` hacia `frontend` | Necesidades reales de la UI antes de congelar contratos. |
-| `security` hacia ambos | Código implementado que auditar. |
-| `frontend` y `backend` hacia `security` | Aprobación antes de `INTEGRATE`. |
-| Todos hacia el abogado del cliente | Official Rules (`docs/LEGAL_PENDING.md`). |
+| Depende de                              | para                                                     |
+| --------------------------------------- | -------------------------------------------------------- |
+| `frontend` hacia `backend`              | Contratos de API, formas de datos, estados, errores.     |
+| `backend` hacia `frontend`              | Necesidades reales de la UI antes de congelar contratos. |
+| `security` hacia ambos                  | Código implementado que auditar.                         |
+| `frontend` y `backend` hacia `security` | Aprobación antes de `INTEGRATE`.                         |
+| Todos hacia el abogado del cliente      | Official Rules (`docs/LEGAL_PENDING.md`).                |
 
 **Regla de desbloqueo:** cuando un agente queda bloqueado, abre un handoff con
 `Blocking: YES` y sigue con trabajo que no dependa de esa respuesta. No

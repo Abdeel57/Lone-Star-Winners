@@ -40,12 +40,16 @@ const integerFromEnv = (min: number, max: number) =>
     .string()
     .regex(/^\d+$/u, { error: "must_be_a_non_negative_integer" })
     .transform((value) => Number.parseInt(value, 10))
-    .refine((value) => value >= min && value <= max, { error: `must_be_between_${String(min)}_and_${String(max)}` });
+    .refine((value) => value >= min && value <= max, {
+      error: `must_be_between_${String(min)}_and_${String(max)}`,
+    });
 
 const booleanFromEnv = z
   .string()
   .transform((value) => value.trim().toLowerCase())
-  .refine((value) => ["true", "false", "1", "0"].includes(value), { error: "must_be_true_or_false" })
+  .refine((value) => ["true", "false", "1", "0"].includes(value), {
+    error: "must_be_true_or_false",
+  })
   .transform((value) => value === "true" || value === "1");
 
 const commaSeparatedUrls = z
@@ -68,7 +72,9 @@ export const environmentSchema = z
      * introducirian un desfase silencioso, y la zona legal de la promocion
      * dejaria de ser la unica que decide.
      */
-    TZ: z.literal("UTC", { error: "DEC-011: el proceso debe correr en UTC. La zona legal la declara cada promocion." }),
+    TZ: z.literal("UTC", {
+      error: "DEC-011: el proceso debe correr en UTC. La zona legal la declara cada promocion.",
+    }),
     LOG_LEVEL: z.enum(LOG_LEVELS),
 
     // ----- HTTP -----
@@ -128,7 +134,8 @@ export const environmentSchema = z
       ctx.addIssue({
         code: "custom",
         path: ["DATABASE_SSL_MODE"],
-        message: "En produccion la conexion a PostgreSQL debe verificar el certificado (verify-full).",
+        message:
+          "En produccion la conexion a PostgreSQL debe verificar el certificado (verify-full).",
       });
     }
 
@@ -213,7 +220,9 @@ export class EnvironmentValidationError extends Error {
   public readonly issues: readonly string[];
 
   public constructor(issues: readonly string[]) {
-    super(`Configuracion de entorno invalida:\n${issues.map((issue) => `  - ${issue}`).join("\n")}`);
+    super(
+      `Configuracion de entorno invalida:\n${issues.map((issue) => `  - ${issue}`).join("\n")}`,
+    );
     this.name = "EnvironmentValidationError";
     this.issues = issues;
   }

@@ -23,7 +23,10 @@ const routes: RouteDefinition[] = [
     operationId: "getPromotionBySlug",
     summary: "Detalle de promocion.",
     tags: ["promotions"],
-    authorization: { kind: "PUBLIC", justification: "Catalogo publico de promociones, sin datos de participante." },
+    authorization: {
+      kind: "PUBLIC",
+      justification: "Catalogo publico de promociones, sin datos de participante.",
+    },
     schema: {
       params: z.object({ slug: z.string() }),
       querystring: z.object({ locale: z.enum(["en-US", "es-US"]).optional() }),
@@ -63,7 +66,11 @@ describe("documento OpenAPI 3.1", () => {
   it("marca siempre como obligatorio un parametro de ruta", () => {
     const paths = document["paths"] as Record<string, Record<string, Record<string, unknown>>>;
     const operation = paths["/api/v1/promotions/{slug}"]?.["get"];
-    const parameters = operation?.["parameters"] as { name: string; in: string; required: boolean }[];
+    const parameters = operation?.["parameters"] as {
+      name: string;
+      in: string;
+      required: boolean;
+    }[];
     const slug = parameters.find((parameter) => parameter.name === "slug");
     expect(slug?.required).toBe(true);
   });
@@ -91,11 +98,16 @@ describe("documento OpenAPI 3.1", () => {
   it("no aplica securityScheme a las rutas publicas y si al resto", () => {
     const paths = document["paths"] as Record<string, Record<string, Record<string, unknown>>>;
     expect(paths["/api/v1/promotions/{slug}"]?.["get"]?.["security"]).toBeUndefined();
-    expect(paths["/api/v1/admin/promotions/{id}/activate"]?.["post"]?.["security"]).toEqual([{ sessionCookie: [] }]);
+    expect(paths["/api/v1/admin/promotions/{id}/activate"]?.["post"]?.["security"]).toEqual([
+      { sessionCookie: [] },
+    ]);
   });
 
   it("describe la sesion como cookie opaca, nunca como bearer token (DEC-006)", () => {
-    const components = document["components"] as Record<string, Record<string, Record<string, unknown>>>;
+    const components = document["components"] as Record<
+      string,
+      Record<string, Record<string, unknown>>
+    >;
     const schemes = components["securitySchemes"];
     expect(Object.keys(schemes ?? {})).toEqual(["sessionCookie"]);
     expect(schemes?.["sessionCookie"]?.["in"]).toBe("cookie");

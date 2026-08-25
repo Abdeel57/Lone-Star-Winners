@@ -16,7 +16,13 @@ export const IDENTITY_STATUSES = ["PENDING_VERIFICATION", "ACTIVE", "SUSPENDED",
 export type IdentityStatus = (typeof IDENTITY_STATUSES)[number];
 
 /** Estado del perfil de participante. */
-export const PARTICIPANT_STATUSES = ["ACTIVE", "SUSPENDED", "DISQUALIFIED", "CLOSED", "ANONYMIZED"] as const;
+export const PARTICIPANT_STATUSES = [
+  "ACTIVE",
+  "SUSPENDED",
+  "DISQUALIFIED",
+  "CLOSED",
+  "ANONYMIZED",
+] as const;
 export type ParticipantStatus = (typeof PARTICIPANT_STATUSES)[number];
 
 /**
@@ -91,7 +97,9 @@ export const ENTRY_TRANSACTION_TYPES = [
 export type EntryTransactionType = (typeof ENTRY_TRANSACTION_TYPES)[number];
 
 /** Signo esperado del delta de cada tipo de movimiento. Lo verificara un CHECK en base de datos. */
-export const ENTRY_TRANSACTION_SIGN: Readonly<Record<EntryTransactionType, "POSITIVE" | "NEGATIVE">> = Object.freeze({
+export const ENTRY_TRANSACTION_SIGN: Readonly<
+  Record<EntryTransactionType, "POSITIVE" | "NEGATIVE">
+> = Object.freeze({
   PURCHASE_EARNED: "POSITIVE",
   AMOE_EARNED: "POSITIVE",
   PROMOTION_BONUS: "POSITIVE",
@@ -112,12 +120,29 @@ export const ENTRY_TRANSACTION_SIGN: Readonly<Record<EntryTransactionType, "POSI
  * `DISABLED` es el valor por defecto y el unico seguro mientras
  * `docs/LEGAL_PENDING.md` -> "AMOE mechanism" siga en `TBD`.
  */
-export const AMOE_MODES = ["DISABLED", "ONLINE_FORM", "MAIL_IN_REVIEW", "CODE", "EXTERNAL_INSTRUCTIONS"] as const;
+export const AMOE_MODES = [
+  "DISABLED",
+  "ONLINE_FORM",
+  "MAIL_IN_REVIEW",
+  "CODE",
+  "EXTERNAL_INSTRUCTIONS",
+] as const;
 export type AmoeMode = (typeof AMOE_MODES)[number];
 
-export const AMOE_SUBMISSION_STATUSES = ["SUBMITTED", "PENDING_REVIEW", "APPROVED", "REJECTED", "CANCELLED"] as const;
+export const AMOE_SUBMISSION_STATUSES = [
+  "SUBMITTED",
+  "PENDING_REVIEW",
+  "APPROVED",
+  "REJECTED",
+  "CANCELLED",
+] as const;
 export type AmoeSubmissionStatus = (typeof AMOE_SUBMISSION_STATUSES)[number];
 
 /** Como se resuelve el solapamiento entre multiplicadores. La eleccion es configuracion, no codigo. */
-export const MULTIPLIER_CONFLICT_STRATEGIES = ["STACK", "HIGHEST_WINS", "EXCLUSIVE", "PRIORITY_ORDER"] as const;
+export const MULTIPLIER_CONFLICT_STRATEGIES = [
+  "STACK",
+  "HIGHEST_WINS",
+  "EXCLUSIVE",
+  "PRIORITY_ORDER",
+] as const;
 export type MultiplierConflictStrategy = (typeof MULTIPLIER_CONFLICT_STRATEGIES)[number];

@@ -32,7 +32,12 @@ export const participantReviewStateEnum = pgEnum("participant_review_state", [
   "RESTRICTED",
 ]);
 
-export const adminUserStatusEnum = pgEnum("admin_user_status", ["INVITED", "ACTIVE", "SUSPENDED", "DEACTIVATED"]);
+export const adminUserStatusEnum = pgEnum("admin_user_status", [
+  "INVITED",
+  "ACTIVE",
+  "SUSPENDED",
+  "DEACTIVATED",
+]);
 
 export const promotionStatusEnum = pgEnum("promotion_status", [
   "DRAFT",
@@ -46,7 +51,11 @@ export const promotionStatusEnum = pgEnum("promotion_status", [
   "CANCELLED",
 ]);
 
-export const rulesVersionStatusEnum = pgEnum("rules_version_status", ["DRAFT", "ACTIVE", "ARCHIVED"]);
+export const rulesVersionStatusEnum = pgEnum("rules_version_status", [
+  "DRAFT",
+  "ACTIVE",
+  "ARCHIVED",
+]);
 
 export const productStatusEnum = pgEnum("product_status", ["DRAFT", "ACTIVE", "ARCHIVED"]);
 

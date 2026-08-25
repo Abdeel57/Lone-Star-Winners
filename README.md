@@ -54,10 +54,10 @@ Lone Star/
 
 ## El equipo
 
-| Teammate | Agente | Dominio |
-|---|---|---|
-| `frontend` | `frontend-ux` | Frontend, UX/UI, bilingüe, storefront, portal, admin UI |
-| `backend` | `backend-sweepstakes` | Base de datos, APIs, commerce, sweepstakes engine, AMOE |
+| Teammate   | Agente                 | Dominio                                                         |
+| ---------- | ---------------------- | --------------------------------------------------------------- |
+| `frontend` | `frontend-ux`          | Frontend, UX/UI, bilingüe, storefront, portal, admin UI         |
+| `backend`  | `backend-sweepstakes`  | Base de datos, APIs, commerce, sweepstakes engine, AMOE         |
 | `security` | `security-integration` | Seguridad, compliance, auditoría, exports, TPA, QA, integración |
 
 ---

@@ -113,7 +113,7 @@ Date: 2026-08-25
 Decision:
 **TypeScript en modo `strict`** en todo el monorepo, con
 `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes` y
-`noImplicitOverride`. `@typescript-eslint/no-explicit-any` como *error*.
+`noImplicitOverride`. `@typescript-eslint/no-explicit-any` como _error_.
 
 Context:
 Los contratos entre frontend y backend son tipados; un cambio de contrato debe
@@ -177,6 +177,7 @@ Date: 2026-08-25
 
 Decision:
 Dos procesos separados:
+
 - **`apps/web`** — Next.js (App Router) con `output: "standalone"`.
 - **`apps/api`** — **Fastify 5 standalone**. Las API routes de Next **no** se
   usan para lógica de negocio.
@@ -184,7 +185,7 @@ Dos procesos separados:
 El frontend consume la API por HTTP. No se fusionan.
 
 Context:
-Los webhooks de pago exigen *raw body* para verificar firma; los jobs largos y
+Los webhooks de pago exigen _raw body_ para verificar firma; los jobs largos y
 la generación de export snapshots no encajan en funciones serverless.
 
 Alternatives:
@@ -275,7 +276,7 @@ coincidente e independiente)
 Agreed by: los tres
 
 Nota: si en el futuro se propone SSO/IdP externo para staff, se implementa como
-*provider adicional dentro del mismo Identity*, nunca como sistema paralelo, y
+_provider adicional dentro del mismo Identity_, nunca como sistema paralelo, y
 requiere un `DEC-xxx` propio.
 
 ---
@@ -289,8 +290,9 @@ Date: 2026-08-25
 Decision:
 El **entry ledger es append-only de forma estructural**, garantizado en tres
 capas independientes:
+
 1. **Permisos de base de datos** — `REVOKE UPDATE, DELETE ON
-   entry_transactions, audit_events FROM app;`
+entry_transactions, audit_events FROM app;`
 2. **Triggers** `BEFORE UPDATE OR DELETE` que lanzan excepción.
 3. **Test de invariante en CI** que intenta activamente un `UPDATE` y un
    `DELETE` y exige que fallen; más un check que inspecciona las migraciones y
@@ -353,7 +355,7 @@ reescritura coherente). Hash chain sin sellado externo (insuficiente por la
 razón anterior).
 
 Reason:
-Es la diferencia entre *append-only* y **tamper-evident**. Un tercero debe
+Es la diferencia entre _append-only_ y **tamper-evident**. Un tercero debe
 poder demostrar que el histórico no se reescribió.
 
 Affected areas: `packages/audit`, `packages/database`, infraestructura.
@@ -372,6 +374,7 @@ Date: 2026-08-25
 
 Decision:
 **Idempotencia estructural**, garantizada por constraints y no por lógica:
+
 - `UNIQUE (promotion_id, source_type, source_ref)` sobre todo award de entries.
 - `UNIQUE (provider, provider_event_id)` sobre todo webhook, persistido
   **antes** de procesarse.
@@ -409,6 +412,7 @@ Date: 2026-08-25
 
 Decision:
 **Nunca coma flotante** para dinero ni para entries.
+
 - Dinero: enteros en unidad menor (`amount_minor`) más `currency` explícita.
 - Entries: enteros.
 - Multiplicadores: par numerador/denominador entero, nunca decimal.
@@ -652,6 +656,7 @@ Date: 2026-08-25
 
 Decision:
 Un sorteo interno requiere **cinco cerrojos simultáneos**, todos necesarios:
+
 1. Flag `internal_draw_enabled = false` por defecto, persistido en base de
    datos. Nunca `true` en migraciones semilla ni en `.env.example`. Test de
    invariante que falla si el default es `true`.
@@ -690,7 +695,7 @@ Agreed by: security; backend se compromete a no implementar selección aleatoria
 interna sin este `DEC` aprobado
 
 Nota adicional propuesta por security, **no vinculante**: esquema
-*commit-reveal* (publicar `snapshot_hash` y `commitment = SHA256(server_seed)`
+_commit-reveal_ (publicar `snapshot_hash` y `commitment = SHA256(server_seed)`
 antes del sorteo, y revelar `server_seed` después) para que un auditor externo
 compruebe que la semilla no se eligió a posteriori. Requiere decisión del
 cliente y de su abogado.
@@ -746,7 +751,7 @@ Decision:
 **`docs/LEGAL_PENDING.md` es el único registro de decisiones legales
 pendientes.** El archivo `docs/LEGAL_CONFIG_PENDING.md` que menciona el prompt
 del agente `security-integration` **no se crea**. En ese punto concreto, el
-prompt del agente queda *superseded* por `CLAUDE.md`.
+prompt del agente queda _superseded_ por `CLAUDE.md`.
 
 Context:
 El prompt de `security-integration` pide crear `docs/LEGAL_CONFIG_PENDING.md`,
@@ -1022,4 +1027,197 @@ Affected areas: raíz del repositorio, `packages/tpa`, `packages/database`,
 `pnpm-workspace.yaml`, CI.
 
 Proposed by: backend (detectado durante la implementación)
+Agreed by: Team Lead
+
+---
+
+## DEC-027
+
+Status: Accepted
+
+Date: 2026-08-25
+
+Decision:
+**El catálogo canónico de roles y capacidades vive en `packages/security`.**
+`packages/database` lo importa para la semilla y mantiene un test de paridad.
+`apps/api` lo consume a través de `apps/api/src/http/permission-catalog.ts`.
+
+Se adoptan del catálogo de `security`: los 8 roles (incluidos **`EXPORT_OFFICER`**
+y el actor **`SYSTEM`**), la convención `dominio.recurso.accion`, y los
+metadatos de step-up, segunda aprobación, dependencia de flag y dependencia
+legal.
+
+Se conservan del diseño de `backend`, por ser aciertos que el otro catálogo no
+tenía: **`SUPER_ADMIN` excluido de `export.finalize`, `draw.authorize` y
+`draw.execute`**; el conflicto de roles impuesto por trigger de base de datos; y
+el renombrado de `COMPLIANCE_REVIEWER` a `COMPLIANCE_OFFICER` para alinear con
+DEC-017.
+
+Context:
+Resuelve `HO-007`. Trabajando en paralelo, `security` y `backend` crearon dos
+catálogos de autorización incompatibles: capacidades `entry.ledger.read` frente
+a `entry.read`, y solo dos roles coincidentes de ocho. Es el anti-patrón de dos
+fuentes de verdad que prohíbe `CLAUDE.md` §4.
+
+Alternatives:
+Que ganase el catálogo de `packages/database` (descartado: no puede representar
+la separación entre `export.finalize` y `export.download` que exige DEC-016, no
+tiene actor `SYSTEM` para distinguir un job de una persona en la auditoría, y
+carece de `requiresSecondApproval`).
+
+Reason:
+**Los dos agentes detectaron el conflicto por separado y los dos recomendaron
+la misma resolución**, sin haberse consultado. La regla 4 de este documento
+atribuye a `security-integration` la revisión de autorización, y `backend` ya
+había preparado el punto de indirección precisamente para que el cambio fuese
+barato.
+
+Affected areas: `packages/security`, `packages/database`, `apps/api`.
+
+Proposed by: security y backend (coincidencia independiente)
+Agreed by: Team Lead
+
+---
+
+## DEC-028
+
+Status: Accepted
+
+Date: 2026-08-25
+
+Decision:
+Se añade **`Identity`** al vocabulario canónico, como entidad intermedia:
+`participants` y `admin_users` cuelgan de `identities`.
+
+Sigue habiendo **un único sistema de identidad** (DEC-006). La diferencia es
+que un empleado que no participa **no tiene fila en `participants`**.
+
+Context:
+`backend` introdujo la tabla durante B0 y pidió decisión explícita antes de
+que existan datos.
+
+Alternatives:
+Una sola tabla de usuarios con un discriminador (descartado por el motivo de
+abajo).
+
+Reason:
+Sin esta separación, una cuenta de personal podría acabar dentro del
+`ExportSnapshot` que recibe el third-party administrator. Que un empleado
+aparezca en el universo de participantes de un sweepstakes no es un detalle de
+modelado: es un problema de integridad del sorteo.
+
+Affected areas: `packages/database`, `packages/sweepstakes`, `packages/tpa`.
+
+Proposed by: backend
+Agreed by: Team Lead
+
+---
+
+## DEC-029
+
+Status: Accepted
+
+Date: 2026-08-25
+
+Decision:
+**El segmento de ruta y la etiqueta de formato son cosas distintas y se
+declaran por separado.**
+
+- Segmentos de ruta: `/en` y `/es` (cortos, legibles).
+- Etiquetas de formato e identificadores de diccionario: **`en-US` y `es-US`**.
+- Todo formateo con `Intl` (fechas, números, moneda) usa la **etiqueta
+  completa**, nunca el segmento de ruta.
+
+Context:
+DEC-021 fijó las rutas y los diccionarios sin decir que eran identificadores
+distintos. `frontend` lo detectó al implementar.
+
+Alternatives:
+Usar `es` a secas para todo (**descartado**: `es` formatea `31/12/2026`,
+mientras que `es-US` formatea al modo estadounidense).
+
+Reason:
+Lone Star Winners es un producto para hispanohablantes **de Estados Unidos**.
+Formatear sus fechas al estilo español sería un error silencioso: nadie lo
+detecta hasta que un participante se equivoca de día, y en una promoción con
+fecha de cierre eso tiene consecuencias.
+
+Affected areas: `apps/web`, `packages/ui`, cualquier salida formateada.
+
+Proposed by: frontend
+Agreed by: Team Lead
+
+---
+
+## DEC-030
+
+Status: Accepted
+
+Date: 2026-08-25
+
+Decision:
+El **contenido dinámico localizado** —títulos de promoción, nombres de premio,
+descripciones de producto: datos que un administrador teclea— se almacena y se
+sirve **por locale desde el backend**, como objeto `{ "en-US": …, "es-US": … }`.
+
+No es copy de producto (que es de `frontend` por DEC-022) ni texto legalmente
+controlante (que viaja aparte con sus banderas). Es una **tercera categoría**
+con dueño propio: `backend` lo persiste, el admin lo edita, `frontend` lo
+renderiza sin traducirlo jamás.
+
+Ningún locale puede quedar vacío al publicar: la validación de publicación
+exige ambos idiomas completos.
+
+Context:
+DEC-021 lo dejó abierto y DEC-022 no lo cerró. `frontend` señaló que el nombre
+de un premio no encaja en ninguna de las dos categorías existentes.
+
+Alternatives:
+Que `frontend` lo traduzca (descartado: no puede traducir datos que aún no
+existen cuando se compila). Un solo idioma con traducción automática
+(descartado: viola el principio #4).
+
+Reason:
+Si un locale pudiera quedar vacío, el principio #4 se rompería en producción
+justo donde más se nota: el nombre del premio.
+
+Affected areas: `packages/database`, `apps/api`, `apps/web`, admin.
+
+Proposed by: frontend
+Agreed by: Team Lead
+
+---
+
+## DEC-031
+
+Status: Accepted
+
+Date: 2026-08-25
+
+Decision:
+En el envelope de error, **`code` es la clave canónica de traducción**.
+`message_key` queda eliminado del contrato para no tener dos campos con el
+mismo propósito.
+
+Los paquetes del workspace usan el prefijo **`@lsw/*`**, y los paquetes de
+frontend consumidos por Next son **source-only** (`exports` apuntando a
+`./src/index.ts` más `transpilePackages`), sin paso de build intermedio.
+
+Context:
+DEC-022 dejó ambos campos en el envelope sin decir cuál era la clave de
+traducción. La convención `@lsw/*` la adoptaron los tres agentes de forma
+espontánea, pero no estaba escrita en ninguna decisión.
+
+Alternatives:
+Conservar los dos campos (descartado: dos nombres para lo mismo es la semilla
+de que se desincronicen).
+
+Reason:
+DEC-022 ya describe `code` como el enum estable. Tener además `message_key`
+solo añade ambigüedad.
+
+Affected areas: `docs/API_CONTRACT.md`, `apps/api`, `apps/web`, todos los
+manifiestos.
+
+Proposed by: frontend
 Agreed by: Team Lead

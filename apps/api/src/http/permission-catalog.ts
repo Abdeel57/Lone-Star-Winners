@@ -34,5 +34,10 @@
  *   de aqui y no del catalogo directamente.
  */
 
-export { getPermission, isPermissionKey, PERMISSIONS, STEP_UP_PERMISSION_KEYS } from "@lsw/database";
+export {
+  getPermission,
+  isPermissionKey,
+  PERMISSIONS,
+  STEP_UP_PERMISSION_KEYS,
+} from "@lsw/database";
 export type { PermissionKey, PermissionDefinition } from "@lsw/database";

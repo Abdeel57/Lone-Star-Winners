@@ -21,7 +21,8 @@ function buildDependencies(databaseWorks = true): AppDependencies {
     database: {
       role: "app",
       db: {
-        execute: () => (databaseWorks ? Promise.resolve({ rows: [] }) : Promise.reject(new Error("sin conexion"))),
+        execute: () =>
+          databaseWorks ? Promise.resolve({ rows: [] }) : Promise.reject(new Error("sin conexion")),
       },
       pool: {},
       close: () => Promise.resolve(),
@@ -51,7 +52,10 @@ describe("healthchecks", () => {
     const app = await createApp(buildDependencies(false));
     const response = await app.inject({ method: "GET", url: "/api/v1/health/ready" });
     expect(response.statusCode).toBe(503);
-    expect(response.json()).toEqual({ status: "degraded", checks: [{ name: "database", ok: false }] });
+    expect(response.json()).toEqual({
+      status: "degraded",
+      checks: [{ name: "database", ok: false }],
+    });
     expect(response.body).not.toContain("sin conexion");
     await app.close();
   });
@@ -83,7 +87,10 @@ describe("envelope de error (DEC-022)", () => {
       operationId: "fixtureExplodes",
       summary: "Fixture que lanza.",
       tags: ["fixture"],
-      authorization: { kind: "PUBLIC", justification: "Fixture de prueba del manejador de errores." },
+      authorization: {
+        kind: "PUBLIC",
+        justification: "Fixture de prueba del manejador de errores.",
+      },
       schema: { response: { 200: z.object({ ok: z.boolean() }) } },
       handler: () => {
         throw new Error("detalle interno que no debe salir: tabla entry_transactions");

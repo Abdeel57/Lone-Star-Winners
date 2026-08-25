@@ -27,7 +27,12 @@ import { buildRouteManifest } from "../http/route-registry.js";
 import { OPENAPI_DOCUMENT_VERSION } from "../routes/meta.js";
 import { CONTRACT_GENERATION_CONFIG } from "../config/contract-config.js";
 
-const OUTPUT_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "openapi");
+const OUTPUT_DIR = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "..",
+  "..",
+  "openapi",
+);
 
 function main(): void {
   // Las definiciones de ruta no consultan la base de datos: solo la capturan
@@ -57,7 +62,11 @@ function main(): void {
     contract_version: OPENAPI_DOCUMENT_VERSION,
     routes: buildRouteManifest(routes),
   };
-  writeFileSync(path.join(OUTPUT_DIR, "route-manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+  writeFileSync(
+    path.join(OUTPUT_DIR, "route-manifest.json"),
+    `${JSON.stringify(manifest, null, 2)}\n`,
+    "utf8",
+  );
 
   console.error(`[contract] ${String(routes.length)} rutas escritas en ${OUTPUT_DIR}`);
 }

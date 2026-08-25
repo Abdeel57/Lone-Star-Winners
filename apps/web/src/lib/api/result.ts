@@ -10,8 +10,7 @@ import type { ApiErrorEnvelope } from "./contract";
  * `error.tsx` generico que solo sabe decir "algo ha fallado".
  */
 export type ApiResult<T> =
-  | { readonly ok: true; readonly data: T }
-  | { readonly ok: false; readonly error: ApiFailure };
+  { readonly ok: true; readonly data: T } | { readonly ok: false; readonly error: ApiFailure };
 
 /** Por que fallo la llamada. */
 export type ApiFailureKind =

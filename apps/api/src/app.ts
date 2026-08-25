@@ -29,7 +29,10 @@ import {
 } from "./http/route-registry.js";
 import { zodSerializerCompiler, zodValidatorCompiler } from "./http/zod-compilers.js";
 import { createLogger } from "./observability/logger.js";
-import { runWithRequestContext, sanitizeIncomingCorrelationId } from "./observability/request-context.js";
+import {
+  runWithRequestContext,
+  sanitizeIncomingCorrelationId,
+} from "./observability/request-context.js";
 import { buildHealthRoutes } from "./routes/health.js";
 import { buildMetaRoutes } from "./routes/meta.js";
 
@@ -46,7 +49,10 @@ export function createDependencies(config: ApiConfig): AppDependencies {
     connectionString: config.database.appUrl,
     maxConnections: config.database.poolMax,
     statementTimeoutMs: config.database.statementTimeoutMs,
-    ssl: config.database.sslMode === "disable" ? false : { rejectUnauthorized: config.database.sslMode === "verify-full" },
+    ssl:
+      config.database.sslMode === "disable"
+        ? false
+        : { rejectUnauthorized: config.database.sslMode === "verify-full" },
     applicationName: "lsw-api",
   });
 
@@ -82,7 +88,9 @@ export function collectRouteDefinitions(dependencies: AppDependencies): RouteDef
  */
 export function collectContractRouteDefinitions(dependencies: AppDependencies): RouteDefinition[] {
   const routes: RouteDefinition[] = [...buildHealthRoutes(dependencies)];
-  routes.push(...buildMetaRoutes({ serverUrl: dependencies.config.http.publicUrl, allRoutes: () => routes }));
+  routes.push(
+    ...buildMetaRoutes({ serverUrl: dependencies.config.http.publicUrl, allRoutes: () => routes }),
+  );
   return routes;
 }
 
@@ -98,7 +106,8 @@ export async function createApp(dependencies: AppDependencies): Promise<FastifyI
     // en decisiones de rate limiting y de riesgo.
     trustProxy: false,
     disableRequestLogging: false,
-    genReqId: (request) => sanitizeIncomingCorrelationId(request.headers[config.http.requestIdHeader]),
+    genReqId: (request) =>
+      sanitizeIncomingCorrelationId(request.headers[config.http.requestIdHeader]),
   });
 
   // ---- 1. Guardia deny-by-default, antes de cualquier ruta (DEC-015) ----
@@ -128,9 +137,13 @@ export async function createApp(dependencies: AppDependencies): Promise<FastifyI
   await app.register(helmet, {
     // La API no sirve HTML; una CSP restrictiva evita que una respuesta de
     // error se interprete como documento.
-    contentSecurityPolicy: { directives: { "default-src": ["'none'"], "frame-ancestors": ["'none'"] } },
+    contentSecurityPolicy: {
+      directives: { "default-src": ["'none'"], "frame-ancestors": ["'none'"] },
+    },
     crossOriginResourcePolicy: { policy: "same-site" },
-    hsts: config.isProduction ? { maxAge: 31_536_000, includeSubDomains: true, preload: false } : false,
+    hsts: config.isProduction
+      ? { maxAge: 31_536_000, includeSubDomains: true, preload: false }
+      : false,
   });
 
   await app.register(cors, {

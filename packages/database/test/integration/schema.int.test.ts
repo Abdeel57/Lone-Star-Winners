@@ -76,11 +76,17 @@ describe("DEC-003 - roles y privilegios", () => {
     const result = await app.execute<{ rolname: string }>(
       sql`SELECT rolname FROM pg_roles WHERE rolname LIKE 'lsw_%' ORDER BY rolname`,
     );
-    expect(result.rows.map((row) => row.rolname)).toEqual(["lsw_app", "lsw_migrator", "lsw_readonly_report"]);
+    expect(result.rows.map((row) => row.rolname)).toEqual([
+      "lsw_app",
+      "lsw_migrator",
+      "lsw_readonly_report",
+    ]);
   });
 
   it("el rol app no puede crear tablas", async () => {
-    await expect(app.execute(sql`CREATE TABLE app_should_not_be_able_to_do_this (id int)`)).rejects.toThrow();
+    await expect(
+      app.execute(sql`CREATE TABLE app_should_not_be_able_to_do_this (id int)`),
+    ).rejects.toThrow();
   });
 
   it("el rol app no puede borrar una asignacion de rol administrativo", async () => {
@@ -88,15 +94,21 @@ describe("DEC-003 - roles y privilegios", () => {
     await app.execute(
       sql`INSERT INTO admin_user_roles (admin_user_id, role_key) VALUES (${adminId}, 'READ_ONLY_AUDITOR')`,
     );
-    await expect(app.execute(sql`DELETE FROM admin_user_roles WHERE admin_user_id = ${adminId}`)).rejects.toThrow();
+    await expect(
+      app.execute(sql`DELETE FROM admin_user_roles WHERE admin_user_id = ${adminId}`),
+    ).rejects.toThrow();
   });
 
   it("el rol app no puede reescribir quien concedio un rol, solo marcar la revocacion", async () => {
     const adminId = await createAdminUser("column-grant-probe-admin");
-    await app.execute(sql`INSERT INTO admin_user_roles (admin_user_id, role_key) VALUES (${adminId}, 'CUSTOMER_SUPPORT')`);
+    await app.execute(
+      sql`INSERT INTO admin_user_roles (admin_user_id, role_key) VALUES (${adminId}, 'CUSTOMER_SUPPORT')`,
+    );
 
     await expect(
-      app.execute(sql`UPDATE admin_user_roles SET granted_at = now() WHERE admin_user_id = ${adminId}`),
+      app.execute(
+        sql`UPDATE admin_user_roles SET granted_at = now() WHERE admin_user_id = ${adminId}`,
+      ),
     ).rejects.toThrow();
 
     const revoker = await createAdminUser("revoker-admin");
@@ -122,9 +134,13 @@ describe("DEC-003 - roles y privilegios", () => {
 
 describe("DEC-006 - identidad y MFA", () => {
   it("el correo se normaliza en el motor y no admite duplicados con distinta caja", async () => {
-    await app.execute(sql`INSERT INTO identities (email) VALUES ('Duplicado.Prueba@example.invalid')`);
+    await app.execute(
+      sql`INSERT INTO identities (email) VALUES ('Duplicado.Prueba@example.invalid')`,
+    );
     await expect(
-      app.execute(sql`INSERT INTO identities (email) VALUES ('  duplicado.prueba@example.invalid  ')`),
+      app.execute(
+        sql`INSERT INTO identities (email) VALUES ('  duplicado.prueba@example.invalid  ')`,
+      ),
     ).rejects.toThrow();
   });
 
@@ -148,7 +164,9 @@ describe("DEC-017 - separacion de funciones", () => {
       sql`INSERT INTO admin_user_roles (admin_user_id, role_key) VALUES (${adminId}, 'COMPLIANCE_OFFICER')`,
     );
     await expect(
-      app.execute(sql`INSERT INTO admin_user_roles (admin_user_id, role_key) VALUES (${adminId}, 'DRAW_OFFICER')`),
+      app.execute(
+        sql`INSERT INTO admin_user_roles (admin_user_id, role_key) VALUES (${adminId}, 'DRAW_OFFICER')`,
+      ),
     ).rejects.toThrow(/separacion de funciones/iu);
   });
 

@@ -42,7 +42,9 @@ interface ZodIssueLike {
   readonly message: string;
 }
 
-function toStructuredIssues(error: { issues: readonly ZodIssueLike[] }): { path: string; code: string }[] {
+function toStructuredIssues(error: {
+  issues: readonly ZodIssueLike[];
+}): { path: string; code: string }[] {
   return error.issues.map((issue) => ({
     path: issue.path.map((segment) => String(segment)).join("."),
     // `message` es la clave estable cuando el esquema la define con

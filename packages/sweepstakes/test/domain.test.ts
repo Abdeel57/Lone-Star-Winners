@@ -70,13 +70,18 @@ describe("aritmetica sin coma flotante (DEC-010)", () => {
   });
 
   it("rechaza un denominador no positivo", () => {
-    expect(() => normalizeRationalMultiplier({ numerator: 1n, denominator: 0n })).toThrow(RangeError);
+    expect(() => normalizeRationalMultiplier({ numerator: 1n, denominator: 0n })).toThrow(
+      RangeError,
+    );
   });
 
   it("compara multiplicadores por valor matematico", () => {
-    expect(rationalMultipliersAreEqual({ numerator: 2n, denominator: 4n }, { numerator: 1n, denominator: 2n })).toBe(
-      true,
-    );
+    expect(
+      rationalMultipliersAreEqual(
+        { numerator: 2n, denominator: 4n },
+        { numerator: 1n, denominator: 2n },
+      ),
+    ).toBe(true);
   });
 
   it("acepta importes por encima de Number.MAX_SAFE_INTEGER sin perder precision", () => {

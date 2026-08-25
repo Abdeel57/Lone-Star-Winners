@@ -54,7 +54,8 @@ export const scenarios = {
       }),
     ),
 
-  promotion: (body: unknown) => http.get(url(API_PATHS.activePromotion), () => HttpResponse.json(body)),
+  promotion: (body: unknown) =>
+    http.get(url(API_PATHS.activePromotion), () => HttpResponse.json(body)),
 
   siteConfig: (body: unknown) => http.get(url(API_PATHS.siteConfig), () => HttpResponse.json(body)),
 

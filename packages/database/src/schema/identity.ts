@@ -4,7 +4,16 @@
  */
 
 import { sql } from "drizzle-orm";
-import { boolean, index, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import {
+  boolean,
+  index,
+  pgTable,
+  primaryKey,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid,
+} from "drizzle-orm/pg-core";
 
 import {
   adminUserStatusEnum,
@@ -108,7 +117,12 @@ export const adminRolePermissions = pgTable(
       .references(() => adminPermissions.key, { onDelete: "restrict" }),
     createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
   },
-  (table) => [primaryKey({ name: "admin_role_permissions_pkey", columns: [table.roleKey, table.permissionKey] })],
+  (table) => [
+    primaryKey({
+      name: "admin_role_permissions_pkey",
+      columns: [table.roleKey, table.permissionKey],
+    }),
+  ],
 );
 
 /** DEC-017 cerrojo 3: pares de roles incompatibles, impuestos por trigger. */
@@ -124,7 +138,9 @@ export const adminRoleConflicts = pgTable(
     reason: text("reason").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
   },
-  (table) => [primaryKey({ name: "admin_role_conflicts_pkey", columns: [table.roleKeyA, table.roleKeyB] })],
+  (table) => [
+    primaryKey({ name: "admin_role_conflicts_pkey", columns: [table.roleKeyA, table.roleKeyB] }),
+  ],
 );
 
 /**
@@ -142,10 +158,14 @@ export const adminUserRoles = pgTable(
       .notNull()
       .references(() => adminRoles.key, { onDelete: "restrict" }),
     grantedAt: timestamp("granted_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
-    grantedByAdminUserId: uuid("granted_by_admin_user_id").references(() => adminUsers.id, { onDelete: "restrict" }),
+    grantedByAdminUserId: uuid("granted_by_admin_user_id").references(() => adminUsers.id, {
+      onDelete: "restrict",
+    }),
     grantReason: text("grant_reason"),
     revokedAt: timestamp("revoked_at", { withTimezone: true, mode: "date" }),
-    revokedByAdminUserId: uuid("revoked_by_admin_user_id").references(() => adminUsers.id, { onDelete: "restrict" }),
+    revokedByAdminUserId: uuid("revoked_by_admin_user_id").references(() => adminUsers.id, {
+      onDelete: "restrict",
+    }),
     revokeReason: text("revoke_reason"),
   },
   (table) => [

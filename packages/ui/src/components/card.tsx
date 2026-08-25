@@ -39,14 +39,7 @@ export interface CardProps extends Omit<HTMLAttributes<HTMLElement>, "className"
   readonly children: ReactNode;
 }
 
-export function Card({
-  elevation,
-  padding,
-  as = "div",
-  className,
-  children,
-  ...rest
-}: CardProps) {
+export function Card({ elevation, padding, as = "div", className, children, ...rest }: CardProps) {
   const classes = cn(cardVariants({ elevation, padding }), className);
 
   if (as === "section") {
@@ -133,7 +126,5 @@ export function CardBody({ className, children }: CardSlotProps) {
 }
 
 export function CardFooter({ className, children }: CardSlotProps) {
-  return (
-    <div className={cn("mt-s5 flex flex-wrap items-center gap-3", className)}>{children}</div>
-  );
+  return <div className={cn("mt-s5 flex flex-wrap items-center gap-3", className)}>{children}</div>;
 }

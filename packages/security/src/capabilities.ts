@@ -189,7 +189,12 @@ export const CAPABILITIES = Object.freeze({
       touchesPii: true,
     },
   ),
-  "order.read": define("order.read", "order", "SENSITIVE", "Ver pedidos de cualquier participante."),
+  "order.read": define(
+    "order.read",
+    "order",
+    "SENSITIVE",
+    "Ver pedidos de cualquier participante.",
+  ),
   "entry.ledger.read": define(
     "entry.ledger.read",
     "entry",

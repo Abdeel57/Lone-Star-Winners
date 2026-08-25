@@ -54,7 +54,10 @@ const promotionsSql = readMigration("0002_promotions.sql");
 
 /** Extrae los valores de `CREATE TYPE <name> AS ENUM (...)`. */
 function parseSqlEnum(sql: string, typeName: string): string[] {
-  const pattern = new RegExp(String.raw`CREATE\s+TYPE\s+${typeName}\s+AS\s+ENUM\s*\(([^)]*)\)`, "iu");
+  const pattern = new RegExp(
+    String.raw`CREATE\s+TYPE\s+${typeName}\s+AS\s+ENUM\s*\(([^)]*)\)`,
+    "iu",
+  );
   const match = pattern.exec(sql);
   if (match?.[1] === undefined) {
     throw new Error(`No se encontro el tipo enumerado ${typeName} en el SQL.`);
@@ -75,15 +78,31 @@ function parseInsertBlock(sql: string, table: string): string {
 describe("paridad de enumerados: SQL <-> Drizzle <-> dominio", () => {
   const cases = [
     { type: "identity_status", drizzle: identityStatusEnum.enumValues, domain: IDENTITY_STATUSES },
-    { type: "participant_status", drizzle: participantStatusEnum.enumValues, domain: PARTICIPANT_STATUSES },
+    {
+      type: "participant_status",
+      drizzle: participantStatusEnum.enumValues,
+      domain: PARTICIPANT_STATUSES,
+    },
     {
       type: "participant_review_state",
       drizzle: participantReviewStateEnum.enumValues,
       domain: PARTICIPANT_REVIEW_STATES,
     },
-    { type: "admin_user_status", drizzle: adminUserStatusEnum.enumValues, domain: ADMIN_USER_STATUSES },
-    { type: "promotion_status", drizzle: promotionStatusEnum.enumValues, domain: PROMOTION_STATUSES },
-    { type: "rules_version_status", drizzle: rulesVersionStatusEnum.enumValues, domain: RULES_VERSION_STATUSES },
+    {
+      type: "admin_user_status",
+      drizzle: adminUserStatusEnum.enumValues,
+      domain: ADMIN_USER_STATUSES,
+    },
+    {
+      type: "promotion_status",
+      drizzle: promotionStatusEnum.enumValues,
+      domain: PROMOTION_STATUSES,
+    },
+    {
+      type: "rules_version_status",
+      drizzle: rulesVersionStatusEnum.enumValues,
+      domain: RULES_VERSION_STATUSES,
+    },
     { type: "product_status", drizzle: productStatusEnum.enumValues, domain: PRODUCT_STATUSES },
     { type: "locale_code", drizzle: localeCodeEnum.enumValues, domain: LOCALE_CODES },
   ] as const;
@@ -100,14 +119,16 @@ describe("paridad de enumerados: SQL <-> Drizzle <-> dominio", () => {
 describe("paridad del catalogo RBAC (DEC-015)", () => {
   it("los permisos del SQL y los de TypeScript son exactamente los mismos", () => {
     const block = parseInsertBlock(rbacSql, "admin_permissions");
-    const parsed = [...block.matchAll(/\(\s*'([a-z0-9_.]+)'\s*,\s*'([^']*)'\s*,\s*(true|false)\s*,\s*(true|false)\s*\)/gu)].map(
-      (match) => ({
-        key: match[1] ?? "",
-        description: match[2] ?? "",
-        isSensitive: match[3] === "true",
-        requiresStepUp: match[4] === "true",
-      }),
-    );
+    const parsed = [
+      ...block.matchAll(
+        /\(\s*'([a-z0-9_.]+)'\s*,\s*'([^']*)'\s*,\s*(true|false)\s*,\s*(true|false)\s*\)/gu,
+      ),
+    ].map((match) => ({
+      key: match[1] ?? "",
+      description: match[2] ?? "",
+      isSensitive: match[3] === "true",
+      requiresStepUp: match[4] === "true",
+    }));
 
     expect(parsed.length).toBe(PERMISSIONS.length);
     expect(parsed.map((p) => p.key).sort()).toEqual(PERMISSIONS.map((p) => p.key).sort());
@@ -116,9 +137,15 @@ describe("paridad del catalogo RBAC (DEC-015)", () => {
     for (const permission of PERMISSIONS) {
       const fromSql = sqlIndex.get(permission.key);
       expect(fromSql, `permiso ausente en SQL: ${permission.key}`).toBeDefined();
-      expect(fromSql?.isSensitive, `is_sensitive difiere en ${permission.key}`).toBe(permission.isSensitive);
-      expect(fromSql?.requiresStepUp, `requires_step_up difiere en ${permission.key}`).toBe(permission.requiresStepUp);
-      expect(fromSql?.description, `description difiere en ${permission.key}`).toBe(permission.description);
+      expect(fromSql?.isSensitive, `is_sensitive difiere en ${permission.key}`).toBe(
+        permission.isSensitive,
+      );
+      expect(fromSql?.requiresStepUp, `requires_step_up difiere en ${permission.key}`).toBe(
+        permission.requiresStepUp,
+      );
+      expect(fromSql?.description, `description difiere en ${permission.key}`).toBe(
+        permission.description,
+      );
     }
   });
 
@@ -130,10 +157,12 @@ describe("paridad del catalogo RBAC (DEC-015)", () => {
 
   it("todo permiso asignado a un rol existe en el catalogo", () => {
     const block = parseInsertBlock(rbacSql, "admin_role_permissions");
-    const assignments = [...block.matchAll(/\(\s*'([A-Z_]+)'\s*,\s*'([a-z0-9_.]+)'\s*\)/gu)].map((match) => ({
-      role: match[1] ?? "",
-      permission: match[2] ?? "",
-    }));
+    const assignments = [...block.matchAll(/\(\s*'([A-Z_]+)'\s*,\s*'([a-z0-9_.]+)'\s*\)/gu)].map(
+      (match) => ({
+        role: match[1] ?? "",
+        permission: match[2] ?? "",
+      }),
+    );
 
     expect(assignments.length).toBeGreaterThan(0);
 
@@ -142,7 +171,10 @@ describe("paridad del catalogo RBAC (DEC-015)", () => {
 
     for (const assignment of assignments) {
       expect(knownRoles.has(assignment.role), `rol desconocido: ${assignment.role}`).toBe(true);
-      expect(knownPermissions.has(assignment.permission), `permiso desconocido: ${assignment.permission}`).toBe(true);
+      expect(
+        knownPermissions.has(assignment.permission),
+        `permiso desconocido: ${assignment.permission}`,
+      ).toBe(true);
     }
   });
 
@@ -150,9 +182,9 @@ describe("paridad del catalogo RBAC (DEC-015)", () => {
     // Si el rol con mas privilegios acumulara ambas capacidades, la separacion
     // de funciones se eludiria simplemente usando esa cuenta.
     const block = parseInsertBlock(rbacSql, "admin_role_permissions");
-    const superAdminPermissions = [...block.matchAll(/\(\s*'SUPER_ADMIN'\s*,\s*'([a-z0-9_.]+)'\s*\)/gu)].map(
-      (match) => match[1] ?? "",
-    );
+    const superAdminPermissions = [
+      ...block.matchAll(/\(\s*'SUPER_ADMIN'\s*,\s*'([a-z0-9_.]+)'\s*\)/gu),
+    ].map((match) => match[1] ?? "");
 
     expect(superAdminPermissions).not.toContain("export.finalize");
     expect(superAdminPermissions).not.toContain("draw.execute");
@@ -172,7 +204,9 @@ describe("paridad del catalogo RBAC (DEC-015)", () => {
   it("cada permiso con step-up esta marcado tambien como sensible", () => {
     for (const permission of PERMISSIONS) {
       if (permission.requiresStepUp) {
-        expect(permission.isSensitive, `${permission.key} exige step-up sin ser sensible`).toBe(true);
+        expect(permission.isSensitive, `${permission.key} exige step-up sin ser sensible`).toBe(
+          true,
+        );
       }
     }
   });
@@ -185,7 +219,9 @@ describe("paridad de claves legales requeridas (DEC-012)", () => {
     expect(start).toBeGreaterThan(-1);
     expect(end).toBeGreaterThan(start);
 
-    const fromSql = [...promotionsSql.slice(start, end).matchAll(/'([a-z0-9_]+)'/gu)].map((match) => match[1] ?? "");
+    const fromSql = [...promotionsSql.slice(start, end).matchAll(/'([a-z0-9_]+)'/gu)].map(
+      (match) => match[1] ?? "",
+    );
     expect(fromSql.sort()).toEqual([...REQUIRED_RULES_KEYS].sort());
   });
 });

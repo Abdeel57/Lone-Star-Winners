@@ -55,7 +55,9 @@ export type RulesKey = RequiredRulesKey | OptionalRulesKey;
  * Una clave presente con valor `null`, `undefined` o la cadena `TBD` cuenta
  * como no resuelta.
  */
-export function findUnresolvedRequiredKeys(config: Readonly<Record<string, unknown>>): RequiredRulesKey[] {
+export function findUnresolvedRequiredKeys(
+  config: Readonly<Record<string, unknown>>,
+): RequiredRulesKey[] {
   return REQUIRED_RULES_KEYS.filter((key) => {
     if (!Object.prototype.hasOwnProperty.call(config, key)) {
       return true;
@@ -64,7 +66,10 @@ export function findUnresolvedRequiredKeys(config: Readonly<Record<string, unkno
     if (value === null || value === undefined) {
       return true;
     }
-    if (typeof value === "string" && (value.trim() === "" || value.trim().toUpperCase() === "TBD")) {
+    if (
+      typeof value === "string" &&
+      (value.trim() === "" || value.trim().toUpperCase() === "TBD")
+    ) {
       return true;
     }
     return false;

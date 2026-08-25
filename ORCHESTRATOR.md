@@ -55,7 +55,7 @@ usuario de que falta pegar ese prompt. No inventes las instrucciones faltantes.
 Ni más ni menos:
 
 | Teammate   | Agente                 | Modelo     |
-|------------|------------------------|------------|
+| ---------- | ---------------------- | ---------- |
 | `frontend` | `frontend-ux`          | **Opus 5** |
 | `backend`  | `backend-sweepstakes`  | **Opus 5** |
 | `security` | `security-integration` | **Opus 5** |

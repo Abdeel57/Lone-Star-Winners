@@ -58,8 +58,10 @@ export const buttonVariants = cva(
 export type ButtonVariant = NonNullable<VariantProps<typeof buttonVariants>["variant"]>;
 export type ButtonSize = NonNullable<VariantProps<typeof buttonVariants>["size"]>;
 
-export interface ButtonProps
-  extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, "className" | "type"> {
+export interface ButtonProps extends Omit<
+  ButtonHTMLAttributes<HTMLButtonElement>,
+  "className" | "type"
+> {
   readonly variant?: ButtonVariant;
   readonly size?: ButtonSize;
   readonly fullWidth?: boolean;

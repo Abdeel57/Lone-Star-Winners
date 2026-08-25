@@ -75,7 +75,11 @@ function describeAuthorization(definition: RouteDefinition): JsonSchema {
 
   switch (authorization.kind) {
     case "PUBLIC":
-      return { kind: "PUBLIC", justification: authorization.justification, requires_step_up: false };
+      return {
+        kind: "PUBLIC",
+        justification: authorization.justification,
+        requires_step_up: false,
+      };
     case "PARTICIPANT":
       return {
         kind: authorization.selfOnly ? "PARTICIPANT_SELF" : "PARTICIPANT",

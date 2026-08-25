@@ -52,7 +52,9 @@ describe("esquema de entorno", () => {
   });
 
   it("ningun secreto de .env.example lleva un valor con forma de secreto real", () => {
-    const secretNames = new Set(ENV_REGISTRY.filter((spec) => spec.secret).map((spec) => spec.name));
+    const secretNames = new Set(
+      ENV_REGISTRY.filter((spec) => spec.secret).map((spec) => spec.name),
+    );
     const suspicious = entries
       .filter((entry) => secretNames.has(entry.name) && entry.value !== "")
       .filter((entry) => !/FAKE|CHANGE_ME|PLACEHOLDER|EJEMPLO|EXAMPLE|localhost/i.test(entry.value))

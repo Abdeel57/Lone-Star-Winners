@@ -18,7 +18,11 @@ import { migrate } from "drizzle-orm/node-postgres/migrator";
 
 import { createDatabaseHandle } from "./client.js";
 
-export const MIGRATIONS_FOLDER = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "drizzle");
+export const MIGRATIONS_FOLDER = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "..",
+  "drizzle",
+);
 
 export interface RunMigrationsOptions {
   readonly connectionString: string;

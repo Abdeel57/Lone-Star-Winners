@@ -7,7 +7,17 @@
  * cabecera de la migracion para el razonamiento completo.
  */
 
-import { bigint, char, index, integer, pgTable, primaryKey, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import {
+  bigint,
+  char,
+  index,
+  integer,
+  pgTable,
+  primaryKey,
+  text,
+  timestamp,
+  uuid,
+} from "drizzle-orm/pg-core";
 
 import { localeCodeEnum, productStatusEnum } from "./enums.js";
 
@@ -39,7 +49,9 @@ export const productTranslations = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
   },
-  (table) => [primaryKey({ name: "product_translations_pkey", columns: [table.productId, table.locale] })],
+  (table) => [
+    primaryKey({ name: "product_translations_pkey", columns: [table.productId, table.locale] }),
+  ],
 );
 
 export const productVariants = pgTable(

@@ -14,7 +14,9 @@ import { seedDevelopmentData } from "../seed/dev-seed.js";
 
 async function main(): Promise<void> {
   if (process.env["NODE_ENV"] === "production") {
-    console.error("[seed] Rechazado: esta semilla es de desarrollo y nunca debe correr contra produccion.");
+    console.error(
+      "[seed] Rechazado: esta semilla es de desarrollo y nunca debe correr contra produccion.",
+    );
     process.exit(1);
   }
 

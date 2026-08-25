@@ -7,9 +7,9 @@ Propiedad de `frontend-ux` (`docs/TASK_OWNERSHIP.md`).
 
 | Ruta                    | Qué es                                                        |
 | ----------------------- | ------------------------------------------------------------- |
-| `src/styles/tokens.css` | Custom properties. Única fuente de verdad del sistema visual.  |
-| `tailwind-preset.mjs`   | Preset que expone esos tokens como clases de Tailwind.         |
-| `src/index.ts`          | Nombres de token tipados para el uso ocasional desde TS.       |
+| `src/styles/tokens.css` | Custom properties. Única fuente de verdad del sistema visual. |
+| `tailwind-preset.mjs`   | Preset que expone esos tokens como clases de Tailwind.        |
+| `src/index.ts`          | Nombres de token tipados para el uso ocasional desde TS.      |
 
 ## Cómo se consume
 

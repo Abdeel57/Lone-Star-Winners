@@ -124,7 +124,9 @@ export function assertRouteIsAuthorized(definition: RouteDefinition): void {
   }
 
   if (definition.operationId.trim() === "") {
-    throw new RouteRegistrationError(`Ruta ${where}: falta operationId (DEC-014 lo necesita para el spec).`);
+    throw new RouteRegistrationError(
+      `Ruta ${where}: falta operationId (DEC-014 lo necesita para el spec).`,
+    );
   }
 
   if (Object.keys(definition.schema.response).length === 0) {
@@ -164,7 +166,9 @@ export function assertRouteIsAuthorized(definition: RouteDefinition): void {
     }
     default: {
       const exhaustive: never = authorization;
-      throw new RouteRegistrationError(`Ruta ${where}: autorizacion desconocida ${JSON.stringify(exhaustive)}.`);
+      throw new RouteRegistrationError(
+        `Ruta ${where}: autorizacion desconocida ${JSON.stringify(exhaustive)}.`,
+      );
     }
   }
 }
@@ -172,7 +176,10 @@ export function assertRouteIsAuthorized(definition: RouteDefinition): void {
 /** Resultado de la comprobacion de autorizacion de una peticion concreta. */
 export type AuthorizationOutcome =
   | { readonly allowed: true }
-  | { readonly allowed: false; readonly reason: "UNAUTHENTICATED" | "FORBIDDEN" | "STEP_UP_REQUIRED" };
+  | {
+      readonly allowed: false;
+      readonly reason: "UNAUTHENTICATED" | "FORBIDDEN" | "STEP_UP_REQUIRED";
+    };
 
 export interface AuthorizationRequest {
   readonly request: FastifyRequest;
@@ -181,7 +188,9 @@ export interface AuthorizationRequest {
   readonly requiresStepUp: boolean;
 }
 
-export type Authorizer = (input: AuthorizationRequest) => Promise<AuthorizationOutcome> | AuthorizationOutcome;
+export type Authorizer = (
+  input: AuthorizationRequest,
+) => Promise<AuthorizationOutcome> | AuthorizationOutcome;
 
 /**
  * Autorizador por defecto del hito B0.
@@ -207,13 +216,18 @@ function buildAuthorizationPreHandler(): preHandlerHookHandler {
     if (definition === undefined) {
       // Defensa en profundidad: no deberia poder llegar aqui, porque el hook
       // `onRoute` habria impedido el arranque. Si aun asi llega, se deniega.
-      request.log.error({ event: "route.authorization.missing_definition" }, "ruta sin definicion de autorizacion");
+      request.log.error(
+        { event: "route.authorization.missing_definition" },
+        "ruta sin definicion de autorizacion",
+      );
       throw ApiErrors.internal();
     }
 
     const { authorization } = definition;
     const requiresStepUp =
-      authorization.kind === "PERMISSION" ? getPermission(authorization.permission).requiresStepUp : false;
+      authorization.kind === "PERMISSION"
+        ? getPermission(authorization.permission).requiresStepUp
+        : false;
 
     const outcome = await request.server.lswAuthorizer({ request, authorization, requiresStepUp });
 
@@ -221,7 +235,8 @@ function buildAuthorizationPreHandler(): preHandlerHookHandler {
       return;
     }
 
-    const permissionName = authorization.kind === "PERMISSION" ? authorization.permission : authorization.kind;
+    const permissionName =
+      authorization.kind === "PERMISSION" ? authorization.permission : authorization.kind;
 
     request.log.warn(
       {
@@ -269,7 +284,10 @@ export function installRouteGuard(app: FastifyInstance): void {
   });
 }
 
-export function registerRoutes(app: FastifyInstance, definitions: readonly RouteDefinition[]): void {
+export function registerRoutes(
+  app: FastifyInstance,
+  definitions: readonly RouteDefinition[],
+): void {
   const seen = new Set<string>();
   const seenOperationIds = new Set<string>();
 
@@ -296,7 +314,9 @@ export function registerRoutes(app: FastifyInstance, definitions: readonly Route
       preHandler: buildAuthorizationPreHandler(),
       schema: {
         ...(definition.schema.params === undefined ? {} : { params: definition.schema.params }),
-        ...(definition.schema.querystring === undefined ? {} : { querystring: definition.schema.querystring }),
+        ...(definition.schema.querystring === undefined
+          ? {}
+          : { querystring: definition.schema.querystring }),
         ...(definition.schema.body === undefined ? {} : { body: definition.schema.body }),
         response: definition.schema.response,
       },
@@ -344,12 +364,16 @@ export function buildRouteManifest(definitions: readonly RouteDefinition[]): Rou
         operation_id: definition.operationId,
         authorization: authorizationLabel,
         requires_step_up:
-          authorization.kind === "PERMISSION" ? getPermission(authorization.permission).requiresStepUp : false,
+          authorization.kind === "PERMISSION"
+            ? getPermission(authorization.permission).requiresStepUp
+            : false,
         tags: definition.tags,
         summary: definition.summary,
       };
     })
-    .sort((a, b) => (a.path === b.path ? a.method.localeCompare(b.method) : a.path.localeCompare(b.path)));
+    .sort((a, b) =>
+      a.path === b.path ? a.method.localeCompare(b.method) : a.path.localeCompare(b.path),
+    );
 }
 
 declare module "fastify" {

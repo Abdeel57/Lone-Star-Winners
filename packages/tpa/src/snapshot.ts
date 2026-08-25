@@ -21,18 +21,10 @@
  * `SUPERSEDED` reemplazado por una version posterior. Nunca borrado.
  */
 export type ExportSnapshotStatus =
-  | "DRAFT"
-  | "VALIDATING"
-  | "FINALIZED"
-  | "DELIVERED"
-  | "SUPERSEDED";
+  "DRAFT" | "VALIDATING" | "FINALIZED" | "DELIVERED" | "SUPERSEDED";
 
 export type ExportDeliveryMethod =
-  | "MANUAL_DOWNLOAD"
-  | "SFTP"
-  | "HTTPS_API"
-  | "SIGNED_URL"
-  | "NOT_CONFIGURED";
+  "MANUAL_DOWNLOAD" | "SFTP" | "HTTPS_API" | "SIGNED_URL" | "NOT_CONFIGURED";
 
 /**
  * Manifiesto: lo unico que puede contener marcas de tiempo de generacion.
