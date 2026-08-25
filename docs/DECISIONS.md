@@ -64,16 +64,17 @@ Legal dependency:
 
 > **Estado de esta tanda (DEC-001 … DEC-021):** producto de la FASE 1
 > (planificación) del 2026-08-25, en la que los tres agentes propusieron de
-> forma independiente y sin verse entre sí. Todas están en `Proposed` a la
-> espera de aprobación del usuario. Los puntos donde los agentes **no**
-> coincidieron no aparecen aquí: están abiertos como handoffs en
-> `docs/AGENT_HANDOFF.md`.
+> forma independiente y sin verse entre sí. **Aprobadas por el usuario el
+> 2026-08-25**; todas pasan a `Accepted` y son vinculantes.
+>
+> `DEC-022`, `DEC-023` y `DEC-024` resuelven los conflictos que quedaron
+> abiertos como `HO-001`, `HO-002` y `HO-004`.
 
 ---
 
 ## DEC-001
 
-Status: Proposed
+Status: Accepted
 
 Date: 2026-08-25
 
@@ -105,7 +106,7 @@ Agreed by: frontend, backend; security no objeta
 
 ## DEC-002
 
-Status: Proposed
+Status: Accepted
 
 Date: 2026-08-25
 
@@ -133,7 +134,7 @@ Agreed by: los tres
 
 ## DEC-003
 
-Status: Proposed
+Status: Accepted
 
 Date: 2026-08-25
 
@@ -170,7 +171,7 @@ diferenciados, ese hosting queda descartado.
 
 ## DEC-004
 
-Status: Proposed
+Status: Accepted
 
 Date: 2026-08-25
 
@@ -205,7 +206,7 @@ Agreed by: frontend, backend; security no objeta
 
 ## DEC-005
 
-Status: Proposed
+Status: Accepted
 
 Date: 2026-08-25
 
@@ -237,7 +238,7 @@ Agreed by: backend; alineado con los requisitos R1/R2 de security
 
 ## DEC-006
 
-Status: Proposed
+Status: Accepted
 
 Date: 2026-08-25
 
@@ -281,7 +282,7 @@ requiere un `DEC-xxx` propio.
 
 ## DEC-007
 
-Status: Proposed
+Status: Accepted
 
 Date: 2026-08-25
 
@@ -330,7 +331,7 @@ Agreed by: backend, security
 
 ## DEC-008
 
-Status: Proposed
+Status: Accepted
 
 Date: 2026-08-25
 
@@ -365,7 +366,7 @@ compatibles
 
 ## DEC-009
 
-Status: Proposed
+Status: Accepted
 
 Date: 2026-08-25
 
@@ -402,7 +403,7 @@ Agreed by: backend, security
 
 ## DEC-010
 
-Status: Proposed
+Status: Accepted
 
 Date: 2026-08-25
 
@@ -433,7 +434,7 @@ Agreed by: los tres
 
 ## DEC-011
 
-Status: Proposed
+Status: Accepted
 
 Date: 2026-08-25
 
@@ -465,7 +466,7 @@ Agreed by: backend, security
 
 ## DEC-012
 
-Status: Proposed
+Status: Accepted
 
 Date: 2026-08-25
 
@@ -501,7 +502,7 @@ Agreed by: backend, security
 
 ## DEC-013
 
-Status: Proposed
+Status: Accepted
 
 Date: 2026-08-25
 
@@ -535,7 +536,7 @@ Nota: **la lista exacta y la convención de nombres siguen sin cerrar.** Ver
 
 ## DEC-014
 
-Status: Proposed
+Status: Accepted
 
 Date: 2026-08-25
 
@@ -568,7 +569,7 @@ Agreed by: frontend, backend
 
 ## DEC-015
 
-Status: Proposed
+Status: Accepted
 
 Date: 2026-08-25
 
@@ -600,7 +601,7 @@ Agreed by: security
 
 ## DEC-016
 
-Status: Proposed
+Status: Accepted
 
 Date: 2026-08-25
 
@@ -645,7 +646,7 @@ formato, la firma y la entrega
 
 ## DEC-017
 
-Status: Proposed
+Status: Accepted
 
 Date: 2026-08-25
 
@@ -698,7 +699,7 @@ cliente y de su abogado.
 
 ## DEC-018
 
-Status: Proposed
+Status: Accepted
 
 Date: 2026-08-25
 
@@ -737,7 +738,7 @@ Agreed by: los tres
 
 ## DEC-019
 
-Status: Proposed
+Status: Accepted
 
 Date: 2026-08-25
 
@@ -770,7 +771,7 @@ Agreed by: security
 
 ## DEC-020
 
-Status: Proposed
+Status: Accepted
 
 Date: 2026-08-25
 
@@ -800,7 +801,7 @@ Agreed by: backend; sin objeción de security
 
 ## DEC-021
 
-Status: Proposed
+Status: Accepted
 
 Date: 2026-08-25
 
@@ -830,3 +831,123 @@ Agreed by: frontend; backend y security no objetan
 
 Nota: **la frontera del contenido dinámico localizado sigue abierta.** Ver
 `HO-001` en `docs/AGENT_HANDOFF.md`.
+
+---
+
+## DEC-022
+
+Status: Accepted
+
+Date: 2026-08-25
+
+Decision:
+**El backend envía códigos estables; el frontend es dueño del copy en ambos
+idiomas.**
+
+- El envelope de error es
+  `{ error: { code, message_key, details, request_id } }`. **Sin** `message_en`
+  ni `message_es`.
+- El ledger expone `reason_key` como **enum estable**, nunca prosa.
+- Todo texto visible al participante se resuelve desde `messages/en-US.json` y
+  `messages/es-US.json`.
+
+**Única excepción:** el contenido **legalmente controlante** (Official Rules,
+disclaimers y cualquier texto aprobado por el abogado) viaja desde el backend
+como objeto por locale, con los campos `is_legally_controlling` e
+`is_informational_translation`. El frontend **nunca** traduce ni autotraduce
+ese contenido: lo renderiza tal cual llega.
+
+Context:
+Resuelve `HO-001`. `frontend` pedía claves estables; `backend` se contradijo a
+sí mismo, definiendo el envelope con `message_en`/`message_es` en su sección de
+APIs y proponiendo lo contrario en su sección de riesgos.
+
+Alternatives:
+Backend traduce y envía ambos idiomas (descartado: el copy legal viviría en dos
+repositorios de texto distintos, y el test de paridad de claves de DEC-021 no
+podría verificarlo).
+
+Reason:
+Es la única opción compatible con el test que rompe el build cuando falta una
+traducción. La excepción legal existe porque la redacción aprobada por el
+abogado no es copy de producto: es texto controlado cuya fuente debe ser única.
+
+Affected areas: `docs/API_CONTRACT.md`, `apps/api`, `apps/web`, `messages/*`.
+
+Proposed by: Team Lead (consolidando frontend y backend)
+Agreed by: aprobado por el usuario el 2026-08-25
+
+---
+
+## DEC-023
+
+Status: Accepted
+
+Date: 2026-08-25
+
+Decision:
+**El carrito vive en el servidor.** Existen endpoints de carrito
+(`GET|POST|PATCH|DELETE /api/v1/cart*`) propiedad de `backend`. La cotización
+de entries se calcula **sobre el carrito de servidor**, no sobre una lista de
+ítems enviada por el cliente.
+
+Context:
+Resuelve `HO-002`. `frontend` pedía carrito de servidor; `backend` no ofreció
+ninguno, y su cotizador recibía los ítems en el cuerpo de la petición, lo que
+implicaba un carrito de cliente.
+
+Alternatives:
+Carrito en cliente (descartado: sería el cliente quien decide qué se cotiza, lo
+que roza el requisito R13 de `security` — "los números los produce el backend" —
+y no deja rastro de qué se cotizó ni cuándo).
+
+Reason:
+Un carrito de servidor cuesta más trabajo, pero hace que carrito y cotización
+compartan una única fuente de verdad y deja una traza auditable. En un producto
+donde una cifra de entries mal calculada es un problema legal, esa traza vale
+más que la simplicidad.
+
+Affected areas: `apps/api`, `apps/web`, `packages/commerce`,
+`docs/API_CONTRACT.md`.
+
+Proposed by: Team Lead (consolidando frontend y backend)
+Agreed by: aprobado por el usuario el 2026-08-25
+
+---
+
+## DEC-024
+
+Status: Accepted
+
+Date: 2026-08-25
+
+Decision:
+Ampliación de ownership, resolviendo `HO-004`:
+
+- **`security-integration`** pasa a ser propietario de `docs/SECURITY.md`,
+  `docs/THREAT_MODEL.md`, `docs/PRODUCTION_READINESS.md`, `docs/runbooks/**` y
+  de la configuración de CI (`.github/workflows/**`).
+- La **zona neutral raíz** del monorepo (`pnpm-workspace.yaml`, `turbo.json`,
+  `tsconfig.base.json`, configuración de ESLint y Prettier, `package.json`
+  raíz, `.env.example`) la crea **`backend-sweepstakes`**, en solitario y
+  **antes** de que ningún otro agente escriba código.
+
+Context:
+`docs/TASK_OWNERSHIP.md` dejaba sin propietario los documentos de seguridad, el
+CI y la configuración raíz. Los tres agentes los necesitan, y sin asignación
+explícita habrían acabado editándolos a la vez.
+
+Alternatives:
+Dejar la zona neutral a quien llegue primero (descartado: es exactamente el
+escenario de edición simultánea que prohíbe `CLAUDE.md` §4).
+
+Reason:
+`security` ya es el autor natural de los quality gates, así que el CI le
+pertenece. La raíz del monorepo la crea un solo agente para que exista una
+sola vez y de forma coherente; se elige `backend` porque es quien más depende
+de ella para arrancar.
+
+Affected areas: `docs/TASK_OWNERSHIP.md`, raíz del repositorio, CI.
+
+Proposed by: Team Lead (resolviendo HO-004)
+Agreed by: aprobado por el usuario el 2026-08-25

@@ -81,7 +81,7 @@ YES / NO
 
 ## HO-001
 
-Status: OPEN
+Status: RESOLVED (ver DEC-022, DEC-023, DEC-024)
 
 ## Handoff
 
@@ -126,7 +126,7 @@ YES — bloquea congelar el contrato P0 y bloquea el hito FE-M4.
 
 ## HO-002
 
-Status: OPEN
+Status: RESOLVED (ver DEC-022, DEC-023, DEC-024)
 
 ## Handoff
 
@@ -209,7 +209,7 @@ NO para empezar, YES antes de la primera migración que cree la tabla de flags.
 
 ## HO-004
 
-Status: OPEN
+Status: RESOLVED (ver DEC-022, DEC-023, DEC-024)
 
 ## Handoff
 
