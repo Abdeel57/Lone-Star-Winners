@@ -1,0 +1,114 @@
+# ---------------------------------------------------------------
+# Lone Star Winners - .gitignore
+# Stack aun no decidido: estas reglas son deliberadamente amplias.
+# ---------------------------------------------------------------
+
+# Dependencias
+node_modules/
+.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/releases
+!.yarn/plugins
+!.yarn/sdks
+!.yarn/versions
+vendor/
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Build outputs
+dist/
+build/
+out/
+.next/
+.nuxt/
+.output/
+.svelte-kit/
+.astro/
+.turbo/
+.vercel/
+.netlify/
+.serverless/
+storybook-static/
+*.tsbuildinfo
+
+# Entorno y secretos
+.env
+.env.*
+!.env.example
+!.env.*.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.keystore
+*.jks
+secrets/
+secrets.json
+credentials.json
+service-account*.json
+.htpasswd
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+report.[0-9]*.json
+
+# Cache y temporales
+.cache/
+.parcel-cache/
+.eslintcache
+.stylelintcache
+.rpt2_cache/
+.temp/
+.tmp/
+tmp/
+*.tmp
+*.bak
+*.orig
+
+# Testing y cobertura
+coverage/
+.nyc_output/
+playwright-report/
+test-results/
+blob-report/
+.playwright/
+
+# Bases de datos locales
+*.sqlite
+*.sqlite3
+*.db
+*.db-journal
+
+# Editores e IDE
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json.example
+*.swp
+*.swo
+*.sublime-workspace
+*.sublime-project
+
+# Archivos de sistema operativo
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Claude Code - ajustes locales del usuario, no compartidos
+.claude/settings.local.json
