@@ -60,3 +60,76 @@ TBD
 
 ## Official Rules
 TBD
+
+---
+
+# Categorías añadidas en la FASE 1 (2026-08-25)
+
+Estas cinco preguntas **no estaban en la lista original**. Las detectaron los
+agentes `backend` y `security` durante la planificación, al descubrir que
+afectan al diseño del sistema *antes* de escribir código. Ver `HO-006` en
+`docs/AGENT_HANDOFF.md`.
+
+## Entry expiration
+TBD
+
+¿Las Official Rules contemplan que las entries expiren?
+
+**Por qué importa antes de construir:** si expiran, el saldo de un participante
+deja de ser una suma pura del ledger y pasa a depender de ventanas temporales.
+Eso cambia el diseño del entry ledger y del export al third-party
+administrator. Detectado por `backend`; debe resolverse **antes del hito B1**.
+
+## Rounding policy for partial refunds
+TBD
+
+Cuando se reembolsa parcialmente una orden, ¿cómo se redondea la cantidad de
+entries a revertir? Candidatas: proporcional con `floor`, proporcional con
+banker's rounding, o por ítem.
+
+**Por qué importa:** un participante puede perder o conservar una entry según
+la política elegida. `backend` señala explícitamente que **no debe elegirla un
+ingeniero**: tiene consecuencias legales y la debe aprobar el abogado.
+
+## Record retention and right of erasure
+TBD
+
+¿Cuánto tiempo deben conservarse los registros? ¿Cómo se atiende una solicitud
+de supresión de datos sin destruir la auditabilidad del sweepstakes?
+
+**Diseño propuesto mientras siga TBD:** la supresión se implementa como
+**anonimización del `Participant`** (nulificar campos de PII, conservar
+`participant_id` y un `pseudonym_ref`), **nunca** como borrado de filas del
+ledger. Así los conteos y la reconciliación histórica sobreviven intactos.
+Detectado por `security`.
+
+## Email verification before earning entries
+TBD
+
+¿Exigen las Official Rules que un participante verifique su email antes de
+poder acumular entries?
+
+**Por qué importa:** condiciona el flujo de registro y el momento en que se
+generan las entries de una compra. Se implementa como feature flag, nunca como
+supuesto. Detectado por `security`.
+
+## Controlling language of the Official Rules
+TBD
+
+¿Qué idioma es el legalmente controlante, y cuál es traducción informativa?
+
+**Por qué importa:** `frontend` necesita campos explícitos
+`is_legally_controlling` e `is_informational_translation` por locale. Esa
+relación es **texto visible** para el participante, no una suposición del
+equipo. El frontend nunca autotraduce texto legal. Detectado por `frontend`.
+
+---
+
+## Nota de proceso
+
+`security` advirtió además de un riesgo de cumplimiento que no es legal sino de
+redacción: **el copy del checkout no puede describir la compra como "boletos"
+ni como "oportunidades de ganar"**, porque contradice `CLAUDE.md` §1. Pide
+revisión de compliance del copy bilingüe **antes** de `INTEGRATE`, en ambos
+idiomas — una traducción laxa al español puede crear una representación legal
+distinta de la del inglés.
