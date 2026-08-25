@@ -24,9 +24,15 @@
  *   como entero; rangos de participaciones como `string`, nunca como numero.
  * - DEC-011: los instantes son ISO-8601 en UTC y cada promocion declara su
  *   `legal_timezone` IANA.
- * - DEC-022: el backend manda codigos estables (`message_key`, `reason_key`);
- *   el texto es del frontend. Aqui no hay ni un solo campo `message_en` o
- *   `message_es`.
+ * - DEC-022 y DEC-031: el backend manda codigos estables (`code`, `reason_key`)
+ *   y el texto es del frontend. `code` es la clave canonica de traduccion;
+ *   `message_key` esta eliminado del contrato. Aqui no hay ni un solo campo
+ *   `message_en` o `message_es`.
+ * - DEC-029: el segmento de ruta (`en`, `es`) y la etiqueta de formato
+ *   (`en-US`, `es-US`) son identificadores distintos. Todo lo que viaja por la
+ *   API usa la ETIQUETA, nunca el segmento.
+ * - DEC-030: el contenido dinamico localizado viaja por locale desde el
+ *   backend (`LocalizedText`), y el frontend no lo traduce jamas.
  * - CLAUDE.md #2 y #14: ni una constante legal. Edades, estados elegibles,
  *   ratios y limites no aparecen en este archivo porque no le corresponden.
  */
@@ -38,14 +44,26 @@ export interface MoneyMinor {
 }
 
 /**
- * Texto dinamico que el backend sirve en los dos idiomas.
+ * Contenido dinamico localizado (DEC-030).
  *
- * PENDIENTE DE ACUERDO. DEC-021 deja abierta "la frontera del contenido
- * dinamico localizado" y DEC-022 solo resuelve el copy de producto (del
- * frontend) y el contenido legalmente controlante (del backend). El nombre de
- * un premio o el titulo de una promocion no son ninguna de las dos cosas: son
- * datos que alguien escribe en el admin. Hasta que se decida, se modelan como
- * objeto por locale, que es la forma compatible con las dos salidas posibles.
+ * TERCERA CATEGORIA de texto, con dueno propio. No es copy de producto (que es
+ * del frontend, DEC-022) ni texto legalmente controlante (que viaja aparte con
+ * sus banderas `is_legally_controlling` / `is_informational_translation`). Son
+ * datos que un administrador teclea: titulo de promocion, nombre de premio,
+ * descripcion de producto.
+ *
+ * Reparto de responsabilidades que impone DEC-030:
+ *
+ * - `backend` lo PERSISTE por locale y valida en publicacion que ningun idioma
+ *   quede vacio. Por eso las dos claves son OBLIGATORIAS aqui: un opcional
+ *   permitiria que el frontend recibiera un hueco y tuviera que improvisar.
+ * - `frontend` lo RENDERIZA tal cual y NO LO TRADUCE JAMAS. No hay
+ *   `t()` sobre estos valores, ni fallback de un idioma a otro que disfrace un
+ *   dato incompleto (principio #4).
+ *
+ * Las claves son las ETIQUETAS de DEC-029 (`en-US`, `es-US`), no los segmentos
+ * de ruta (`en`, `es`). Para elegir una, `pickLocalized` (`./localized.ts`) es
+ * el unico camino: hace la conversion de segmento a etiqueta en un solo sitio.
  */
 export interface LocalizedText {
   readonly "en-US": string;
@@ -138,11 +156,18 @@ export interface SiteConfigResponse {
   readonly supported_locales: readonly string[];
 }
 
-/** Envelope de error global (DEC-022). */
+/**
+ * Envelope de error global (DEC-022, DEC-031).
+ *
+ * DEC-031 elimina `message_key` del contrato: `code` ES la clave canonica de
+ * traduccion. Tener dos campos con el mismo proposito solo garantizaba que
+ * acabaran desincronizados. Aqui no hay `message_key`, ni `message_en`, ni
+ * `message_es`: el backend manda un codigo y el texto es del frontend.
+ */
 export interface ApiErrorEnvelope {
   readonly error: {
+    /** Enum estable. Es a la vez identificador de dominio y clave de copy. */
     readonly code: string;
-    readonly message_key: string;
     readonly details?: unknown;
     readonly request_id?: string;
   };

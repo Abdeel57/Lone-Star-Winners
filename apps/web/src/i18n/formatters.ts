@@ -37,7 +37,11 @@ export function formatMoney(money: MoneyMinor, locale: Locale): string {
     currency: money.currency,
   });
 
-  const fractionDigits = formatter.resolvedOptions().maximumFractionDigits;
+  // `maximumFractionDigits` es opcional en el tipo de `resolvedOptions`. El
+  // respaldo son 2 -la unidad menor habitual, los centavos- porque devolver un
+  // divisor `NaN` convertiria un importe en "NaN" delante del participante.
+  // `??` y no `||`: `0` es un valor legitimo (JPY no tiene decimales).
+  const fractionDigits = formatter.resolvedOptions().maximumFractionDigits ?? 2;
   const divisor = 10 ** fractionDigits;
 
   return formatter.format(money.amount_minor / divisor);

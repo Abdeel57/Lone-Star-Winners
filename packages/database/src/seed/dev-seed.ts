@@ -27,6 +27,7 @@
 import { eq, sql } from "drizzle-orm";
 
 import type { Database } from "../client.js";
+import { STAFF_ASSIGNABLE_ROLE_KEYS, type AdminRoleKey } from "../domain/permissions.js";
 import {
   adminUserRoles,
   adminUsers,
@@ -109,43 +110,34 @@ export async function seedDevelopmentData(db: Database): Promise<SeedResult> {
       },
     ]);
 
-    // Cuentas administrativas. `COMPLIANCE_OFFICER` y `DRAW_OFFICER` van a
-    // PERSONAS DISTINTAS: el trigger de DEC-017 impide que sean la misma, y
-    // esta semilla sirve tambien para comprobarlo a mano.
-    const adminSpecs = [
-      {
-        email: `admin.super.ficticio@${FICTITIOUS_EMAIL_DOMAIN}`,
-        name: "Fictitious Super Admin",
-        role: "SUPER_ADMIN",
-      },
-      {
-        email: `admin.ops.ficticio@${FICTITIOUS_EMAIL_DOMAIN}`,
-        name: "Fictitious Operations Admin",
-        role: "OPERATIONS_ADMIN",
-      },
-      {
-        email: `admin.soporte.ficticio@${FICTITIOUS_EMAIL_DOMAIN}`,
-        name: "Fictitious Support Agent",
-        role: "CUSTOMER_SUPPORT",
-      },
-      {
-        email: `admin.compliance.ficticio@${FICTITIOUS_EMAIL_DOMAIN}`,
-        name: "Fictitious Compliance Officer",
-        role: "COMPLIANCE_OFFICER",
-      },
-      {
-        email: `admin.sorteo.ficticio@${FICTITIOUS_EMAIL_DOMAIN}`,
-        name: "Fictitious Draw Officer",
-        role: "DRAW_OFFICER",
-      },
-      {
-        email: `admin.auditor.ficticio@${FICTITIOUS_EMAIL_DOMAIN}`,
-        name: "Fictitious Read-Only Auditor",
-        role: "READ_ONLY_AUDITOR",
-      },
-    ] as const;
+    /**
+     * Cuentas administrativas, una por ROL DE PERSONAL del catalogo canonico.
+     *
+     * `COMPLIANCE_OFFICER` y `DRAW_OFFICER` van a PERSONAS DISTINTAS: el
+     * trigger de DEC-017 impide que sean la misma, y esta semilla sirve
+     * tambien para comprobarlo a mano.
+     *
+     * DEC-027: la lista
+     * se deriva de `STAFF_ASSIGNABLE_ROLE_KEYS`, no se escribe a mano: si
+     * `packages/security` anade un rol, la semilla lo cubre sola.
+     *
+     * `PARTICIPANT` y `SYSTEM` quedan fuera por construccion, y ademas la
+     * clave ajena compuesta de `0004` los rechazaria: un empleado no es un
+     * participante (DEC-028) y nadie actua como el sistema.
+     *
+     * Los pares incompatibles (`ADMIN_ROLE_CONFLICTS`) no son un problema
+     * aqui: cada cuenta recibe UN solo rol, que es justo lo que el trigger de
+     * separacion de funciones permite.
+     */
+    const adminSpecs = STAFF_ASSIGNABLE_ROLE_KEYS.map((role) => ({
+      email: `admin.${role.toLowerCase()}.ficticio@${FICTITIOUS_EMAIL_DOMAIN}`,
+      name: `Fictitious ${role}`,
+      role,
+    }));
 
-    const adminIds: string[] = [];
+    // Por rol, no por posicion: una lista derivada puede reordenarse, y un
+    // indice numerico convertiria eso en "el promotor ahora es el de soporte".
+    const adminIdByRole = new Map<AdminRoleKey, string>();
 
     for (const spec of adminSpecs) {
       const [identity] = await tx
@@ -177,7 +169,7 @@ export async function seedDevelopmentData(db: Database): Promise<SeedResult> {
         throw new Error(`No se pudo crear la cuenta administrativa ${spec.email}.`);
       }
 
-      adminIds.push(admin.id);
+      adminIdByRole.set(spec.role, admin.id);
 
       await tx.insert(adminUserRoles).values({
         adminUserId: admin.id,
@@ -187,9 +179,12 @@ export async function seedDevelopmentData(db: Database): Promise<SeedResult> {
       });
     }
 
-    const operationsAdminId = adminIds[1];
-    if (operationsAdminId === undefined) {
-      throw new Error("No se pudo resolver la cuenta de operaciones de desarrollo.");
+    // Quien crea catalogo y versiones de reglas en desarrollo. DEC-027: el
+    // antiguo `OPERATIONS_ADMIN` es hoy `PROMOTION_MANAGER`, que es el rol que
+    // el catalogo canonico dota de `promotion.create` y `rules.version.create`.
+    const promotionManagerId = adminIdByRole.get("PROMOTION_MANAGER");
+    if (promotionManagerId === undefined) {
+      throw new Error("No se pudo resolver la cuenta PROMOTION_MANAGER de desarrollo.");
     }
 
     // -----------------------------------------------------------------------
@@ -376,7 +371,7 @@ export async function seedDevelopmentData(db: Database): Promise<SeedResult> {
               note: "DEC-013: apagado por defecto. La modalidad la decide el abogado.",
             },
           },
-          createdByAdminUserId: operationsAdminId,
+          createdByAdminUserId: promotionManagerId,
         })
         .returning({ id: promotionRulesVersions.id });
 

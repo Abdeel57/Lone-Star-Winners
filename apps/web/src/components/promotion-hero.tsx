@@ -2,8 +2,8 @@ import { Alert, Card } from "@lsw/ui";
 import { useTranslations } from "next-intl";
 
 import { formatMoney, formatZonedDateTime } from "@/i18n/formatters";
-import { localeTag, type Locale } from "@/i18n/locales";
-import type { LocalizedText, PromotionSummary } from "@/lib/api";
+import type { Locale } from "@/i18n/locales";
+import { pickLocalized, type PromotionSummary } from "@/lib/api";
 
 import { PromotionStatusBadge } from "./promotion-status-badge";
 
@@ -22,6 +22,11 @@ import { PromotionStatusBadge } from "./promotion-status-badge";
  *   zona del navegador (DEC-011), y se dice explicitamente que es asi.
  * - El importe llega como entero en unidad menor y solo se divide para
  *   pintarlo (DEC-010).
+ * - El titulo y el resumen son contenido dinamico localizado (DEC-030): llegan
+ *   del backend en los dos idiomas y se pintan con `pickLocalized`, SIN
+ *   traducirlos. `t()` solo toca copy de producto (DEC-022).
+ * - Todo formateo usa la etiqueta (`en-US` / `es-US`), no el segmento de ruta
+ *   (DEC-029). La conversion la hacen `formatters` y `pickLocalized`.
  */
 export function PromotionHero({
   promotion,
@@ -102,16 +107,4 @@ export function PromotionHero({
       </div>
     </section>
   );
-}
-
-/**
- * Elige la variante de idioma de un texto dinamico servido por el backend.
- *
- * PENDIENTE DE ACUERDO: la frontera del contenido dinamico localizado sigue
- * abierta (nota de DEC-021, resuelta solo en parte por DEC-022). Si el backend
- * acabara sirviendo un unico texto ya resuelto por `Accept-Language`, esta
- * funcion desaparece y no cambia nada mas.
- */
-function pickLocalized(text: LocalizedText, locale: Locale): string {
-  return localeTag(locale) === "es-US" ? text["es-US"] : text["en-US"];
 }

@@ -13,14 +13,14 @@ import { createDatabaseHandle } from "../client.js";
 import { seedDevelopmentData } from "../seed/dev-seed.js";
 
 async function main(): Promise<void> {
-  if (process.env["NODE_ENV"] === "production") {
+  if (process.env.NODE_ENV === "production") {
     console.error(
       "[seed] Rechazado: esta semilla es de desarrollo y nunca debe correr contra produccion.",
     );
     process.exit(1);
   }
 
-  const connectionString = process.env["DATABASE_URL_APP"];
+  const connectionString = process.env.DATABASE_URL_APP;
   if (connectionString === undefined || connectionString.trim() === "") {
     console.error("[seed] Falta DATABASE_URL_APP.");
     process.exit(1);

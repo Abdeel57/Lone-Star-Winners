@@ -36,9 +36,8 @@ import type {
   FastifyReply,
   FastifyRequest,
   HTTPMethods,
-  RouteHandlerMethod,
   RouteOptions,
-  preHandlerHookHandler,
+  preHandlerAsyncHookHandler,
 } from "fastify";
 import type { ZodType } from "zod";
 
@@ -89,7 +88,13 @@ export interface RouteDefinition {
   readonly tags: readonly string[];
   readonly authorization: RouteAuthorization;
   readonly schema: RouteSchemas;
-  readonly handler: (request: FastifyRequest, reply: FastifyReply) => Promise<unknown> | unknown;
+  /**
+   * Devuelve el cuerpo de la respuesta; el serializador Zod se encarga del
+   * resto. El tipo es `unknown` a secas -no `Promise<unknown> | unknown`-
+   * porque `unknown` ya incluye las promesas: enumerarlas aparte no anadia
+   * informacion y hacia que la union no dijese nada.
+   */
+  readonly handler: (request: FastifyRequest, reply: FastifyReply) => unknown;
 }
 
 /** Clave con la que la definicion viaja dentro de `routeOptions.config`. */
@@ -107,13 +112,32 @@ export class RouteRegistrationError extends Error {
 }
 
 /**
- * Rutas que Fastify puede generar por su cuenta y que no pasan por el
- * registro. Solo `HEAD`, que Fastify deriva automaticamente de cada `GET` y
- * que hereda su misma configuracion.
+ * Rutas que el framework genera por su cuenta y que no pasan por el registro.
+ *
+ * La lista es CERRADA y deliberadamente corta. Cada entrada es una excepcion a
+ * DEC-015, asi que tiene que poder justificarse por escrito:
+ *
+ *   1. `HEAD`, que Fastify deriva automaticamente de cada `GET` y que hereda su
+ *      misma configuracion -incluido el `preHandler` de autorizacion-.
+ *
+ *   2. El `OPTIONS *` que registra `@fastify/cors` para responder al preflight.
+ *      No devuelve datos: responde con las cabeceras CORS y termina. Sin esta
+ *      excepcion el proceso no arranca, que es exactamente lo que pasaba: la
+ *      guardia abortaba el registro del plugin y `createApp` se quedaba
+ *      colgado hasta el timeout de avvio. Se acota al comodin `*`: cualquier
+ *      otro `OPTIONS` sobre una ruta concreta si tiene que declarar permiso.
  */
-function isDerivedHeadRoute(routeOptions: RouteOptions): boolean {
+function isFrameworkGeneratedRoute(routeOptions: RouteOptions): boolean {
   const methods = Array.isArray(routeOptions.method) ? routeOptions.method : [routeOptions.method];
-  return methods.length === 1 && methods[0] === "HEAD";
+  if (methods.length !== 1) {
+    return false;
+  }
+
+  if (methods[0] === "HEAD") {
+    return true;
+  }
+
+  return methods[0] === "OPTIONS" && routeOptions.url === "*";
 }
 
 export function assertRouteIsAuthorized(definition: RouteDefinition): void {
@@ -156,10 +180,19 @@ export function assertRouteIsAuthorized(definition: RouteDefinition): void {
       return;
     }
     case "PERMISSION": {
-      if (!isPermissionKey(authorization.permission)) {
+      // Se ensancha a `string` a proposito. Para el compilador la comprobacion
+      // es redundante -el campo ya es `PermissionKey`-, pero esta validacion
+      // existe justamente para el caso en que el tipo no se haya podido
+      // aplicar: una definicion construida en un test, cargada de un JSON o
+      // llegada de un paquete compilado con otra version del catalogo. Un
+      // control que solo funciona cuando los tipos son correctos no es un
+      // control.
+      const declared: string = authorization.permission;
+      if (!isPermissionKey(declared)) {
         throw new RouteRegistrationError(
-          `DEC-015: la ruta ${where} exige el permiso "${authorization.permission}", que no existe en el catalogo ` +
-            "de packages/database. Un permiso inventado es un permiso que nadie puede conceder ni auditar.",
+          `DEC-015: la ruta ${where} exige el permiso "${declared}", que no existe en el catalogo ` +
+            "de autorizacion (DEC-027: packages/security, sembrado por packages/database). " +
+            "Un permiso inventado es un permiso que nadie puede conceder ni auditar.",
         );
       }
       return;
@@ -208,7 +241,7 @@ export const denyAllAuthorizer: Authorizer = ({ authorization }) => {
   return { allowed: false, reason: "UNAUTHENTICATED" };
 };
 
-function buildAuthorizationPreHandler(): preHandlerHookHandler {
+function buildAuthorizationPreHandler(): preHandlerAsyncHookHandler {
   return async function authorizationPreHandler(request, _reply) {
     const config = request.routeOptions.config as Partial<LswRouteConfig> | undefined;
     const definition = config?.[ROUTE_CONFIG_KEY];
@@ -265,7 +298,7 @@ function buildAuthorizationPreHandler(): preHandlerHookHandler {
  */
 export function installRouteGuard(app: FastifyInstance): void {
   app.addHook("onRoute", (routeOptions) => {
-    if (isDerivedHeadRoute(routeOptions)) {
+    if (isFrameworkGeneratedRoute(routeOptions)) {
       return;
     }
 
@@ -323,7 +356,7 @@ export function registerRoutes(
       // El tipo de handler del registro es deliberadamente mas laxo que el de
       // Fastify: los handlers devuelven el cuerpo y el serializador Zod se
       // encarga del resto. El contrato real lo impone `schema.response`.
-      handler: definition.handler as RouteHandlerMethod,
+      handler: definition.handler,
     });
   }
 }
@@ -384,5 +417,19 @@ declare module "fastify" {
      * `denyAllAuthorizer`.
      */
     lswAuthorizer: Authorizer;
+  }
+
+  /**
+   * La definicion de ruta viaja dentro de `routeOptions.config` para que el
+   * hook `onRoute` y el `preHandler` de autorizacion puedan recuperarla sin
+   * mantener un registro paralelo indexado por url, que se desincronizaria en
+   * cuanto una ruta se registrara dos veces.
+   *
+   * Opcional porque Fastify tambien crea rutas por su cuenta (`HEAD` derivado,
+   * preflight de CORS): que el tipo lo permita es lo que obliga a comprobarlo
+   * antes de usarlo, y esa comprobacion es la que deniega por defecto.
+   */
+  interface FastifyContextConfig {
+    lswRoute?: RouteDefinition;
   }
 }

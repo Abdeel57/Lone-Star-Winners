@@ -78,7 +78,7 @@ describe("PromotionStatusBadge", () => {
   });
 });
 
-describe("ApiErrorState (DEC-022)", () => {
+describe("ApiErrorState (DEC-022, DEC-031)", () => {
   it("traduce el codigo del backend con el copy del frontend", () => {
     renderIn(
       "es",
@@ -87,7 +87,6 @@ describe("ApiErrorState (DEC-022)", () => {
           kind: "http",
           status: 500,
           code: "INTERNAL_ERROR",
-          messageKey: "apiErrors.INTERNAL_ERROR",
           requestId: "req_test_0001",
           details: null,
         }}
@@ -109,7 +108,6 @@ describe("ApiErrorState (DEC-022)", () => {
           kind: "http",
           status: 422,
           code: "SOME_NEW_CODE_FROM_BACKEND",
-          messageKey: "apiErrors.SOME_NEW_CODE_FROM_BACKEND",
           requestId: null,
           details: null,
         }}
@@ -127,7 +125,6 @@ describe("ApiErrorState (DEC-022)", () => {
           kind: "network",
           status: null,
           code: null,
-          messageKey: null,
           requestId: null,
           details: null,
         }}

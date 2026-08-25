@@ -17,6 +17,15 @@ import { defineConfig } from "vitest/config";
  */
 export default defineConfig({
   test: {
+    // `fileParallelism` es una opcion de RAIZ en Vitest 3: dentro de un
+    // `projects[].test` ni siquiera existe en el tipo, y ponerla ahi no
+    // desactivaba nada. Vive aqui porque es donde surte efecto.
+    //
+    // Quien la necesita es la suite `integration`: comparte un unico
+    // contenedor de PostgreSQL, asi que paralelizar por fichero multiplica la
+    // memoria sin acelerar nada. La suite `unit` audita tres ficheros de
+    // texto; correrlos en serie evita ademas levantar varios workers.
+    fileParallelism: false,
     projects: [
       {
         test: {
@@ -35,9 +44,6 @@ export default defineConfig({
           // Arrancar el contenedor y aplicar las migraciones no es rapido.
           testTimeout: 180_000,
           hookTimeout: 180_000,
-          // Un solo contenedor compartido: paralelizar aqui multiplica la
-          // memoria sin acelerar nada.
-          fileParallelism: false,
         },
       },
     ],

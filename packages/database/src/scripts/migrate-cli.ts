@@ -9,7 +9,7 @@
 import { runMigrations } from "../migrate.js";
 
 async function main(): Promise<void> {
-  const connectionString = process.env["DATABASE_URL_MIGRATOR"];
+  const connectionString = process.env.DATABASE_URL_MIGRATOR;
 
   if (connectionString === undefined || connectionString.trim() === "") {
     console.error(
@@ -18,7 +18,7 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  const sslMode = process.env["DATABASE_SSL_MODE"] ?? "disable";
+  const sslMode = process.env.DATABASE_SSL_MODE ?? "disable";
 
   console.error("[migrate] aplicando migraciones forward-only...");
   await runMigrations({ connectionString, ssl: sslMode !== "disable" });

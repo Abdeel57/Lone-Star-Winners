@@ -9,6 +9,16 @@
  *
  * Los patrones se construyen concatenando fragmentos para que este fichero no
  * se detecte a si mismo.
+ *
+ * IMPORTANTE sobre la construccion de los patrones: cuando se interpola un
+ * fragmento hay que usar `String.raw`. En un template literal normal `\s` no es
+ * una secuencia de escape valida y colapsa a la letra `s`, de modo que
+ * `` `Math\s*\.\s*random` `` no produce el patron que aparenta sino
+ * `Maths*.s*random`, que no detecta nada. Ese error tumbo este fichero entero
+ * durante la FASE 1: `\(` colapsaba a `(` y el `new RegExp` lanzaba
+ * "Unterminated group" al importarse, asi que el gate reportaba verde por
+ * ausencia. Los patrones sin interpolacion se escriben como literales /.../,
+ * donde el problema no existe.
  */
 
 import { describe, expect, it } from "vitest";
@@ -19,8 +29,8 @@ import { join } from "node:path";
 const CRITICAL_PACKAGES = ["packages/security", "packages/tpa", "packages/sweepstakes"] as const;
 
 const WEAK_SOURCES: readonly { readonly id: string; readonly pattern: RegExp }[] = [
-  { id: "math-random", pattern: new RegExp(`Math\s*\.\s*${"random"}\s*\(`) },
-  { id: "pseudo-random-bytes", pattern: new RegExp(`${"pseudoRandom"}Bytes\s*\(`) },
+  { id: "math-random", pattern: new RegExp(String.raw`Math\s*\.\s*${"random"}\s*\(`) },
+  { id: "pseudo-random-bytes", pattern: new RegExp(String.raw`${"pseudoRandom"}Bytes\s*\(`) },
   {
     id: "prng-sembrado",
     pattern: /from\s+["'](seedrandom|chance|random-seed|@faker-js\/faker)["']/,
@@ -29,6 +39,12 @@ const WEAK_SOURCES: readonly { readonly id: string; readonly pattern: RegExp }[]
   // deberia, precisamente porque parece inofensivo.
   { id: "timestamp-como-semilla", pattern: /seed\s*[:=]\s*Date\s*\.\s*now\s*\(/i },
 ];
+
+const SOURCE_FILE = /\.(ts|tsx|mts|cts|js|mjs|cjs)$/;
+
+/** Desactivaciones de la restriccion de aleatoriedad, en cualquiera de sus formas. */
+const SUPPRESSION =
+  /eslint-disable(?:-next-line|-line)?[^\n]*no-restricted-(?:properties|syntax|imports)/;
 
 describe("DEC-017: solo CSPRNG en los paquetes que pueden influir en un sorteo", () => {
   it("ningun paquete critico usa aleatoriedad debil o sembrada", () => {
@@ -41,12 +57,12 @@ describe("DEC-017: solo CSPRNG en los paquetes que pueden influir en un sorteo",
         continue;
       }
       const files = listRepoTextFiles(join(repoRoot(), packagePath)).filter((file) =>
-        /\.(ts|tsx|mts|cts|js|mjs|cjs)$/.test(file.path),
+        SOURCE_FILE.test(file.path),
       );
       for (const file of files) {
-        const lines = readRepoFile(file.path).split("\n");
-        for (let index = 0; index < lines.length; index += 1) {
-          const text = lines[index] ?? "";
+        // `index` es el contador de un recorrido sobre el propio array: no es
+        // una clave de origen externo.
+        for (const [index, text] of readRepoFile(file.path).split("\n").entries()) {
           for (const source of WEAK_SOURCES) {
             if (source.pattern.test(text)) {
               offences.push(`${file.path}:${String(index + 1)} [${source.id}] ${text.trim()}`);
@@ -57,6 +73,41 @@ describe("DEC-017: solo CSPRNG en los paquetes que pueden influir en un sorteo",
     }
 
     expect(offences, `Aleatoriedad no criptografica:\n${offences.join("\n")}`).toStrictEqual([]);
+  });
+
+  it("los propios patrones detectan lo que dicen detectar", () => {
+    // Sin esta comprobacion, un patron mal construido convierte el test de
+    // arriba en un gate que siempre pasa. Es exactamente lo que ocurrio.
+    const byId = new Map(WEAK_SOURCES.map((source) => [source.id, source.pattern]));
+
+    const mustMatch: readonly (readonly [string, string])[] = [
+      ["math-random", "const n = Math.random();"],
+      ["math-random", "const n = Math . random ();"],
+      ["math-random", "return Math.random()"],
+      ["pseudo-random-bytes", "const b = pseudoRandomBytes(16);"],
+      ["pseudo-random-bytes", "pseudoRandomBytes (16)"],
+      ["prng-sembrado", `import seedrandom from "seedrandom";`],
+      ["prng-sembrado", `import { faker } from "@faker-js/faker";`],
+      ["timestamp-como-semilla", "const rng = { seed: Date.now() };"],
+      ["timestamp-como-semilla", "seed = Date . now ()"],
+    ];
+    for (const [id, sample] of mustMatch) {
+      expect(byId.get(id)?.test(sample), `${id} deberia detectar: ${sample}`).toBe(true);
+    }
+
+    const mustNotMatch: readonly string[] = [
+      "const bytes = randomBytes(32);",
+      'import { randomInt } from "node:crypto";',
+      "const createdAt = Date.now();",
+      "// Math is not random here",
+    ];
+    for (const sample of mustNotMatch) {
+      for (const source of WEAK_SOURCES) {
+        expect(source.pattern.test(sample), `${source.id} no deberia detectar: ${sample}`).toBe(
+          false,
+        );
+      }
+    }
   });
 
   it("la regla de ESLint que lo prohibe sigue en la configuracion raiz", () => {
@@ -82,12 +133,9 @@ describe("DEC-017: solo CSPRNG en los paquetes que pueden influir en un sorteo",
       if (!repoPathExists(packagePath)) {
         continue;
       }
-      const files = listRepoTextFiles(join(repoRoot(), packagePath));
-      for (const file of files) {
-        const lines = readRepoFile(file.path).split("\n");
-        for (let index = 0; index < lines.length; index += 1) {
-          const text = lines[index] ?? "";
-          if (/eslint-disable[^\n]*no-restricted-(properties|syntax|imports)/.test(text)) {
+      for (const file of listRepoTextFiles(join(repoRoot(), packagePath))) {
+        for (const [index, text] of readRepoFile(file.path).split("\n").entries()) {
+          if (SUPPRESSION.test(text)) {
             suppressions.push(`${file.path}:${String(index + 1)}`);
           }
         }

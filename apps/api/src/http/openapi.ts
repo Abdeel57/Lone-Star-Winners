@@ -56,8 +56,8 @@ function buildParameters(schema: ZodType | undefined, location: "path" | "query"
   }
 
   const jsonSchema = toJsonSchema(schema, "input");
-  const properties = (jsonSchema["properties"] ?? {}) as Record<string, JsonSchema>;
-  const required = new Set((jsonSchema["required"] ?? []) as string[]);
+  const properties = (jsonSchema.properties ?? {}) as Record<string, JsonSchema>;
+  const required = new Set((jsonSchema.required ?? []) as string[]);
 
   return Object.keys(properties)
     .sort()
@@ -140,22 +140,22 @@ export function buildOpenApiDocument(
     };
 
     if (definition.description !== undefined) {
-      operation["description"] = definition.description;
+      operation.description = definition.description;
     }
 
     if (parameters.length > 0) {
-      operation["parameters"] = parameters;
+      operation.parameters = parameters;
     }
 
     if (definition.schema.body !== undefined) {
-      operation["requestBody"] = {
+      operation.requestBody = {
         required: true,
         content: { "application/json": { schema: toJsonSchema(definition.schema.body, "input") } },
       };
     }
 
     if (definition.authorization.kind !== "PUBLIC") {
-      operation["security"] = [{ sessionCookie: [] }];
+      operation.security = [{ sessionCookie: [] }];
     }
 
     paths[path] = { ...paths[path], [method]: operation };

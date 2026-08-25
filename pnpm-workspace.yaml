@@ -21,10 +21,14 @@ packages:
   - "packages/*"
   - "tests/*"
 
-# Nota para quien instale por primera vez: pnpm 10 no ejecuta scripts de
-# postinstall de dependencias salvo que se declaren aqui explicitamente.
-# Cuando se elijan las dependencias reales (Next.js, drizzle-kit, playwright,
-# etc.) hay que anadir las que lo requieran:
+# pnpm 10 no ejecuta scripts de postinstall de dependencias salvo que se
+# declaren aqui explicitamente. La lista es una decision de seguridad: cada
+# entrada es codigo de terceros al que se le permite ejecutarse durante
+# `pnpm install`. Se anaden solo las que lo necesitan de verdad.
 #
-# onlyBuiltDependencies:
-#   - esbuild
+#   lefthook ... descarga el binario de su plataforma; sin el, el `prepare` de
+#                la raiz (`lefthook install`) no puede instalar los hooks.
+#   msw ........ escribe el service worker de `apps/web` en `public/`.
+onlyBuiltDependencies:
+  - lefthook
+  - msw

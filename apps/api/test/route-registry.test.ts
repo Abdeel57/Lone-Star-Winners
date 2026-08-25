@@ -54,7 +54,7 @@ describe("declaracion de autorizacion (DEC-015)", () => {
   it("acepta un permiso que existe en el catalogo de la base de datos", () => {
     expect(() =>
       assertRouteIsAuthorized(
-        baseRoute({ authorization: { kind: "PERMISSION", permission: "promotion.read" } }),
+        baseRoute({ authorization: { kind: "PERMISSION", permission: "order.read" } }),
       ),
     ).not.toThrow();
   });
@@ -144,8 +144,8 @@ describe("autorizador por defecto: falla cerrado", () => {
   it("deniega todo lo demas mientras packages/security no exista (DEC-006)", () => {
     for (const authorization of [
       { kind: "PARTICIPANT", selfOnly: true },
-      { kind: "PERMISSION", permission: "promotion.read" },
-      { kind: "PERMISSION", permission: "draw.execute" },
+      { kind: "PERMISSION", permission: "order.read" },
+      { kind: "PERMISSION", permission: "draw.initiate" },
     ] as const) {
       const outcome = denyAllAuthorizer({
         request: {} as never,
@@ -163,19 +163,19 @@ describe("manifiesto de rutas (evidencia para DEC-015)", () => {
       baseRoute({
         url: "/api/v1/b",
         operationId: "b",
-        authorization: { kind: "PERMISSION", permission: "draw.execute" },
+        authorization: { kind: "PERMISSION", permission: "draw.initiate" },
       }),
       baseRoute({ url: "/api/v1/a", operationId: "a" }),
       baseRoute({
         url: "/api/v1/c",
         operationId: "c",
-        authorization: { kind: "PERMISSION", permission: "promotion.read" },
+        authorization: { kind: "PERMISSION", permission: "order.read" },
       }),
     ]);
 
     expect(manifest.map((entry) => entry.path)).toEqual(["/api/v1/a", "/api/v1/b", "/api/v1/c"]);
     expect(manifest[0]?.authorization).toBe("PUBLIC");
-    expect(manifest[1]?.authorization).toBe("draw.execute");
+    expect(manifest[1]?.authorization).toBe("draw.initiate");
     expect(manifest[1]?.requires_step_up).toBe(true);
     expect(manifest[2]?.requires_step_up).toBe(false);
   });

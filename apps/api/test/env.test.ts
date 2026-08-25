@@ -62,7 +62,7 @@ describe("configuracion valida", () => {
 describe("fallo duro (DEC-018)", () => {
   it("no arranca si falta una variable", () => {
     const incomplete = { ...VALID_DEV_ENV };
-    delete incomplete["DATABASE_URL_APP"];
+    delete incomplete.DATABASE_URL_APP;
     expect(() => loadConfig(incomplete)).toThrow(EnvironmentValidationError);
   });
 

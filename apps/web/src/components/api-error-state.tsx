@@ -1,4 +1,4 @@
-import { ErrorState } from "@lsw/ui";
+import { ErrorState, type HeadingLevel } from "@lsw/ui";
 import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 
@@ -14,10 +14,9 @@ import type { ApiFailure } from "@/lib/api";
  * mas vale un mensaje generico que una cadena en ingles delante de un
  * participante hispanohablante.
  *
- * SUPUESTO PENDIENTE (HO-005): la busqueda se hace por `error.code`, que
- * DEC-022 describe como enum estable. El envelope trae ademas `message_key`.
- * Cual de los dos es la clave canonica de traduccion hay que acordarlo con
- * `backend`; cambiar de uno a otro es una linea de este archivo.
+ * DEC-031 cierra el supuesto que quedaba abierto: `error.code` ES la clave
+ * canonica de traduccion, y `message_key` esta eliminado del contrato. La
+ * busqueda se hace por codigo y no existe ningun segundo campo que consultar.
  */
 
 /**
@@ -46,7 +45,7 @@ export function ApiErrorState({
 }: {
   readonly failure: ApiFailure;
   readonly action?: ReactNode;
-  readonly headingLevel?: "h2" | "h3" | "h4";
+  readonly headingLevel?: HeadingLevel;
   readonly className?: string;
 }) {
   const t = useTranslations();

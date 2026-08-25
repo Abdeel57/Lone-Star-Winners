@@ -7,13 +7,31 @@
 // DEC-021  i18n con next-intl. Ambos locales llevan prefijo de ruta.
 // ---------------------------------------------------------------------------
 
+import { join } from "node:path";
+
 import createNextIntlPlugin from "next-intl/plugin";
 
 const withNextIntl = createNextIntlPlugin("./src/i18n/request.ts");
 
+/**
+ * Raiz del monorepo.
+ *
+ * Con `output: "standalone"` Next copia el arbol de dependencias trazado a
+ * partir de esta raiz. Si no se declara, la infiere buscando lockfiles hacia
+ * arriba, y basta con que exista un `package-lock.json` suelto en el directorio
+ * personal del desarrollador para que elija ese: el build "pasa", pero el
+ * `standalone` sale anidado bajo la ruta equivocada y SIN `server.js`, es decir
+ * inservible, y solo se descubre al desplegar.
+ *
+ * Se declara explicitamente para que el resultado no dependa de que haya o no
+ * ficheros ajenos fuera del repositorio.
+ */
+const monorepoRoot = join(import.meta.dirname, "..", "..");
+
 /** @type {import("next").NextConfig} */
 const nextConfig = {
   output: "standalone",
+  outputFileTracingRoot: monorepoRoot,
   reactStrictMode: true,
   // Cabecera `X-Powered-By`: informacion gratuita para quien enumere el stack.
   poweredByHeader: false,

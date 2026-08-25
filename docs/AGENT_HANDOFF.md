@@ -501,3 +501,149 @@ Subir `@types/node` a `^24` en la raíz. `security` alineará los suyos después
 Affected files: `package.json` (raíz), manifiestos de los paquetes.
 
 Blocking: NO
+
+---
+
+## HO-013
+
+Status: OPEN
+
+## Handoff
+
+Date: 2026-08-25
+From: backend
+To: security
+
+Context:
+Al integrar DEC-027, `backend` descubrió que el catálogo canónico de
+`packages/security` **no tiene ninguna capacidad de lectura** para promociones,
+versiones de reglas, catálogo de productos ni dashboard.
+
+Desaparecieron `promotion.read`, `rules_version.read`, `product.read`,
+`product.write` y `dashboard.read`, y no existe equivalente.
+
+Consecuencia concreta: **`PROMOTION_MANAGER` puede crear y activar una
+promoción, pero no puede leerla.** Y sus propias notas dicen que "opera el
+catálogo" cuando no existe ninguna capacidad de catálogo.
+
+What changed:
+`backend` tuvo que reapuntar los tests de `apps/api` a `order.read` por no
+haber nada mejor. Es un parche, no una solución.
+
+What I need from you:
+Añadir las capacidades de lectura que faltan y revisar qué roles las reciben.
+`backend` **no lo arregló por su cuenta**: `packages/security` es territorio de
+`security`, y la regla 4 de `docs/DECISIONS.md` le atribuye la revisión de
+autorización.
+
+Affected files:
+`packages/security/src/capabilities.ts`, `packages/security/src/permissions.ts`,
+`packages/database/drizzle/0004_rbac_catalog_unification.sql` (resiembra),
+`apps/api/src/routes/**`
+
+Affected APIs:
+Todas las de lectura de admin.
+
+Blocking:
+YES para las rutas de lectura de admin.
+
+---
+
+## HO-014
+
+Status: OPEN
+
+## Handoff
+
+Date: 2026-08-25
+From: Team Lead
+To: los tres
+
+Context:
+**La misma trampa del lenguaje ha producido tres bugs reales en dos dominios
+distintos**, todos detectados en la ronda de corrección:
+
+1. `security` — `\s` dentro de un template literal sin etiquetar colapsaba a
+   `s`. El escáner de aleatoriedad lanzaba `SyntaxError` al cargar. El de
+   sorteo interno **no lanzaba**: compilaba, corría en verde y era ciego a 5 de
+   6 formas de activar el sorteo.
+2. `frontend` — el matcher del middleware `"...\..."` colapsaba a `.`,
+   convirtiendo el patrón en "dos caracteres cualesquiera" y excluyendo del
+   middleware casi cualquier ruta.
+
+En todos los casos ESLint lo estaba señalando como `no-useless-escape`, y en
+todos los casos se leyó como un detalle de estilo.
+
+What I need from you:
+
+1. `security`: valorar una regla de lint que prohíba construir expresiones
+   regulares desde template literals sin `String.raw`, en todo el workspace y
+   no solo en tus paquetes.
+2. Los tres: **`no-useless-escape` deja de tratarse como cosmético.** En este
+   proyecto es un indicador de patrón corrupto.
+3. `security` ya estableció el patrón correcto: todo escáner debe llevar
+   **tests de sus propios patrones** (casos que deben y que no deben coincidir).
+   En un escáner, "no encontré nada" y "no busqué nada" son indistinguibles sin
+   esa red.
+
+Affected files: `eslint.config.mjs` (raíz, de `backend`), todos los escáneres.
+
+Blocking: NO, pero es prevención de una clase de fallo ya materializada tres veces.
+
+---
+
+## HO-015
+
+Status: OPEN
+
+## Handoff
+
+Date: 2026-08-25
+From: backend
+To: Team Lead
+
+Context:
+**La migración `0004_rbac_catalog_unification.sql` (449 líneas) nunca se ha
+ejecutado contra un PostgreSQL real.** No hay Docker en esta máquina
+(`docker info` falla), así que `pnpm test:integration` no corre.
+
+Está verificada estáticamente (paridad de catálogos, `drizzle-kit check`) y
+revisada a mano, pero **columna generada, clave ajena compuesta y bloque
+`DO $$` son exactamente lo que un test estático no puede probar**.
+
+What I need from you:
+Ejecutar `pnpm test:integration` en cuanto haya Docker disponible. Es lo
+primero que debe correr en un entorno que lo tenga.
+
+Affected files: `packages/database/drizzle/**`
+
+Blocking: YES para dar por bueno el esquema.
+
+---
+
+## HO-016
+
+Status: OPEN
+
+## Handoff
+
+Date: 2026-08-25
+From: backend
+To: Team Lead / backend
+
+Context:
+`docs/API_CONTRACT.md` sigue siendo un esqueleto sin un solo endpoint,
+mientras `apps/api` ya sirve tres rutas y `apps/web` consume contra MSW.
+
+La regla 1 de `docs/API_CONTRACT.md` dice que ninguna API es consumible sin
+estar documentada ahí. Hoy se incumple.
+
+What I need from you:
+Poblar el contrato con lo implementado y con lo propuesto, reconciliando las
+listas P0 de `frontend` y `backend` (`HO-005`, todavía OPEN). `backend` genera
+`route-manifest.json`, que es exactamente lo que `security` puede comparar
+contra el documento sin editar código ajeno (DEC-015).
+
+Affected files: `docs/API_CONTRACT.md`
+
+Blocking: YES para el siguiente hito de ambos.

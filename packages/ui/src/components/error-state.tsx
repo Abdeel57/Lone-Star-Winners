@@ -1,15 +1,15 @@
 import type { ReactNode } from "react";
 
 import { cn } from "../lib/cn";
-import { Heading } from "./empty-state";
+import { Heading, type HeadingLevel } from "./empty-state";
 
 export interface ErrorStateProps {
   /** Titulo ya traducido por el consumidor. */
   readonly title: ReactNode;
   /**
-   * Explicacion ya traducida. El consumidor la resuelve a partir del
-   * `message_key` que devuelve la API (DEC-022): este componente nunca muestra
-   * texto que venga del backend en un idioma concreto.
+   * Explicacion ya traducida. El consumidor la resuelve a partir del `code`
+   * estable que devuelve la API (DEC-022, DEC-031): este componente nunca
+   * muestra texto que venga del backend en un idioma concreto.
    */
   readonly description?: ReactNode;
   /** Accion de reintento o alternativa. */
@@ -25,7 +25,7 @@ export interface ErrorStateProps {
    * API lo devuelva.
    */
   readonly requestId?: string;
-  readonly headingLevel?: "h2" | "h3" | "h4";
+  readonly headingLevel?: HeadingLevel;
   readonly className?: string;
 }
 

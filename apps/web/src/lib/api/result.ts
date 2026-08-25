@@ -26,16 +26,15 @@ export interface ApiFailure {
   /** Codigo HTTP, si llego a haber respuesta. */
   readonly status: number | null;
   /**
-   * Codigo estable de dominio (DEC-022). `null` cuando no hubo envelope.
-   * Es un identificador, no un mensaje: nunca se muestra tal cual.
+   * Codigo estable de dominio (DEC-022) y CLAVE CANONICA DE TRADUCCION
+   * (DEC-031). `null` cuando no hubo envelope.
+   *
+   * Es un identificador, no un mensaje: nunca se muestra tal cual. El texto lo
+   * resuelve el frontend contra sus diccionarios; si el codigo no tiene
+   * traduccion, se cae al mensaje generico. El backend nunca manda prosa, y ya
+   * no manda un segundo campo `message_key` con el mismo proposito.
    */
   readonly code: string | null;
-  /**
-   * Clave de traduccion que propone el backend (DEC-022). El texto lo resuelve
-   * el frontend contra sus diccionarios; si la clave no existe, se cae al
-   * mensaje generico. El backend nunca manda prosa.
-   */
-  readonly messageKey: string | null;
   /**
    * `request_id` del envelope. Es lo unico que permite a soporte encontrar el
    * fallo concreto en los logs, asi que se propaga hasta la pantalla.
@@ -59,17 +58,17 @@ export function failure(error: ApiFailure): ApiResult<never> {
  * Se valida a mano y de forma estricta: mientras `packages/api-types` no
  * exista (DEC-014), confiar en la forma de la respuesta seria confiar en una
  * suposicion.
+ *
+ * DEC-031: lo unico obligatorio es `code`. `message_key` ya no forma parte del
+ * contrato, asi que no se exige ni se lee. Una respuesta que aun lo traiga se
+ * acepta -sobra un campo, no falta ninguno- pero el frontend lo ignora.
  */
 export function isApiErrorEnvelope(value: unknown): value is ApiErrorEnvelope {
   if (typeof value !== "object" || value === null) return false;
   if (!("error" in value)) return false;
 
-  const { error } = value as { error: unknown };
+  const { error } = value;
   if (typeof error !== "object" || error === null) return false;
 
-  const hasCode = "code" in error && typeof (error as { code: unknown }).code === "string";
-  const hasMessageKey =
-    "message_key" in error && typeof (error as { message_key: unknown }).message_key === "string";
-
-  return hasCode && hasMessageKey;
+  return "code" in error && typeof error.code === "string";
 }

@@ -1,5 +1,5 @@
 import { readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
@@ -23,7 +23,23 @@ import { describe, expect, it } from "vitest";
  * anade a `ALLOWED` con su motivo; nunca se relaja el patron.
  */
 
-const HERE = fileURLToPath(new URL(".", import.meta.url));
+/**
+ * Directorio de este fichero, como RUTA DEL SISTEMA DE FICHEROS.
+ *
+ * Deliberadamente NO se usa `new URL(".", import.meta.url)`. Vite reescribe ese
+ * patron cuando el primer argumento es una cadena literal (es su mecanismo de
+ * import de assets), asi que dentro de Vitest la expresion no se evalua como
+ * esta escrita: se resuelve contra `location`, que en el entorno jsdom es
+ * `http://localhost:3000`. El resultado era una URL `http:` y `fileURLToPath`
+ * lanzaba `TypeError: The URL must be of scheme file` en la carga del modulo,
+ * de modo que el fichero entero no llegaba a ejecutarse: la red no existia y
+ * ademas no aparecia como fallo en el recuento de tests.
+ *
+ * `fileURLToPath(import.meta.url)` no coincide con ese patron, y `dirname`
+ * trabaja sobre rutas nativas, que es lo que `readdirSync` espera tanto en
+ * Windows (`C:\...`) como en POSIX.
+ */
+const HERE = dirname(fileURLToPath(import.meta.url));
 
 /** Carpetas con JSX de interfaz. `mocks` y `test` no pintan nada. */
 const SCANNED_DIRECTORIES = [join(HERE, "..", "app"), join(HERE, "..", "components")];

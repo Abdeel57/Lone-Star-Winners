@@ -62,17 +62,19 @@ describe("healthchecks", () => {
 });
 
 describe("envelope de error (DEC-022)", () => {
-  it("un 404 usa `code` y `message_key`, nunca prosa traducida", async () => {
+  it("un 404 usa `code` como unica clave, nunca prosa traducida (DEC-031)", async () => {
     const app = await createApp(buildDependencies());
     const response = await app.inject({ method: "GET", url: "/api/v1/no-existe" });
 
     expect(response.statusCode).toBe(404);
     const body = response.json<{ error: Record<string, unknown> }>();
-    expect(body.error["code"]).toBe("NOT_FOUND");
-    expect(body.error["message_key"]).toBe("errors.common.not_found");
-    expect(typeof body.error["request_id"]).toBe("string");
+    expect(body.error.code).toBe("NOT_FOUND");
+    expect(typeof body.error.request_id).toBe("string");
     expect(body.error).not.toHaveProperty("message_en");
     expect(body.error).not.toHaveProperty("message_es");
+    // DEC-031: `code` ES la clave de traduccion. Un segundo campo con el mismo
+    // proposito solo puede desincronizarse del primero.
+    expect(body.error).not.toHaveProperty("message_key");
 
     await app.close();
   });
@@ -118,7 +120,7 @@ describe("deny-by-default en tiempo de ejecucion (DEC-015)", () => {
         operationId: "adminFixture",
         summary: "Fixture administrativo.",
         tags: ["admin"],
-        authorization: { kind: "PERMISSION", permission: "promotion.read" },
+        authorization: { kind: "PERMISSION", permission: "order.read" },
         schema: { response: { 200: z.object({ ok: z.boolean() }) } },
         handler: () => ({ ok: true }),
       },
@@ -141,7 +143,7 @@ describe("deny-by-default en tiempo de ejecucion (DEC-015)", () => {
         operationId: "adminDrawFixture",
         summary: "Fixture de sorteo.",
         tags: ["admin"],
-        authorization: { kind: "PERMISSION", permission: "draw.execute" },
+        authorization: { kind: "PERMISSION", permission: "draw.initiate" },
         schema: { response: { 200: z.object({ ok: z.boolean() }) } },
         handler: () => ({ ok: true }),
       },

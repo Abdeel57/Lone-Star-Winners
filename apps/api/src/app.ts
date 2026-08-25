@@ -160,15 +160,10 @@ export async function createApp(dependencies: AppDependencies): Promise<FastifyI
     max: config.http.rateLimit.maxRequests,
     timeWindow: config.http.rateLimit.windowSeconds * 1_000,
     // El envelope de error tambien aqui: un 429 con otro formato obligaria al
-    // frontend a tratar dos formas distintas de error (DEC-022).
-    errorResponseBuilder: (request, context) => ({
-      error: {
-        code: "RATE_LIMITED",
-        message_key: "errors.common.rate_limited",
-        details: { retry_after_seconds: Math.ceil(context.ttl / 1_000) },
-        request_id: request.id,
-      },
-    }),
+    // frontend a tratar dos formas distintas de error (DEC-022, DEC-031). Se
+    // construye con la misma fabrica que el resto para que no pueda divergir.
+    errorResponseBuilder: (request, context) =>
+      ApiErrors.rateLimited(Math.ceil(context.ttl / 1_000)).toEnvelope(request.id),
   });
 
   // ---- 6. Errores: un unico envelope (DEC-022) ----

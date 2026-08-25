@@ -2,6 +2,17 @@ import type { ReactNode } from "react";
 
 import { cn } from "../lib/cn";
 
+/**
+ * Nivel de encabezado real dentro del documento.
+ *
+ * Incluye `h1` a proposito: cuando un estado vacio o de error OCUPA la pagina
+ * entera -un 404, una frontera de error de ruta- ese titulo es el encabezado
+ * principal del documento, y degradarlo a `h2` dejaria la pagina sin `h1`, que
+ * es un fallo de WCAG y de navegacion por lector de pantalla. El nivel lo elige
+ * quien conoce la jerarquia de la pagina, no el componente.
+ */
+export type HeadingLevel = "h1" | "h2" | "h3" | "h4";
+
 export interface EmptyStateProps {
   /**
    * Titulo ya traducido. Es obligatorio: un estado vacio sin explicacion se
@@ -14,7 +25,7 @@ export interface EmptyStateProps {
   /** Ilustracion o icono decorativo. Debe venir con `aria-hidden`. */
   readonly icon?: ReactNode;
   /** Nivel de encabezado real dentro de la pagina. */
-  readonly headingLevel?: "h2" | "h3" | "h4";
+  readonly headingLevel?: HeadingLevel;
   readonly className?: string;
 }
 
@@ -63,11 +74,20 @@ export function Heading({
   className,
   children,
 }: {
-  readonly level: "h2" | "h3" | "h4";
+  readonly level: HeadingLevel;
   readonly className?: string;
   readonly children: ReactNode;
 }) {
-  if (level === "h2") return <h2 className={className}>{children}</h2>;
-  if (level === "h4") return <h4 className={className}>{children}</h4>;
-  return <h3 className={className}>{children}</h3>;
+  // `switch` exhaustivo: anadir un nivel al tipo obliga a manejarlo aqui, en
+  // vez de caer silenciosamente en el `h3` por defecto.
+  switch (level) {
+    case "h1":
+      return <h1 className={className}>{children}</h1>;
+    case "h2":
+      return <h2 className={className}>{children}</h2>;
+    case "h4":
+      return <h4 className={className}>{children}</h4>;
+    case "h3":
+      return <h3 className={className}>{children}</h3>;
+  }
 }

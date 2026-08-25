@@ -1,296 +1,227 @@
 /**
- * Catalogo canonico de permisos y roles administrativos.
+ * Proyeccion PERSISTIBLE del catalogo de autorizacion.
  *
- * Esta lista es la contraparte en TypeScript de la semilla de
- * `drizzle/0001_identity_and_rbac.sql`. `test/rbac-parity.test.ts` compara
- * ambas: si divergen, una ruta podria exigir un permiso que no existe en la
- * base de datos, y el registro deny-by-default de DEC-015 se quedaria sin
- * referencia contra la que validar.
+ * DEC-027: el catalogo canonico de roles y capacidades vive en
+ * `packages/security`. Este modulo NO lo define: lo importa y lo traduce a las
+ * filas que siembra la migracion `0004_rbac_catalog_unification.sql`.
  *
- * CONFLICTO ABIERTO CON `packages/security`
- *   `security-integration` ha creado en paralelo `packages/security/src/
- *   capabilities.ts` y `roles.ts`, con otro vocabulario: capacidades tipo
- *   `entry.ledger.read` y roles `PROMOTION_MANAGER`, `EXPORT_OFFICER`,
- *   `SECURITY_ADMIN`, `SYSTEM`. Solo `COMPLIANCE_OFFICER` y `DRAW_OFFICER`
- *   coinciden con los de aqui.
+ * POR QUE ESTE ARCHIVO SIGUE EXISTIENDO
  *
- *   Son DOS FUENTES DE VERDAD para lo mismo, que es lo que prohibe `CLAUDE.md`
- *   seccion 4. No se resuelve unilateralmente: necesita un `DEC-xxx`.
- *   Recomendacion de `backend`: gana el catalogo de `packages/security`, y
- *   este archivo pasa a re-exportarlo mas una migracion de resiembra. Ver
- *   `apps/api/src/http/permission-catalog.ts`, que existe justamente para que
- *   ese cambio sea de un solo import.
+ *   Porque hay dos representaciones inevitables del mismo vocabulario: la de
+ *   `@lsw/security`, que es una libreria de decision sin estado, y las filas
+ *   de `admin_permissions` / `admin_roles`, que son lo que la base de datos
+ *   impone con claves ajenas. Traducir de una a otra en un solo sitio, de
+ *   forma derivada, es lo que permite que `test/parity.test.ts` compare el SQL
+ *   con el catalogo y falle si divergen.
  *
- * POR QUE, MIENTRAS TANTO, VIVE AQUI
- *   Porque es donde se persiste y se siembra: la migracion `0001` lo inserta
- *   en `admin_permissions`, y `apps/api` necesita que el permiso que declara
- *   una ruta exista de verdad en la base de datos.
+ *   Ninguna constante de este archivo esta escrita a mano. Todo se DERIVA. Un
+ *   permiso nuevo en `packages/security` aparece aqui solo; lo unico que hay
+ *   que escribir es la migracion, y el test de paridad avisa si falta.
+ *
+ * QUE SE CONSERVA DEL DISENO ANTERIOR DE `backend` (DEC-027 lo adopta)
+ *
+ *   1. Ningun rol acumula "finalizar el export" y "sortear". En el catalogo de
+ *      `security` esto es aun mas fuerte que antes: NO EXISTE un rol
+ *      `SUPER_ADMIN`. El rol que administra cuentas (`SECURITY_ADMIN`) no
+ *      tiene `export.finalize`, ni `draw.authorization.create`, ni
+ *      `draw.initiate`. La prueba correspondiente sigue en el test de paridad.
+ *   2. La incompatibilidad entre roles se persiste como DATO y la impone un
+ *      trigger, no el codigo de la aplicacion.
+ *   3. `COMPLIANCE_OFFICER`, no `COMPLIANCE_REVIEWER`.
  *
  * POR QUE NO HAY UN `isAdmin`
  *   Con un booleano, "puede ver el panel" y "puede ejecutar el sorteo" serian
  *   el mismo privilegio. Un permiso es una CAPACIDAD concreta, no un nivel.
  */
 
-export interface PermissionDefinition {
-  readonly key: string;
+import {
+  CAPABILITIES,
+  CAPABILITY_IDS,
+  ROLES,
+  ROLE_CAPABILITIES,
+  ROLE_IDS,
+  SEPARATION_OF_DUTIES,
+  isCapabilityId,
+  type CapabilityDefinition,
+  type CapabilityId,
+  type RoleDefinition,
+  type RoleId,
+} from "@lsw/security";
+
+/**
+ * Nombres locales. El vocabulario del dominio es el de `@lsw/security`; estos
+ * alias existen para que el resto de `@lsw/database` y de `apps/api` no tenga
+ * que cambiar de palabra al hablar de lo mismo.
+ */
+export type PermissionKey = CapabilityId;
+export type PermissionDefinition = CapabilityDefinition;
+export type AdminRoleKey = RoleId;
+export type AdminRoleDefinition = RoleDefinition;
+
+export { CAPABILITIES, ROLES, ROLE_CAPABILITIES, SEPARATION_OF_DUTIES };
+
+/** Fila de `admin_permissions`, tal y como la siembra la migracion `0004`. */
+export interface PermissionSeedRow {
+  readonly key: PermissionKey;
+  readonly domain: string;
+  readonly sensitivity: "ROUTINE" | "SENSITIVE" | "CRITICAL";
   readonly description: string;
-  readonly isSensitive: boolean;
-  /** DEC-006: exige re-autenticacion con MFA reciente (ventana <= 5 min). */
   readonly requiresStepUp: boolean;
+  readonly requiresReason: boolean;
+  readonly requiresSecondApproval: boolean;
+  readonly emitsAuditEvent: boolean;
+  readonly touchesPii: boolean;
+  readonly dependsOnFeatureFlag: boolean;
+  readonly legalDependency: string | null;
 }
 
-export const PERMISSIONS = [
-  {
-    key: "dashboard.read",
-    description: "View operational dashboard aggregates.",
-    isSensitive: false,
-    requiresStepUp: false,
-  },
+/** Fila de `admin_roles`. */
+export interface AdminRoleSeedRow {
+  readonly key: AdminRoleKey;
+  readonly kind: "PARTICIPANT" | "STAFF" | "SYSTEM";
+  readonly requiresMfa: boolean;
+  readonly assignableToHuman: boolean;
+  readonly labelKey: string;
+  readonly description: string;
+}
 
-  {
-    key: "promotion.read",
-    description: "View promotions and their configuration.",
-    isSensitive: false,
-    requiresStepUp: false,
-  },
-  {
-    key: "promotion.write",
-    description: "Create and edit draft promotions.",
-    isSensitive: false,
-    requiresStepUp: false,
-  },
-  {
-    key: "promotion.schedule",
-    description: "Move a promotion from DRAFT to SCHEDULED.",
-    isSensitive: true,
-    requiresStepUp: false,
-  },
-  {
-    key: "promotion.activate",
-    description:
-      "Activate a promotion. Blocked while required rules keys are unresolved (DEC-012).",
-    isSensitive: true,
-    requiresStepUp: true,
-  },
-  {
-    key: "promotion.close",
-    description: "Close an active promotion.",
-    isSensitive: true,
-    requiresStepUp: false,
-  },
+/** Fila de `admin_role_conflicts`. */
+export interface AdminRoleConflictRow {
+  readonly roleKeyA: AdminRoleKey;
+  readonly roleKeyB: AdminRoleKey;
+  readonly reason: string;
+}
 
-  {
-    key: "rules_version.read",
-    description: "View promotion rules versions.",
-    isSensitive: false,
-    requiresStepUp: false,
+export const PERMISSIONS: readonly PermissionSeedRow[] = CAPABILITY_IDS.map(
+  (id): PermissionSeedRow => {
+    const capability = CAPABILITIES[id];
+    return {
+      key: id,
+      domain: capability.domain,
+      sensitivity: capability.sensitivity,
+      description: capability.notes,
+      requiresStepUp: capability.requiresStepUp,
+      requiresReason: capability.requiresReason,
+      requiresSecondApproval: capability.requiresSecondApproval,
+      emitsAuditEvent: capability.emitsAuditEvent,
+      touchesPii: capability.touchesPii,
+      dependsOnFeatureFlag: capability.dependsOnFeatureFlag,
+      legalDependency: capability.legalDependency,
+    };
   },
-  {
-    key: "rules_version.write",
-    description: "Create and edit DRAFT rules versions.",
-    isSensitive: false,
-    requiresStepUp: false,
-  },
-  {
-    key: "rules_version.activate",
-    description: "Activate a rules version, making it legally operative.",
-    isSensitive: true,
-    requiresStepUp: true,
-  },
-
-  {
-    key: "product.read",
-    description: "View catalog products and variants.",
-    isSensitive: false,
-    requiresStepUp: false,
-  },
-  {
-    key: "product.write",
-    description: "Create and edit catalog products and variants.",
-    isSensitive: false,
-    requiresStepUp: false,
-  },
-
-  {
-    key: "order.read",
-    description: "View orders and their entry calculation trace.",
-    isSensitive: false,
-    requiresStepUp: false,
-  },
-  {
-    key: "order.refund",
-    description: "Issue a refund against an order.",
-    isSensitive: true,
-    requiresStepUp: false,
-  },
-
-  {
-    key: "participant.read",
-    description: "View participant records without personal data.",
-    isSensitive: false,
-    requiresStepUp: false,
-  },
-  {
-    key: "participant.read_pii",
-    description: "View participant personal data.",
-    isSensitive: true,
-    requiresStepUp: false,
-  },
-  {
-    key: "participant.disqualify",
-    description: "Disqualify a participant, reversing their eligible entries.",
-    isSensitive: true,
-    requiresStepUp: true,
-  },
-
-  {
-    key: "entry.read",
-    description: "Read the entry ledger and derived balances.",
-    isSensitive: false,
-    requiresStepUp: false,
-  },
-  {
-    key: "entry.adjust_request",
-    description: "Request a manual entry adjustment.",
-    isSensitive: true,
-    requiresStepUp: false,
-  },
-  {
-    key: "entry.adjust_approve",
-    description: "Approve a manual entry adjustment and post it to the ledger.",
-    isSensitive: true,
-    requiresStepUp: true,
-  },
-
-  {
-    key: "amoe.read",
-    description: "View AMOE submissions.",
-    isSensitive: false,
-    requiresStepUp: false,
-  },
-  {
-    key: "amoe.review",
-    description: "Approve or reject AMOE submissions.",
-    isSensitive: true,
-    requiresStepUp: false,
-  },
-
-  {
-    key: "feature_flag.read",
-    description: "View feature flag state.",
-    isSensitive: false,
-    requiresStepUp: false,
-  },
-  {
-    key: "feature_flag.write",
-    description: "Change a feature flag, including legally material ones.",
-    isSensitive: true,
-    requiresStepUp: true,
-  },
-
-  {
-    key: "audit.read",
-    description: "Read audit events and integrity check results.",
-    isSensitive: false,
-    requiresStepUp: false,
-  },
-
-  {
-    key: "export.prepare",
-    description: "Prepare an export snapshot of the eligible universe.",
-    isSensitive: true,
-    requiresStepUp: false,
-  },
-  {
-    key: "export.finalize",
-    description: "Finalize an export snapshot. Irreversible (DEC-016).",
-    isSensitive: true,
-    requiresStepUp: true,
-  },
-  {
-    key: "export.download",
-    description: "Download a finalized export snapshot.",
-    isSensitive: true,
-    requiresStepUp: true,
-  },
-
-  {
-    key: "draw.authorize",
-    description: "Create a DrawAuthorization for a promotion (DEC-017 lock 2).",
-    isSensitive: true,
-    requiresStepUp: true,
-  },
-  {
-    key: "draw.execute",
-    description: "Initiate an internal draw (DEC-017 lock 3).",
-    isSensitive: true,
-    requiresStepUp: true,
-  },
-
-  {
-    key: "admin_user.read",
-    description: "View administrative accounts.",
-    isSensitive: false,
-    requiresStepUp: false,
-  },
-  {
-    key: "admin_user.write",
-    description: "Create, suspend or deactivate administrative accounts.",
-    isSensitive: true,
-    requiresStepUp: true,
-  },
-  {
-    key: "admin_role.assign",
-    description: "Grant or revoke administrative roles.",
-    isSensitive: true,
-    requiresStepUp: true,
-  },
-] as const satisfies readonly PermissionDefinition[];
-
-export type PermissionKey = (typeof PERMISSIONS)[number]["key"];
-
-export const PERMISSION_KEYS: readonly PermissionKey[] = PERMISSIONS.map(
-  (permission) => permission.key,
 );
 
-const PERMISSION_INDEX = new Map<string, PermissionDefinition>(
-  PERMISSIONS.map((permission) => [permission.key, permission]),
-);
+export const PERMISSION_KEYS: readonly PermissionKey[] = CAPABILITY_IDS;
 
 export function isPermissionKey(candidate: string): candidate is PermissionKey {
-  return PERMISSION_INDEX.has(candidate);
+  return isCapabilityId(candidate);
 }
 
 export function getPermission(key: PermissionKey): PermissionDefinition {
-  const found = PERMISSION_INDEX.get(key);
-  if (found === undefined) {
-    throw new Error(`Permiso desconocido: ${key}`);
-  }
-  return found;
+  return CAPABILITIES[key];
 }
 
 /** DEC-006: operaciones que exigen step-up authentication. */
-export const STEP_UP_PERMISSION_KEYS: readonly PermissionKey[] = PERMISSIONS.filter(
-  (permission) => permission.requiresStepUp,
-).map((permission) => permission.key);
+export const STEP_UP_PERMISSION_KEYS: readonly PermissionKey[] = CAPABILITY_IDS.filter(
+  (id) => CAPABILITIES[id].requiresStepUp,
+);
 
-export const ADMIN_ROLE_KEYS = [
-  "SUPER_ADMIN",
-  "OPERATIONS_ADMIN",
-  "CUSTOMER_SUPPORT",
-  "COMPLIANCE_OFFICER",
-  "DRAW_OFFICER",
-  "READ_ONLY_AUDITOR",
-] as const;
+export const ADMIN_ROLE_KEYS: readonly AdminRoleKey[] = ROLE_IDS;
 
-export type AdminRoleKey = (typeof ADMIN_ROLE_KEYS)[number];
+export const ADMIN_ROLES: readonly AdminRoleSeedRow[] = ROLE_IDS.map((id): AdminRoleSeedRow => {
+  const role = ROLES[id];
+  return {
+    key: id,
+    kind: role.kind,
+    requiresMfa: role.requiresMfa,
+    assignableToHuman: role.assignableToHuman,
+    labelKey: role.labelKey,
+    description: role.notes,
+  };
+});
+
+/** Pares `(rol, capacidad)` de `admin_role_permissions`, en orden estable. */
+export const ADMIN_ROLE_PERMISSIONS: readonly (readonly [AdminRoleKey, PermissionKey])[] =
+  ROLE_IDS.flatMap((role) =>
+    ROLE_CAPABILITIES[role].map((capability): readonly [AdminRoleKey, PermissionKey] => [
+      role,
+      capability,
+    ]),
+  );
 
 /**
- * DEC-017 cerrojo 3: pares de roles que una misma persona no puede acumular.
- * Se persiste en `admin_role_conflicts` y lo impone un trigger, porque una
- * regla que solo vive en el codigo de la aplicacion sobrevive hasta el primer
- * script de mantenimiento que asigne roles a mano.
+ * DEC-017 cerrojo 3: pares de ROLES que una misma persona no puede acumular.
+ *
+ * `packages/security` declara la separacion de funciones en terminos de
+ * CAPACIDADES, que es el nivel correcto para decidir en tiempo de ejecucion.
+ * La base de datos, en cambio, solo ve roles al asignarlos. Esta funcion
+ * traduce lo uno en lo otro: para cada restriccion, todo par de roles tal que
+ * uno concede la primera capacidad y el otro la segunda.
+ *
+ * La derivacion importa. Escribir los pares a mano significaria que anadir a
+ * un rol una capacidad conflictiva no produciria ningun conflicto nuevo, y el
+ * control se degradaria en silencio.
  */
-export const ADMIN_ROLE_CONFLICTS: readonly (readonly [AdminRoleKey, AdminRoleKey])[] = [
-  ["COMPLIANCE_OFFICER", "DRAW_OFFICER"],
-];
+function deriveRoleConflicts(): readonly AdminRoleConflictRow[] {
+  const byPair = new Map<string, { pair: readonly [RoleId, RoleId]; reasons: string[] }>();
+
+  for (const constraint of SEPARATION_OF_DUTIES) {
+    const [capabilityA, capabilityB] = constraint.capabilities;
+
+    const rolesWithA = ROLE_IDS.filter((role) => ROLE_CAPABILITIES[role].includes(capabilityA));
+    const rolesWithB = ROLE_IDS.filter((role) => ROLE_CAPABILITIES[role].includes(capabilityB));
+
+    for (const roleA of rolesWithA) {
+      for (const roleB of rolesWithB) {
+        if (roleA === roleB) {
+          // Un solo rol que concede ambas capacidades no es un conflicto ENTRE
+          // roles: es un error del propio catalogo, y lo detecta el test de
+          // paridad, no esta funcion.
+          continue;
+        }
+
+        const pair: readonly [RoleId, RoleId] = roleA < roleB ? [roleA, roleB] : [roleB, roleA];
+        const key = `${pair[0]}|${pair[1]}`;
+        const reason = `${constraint.source}: ${constraint.rationale}`;
+
+        const existing = byPair.get(key);
+        if (existing === undefined) {
+          byPair.set(key, { pair, reasons: [reason] });
+        } else if (!existing.reasons.includes(reason)) {
+          existing.reasons.push(reason);
+        }
+      }
+    }
+  }
+
+  return [...byPair.values()]
+    .map((entry): AdminRoleConflictRow => ({
+      roleKeyA: entry.pair[0],
+      roleKeyB: entry.pair[1],
+      reason: entry.reasons.join(" "),
+    }))
+    .sort((a, b) =>
+      a.roleKeyA === b.roleKeyA
+        ? a.roleKeyB.localeCompare(b.roleKeyB)
+        : a.roleKeyA.localeCompare(b.roleKeyA),
+    );
+}
+
+export const ADMIN_ROLE_CONFLICTS: readonly AdminRoleConflictRow[] = deriveRoleConflicts();
+
+/**
+ * Roles que pueden asignarse a una cuenta de `admin_users`.
+ *
+ * `PARTICIPANT` queda fuera porque DEC-028 separa participantes de personal, y
+ * `SYSTEM` porque si una persona pudiera actuar como el sistema la auditoria
+ * dejaria de distinguir un job de un humano. La base de datos lo impone con
+ * una clave ajena compuesta contra `admin_roles (key, staff_assignable)`; esta
+ * constante es la misma regla para el lado TypeScript.
+ */
+export const STAFF_ASSIGNABLE_ROLE_KEYS: readonly AdminRoleKey[] = ROLE_IDS.filter(
+  (id) => ROLES[id].kind === "STAFF" && ROLES[id].assignableToHuman,
+);
+
+export function isStaffAssignableRole(candidate: string): candidate is AdminRoleKey {
+  return (STAFF_ASSIGNABLE_ROLE_KEYS as readonly string[]).includes(candidate);
+}

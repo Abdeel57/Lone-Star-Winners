@@ -18,5 +18,6 @@ export type {
 } from "./contract";
 export { FEATURE_FLAG_KEYS } from "./contract";
 export { apiBaseUrl } from "./http";
+export { isCompleteLocalizedText, pickLocalized } from "./localized";
 export { API_PATHS, fetchActivePromotion, fetchSiteConfig } from "./resources";
 export type { ApiFailure, ApiFailureKind, ApiResult } from "./result";

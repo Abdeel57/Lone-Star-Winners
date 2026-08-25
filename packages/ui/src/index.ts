@@ -35,7 +35,12 @@ export {
   type CardSlotProps,
   type CardTitleProps,
 } from "./components/card";
-export { EmptyState, Heading, type EmptyStateProps } from "./components/empty-state";
+export {
+  EmptyState,
+  Heading,
+  type EmptyStateProps,
+  type HeadingLevel,
+} from "./components/empty-state";
 export { ErrorState, type ErrorStateProps } from "./components/error-state";
 export {
   FormField,

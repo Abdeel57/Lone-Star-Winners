@@ -26,9 +26,7 @@ const DEFAULT_API_BASE_URL = "http://localhost:4000/api/v1";
  * es la unica que hoy declara `.env.example`.
  */
 export function apiBaseUrl(): string {
-  return (
-    process.env["API_BASE_URL"] ?? process.env["NEXT_PUBLIC_API_BASE_URL"] ?? DEFAULT_API_BASE_URL
-  );
+  return process.env.API_BASE_URL ?? process.env.NEXT_PUBLIC_API_BASE_URL ?? DEFAULT_API_BASE_URL;
 }
 
 export interface ApiRequestOptions {
@@ -74,7 +72,6 @@ export async function apiGet<T>(
       kind: "network",
       status: null,
       code: null,
-      messageKey: null,
       requestId: null,
       details: cause instanceof Error ? cause.message : null,
     });
@@ -96,7 +93,6 @@ export async function apiGet<T>(
         kind: "http",
         status: response.status,
         code: body.error.code,
-        messageKey: body.error.message_key,
         requestId: body.error.request_id ?? requestIdHeader,
         details: body.error.details ?? null,
       });
@@ -108,7 +104,6 @@ export async function apiGet<T>(
       kind: "malformed",
       status: response.status,
       code: null,
-      messageKey: null,
       requestId: requestIdHeader,
       details: null,
     });
@@ -119,7 +114,6 @@ export async function apiGet<T>(
       kind: "malformed",
       status: response.status,
       code: null,
-      messageKey: null,
       requestId: requestIdHeader,
       details: null,
     });

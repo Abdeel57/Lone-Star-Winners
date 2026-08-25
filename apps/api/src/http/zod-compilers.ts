@@ -29,7 +29,6 @@ export class ValidationError extends ApiError {
     super({
       statusCode: 422,
       code: "VALIDATION_FAILED",
-      messageKey: "errors.common.validation_failed",
       details: { issues },
     });
     this.name = "ValidationError";
@@ -81,7 +80,6 @@ export const zodSerializerCompiler: FastifySerializerCompiler<ZodType> = ({ sche
       throw new ApiError({
         statusCode: 500,
         code: "RESPONSE_CONTRACT_VIOLATION",
-        messageKey: "errors.common.internal",
         cause: result.error,
       });
     }

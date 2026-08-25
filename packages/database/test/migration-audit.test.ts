@@ -17,14 +17,53 @@ const MIGRATIONS_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url))
 
 interface MigrationFile {
   readonly name: string;
+  /** Contenido literal del archivo, comentarios incluidos. */
   readonly sql: string;
+  /**
+   * El mismo SQL sin comentarios `--`.
+   *
+   * Las comprobaciones de INVARIANTES DE DOMINIO tienen que mirar aqui, no al
+   * texto completo. La migracion `0001` explica en un comentario por que NO
+   * existe una columna `is_admin`; buscar la cadena en el archivo entero
+   * convierte esa explicacion en un fallo. Lo que se quiere comprobar es lo
+   * que la base de datos hace, y un comentario no hace nada.
+   *
+   * Las comprobaciones de PERMISOS siguen usando `sql`: un GRANT nunca vive
+   * dentro de un comentario, y ahi el falso positivo es preferible al falso
+   * negativo.
+   */
+  readonly statements: string;
+}
+
+/** Quita comentarios de linea `--`, respetando los que van dentro de literales. */
+function stripLineComments(sql: string): string {
+  return sql
+    .split("\n")
+    .map((line) => {
+      let inString = false;
+      for (let index = 0; index < line.length; index += 1) {
+        const character = line[index];
+        if (character === "'") {
+          inString = !inString;
+          continue;
+        }
+        if (!inString && character === "-" && line[index + 1] === "-") {
+          return line.slice(0, index);
+        }
+      }
+      return line;
+    })
+    .join("\n");
 }
 
 function loadMigrations(): MigrationFile[] {
   return readdirSync(MIGRATIONS_DIR)
     .filter((name) => name.endsWith(".sql"))
     .sort()
-    .map((name) => ({ name, sql: readFileSync(path.join(MIGRATIONS_DIR, name), "utf8") }));
+    .map((name) => {
+      const sql = readFileSync(path.join(MIGRATIONS_DIR, name), "utf8");
+      return { name, sql, statements: stripLineComments(sql) };
+    });
 }
 
 /** Tablas cuyo append-only es una garantia estructural (DEC-007). */
@@ -132,7 +171,7 @@ describe("migraciones: invariantes de dominio", () => {
     for (const migration of migrations) {
       expect(
         /\b(amount|price|total|subtotal)\w*\s+(numeric|decimal|real|double\s+precision|float)/iu.test(
-          migration.sql,
+          migration.statements,
         ),
         migration.name,
       ).toBe(false);
@@ -142,7 +181,7 @@ describe("migraciones: invariantes de dominio", () => {
   it("todas las columnas de instante son timestamptz, nunca timestamp sin zona (DEC-011)", () => {
     for (const migration of migrations) {
       const naive = /\b\w+\s+timestamp(?!tz)\b(?!\s+with\s+time\s+zone)/giu;
-      const matches = migration.sql.match(naive) ?? [];
+      const matches = migration.statements.match(naive) ?? [];
       expect(
         matches,
         `${migration.name} usa timestamp sin zona: ${matches.join(", ")}`,
@@ -152,19 +191,22 @@ describe("migraciones: invariantes de dominio", () => {
 
   it("no existe ninguna columna is_admin: la autorizacion es por capacidades", () => {
     for (const migration of migrations) {
-      expect(/\bis_admin\b/iu.test(migration.sql), migration.name).toBe(false);
+      expect(/\bis_admin\b/iu.test(migration.statements), migration.name).toBe(false);
     }
   });
 
   it("ninguna migracion activa un sorteo interno ni siembra una autorizacion de sorteo (DEC-017)", () => {
     for (const migration of migrations) {
       expect(
-        /internal_draw_enabled\s*(boolean\s*)?(NOT NULL\s*)?DEFAULT\s+true/iu.test(migration.sql),
+        /internal_draw_enabled\s*(boolean\s*)?(NOT NULL\s*)?DEFAULT\s+true/iu.test(
+          migration.statements,
+        ),
         migration.name,
       ).toBe(false);
-      expect(/INSERT\s+INTO\s+draw_authorizations/iu.test(migration.sql), migration.name).toBe(
-        false,
-      );
+      expect(
+        /INSERT\s+INTO\s+draw_authorizations/iu.test(migration.statements),
+        migration.name,
+      ).toBe(false);
     }
   });
 
@@ -175,9 +217,11 @@ describe("migraciones: invariantes de dominio", () => {
     // cargados, no en el esquema.
     const promotionsMigration = migrations.find((m) => m.name.includes("promotions"));
     expect(promotionsMigration).toBeDefined();
-    expect(/minimum_age\s*'?\s*[:=]\s*\d/iu.test(promotionsMigration?.sql ?? "")).toBe(false);
-    expect(/INSERT\s+INTO\s+promotion_rules_versions/iu.test(promotionsMigration?.sql ?? "")).toBe(
+    expect(/minimum_age\s*'?\s*[:=]\s*\d/iu.test(promotionsMigration?.statements ?? "")).toBe(
       false,
     );
+    expect(
+      /INSERT\s+INTO\s+promotion_rules_versions/iu.test(promotionsMigration?.statements ?? ""),
+    ).toBe(false);
   });
 });

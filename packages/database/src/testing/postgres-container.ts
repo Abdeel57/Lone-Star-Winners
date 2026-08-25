@@ -37,7 +37,7 @@ export interface TestDatabase {
  * (principios 19 y 20).
  */
 export async function startTestDatabase(): Promise<TestDatabase> {
-  const image = process.env["TESTCONTAINERS_POSTGRES_IMAGE"] ?? DEFAULT_IMAGE;
+  const image = process.env.TESTCONTAINERS_POSTGRES_IMAGE ?? DEFAULT_IMAGE;
 
   const container = await new PostgreSqlContainer(image)
     .withDatabase("lone_star_winners_test")

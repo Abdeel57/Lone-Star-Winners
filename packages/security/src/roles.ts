@@ -124,6 +124,19 @@ export const ROLES: Readonly<Record<RoleId, RoleDefinition>> = Object.freeze({
   },
 });
 
+/**
+ * Acceso al catalogo por identificador tipado.
+ *
+ * Existe por la misma razon que `getCapability`: los consumidores
+ * (`packages/database`, `apps/api`) necesitan resolver un rol a su definicion
+ * sin escribir `ROLES[algo]` en su propio codigo. Un acceso indexado con una
+ * clave que viene de fuera es la forma habitual de acabar leyendo
+ * `ROLES["constructor"]`; concentrarlo aqui deja un unico sitio que auditar.
+ */
+export function getRole(id: RoleId): RoleDefinition {
+  return ROLES[id];
+}
+
 export function isRoleId(value: string): value is RoleId {
   return (ROLE_IDS as readonly string[]).includes(value);
 }

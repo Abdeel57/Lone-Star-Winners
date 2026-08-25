@@ -51,8 +51,21 @@ describe("fetchActivePromotion", () => {
     expect(result.error.code).toBe("INTERNAL_ERROR");
     // El `request_id` es lo unico que permite a soporte encontrar el fallo.
     expect(result.error.requestId).toBe("req_mock_000000000000");
-    // DEC-022: el backend no manda prosa, solo claves.
-    expect(result.error.messageKey).toBe("apiErrors.INTERNAL_ERROR");
+  });
+
+  it("acepta el envelope sin `message_key` y no reintroduce el campo (DEC-031)", async () => {
+    // DEC-031 elimina `message_key` del contrato: `code` es la unica clave.
+    // Un envelope que solo trae `code` es VALIDO, no malformado.
+    mockApiServer.use(scenarios.serverError(API_PATHS.activePromotion));
+
+    const result = await fetchActivePromotion("en");
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.kind).toBe("http");
+    expect(result.error.code).toBe("INTERNAL_ERROR");
+    // Si alguien reintrodujera `messageKey`, este test lo delata.
+    expect(Object.keys(result.error)).not.toContain("messageKey");
   });
 
   it("distingue una respuesta que no respeta el envelope de DEC-022", async () => {

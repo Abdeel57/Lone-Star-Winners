@@ -128,7 +128,7 @@ export function validateEnv(source: EnvSource, environment: EnvName): EnvValidat
   }
 
   // DEC-006: la ventana de step-up es un tope duro, no una preferencia.
-  const stepUp = source["STEP_UP_MAX_AGE_SECONDS"];
+  const stepUp = source.STEP_UP_MAX_AGE_SECONDS;
   if (stepUp !== undefined && INTEGER_PATTERN.test(stepUp)) {
     const seconds = Number.parseInt(stepUp, 10);
     if (seconds > STEP_UP_HARD_LIMIT_SECONDS || seconds <= 0) {

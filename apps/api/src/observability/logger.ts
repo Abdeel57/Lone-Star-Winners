@@ -14,7 +14,8 @@
  * `log.info({ headers })` escrito con prisa a las tres de la madrugada.
  */
 
-import { pino, type Logger, type LoggerOptions } from "pino";
+import type { FastifyBaseLogger } from "fastify";
+import { pino, stdSerializers, stdTimeFunctions, type LoggerOptions } from "pino";
 
 import type { ApiConfig } from "../config/env.js";
 import { getCorrelationId } from "./request-context.js";
@@ -55,12 +56,21 @@ const REDACTED_PATHS = [
   "*.rawPayload",
 ];
 
-export function createLogger(config: ApiConfig): Logger {
+/**
+ * El tipo de retorno es `FastifyBaseLogger`, no el `Logger` de pino, y es
+ * deliberado: es lo que Fastify espera en `loggerInstance`. Devolviendo el tipo
+ * de pino, la instancia de Fastify quedaba parametrizada con el y dejaba de ser
+ * asignable a `FastifyInstance` en todas las funciones que la reciben.
+ *
+ * Nadie fuera de este modulo necesita la API especifica de pino: el resto del
+ * proceso solo registra eventos.
+ */
+export function createLogger(config: ApiConfig): FastifyBaseLogger {
   const options: LoggerOptions = {
     level: config.logLevel,
     // Nombres en `snake_case`, consistentes con el resto del contrato.
     messageKey: "message",
-    timestamp: pino.stdTimeFunctions.isoTime,
+    timestamp: stdTimeFunctions.isoTime,
     base: {
       service: "lsw-api",
       env: config.nodeEnv,
@@ -86,11 +96,9 @@ export function createLogger(config: ApiConfig): Logger {
         route: request.routeOptions?.url ?? request.url.split("?")[0],
       }),
       res: (reply: { statusCode: number }) => ({ status_code: reply.statusCode }),
-      err: pino.stdSerializers.err,
+      err: stdSerializers.err,
     },
   };
 
   return pino(options);
 }
-
-export type { Logger };

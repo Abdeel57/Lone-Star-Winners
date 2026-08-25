@@ -1,4 +1,4 @@
-import { http, HttpResponse } from "msw";
+import { http, HttpResponse, type JsonBodyType } from "msw";
 
 import { API_PATHS, apiBaseUrl, type ApiErrorEnvelope } from "@/lib/api";
 
@@ -24,12 +24,17 @@ function url(path: string): string {
   return `${apiBaseUrl().replace(/\/+$/, "")}/${path.replace(/^\/+/, "")}`;
 }
 
-/** Construye un envelope de error conforme a DEC-022 (codigo, nunca prosa). */
-export function errorEnvelope(code: string, messageKey: string): ApiErrorEnvelope {
+/**
+ * Construye un envelope de error conforme a DEC-022 y DEC-031.
+ *
+ * Un solo campo de identidad: `code`. Es a la vez el enum estable de dominio y
+ * la clave de traduccion (DEC-031). Nunca prosa, y nunca un `message_key`
+ * paralelo.
+ */
+export function errorEnvelope(code: string): ApiErrorEnvelope {
   return {
     error: {
       code,
-      message_key: messageKey,
       request_id: "req_mock_000000000000",
     },
   };
@@ -49,19 +54,20 @@ export const handlers = [
 export const scenarios = {
   noActivePromotion: () =>
     http.get(url(API_PATHS.activePromotion), () =>
-      HttpResponse.json(errorEnvelope("PROMOTION_NOT_FOUND", "apiErrors.PROMOTION_NOT_FOUND"), {
+      HttpResponse.json(errorEnvelope("PROMOTION_NOT_FOUND"), {
         status: 404,
       }),
     ),
 
-  promotion: (body: unknown) =>
+  promotion: (body: JsonBodyType) =>
     http.get(url(API_PATHS.activePromotion), () => HttpResponse.json(body)),
 
-  siteConfig: (body: unknown) => http.get(url(API_PATHS.siteConfig), () => HttpResponse.json(body)),
+  siteConfig: (body: JsonBodyType) =>
+    http.get(url(API_PATHS.siteConfig), () => HttpResponse.json(body)),
 
   serverError: (path: string) =>
     http.get(url(path), () =>
-      HttpResponse.json(errorEnvelope("INTERNAL_ERROR", "apiErrors.INTERNAL_ERROR"), {
+      HttpResponse.json(errorEnvelope("INTERNAL_ERROR"), {
         status: 500,
       }),
     ),

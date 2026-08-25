@@ -1,43 +1,36 @@
 /**
- * Adaptador de UN SOLO PUNTO hacia el catalogo de permisos.
+ * Adaptador de UN SOLO PUNTO hacia el catalogo de autorizacion.
  *
- * CONFLICTO ABIERTO, LEER ANTES DE TOCAR NADA
+ * DEC-027 (resuelve `HO-007`): el catalogo canonico de roles y capacidades vive
+ * en **`packages/security`**. `packages/database` lo importa para la semilla y
+ * mantiene un test de paridad; `apps/api` lo consume a traves de este archivo.
  *
- *   Existen hoy DOS catalogos de autorizacion en el repositorio, creados en
- *   paralelo por dos agentes que no se veian:
+ * POR QUE `apps/api` NO IMPORTA DE `@lsw/security` DIRECTAMENTE
  *
- *     A) `packages/database/src/domain/permissions.ts` (backend, este hito),
- *        con claves tipo `promotion.read` y roles `SUPER_ADMIN`,
- *        `OPERATIONS_ADMIN`, `CUSTOMER_SUPPORT`, `COMPLIANCE_OFFICER`,
- *        `DRAW_OFFICER`, `READ_ONLY_AUDITOR`. Es el que esta SEMBRADO en la
- *        migracion `0001_identity_and_rbac.sql`.
+ *   Porque la pregunta que hace la API no es "que capacidades existen" sino
+ *   "que capacidades existen Y ESTAN SEMBRADAS". Un permiso que el catalogo
+ *   declara pero que la migracion no ha insertado no se le puede conceder a
+ *   nadie: una ruta que lo exigiera devolveria 403 para siempre, sin que nada
+ *   lo delatara. Al pasar por `@lsw/database`, la unica lista que ve el
+ *   registro de rutas es la que el test de paridad compara contra el SQL.
  *
- *     B) `packages/security/src/capabilities.ts` y `roles.ts` (security),
- *        con claves tipo `entry.ledger.read` y roles `PARTICIPANT`,
- *        `SUPPORT`, `PROMOTION_MANAGER`, `COMPLIANCE_OFFICER`,
- *        `DRAW_OFFICER`, `EXPORT_OFFICER`, `SECURITY_ADMIN`, `SYSTEM`.
+ *   Ese fue tambien el motivo original de este archivo: cuando existian dos
+ *   catalogos incompatibles, resolver el conflicto tenia que costar un import,
+ *   no una revision de cada declaracion de ruta. Costo exactamente eso.
  *
- *   Solo `COMPLIANCE_OFFICER` y `DRAW_OFFICER` coinciden. Esto es exactamente
- *   la situacion de "dos fuentes de verdad" que prohibe `CLAUDE.md` seccion 4,
- *   y no se resuelve unilateralmente: necesita un `DEC-xxx`.
- *
- *   Recomendacion de `backend` al Team Lead: **gana el catalogo de
- *   `packages/security`.** La regla 4 de `docs/DECISIONS.md` da a `security` la
- *   revision explicita de la autorizacion, y sus metadatos ya cubren
- *   `requiresSecondApproval`, que el catalogo de backend no modela.
- *
- * POR QUE EXISTE ESTE ARCHIVO
- *
- *   Para que resolver el conflicto sea cambiar UN import y anadir UNA
- *   migracion de resiembra, en vez de tocar el registro de rutas, el generador
- *   de OpenAPI y cada declaracion de ruta. Todo el resto de `apps/api` importa
- *   de aqui y no del catalogo directamente.
+ * VOCABULARIO
+ *   `PermissionKey` es un alias local de `CapabilityId`, y una capacidad se
+ *   identifica como `dominio.recurso.accion`. Los metadatos que trae cada una
+ *   -step-up, motivo obligatorio, segunda aprobacion, dependencia de feature
+ *   flag y dependencia legal- los usa el registro de rutas y el generador de
+ *   OpenAPI; no se reimplementan aqui.
  */
 
 export {
   getPermission,
   isPermissionKey,
   PERMISSIONS,
+  PERMISSION_KEYS,
   STEP_UP_PERMISSION_KEYS,
 } from "@lsw/database";
 export type { PermissionKey, PermissionDefinition } from "@lsw/database";

@@ -35,6 +35,7 @@
     "db:seed": "tsc -p tsconfig.build.json && node dist/scripts/seed-cli.js"
   },
   "dependencies": {
+    "@lsw/security": "workspace:*",
     "@lsw/sweepstakes": "workspace:*",
     "drizzle-orm": "^0.44.4",
     "pg": "^8.16.3"

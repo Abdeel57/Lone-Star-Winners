@@ -3,7 +3,7 @@
 import { cn } from "@lsw/ui";
 import { useLocale, useTranslations } from "next-intl";
 
-import { LOCALES, type Locale } from "@/i18n/locales";
+import { LOCALES } from "@/i18n/locales";
 import { Link, usePathname } from "@/i18n/navigation";
 
 /**
@@ -26,7 +26,8 @@ import { Link, usePathname } from "@/i18n/navigation";
  * cubre este texto.
  */
 export function LanguageSwitcher({ className }: { readonly className?: string }) {
-  const current = useLocale() as Locale;
+  // `useLocale` ya devuelve `Locale` gracias a `AppConfig` en `src/global.d.ts`.
+  const current = useLocale();
   const pathname = usePathname();
   const t = useTranslations();
 

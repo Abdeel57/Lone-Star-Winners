@@ -13,7 +13,7 @@
 
 import { defineConfig } from "drizzle-kit";
 
-const connectionString = process.env["DATABASE_URL_MIGRATOR"];
+const connectionString = process.env.DATABASE_URL_MIGRATOR;
 
 export default defineConfig({
   dialect: "postgresql",

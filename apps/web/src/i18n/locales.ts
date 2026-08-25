@@ -31,8 +31,22 @@ export type Locale = (typeof LOCALES)[number];
  */
 export const FALLBACK_LOCALE: Locale = "en";
 
-/** Etiqueta BCP-47 asociada a un locale de ruta. */
-export function localeTag(locale: Locale): "en-US" | "es-US" {
+/**
+ * Etiqueta de formato e identificador de diccionario (DEC-029).
+ *
+ * NO es intercambiable con `Locale`. `Locale` ("en" / "es") es el segmento de
+ * ruta; `LocaleTag` ("en-US" / "es-US") es lo que se pasa a `Intl`, lo que da
+ * nombre a `messages/*.json` y lo que indexa el contenido dinamico localizado
+ * de DEC-030. Son dos tipos distintos precisamente para que pasar uno donde va
+ * el otro sea un error de compilacion y no un formato equivocado en pantalla.
+ */
+export type LocaleTag = "en-US" | "es-US";
+
+/** Etiquetas soportadas, en el mismo orden que `LOCALES`. */
+export const LOCALE_TAGS: readonly LocaleTag[] = ["en-US", "es-US"];
+
+/** Etiqueta BCP-47 asociada a un locale de ruta (DEC-029). */
+export function localeTag(locale: Locale): LocaleTag {
   // `switch` y no un objeto indexado: asi anadir un locale es un error de
   // compilacion en vez de un `undefined` en tiempo de ejecucion.
   switch (locale) {

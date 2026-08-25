@@ -22,5 +22,10 @@ export const config = {
   //   - `/api`: reservado; la API de negocio es un proceso aparte (DEC-004),
   //     pero el prefijo se reserva igualmente para no crear rutas ambiguas.
   //   - cualquier cosa con punto (`favicon.ico`, `robots.txt`, imagenes).
-  matcher: ["/", "/(en|es)/:path*", "/((?!_next|_vercel|api|.*\..*).*)"],
+  // OJO con el escape: en una cadena de JavaScript `"\."` se colapsa a `.`, y
+  // el patron pasaba a ser `.*..*` -"dos caracteres cualesquiera"-, que excluia
+  // del middleware casi cualquier ruta en vez de solo los ficheros con
+  // extension. Se escribe `\\.` para que el punto llegue literal a la expresion
+  // regular.
+  matcher: ["/", "/(en|es)/:path*", "/((?!_next|_vercel|api|.*\\..*).*)"],
 };

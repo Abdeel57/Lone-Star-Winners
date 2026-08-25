@@ -21,9 +21,41 @@ import prettier from "eslint-config-prettier";
 import globals from "globals";
 
 /**
+ * POR QUE NINGUN GLOB DE ESTE ARCHIVO LLEVA PREFIJO DE DIRECTORIO
+ *
+ * En flat config, los globs de `files` se resuelven contra el BASE PATH, que
+ * es el directorio del `eslint.config.mjs` que ESLint acabe cargando. Cuando
+ * un workspace tiene su propia configuracion que importa esta (`apps/web`,
+ * `packages/ui`, `tests/security`), el base path pasa a ser ESE directorio, y
+ * un glob como `packages/**` deja de coincidir con nada.
+ *
+ * El fallo es silencioso y peor que un error: ESLint sigue corriendo, informa
+ * de las reglas basicas y la capa type-aware -que es donde viven las reglas NO
+ * NEGOCIABLES de DEC-002 y DEC-017- simplemente no se aplica. Como
+ * `turbo run lint` ejecuta paquete a paquete, ese era el modo habitual de
+ * ejecucion. Detectado por `frontend`; corregido aqui.
+ *
+ * Por eso los globs son relativos (`**\/*.ts`) y el alcance se acota con
+ * `ignores`, que se comportan igual desde cualquier base path.
+ */
+
+/**
  * DEC-017 / DEC-018: paquetes en los que la aleatoriedad debil o sembrada esta
  * prohibida. Son los que pueden influir, directa o indirectamente, en la
  * seleccion de un ganador o en material de auditoria.
+ *
+ * Esta capa es la UNICA que conserva prefijo de directorio, porque su alcance
+ * es un subconjunto de paquetes y no hay forma de nombrarlos con un glob
+ * relativo: cuando el base path ya ES el paquete, su nombre no aparece en la
+ * ruta del fichero.
+ *
+ * Funciona hoy porque ninguno de los tres tiene `eslint.config.mjs` propio, de
+ * modo que ESLint sube hasta la raiz y el base path es el del monorepo.
+ *
+ * ADVERTENCIA para quien anada uno: el dia que `packages/security`,
+ * `packages/tpa` o `packages/sweepstakes` tenga configuracion local, ESTA CAPA
+ * DEJA DE APLICARSE en ese paquete sin decir nada. Esa configuracion local
+ * tiene que repetirla, igual que `apps/web` repite la capa type-aware.
  */
 const RANDOMNESS_CRITICAL = [
   "packages/security/**/*.{ts,tsx,mts,cts,js,mjs,cjs}",
@@ -31,8 +63,11 @@ const RANDOMNESS_CRITICAL = [
   "packages/sweepstakes/**/*.{ts,tsx,mts,cts,js,mjs,cjs}",
 ];
 
-/** Fuentes TypeScript de los workspaces: lint con informacion de tipos. */
-const WORKSPACE_TS = ["apps/**/*.{ts,tsx,mts,cts}", "packages/**/*.{ts,tsx,mts,cts}"];
+/**
+ * Fuentes TypeScript de los workspaces: lint con informacion de tipos.
+ * Sin prefijo de directorio, a proposito (ver la nota de arriba).
+ */
+const WORKSPACE_TS = ["**/*.{ts,tsx,mts,cts}"];
 
 export default tseslint.config(
   // -------------------------------------------------------------------------
@@ -53,6 +88,8 @@ export default tseslint.config(
       // Migraciones SQL y artefactos generados: no son fuente TypeScript.
       "**/drizzle/**",
       "**/generated/**",
+      // Generado por Next en cada arranque; no lo escribe nadie.
+      "**/next-env.d.ts",
     ],
   },
 

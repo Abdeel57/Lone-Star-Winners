@@ -1,0 +1,202 @@
+{
+  "components": {
+    "securitySchemes": {
+      "sessionCookie": {
+        "description": "Sesion opaca y revocable respaldada por la tabla Session (DEC-006). Nunca un JWT auto-contenido.",
+        "in": "cookie",
+        "name": "lsw_session",
+        "type": "apiKey"
+      }
+    }
+  },
+  "info": {
+    "description": "Plataforma bilingue de e-commerce y sweepstakes. Las promotional entries se generan conforme a las Official Rules; no se venden boletos.",
+    "title": "Lone Star Winners API",
+    "version": "0.1.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/api/v1/health": {
+      "get": {
+        "description": "Responde si el proceso esta vivo. No consulta la base de datos a proposito.",
+        "operationId": "getHealth",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "status": {
+                      "const": "ok",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "status"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 200."
+          }
+        },
+        "summary": "Liveness probe.",
+        "tags": [
+          "meta"
+        ],
+        "x-lsw-authorization": {
+          "justification": "Liveness probe del orquestador, que consulta antes de que exista sesion alguna. No revela ningun dato del sistema.",
+          "kind": "PUBLIC",
+          "requires_step_up": false
+        }
+      }
+    },
+    "/api/v1/health/ready": {
+      "get": {
+        "description": "Comprueba las dependencias necesarias para atender trafico.",
+        "operationId": "getReadiness",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "checks": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "ok": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "ok"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "status": {
+                      "enum": [
+                        "ready",
+                        "degraded"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "status",
+                    "checks"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 200."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "checks": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "ok": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "ok"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "status": {
+                      "enum": [
+                        "ready",
+                        "degraded"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "status",
+                    "checks"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 503."
+          }
+        },
+        "summary": "Readiness probe.",
+        "tags": [
+          "meta"
+        ],
+        "x-lsw-authorization": {
+          "justification": "Readiness probe del orquestador y del balanceador. Devuelve solo el nombre de cada comprobacion y si paso, nunca el detalle del fallo.",
+          "kind": "PUBLIC",
+          "requires_step_up": false
+        }
+      }
+    },
+    "/api/v1/openapi.json": {
+      "get": {
+        "description": "DEC-014. Solo se sirve fuera de produccion; en produccion el spec viaja como artefacto de build.",
+        "operationId": "getOpenApiDocument",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {},
+                  "properties": {
+                    "openapi": {
+                      "const": "3.1.0",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "openapi"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 200."
+          }
+        },
+        "summary": "Documento OpenAPI 3.1 generado desde los esquemas Zod.",
+        "tags": [
+          "meta"
+        ],
+        "x-lsw-authorization": {
+          "justification": "Contrato de la API para el frontend en desarrollo. Esta ruta no se registra en produccion, donde el spec se publica como artefacto de build.",
+          "kind": "PUBLIC",
+          "requires_step_up": false
+        }
+      }
+    }
+  },
+  "servers": [
+    {
+      "url": "http://localhost:4000"
+    }
+  ]
+}

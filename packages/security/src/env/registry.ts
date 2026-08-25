@@ -92,6 +92,25 @@ const RUNTIME_AND_DATA_VARS: readonly EnvVarSpec[] = Object.freeze([
     ALL_ENVIRONMENTS,
     "Base de la API, visible en navegador.",
   ),
+  v(
+    "API_BASE_URL",
+    "web",
+    "url",
+    ALL_ENVIRONMENTS,
+    "Base de la API para las llamadas que hace el SERVIDOR de Next. Sin prefijo NEXT_PUBLIC_ a proposito: en despliegue puede apuntar a una direccion interna que el navegador no debe conocer.",
+  ),
+  v(
+    "WEB_ENABLE_API_MOCKS",
+    "web",
+    "boolean",
+    // Opcional en todas partes: ausente significa apagado, que es el valor
+    // seguro. Declararla obligatoria en produccion obligaria a escribir
+    // literalmente `false` en el entorno de produccion, y una variable que hay
+    // que acordarse de poner a `false` es una variable que algun dia estara
+    // a `true`.
+    NO_ENVIRONMENT,
+    "Interruptor de los mocks de red de apps/web (MSW). Prohibido en entornos desplegados: ver PRODUCTION_HARDENING_RULES.",
+  ),
 
   // ----- PostgreSQL (DEC-003) ------------------------------------------
   v(
@@ -374,6 +393,14 @@ export const PRODUCTION_HARDENING_RULES: readonly ProductionHardeningRule[] = Ob
     value: "verify-full",
     appliesTo: DEPLOYED_ENVIRONMENTS,
     rationale: "Sin verify-full, TLS protege del sniffing pero no del man-in-the-middle.",
+  },
+  {
+    name: "WEB_ENABLE_API_MOCKS",
+    requirement: "MUST_NOT_EQUAL",
+    value: "true",
+    appliesTo: DEPLOYED_ENVIRONMENTS,
+    rationale:
+      "Con los mocks activos el portal responde con datos inventados. En una promocion eso significa ensenar a un participante un numero de entries que no existe en el ledger.",
   },
   {
     name: "API_CORS_ALLOWED_ORIGINS",

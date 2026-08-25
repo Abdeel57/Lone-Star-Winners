@@ -91,18 +91,46 @@ export const adminUsers = pgTable("admin_users", {
   updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
 });
 
+/**
+ * Catalogo de capacidades. DEC-027: lo DEFINE `packages/security`; aqui solo se
+ * persiste lo que la migracion `0004` siembra a partir de el.
+ */
 export const adminPermissions = pgTable("admin_permissions", {
   key: text("key").primaryKey(),
+  domain: text("domain").notNull(),
+  /** `ROUTINE` | `SENSITIVE` | `CRITICAL`. Sustituye al antiguo booleano. */
+  sensitivity: text("sensitivity").notNull(),
   description: text("description").notNull(),
-  isSensitive: boolean("is_sensitive").notNull().default(false),
-  requiresStepUp: boolean("requires_step_up").notNull().default(false),
+  requiresStepUp: boolean("requires_step_up").notNull(),
+  requiresReason: boolean("requires_reason").notNull(),
+  /** DEC-017: aprobacion viva de un actor DISTINTO dentro de su TTL. */
+  requiresSecondApproval: boolean("requires_second_approval").notNull(),
+  emitsAuditEvent: boolean("emits_audit_event").notNull(),
+  touchesPii: boolean("touches_pii").notNull(),
+  dependsOnFeatureFlag: boolean("depends_on_feature_flag").notNull(),
+  /** Entrada de `docs/LEGAL_PENDING.md` de la que depende, o `null`. */
+  legalDependency: text("legal_dependency"),
   createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
 });
 
 export const adminRoles = pgTable("admin_roles", {
   key: text("key").primaryKey(),
+  /** `PARTICIPANT` | `STAFF` | `SYSTEM`. */
+  kind: text("kind").notNull(),
+  requiresMfa: boolean("requires_mfa").notNull(),
+  assignableToHuman: boolean("assignable_to_human").notNull(),
+  /** Clave i18n. El copy en ambos idiomas pertenece a `frontend` (DEC-022). */
+  labelKey: text("label_key").notNull(),
   description: text("description").notNull(),
   isSystem: boolean("is_system").notNull().default(true),
+  /**
+   * Columna GENERADA (`kind = 'STAFF' AND assignable_to_human`). Solo lectura:
+   * la calcula PostgreSQL. De ella cuelga la clave ajena compuesta que impide
+   * asignar `SYSTEM` o `PARTICIPANT` a una cuenta de personal.
+   */
+  staffAssignable: boolean("staff_assignable").generatedAlwaysAs(
+    sql`(kind = 'STAFF' AND assignable_to_human)`,
+  ),
   createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
 });
 
@@ -157,6 +185,13 @@ export const adminUserRoles = pgTable(
     roleKey: text("role_key")
       .notNull()
       .references(() => adminRoles.key, { onDelete: "restrict" }),
+    /**
+     * Siempre `true`. Existe solo como segundo componente de la clave ajena
+     * compuesta contra `admin_roles (key, staff_assignable)`: obliga a que el
+     * rol referenciado sea de personal (DEC-027, DEC-028). No lo escribe la
+     * aplicacion; el default de la columna lo pone.
+     */
+    roleIsStaffAssignable: boolean("role_is_staff_assignable").notNull().default(true),
     grantedAt: timestamp("granted_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
     grantedByAdminUserId: uuid("granted_by_admin_user_id").references(() => adminUsers.id, {
       onDelete: "restrict",

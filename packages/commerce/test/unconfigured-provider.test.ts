@@ -50,9 +50,12 @@ describe("UnconfiguredPaymentProvider", () => {
     }
   });
 
-  it("el error lleva codigo estable y message_key, nunca prosa traducida (DEC-022)", () => {
+  it("el error lleva un codigo estable como unica clave, nunca prosa traducida (DEC-022, DEC-031)", () => {
     const error = new PaymentProviderNotConfiguredError();
     expect(error.code).toBe("PAYMENT_PROVIDER_NOT_CONFIGURED");
-    expect(error.messageKey).toBe("errors.payment.provider_not_configured");
+    // DEC-031: no hay un segundo campo de traduccion. `code` es la clave.
+    expect(error).not.toHaveProperty("messageKey");
+    // El `message` es texto interno para logs; no se traduce ni se muestra.
+    expect(error.message).not.toBe(error.code);
   });
 });

@@ -1,0 +1,33 @@
+{
+  "generated_from": "apps/api/src/http/route-registry.ts",
+  "contract_version": "0.1.0",
+  "routes": [
+    {
+      "method": "GET",
+      "path": "/api/v1/health",
+      "operation_id": "getHealth",
+      "authorization": "PUBLIC",
+      "requires_step_up": false,
+      "tags": ["meta"],
+      "summary": "Liveness probe."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/health/ready",
+      "operation_id": "getReadiness",
+      "authorization": "PUBLIC",
+      "requires_step_up": false,
+      "tags": ["meta"],
+      "summary": "Readiness probe."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/openapi.json",
+      "operation_id": "getOpenApiDocument",
+      "authorization": "PUBLIC",
+      "requires_step_up": false,
+      "tags": ["meta"],
+      "summary": "Documento OpenAPI 3.1 generado desde los esquemas Zod."
+    }
+  ]
+}

@@ -1,6 +1,16 @@
 /**
  * INVARIANTES de la matriz de autorizacion.
  *
+ * Nota de estilo con consecuencia real: estas comprobaciones recorren el
+ * catalogo con `Object.entries`/`Object.values` en lugar de indexar
+ * `CAPABILITIES[id]` con identificadores sueltos. No es cosmetica. Recorrer los
+ * valores garantiza que el test ve el catalogo COMPLETO: si manana alguien
+ * anade una capacidad y se olvida de incluirla en `CAPABILITY_IDS`, la version
+ * indexada seguiria pasando y esta falla. De paso desaparecen los avisos de
+ * `security/detect-object-injection`, que aqui eran falsos positivos -las
+ * claves son uniones literales cerradas, no entrada externa- pero cuya
+ * presencia constante ensena a ignorar la regla donde si importa.
+ *
  * DEC-015 (deny-by-default), DEC-006 (step-up) y DEC-017 (separacion de
  * funciones). Estos tests son la razon por la que la matriz esta escrita como
  * datos: una matriz de permisos que solo existe repartida en `if` no se puede
@@ -15,6 +25,7 @@ import {
   CAPABILITY_IDS,
   capabilitiesForRoles,
   findSeparationOfDutiesViolationsForRoles,
+  getCapability,
   hasCapability,
   ROLE_CAPABILITIES,
   ROLE_IDS,
@@ -45,31 +56,32 @@ function contextFor(
 
 describe("coherencia del catalogo", () => {
   it("la clave de cada capacidad coincide con su identificador", () => {
-    for (const id of CAPABILITY_IDS) {
-      expect(CAPABILITIES[id].id).toBe(id);
+    for (const [key, definition] of Object.entries(CAPABILITIES)) {
+      expect(definition.id, key).toBe(key);
     }
   });
 
   it("toda capacidad concedida a un rol existe en el catalogo", () => {
     const known = new Set<string>(CAPABILITY_IDS);
-    for (const role of ROLE_IDS) {
-      for (const capability of ROLE_CAPABILITIES[role]) {
+    for (const [role, granted] of Object.entries(ROLE_CAPABILITIES)) {
+      for (const capability of granted) {
         expect(known.has(capability), `${role} concede ${capability}, que no existe`).toBe(true);
       }
     }
   });
 
   it("toda capacidad no rutinaria se audita", () => {
-    const silent = CAPABILITY_IDS.filter(
-      (id) => CAPABILITIES[id].sensitivity !== "ROUTINE" && !CAPABILITIES[id].emitsAuditEvent,
-    );
+    const silent = Object.values(CAPABILITIES)
+      .filter((capability) => capability.sensitivity !== "ROUTINE" && !capability.emitsAuditEvent)
+      .map((capability) => capability.id);
     expect(silent, "Hay capacidades sensibles que no dejan rastro").toStrictEqual([]);
   });
 
   it("toda capacidad critica exige step-up y motivo", () => {
-    const weak = CAPABILITY_IDS.filter((id) => CAPABILITIES[id].sensitivity === "CRITICAL").filter(
-      (id) => !CAPABILITIES[id].requiresStepUp || !CAPABILITIES[id].requiresReason,
-    );
+    const weak = Object.values(CAPABILITIES)
+      .filter((capability) => capability.sensitivity === "CRITICAL")
+      .filter((capability) => !capability.requiresStepUp || !capability.requiresReason)
+      .map((capability) => capability.id);
     // Excepciones deliberadas, cada una con motivo. La lista es cerrada:
     // anadir una obliga a tocar este test, que es justo cuando debe discutirse.
     //
@@ -88,8 +100,8 @@ describe("coherencia del catalogo", () => {
 
 describe("deny-by-default", () => {
   it("ningun rol tiene todas las capacidades", () => {
-    for (const role of ROLE_IDS) {
-      expect(ROLE_CAPABILITIES[role].length).toBeLessThan(CAPABILITY_IDS.length);
+    for (const [role, granted] of Object.entries(ROLE_CAPABILITIES)) {
+      expect(granted.length, role).toBeLessThan(CAPABILITY_IDS.length);
     }
   });
 
@@ -130,9 +142,9 @@ describe("deny-by-default", () => {
   });
 
   it("todo rol de personal exige MFA", () => {
-    for (const role of ROLE_IDS) {
-      if (ROLES[role].kind === "STAFF") {
-        expect(ROLES[role].requiresMfa, role).toBe(true);
+    for (const role of Object.values(ROLES)) {
+      if (role.kind === "STAFF") {
+        expect(role.requiresMfa, role.id).toBe(true);
       }
     }
   });
@@ -247,7 +259,7 @@ describe("DEC-013: capacidades condicionadas por feature flag", () => {
       "winner.publish",
     ];
     for (const capability of flagged) {
-      expect(CAPABILITIES[capability].dependsOnFeatureFlag, capability).toBe(true);
+      expect(getCapability(capability).dependsOnFeatureFlag, capability).toBe(true);
     }
   });
 
@@ -260,8 +272,8 @@ describe("DEC-013: capacidades condicionadas por feature flag", () => {
 describe("capacidades sin rol asignado", () => {
   it("la unica capacidad que hoy no tiene ningun rol es pii.export", () => {
     const assigned = new Set<CapabilityId>();
-    for (const role of ROLE_IDS) {
-      for (const capability of ROLE_CAPABILITIES[role]) {
+    for (const granted of Object.values(ROLE_CAPABILITIES)) {
+      for (const capability of granted) {
         assigned.add(capability);
       }
     }
