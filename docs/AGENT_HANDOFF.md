@@ -855,3 +855,54 @@ Affected APIs:
 
 Blocking:
 NO hoy (todo va contra fixtures), YES para conectar el hero a la API real.
+
+---
+
+## HO-022
+
+Status: OPEN
+
+## Handoff
+
+Date: 2026-08-26
+From: team lead
+To: security
+
+Context:
+DEC-043 fija Railway como hosting de los tres componentes. Al prepararlo
+aparecieron dos choques con la postura de seguridad vigente, y uno de ellos
+**rebaja una garantía existente**. No se ha aplicado en silencio: está en el
+ADR, en `.env.example` y con tests. Falta tu revisión.
+
+What I need from you:
+
+1. **Revisar `DATABASE_NETWORK=private` (el que sí rebaja algo).**
+   `apps/api/src/config/env.ts` admite ahora `DATABASE_SSL_MODE=disable` en
+   producción **solo** si se declara `DATABASE_NETWORK=private`. Motivo:
+   Railway emite certificados autofirmados y `verify-full` es inalcanzable
+   contra su Postgres gestionado. Se rechazó `require` a propósito, porque
+   cifra sin verificar y aparenta una protección que no da.
+
+   Lo que se sustituye es una garantía criptográfica por una topológica. La
+   pregunta que te toca responder: ¿es aceptable mientras la base solo sea
+   alcanzable por la red privada del proyecto, y qué control detecta que
+   alguien le abra un endpoint público más adelante? Hoy nada lo detecta.
+
+   El valor por defecto sigue siendo `public` → `verify-full`. Cobertura en
+   `apps/api/test/env.test.ts` ("DEC-043: camino de red hacia PostgreSQL"),
+   incluido el caso de que el defecto no se relaje solo.
+
+2. **Revisar el colapso de roles del punto 3 de DEC-043.** Las migraciones las
+   aplica el superusuario de Railway (`packages/database/src/scripts/bootstrap-cli.ts`)
+   porque el proveedor no cede la propiedad de `public`. Se comprobó que las
+   diez migraciones conceden permisos a `lsw_app` con GRANT explícitos, así
+   que la invariante de DEC-007 (ledger sin UPDATE/DELETE para la aplicación)
+   se mantiene sea quien sea quien migre. Conviene que lo confirmes con el
+   test de invariante contra una base real: aquí no había Docker para correr
+   `test:integration`.
+
+3. **Compliance del copy antes de publicar.** Lo pediste tú en
+   `docs/LEGAL_PENDING.md` ("Nota de proceso") y sigue pendiente. El
+   despliegue de DEC-043 pone en Internet catálogo, promociones y Reglas
+   Oficiales en ambos idiomas, con los dieciséis puntos legales en TBD.
+   Ninguna página puede presentar una promoción como vigente.

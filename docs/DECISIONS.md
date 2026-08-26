@@ -1834,3 +1834,77 @@ centésimas de AA, así que el valor final es #cf1a22 (5.49:1). Ratios de los
 siete tokens medidos por test (`accent-tokens.test.ts`). La edición
 "Workshop Build-Out" se retira del fixture para conservar la invariante de
 una promoción por estado: Road Trip pasa a SCHEDULED.
+
+---
+
+## DEC-043
+
+Status: Accepted
+
+Date: 2026-08-26
+
+Decision:
+**Railway aloja los tres componentes**: `apps/web`, `apps/api` y PostgreSQL,
+dentro de un mismo proyecto y comunicados por la **red privada** de Railway.
+El despliegue se declara como código, un `railway.json` por servicio.
+
+Tres consecuencias que no son cosméticas y que se aceptan explícitamente:
+
+1. **`apps/api` deja de exponer su superficie al público por necesidad.**
+   El navegador nunca llama a la API: todo el consumo es server-side (server
+   components y server actions). Por eso `web` llega a `api` por
+   `http://${api.RAILWAY_PRIVATE_DOMAIN}:8080/api/v1`, y `API_HOST` es `::`
+   —no `0.0.0.0`— porque la red privada de Railway es IPv6 y un proceso que
+   solo escuche en IPv4 es invisible dentro de ella.
+
+2. **TLS contra PostgreSQL: nueva variable `DATABASE_NETWORK` (`public` |
+   `private`).** Railway emite certificados autofirmados, así que
+   `verify-full` es inalcanzable contra su base gestionada. La salida NO es
+   bajar a `require`: `require` cifra pero no verifica, no defiende de un
+   intermediario y además _aparenta_ que sí. Con `DATABASE_NETWORK=private`
+   el único modo admitido es `disable`, y la garantía la aporta el
+   aislamiento de red. El valor por defecto es `public`, que sigue exigiendo
+   `verify-full` en producción: la excepción solo existe si alguien la
+   escribe a propósito.
+
+3. **En una base gestionada `migrator` y propietario del esquema colapsan en
+   el superusuario del proveedor.** DEC-003 pedía tres roles diferenciados;
+   Railway no cede la propiedad de `public`, así que las migraciones las
+   aplica su superusuario mediante `db:bootstrap`. **La separación que sí se
+   conserva es la que protege el ledger**: la aplicación corre como `lsw_app`,
+   que nunca recibe UPDATE/DELETE sobre ledger ni auditoría (DEC-007). Eso lo
+   garantizan los GRANT explícitos de cada migración, que se aplican sea quien
+   sea quien las ejecute —verificado: las diez migraciones conceden permisos a
+   `lsw_app` de forma explícita, ninguna depende de `ALTER DEFAULT PRIVILEGES
+FOR ROLE lsw_migrator`.
+
+Context:
+Decisión del usuario (2026-08-26): "todo el proyecto será alojado en Railway,
+backend, frontend y base de datos". Hasta ahora el hosting estaba
+deliberadamente sin decidir (`CLAUDE.md` §7) y DEC-004 evitó dar por supuesto
+Vercel precisamente para no cerrar esta puerta.
+
+Alternatives:
+Imágenes Docker propias por servicio (descartado en esta pasada: no hay Docker
+en el entorno donde se preparó el cambio, así que habrían sido artefactos sin
+verificar; Railpack detecta el monorepo pnpm y evita esa deuda). Postgres
+gestionado fuera de Railway con TLS verificable (descartado: contradice la
+instrucción de alojarlo todo en Railway, y añade una salida a Internet donde
+ahora no la hay).
+
+Reason:
+El punto 2 es el único que rebaja una garantía existente, y se documenta como
+tal en vez de esconderse en un valor por defecto. La lectura honesta es que se
+sustituye una garantía criptográfica por una topológica: aceptable mientras la
+base sea inalcanzable desde fuera del proyecto, e inaceptable en cuanto se le
+abra un endpoint público. **Requiere revisión de `security` antes de
+INTEGRATE** (ver `docs/AGENT_HANDOFF.md`, HO-022). El punto 3 no rebaja
+nada: lo que DEC-003 protege de verdad es el ledger frente a la aplicación, no
+frente al operador de la base.
+
+Nota de alcance:
+Este despliegue publica lo que hoy existe: catálogo, promociones, Reglas
+Oficiales y carrito. **No** hay identidad, checkout, pago, AMOE, sorteo ni
+export, y los dieciséis puntos de `docs/LEGAL_PENDING.md` siguen en TBD. Nada
+de lo que se publique puede presentarse como una promoción en curso hasta que
+existan Official Rules aprobadas.

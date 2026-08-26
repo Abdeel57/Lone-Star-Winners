@@ -93,6 +93,28 @@ export const environmentSchema = z
     // ----- PostgreSQL (DEC-003) -----
     DATABASE_URL_APP: z.string().startsWith("postgres"),
     DATABASE_SSL_MODE: z.enum(SSL_MODES),
+    /**
+     * DEC-043: por que camino de red viaja la conexion a PostgreSQL.
+     *
+     * `public`  - la conexion cruza Internet. Es el valor por defecto, y en
+     *             produccion obliga a `verify-full`. No se puede relajar por
+     *             descuido: hay que escribir `private` a proposito.
+     *
+     * `private` - la conexion NO sale de una red privada del proveedor
+     *             (en Railway, `*.railway.internal`). Ese proveedor emite
+     *             certificados autofirmados, asi que `verify-full` no puede
+     *             satisfacerse: no existe una CA publica que los firme.
+     *             Fingir TLS con `require` seria peor que no tenerlo, porque
+     *             `require` sin verificacion no protege de un intermediario y
+     *             ademas *parece* que si. Por eso en `private` el unico modo
+     *             coherente es `disable`, y la garantia la aporta el
+     *             aislamiento de red, no el certificado.
+     *
+     * Elegir `private` sobre una red que no lo sea deja la base de datos
+     * expuesta en claro. La responsabilidad de esa afirmacion es de quien
+     * despliega, y por eso es explicita en vez de inferida.
+     */
+    DATABASE_NETWORK: z.enum(["public", "private"]).default("public"),
     DATABASE_POOL_MAX: integerFromEnv(1, 100),
     DATABASE_STATEMENT_TIMEOUT_MS: integerFromEnv(100, 600_000),
 
@@ -130,12 +152,24 @@ export const environmentSchema = z
       });
     }
 
-    if (env.DATABASE_SSL_MODE !== "verify-full") {
+    // DEC-043. El modo de TLS exigible depende del camino de red, y las dos
+    // ramas son igual de estrictas: ninguna admite `require` ni `verify-ca`,
+    // que cifran sin verificar y por tanto no defienden de un intermediario.
+    if (env.DATABASE_NETWORK === "public") {
+      if (env.DATABASE_SSL_MODE !== "verify-full") {
+        ctx.addIssue({
+          code: "custom",
+          path: ["DATABASE_SSL_MODE"],
+          message:
+            "En produccion sobre red publica la conexion a PostgreSQL debe verificar el certificado (verify-full). Si la base solo es accesible por la red privada del proveedor, declara DATABASE_NETWORK=private.",
+        });
+      }
+    } else if (env.DATABASE_SSL_MODE !== "disable") {
       ctx.addIssue({
         code: "custom",
         path: ["DATABASE_SSL_MODE"],
         message:
-          "En produccion la conexion a PostgreSQL debe verificar el certificado (verify-full).",
+          "DEC-043: con DATABASE_NETWORK=private el proveedor usa certificados autofirmados y `verify-full` no puede satisfacerse. El unico modo coherente es `disable`: la garantia la da el aislamiento de red, no un TLS que no se verifica.",
       });
     }
 

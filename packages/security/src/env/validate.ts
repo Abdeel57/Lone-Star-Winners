@@ -62,6 +62,17 @@ function checkHardening(source: EnvSource, environment: EnvName): readonly EnvIs
     if (!rule.appliesTo.includes(environment)) {
       continue;
     }
+    // DEC-043: reglas cuyo valor correcto depende de otra variable.
+    if (rule.appliesWhen !== undefined) {
+      const condition = source[rule.appliesWhen.name];
+      const active =
+        condition === undefined || condition === ""
+          ? rule.appliesWhen.whenAbsent
+          : condition === rule.appliesWhen.equals;
+      if (!active) {
+        continue;
+      }
+    }
     const value = source[rule.name];
     if (value === undefined || value === "") {
       continue;

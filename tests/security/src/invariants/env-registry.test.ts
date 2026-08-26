@@ -90,3 +90,52 @@ describe("esquema de entorno", () => {
     expect(hardening.length).toBeGreaterThan(0);
   });
 });
+
+/**
+ * DEC-043. El endurecimiento de TLS contra PostgreSQL dejo de ser una regla
+ * unica: depende de por que red viaja la conexion. Lo que estos casos protegen
+ * no es la rama nueva, sino que la excepcion no se derrame sobre la otra.
+ */
+describe("DEC-043: endurecimiento condicionado al camino de red", () => {
+  const PRODUCTION_BASE: Record<string, string> = {
+    SESSION_COOKIE_SECURE: "true",
+    API_PUBLIC_URL: "https://api.ejemplo.invalid",
+    WEB_ENABLE_API_MOCKS: "false",
+  };
+
+  function sslIssues(source: Record<string, string>): readonly string[] {
+    return validateEnv({ ...PRODUCTION_BASE, ...source }, "production")
+      .issues.filter(
+        (issue) => issue.name === "DATABASE_SSL_MODE" && issue.code === "PRODUCTION_HARDENING",
+      )
+      .map((issue) => issue.message);
+  }
+
+  it("sin declarar la red, sigue exigiendo verify-full", () => {
+    // El caso que de verdad importa: omitir DATABASE_NETWORK no puede apagar
+    // el endurecimiento. Si esto se rompe, la excepcion de red privada se
+    // convierte en el comportamiento por defecto sin que nadie lo escriba.
+    expect(sslIssues({ DATABASE_SSL_MODE: "disable" })).toHaveLength(1);
+    expect(sslIssues({ DATABASE_SSL_MODE: "require" })).toHaveLength(1);
+    expect(sslIssues({ DATABASE_SSL_MODE: "verify-full" })).toHaveLength(0);
+  });
+
+  it("en red publica exige verify-full", () => {
+    expect(sslIssues({ DATABASE_NETWORK: "public", DATABASE_SSL_MODE: "require" })).toHaveLength(1);
+    expect(
+      sslIssues({ DATABASE_NETWORK: "public", DATABASE_SSL_MODE: "verify-full" }),
+    ).toHaveLength(0);
+  });
+
+  it("en red privada exige disable y rechaza el TLS que no se verifica", () => {
+    expect(sslIssues({ DATABASE_NETWORK: "private", DATABASE_SSL_MODE: "disable" })).toHaveLength(
+      0,
+    );
+    for (const mode of ["require", "verify-ca", "verify-full"]) {
+      expect(
+        sslIssues({ DATABASE_NETWORK: "private", DATABASE_SSL_MODE: mode }),
+        `DATABASE_SSL_MODE=${mode} deberia ser rechazado sobre red privada`,
+      ).toHaveLength(1);
+    }
+  });
+});

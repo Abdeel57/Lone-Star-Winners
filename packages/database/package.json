@@ -32,6 +32,7 @@
     "db:generate": "drizzle-kit generate --name manual-review-only",
     "db:check": "drizzle-kit check",
     "db:migrate": "tsc -p tsconfig.build.json && node dist/scripts/migrate-cli.js",
+    "db:bootstrap": "tsc -p tsconfig.build.json && node dist/scripts/bootstrap-cli.js",
     "db:seed": "tsc -p tsconfig.build.json && node dist/scripts/seed-cli.js"
   },
   "dependencies": {

@@ -55,6 +55,7 @@ function v(
 // valor que el proceso acepta solo produciria un falso bloqueo de arranque.
 const LOG_LEVELS = ["trace", "debug", "info", "warn", "error", "fatal"] as const;
 const SSL_MODES = ["disable", "require", "verify-ca", "verify-full"] as const;
+const DATABASE_NETWORKS = ["public", "private"] as const;
 
 const RUNTIME_AND_DATA_VARS: readonly EnvVarSpec[] = Object.freeze([
   // ----- Runtime -------------------------------------------------------
@@ -140,8 +141,53 @@ const RUNTIME_AND_DATA_VARS: readonly EnvVarSpec[] = Object.freeze([
   v("DATABASE_SSL_MODE", "api", "enum", ALL_ENVIRONMENTS, "Modo TLS de la conexion.", {
     allowedValues: SSL_MODES,
   }),
+  v(
+    "DATABASE_NETWORK",
+    "api",
+    "enum",
+    NO_ENVIRONMENT,
+    "DEC-043: camino de red hacia PostgreSQL. Si falta, se asume `public`, que es la rama estricta.",
+    { allowedValues: DATABASE_NETWORKS },
+  ),
   v("DATABASE_POOL_MAX", "api", "integer", ALL_ENVIRONMENTS, "Tamano maximo del pool."),
   v("DATABASE_STATEMENT_TIMEOUT_MS", "api", "integer", ALL_ENVIRONMENTS, "Timeout de sentencia."),
+
+  // ----- Arranque en frio de una base gestionada (DEC-043) --------------
+  // Las lee `db:bootstrap`, nunca el proceso que sirve HTTP. Por eso su
+  // `requiredIn` es NO_ENVIRONMENT: en local el arranque en frio se resuelve
+  // con `packages/database/sql/local-dev/set-role-passwords.sql`.
+  v(
+    "DATABASE_URL_SUPERUSER",
+    "api",
+    "postgres_url",
+    NO_ENVIRONMENT,
+    "Superusuario del proveedor gestionado. Solo `db:bootstrap`: crea roles y aplica migraciones cuando `lsw_migrator` aun no puede autenticarse.",
+    { secret: true },
+  ),
+  v(
+    "LSW_DB_MIGRATOR_PASSWORD",
+    "api",
+    "string",
+    NO_ENVIRONMENT,
+    "Contrasena que `db:bootstrap` asigna a `lsw_migrator`.",
+    { secret: true },
+  ),
+  v(
+    "LSW_DB_APP_PASSWORD",
+    "api",
+    "string",
+    NO_ENVIRONMENT,
+    "Contrasena que `db:bootstrap` asigna a `lsw_app`.",
+    { secret: true },
+  ),
+  v(
+    "LSW_DB_READONLY_PASSWORD",
+    "api",
+    "string",
+    NO_ENVIRONMENT,
+    "Contrasena que `db:bootstrap` asigna a `lsw_readonly_report`. Opcional: sin ella el rol queda sin poder autenticarse.",
+    { secret: true },
+  ),
 
   // ----- Colas (DEC-020) -----------------------------------------------
   v("PGBOSS_SCHEMA", "api", "string", ALL_ENVIRONMENTS, "Esquema de pg-boss."),
@@ -387,12 +433,26 @@ export const PRODUCTION_HARDENING_RULES: readonly ProductionHardeningRule[] = Ob
     appliesTo: DEPLOYED_ENVIRONMENTS,
     rationale: "Una cookie de sesion sin Secure viaja en claro ante cualquier degradacion a http.",
   },
+  // DEC-043. Dos ramas, ninguna laxa: la unica diferencia es que sobre red
+  // privada el certificado del proveedor es autofirmado y `verify-full` no
+  // puede satisfacerse. `require` y `verify-ca` estan prohibidos en AMBAS: no
+  // defienden del man-in-the-middle y ademas aparentan que si.
   {
     name: "DATABASE_SSL_MODE",
     requirement: "MUST_EQUAL",
     value: "verify-full",
     appliesTo: DEPLOYED_ENVIRONMENTS,
+    appliesWhen: { name: "DATABASE_NETWORK", equals: "public", whenAbsent: true },
     rationale: "Sin verify-full, TLS protege del sniffing pero no del man-in-the-middle.",
+  },
+  {
+    name: "DATABASE_SSL_MODE",
+    requirement: "MUST_EQUAL",
+    value: "disable",
+    appliesTo: DEPLOYED_ENVIRONMENTS,
+    appliesWhen: { name: "DATABASE_NETWORK", equals: "private", whenAbsent: false },
+    rationale:
+      "Sobre la red privada del proveedor la garantia es el aislamiento, no el certificado. Un TLS que no se verifica solo anadiria una falsa sensacion de seguridad.",
   },
   {
     name: "WEB_ENABLE_API_MOCKS",

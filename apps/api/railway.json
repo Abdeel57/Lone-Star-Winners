@@ -1,0 +1,29 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "build": {
+    "builder": "RAILPACK",
+    "buildCommand": "pnpm exec turbo run build --filter=@lsw/api...",
+    "watchPatterns": [
+      "apps/api/**",
+      "packages/database/**",
+      "packages/sweepstakes/**",
+      "packages/commerce/**",
+      "packages/security/**",
+      "packages/audit/**",
+      "packages/tpa/**",
+      "package.json",
+      "pnpm-lock.yaml",
+      "pnpm-workspace.yaml",
+      "turbo.json",
+      "tsconfig.base.json"
+    ]
+  },
+  "deploy": {
+    "preDeployCommand": ["pnpm --filter @lsw/database run db:bootstrap"],
+    "startCommand": "node apps/api/dist/server.js",
+    "healthcheckPath": "/api/v1/health/ready",
+    "healthcheckTimeout": 120,
+    "restartPolicyType": "ON_FAILURE",
+    "restartPolicyMaxRetries": 5
+  }
+}

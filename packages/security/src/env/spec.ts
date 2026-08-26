@@ -44,6 +44,30 @@ export type ProductionRequirement =
   "MUST_EQUAL" | "MUST_NOT_EQUAL" | "MUST_NOT_CONTAIN" | "MUST_START_WITH";
 
 /**
+ * Condicion que activa una regla de endurecimiento (DEC-043).
+ *
+ * Existe porque hay endurecimientos cuyo valor correcto depende de otra
+ * variable, y colapsarlos en una sola regla incondicional obligaria a elegir
+ * entre dos mentiras: exigir un valor imposible en cierta topologia, o no
+ * exigir ninguno. La conexion a PostgreSQL es el caso: sobre red publica el
+ * unico modo aceptable es `verify-full`, y sobre la red privada de un
+ * proveedor con certificados autofirmados lo es `disable`.
+ */
+export interface HardeningCondition {
+  /** Variable de la que depende la regla. */
+  readonly name: string;
+  /** Valor que activa la regla. */
+  readonly equals: string;
+  /**
+   * Si la regla se aplica tambien cuando la variable condicionante NO esta
+   * definida. Debe valer `true` exactamente en la rama que sea el valor por
+   * defecto del esquema de arranque; si ninguna rama lo declara, omitir la
+   * variable desactivaria el endurecimiento entero sin que nadie lo note.
+   */
+  readonly whenAbsent: boolean;
+}
+
+/**
  * Endurecimiento obligatorio en entornos desplegados. Son las diferencias entre
  * "funciona en mi maquina" y "se puede poner delante de participantes reales".
  */
@@ -53,6 +77,8 @@ export interface ProductionHardeningRule {
   readonly value: string;
   readonly appliesTo: readonly EnvName[];
   readonly rationale: string;
+  /** Sin condicion, la regla se aplica siempre en `appliesTo`. */
+  readonly appliesWhen?: HardeningCondition;
 }
 
 export interface EnvIssue {

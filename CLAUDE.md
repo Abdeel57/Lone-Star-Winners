@@ -140,16 +140,17 @@ El Team Lead coordina; no implementa en lugar de los agentes.
 
 ## 6. Documentación compartida
 
-| Archivo                  | Propósito                                                |
-| ------------------------ | -------------------------------------------------------- |
-| `CLAUDE.md`              | Este documento. Constitución y principios.               |
-| `ORCHESTRATOR.md`        | Prompt de arranque para la sesión principal (Team Lead). |
-| `docs/ARCHITECTURE.md`   | Arquitectura y fronteras de responsabilidad.             |
-| `docs/API_CONTRACT.md`   | Fuente de verdad de las APIs.                            |
-| `docs/DECISIONS.md`      | Registro ADR de decisiones.                              |
-| `docs/AGENT_HANDOFF.md`  | Comunicación entre agentes.                              |
-| `docs/TASK_OWNERSHIP.md` | Propiedad de archivos y responsabilidades.               |
-| `docs/LEGAL_PENDING.md`  | Decisiones pendientes del abogado.                       |
+| Archivo                      | Propósito                                                |
+| ---------------------------- | -------------------------------------------------------- |
+| `CLAUDE.md`                  | Este documento. Constitución y principios.               |
+| `ORCHESTRATOR.md`            | Prompt de arranque para la sesión principal (Team Lead). |
+| `docs/ARCHITECTURE.md`       | Arquitectura y fronteras de responsabilidad.             |
+| `docs/API_CONTRACT.md`       | Fuente de verdad de las APIs.                            |
+| `docs/DECISIONS.md`          | Registro ADR de decisiones.                              |
+| `docs/AGENT_HANDOFF.md`      | Comunicación entre agentes.                              |
+| `docs/TASK_OWNERSHIP.md`     | Propiedad de archivos y responsabilidades.               |
+| `docs/LEGAL_PENDING.md`      | Decisiones pendientes del abogado.                       |
+| `docs/DEPLOYMENT_RAILWAY.md` | Despliegue en Railway (DEC-043).                         |
 
 ---
 
@@ -161,7 +162,7 @@ En esta fase **no** están decididos —y ningún agente debe darlos por supuest
 - framework de backend (Express, Fastify, Nest u otro);
 - ORM;
 - proveedor de base de datos;
-- hosting;
+- ~~hosting~~ → **decidido**: Railway aloja web, api y base de datos (DEC-043);
 - procesador de pagos;
 - proveedor de email;
 - almacenamiento;

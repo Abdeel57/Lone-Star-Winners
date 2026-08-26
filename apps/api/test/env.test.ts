@@ -126,6 +126,42 @@ describe("refuerzos que solo aplican en produccion", () => {
     );
   });
 
+  describe("DEC-043: camino de red hacia PostgreSQL", () => {
+    it("exige verify-full cuando no se declara nada (el defecto es el estricto)", () => {
+      // Sin DATABASE_NETWORK el esquema asume `public`. Es la garantia de que
+      // la excepcion de red privada solo existe si alguien la escribe.
+      expect(() => loadConfig({ ...PRODUCTION_BASE, DATABASE_SSL_MODE: "disable" })).toThrow(
+        /verify-full/iu,
+      );
+    });
+
+    it("acepta disable cuando la conexion no sale de la red privada", () => {
+      const config = loadConfig({
+        ...PRODUCTION_BASE,
+        DATABASE_NETWORK: "private",
+        DATABASE_SSL_MODE: "disable",
+        DATABASE_URL_APP: "postgresql://lsw_app:secreto@postgres.railway.internal:5432/railway",
+      });
+
+      expect(config.isProduction).toBe(true);
+      expect(config.database.sslMode).toBe("disable");
+    });
+
+    it("rechaza en red privada un TLS que cifra pero no verifica", () => {
+      // `require` es la trampa: parece mas seguro que `disable` y no lo es.
+      // No defiende de un intermediario, y ademas oculta que no lo hace.
+      for (const mode of ["require", "verify-ca", "verify-full"] as const) {
+        expect(() =>
+          loadConfig({
+            ...PRODUCTION_BASE,
+            DATABASE_NETWORK: "private",
+            DATABASE_SSL_MODE: mode,
+          }),
+        ).toThrow(/DEC-043/u);
+      }
+    });
+  });
+
   it("rechaza CORS con comodin", () => {
     expect(() => loadConfig({ ...PRODUCTION_BASE, API_CORS_ALLOWED_ORIGINS: "*" })).toThrow(
       /CORS/iu,
