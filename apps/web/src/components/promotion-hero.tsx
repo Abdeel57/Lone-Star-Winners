@@ -1,7 +1,7 @@
 import { Alert, buttonVariants } from "@lsw/ui";
 import { useTranslations } from "next-intl";
 
-import { formatMoney, formatZonedDateTime } from "@/i18n/formatters";
+import { formatZonedDateTime } from "@/i18n/formatters";
 import type { Locale } from "@/i18n/locales";
 import { Link } from "@/i18n/navigation";
 import { pickLocalized, type PromotionSummary } from "@/lib/api";
@@ -87,11 +87,6 @@ export function PromotionHero({
 
   const hasRules = promotion.rules_version_id !== null;
 
-  // `formatMoney` devuelve `null` si el importe no respeta DEC-010. Se resuelve
-  // aqui, una vez, para que el JSX no tenga que decidir dos veces lo mismo.
-  const prizeValue =
-    promotion.prize_value === null ? null : formatMoney(promotion.prize_value, locale);
-
   return (
     <>
       <section
@@ -116,9 +111,25 @@ export function PromotionHero({
         <div className="lsw-container relative flex min-h-[86svh] flex-col justify-center py-s16 lg:min-h-[calc(100svh-5rem)] lg:py-s24">
           <div className="grid gap-s10 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)] lg:items-center lg:gap-s12">
             <div>
+              {/*
+               * CHIP DE ESTADO SOBRE EL TITULAR.
+               *
+               * Es la pieza que la referencia visual pone encima de su titular
+               * -un chip de color pleno, en caja alta, con texto oscuro- y aqui
+               * lo que lleva escrito es DATO: el estado que reporta el backend,
+               * traducido por la misma funcion que lo traduce en el resto del
+               * sitio. Su color sale del estado, no de una decision de esta
+               * pantalla; para una promocion abierta es oro, y para las fases
+               * posteriores, el tono que le corresponde.
+               */}
               <div className="flex flex-wrap items-center gap-3">
-                <p className="lsw-eyebrow">{t("eyebrow")}</p>
-                <PromotionStatusBadge status={promotion.status} size="sm" />
+                <PromotionStatusBadge
+                  status={promotion.status}
+                  size="md"
+                  emphasis="solid"
+                  shape="square"
+                />
+                <p className="lsw-eyebrow text-text-subtle">{t("eyebrow")}</p>
               </div>
 
               <h1
@@ -175,15 +186,19 @@ export function PromotionHero({
             </div>
 
             <div className="flex flex-col gap-s6">
-              {prizeValue === null ? null : (
-                <div className="rounded-xl border border-brand/30 bg-surface/70 p-s6 shadow-lg backdrop-blur-sm">
-                  <p className="lsw-eyebrow text-text-subtle">{t("prizeValueLabel")}</p>
-                  <p className="lsw-display lsw-gold-sheen mt-s2 text-display-md tabular-nums sm:text-display-lg">
-                    {prizeValue}
-                  </p>
-                </div>
-              )}
-
+              {/*
+               * EL VALOR DECLARADO YA NO ESTA AQUI.
+               *
+               * Vive en la banda dorada del premio (`PrizeBand`), que es la
+               * unica superficie clara de la portada y donde una cifra grande
+               * golpea de verdad. Tenerlo en los dos sitios repetia el mismo
+               * numero a dos pantallas de distancia y le quitaba peso a los
+               * dos.
+               *
+               * Sigue sin pintarse ninguna etiqueta de valor cuando la
+               * promocion no declara premio: aqui porque no hay etiqueta, y en
+               * la banda porque la banda entera no se renderiza.
+               */}
               {presentation.countdownTarget === null ? null : (
                 <PromotionCountdown
                   targetIso={
@@ -196,6 +211,10 @@ export function PromotionHero({
                   timeZone={promotion.legal_timezone}
                   variant={presentation.countdownTarget === "starts_at" ? "opens" : "closes"}
                   size="scoreboard"
+                  // El periodo completo, para la barra de progreso bajo el
+                  // marcador. `PromotionCountdown` solo la dibuja cuando la
+                  // cuenta atras apunta al cierre.
+                  period={{ startIso: promotion.starts_at, endIso: promotion.ends_at }}
                 />
               )}
 

@@ -4,6 +4,8 @@ import { useTranslations } from "next-intl";
 import { formatZonedDateTime } from "@/i18n/formatters";
 import type { Locale } from "@/i18n/locales";
 
+import { PromotionProgress } from "./promotion-progress";
+
 /**
  * Cuenta atras de una promocion.
  *
@@ -27,6 +29,7 @@ export function PromotionCountdown({
   timeZone,
   variant,
   size = "inline",
+  period,
 }: {
   readonly targetIso: string;
   readonly nowIso: string;
@@ -40,6 +43,16 @@ export function PromotionCountdown({
    * promocion, donde la cuenta atras acompana pero no manda.
    */
   readonly size?: "inline" | "scoreboard";
+  /**
+   * Periodo completo de la promocion, para dibujar debajo del marcador la parte
+   * ya transcurrida.
+   *
+   * Es OPCIONAL porque solo tiene sentido cuando la cuenta atras apunta al
+   * cierre: mientras la promocion todavia no ha abierto no hay ningun tramo
+   * transcurrido que representar, y una barra a cero diria algo distinto de lo
+   * que quiere decir.
+   */
+  readonly period?: { readonly startIso: string; readonly endIso: string };
 }) {
   const t = useTranslations("countdown");
   const tA11y = useTranslations("a11y");
@@ -81,6 +94,19 @@ export function PromotionCountdown({
         completedLabel={t("elapsed")}
         size={size}
       />
+
+      {/* La barra acompana al marcador y solo hacia el CIERRE: mientras la
+          promocion no ha abierto no hay tramo transcurrido que representar. La
+          decision de pasar `period` la toma la pantalla a partir de la maquina
+          de estados; este componente solo respeta lo que le llega. */}
+      {period === undefined || variant !== "closes" ? null : (
+        <PromotionProgress
+          startIso={period.startIso}
+          endIso={period.endIso}
+          nowIso={nowIso}
+          locale={locale}
+        />
+      )}
 
       {/* Se conserva palabra por palabra: la cuenta atras es una comodidad y el
           estado que manda es el que reporta el servidor. Que ahora sea

@@ -1,4 +1,10 @@
-import { Badge, type BadgeSize, type BadgeTone } from "@lsw/ui";
+import {
+  Badge,
+  type BadgeEmphasis,
+  type BadgeShape,
+  type BadgeSize,
+  type BadgeTone,
+} from "@lsw/ui";
 
 import { usePromotionStatusLabel } from "@/i18n/promotion-labels";
 import type { PromotionStatus } from "@/lib/api";
@@ -21,11 +27,20 @@ import type { PromotionStatus } from "@/lib/api";
 export function PromotionStatusBadge({
   status,
   size,
+  emphasis,
+  shape,
   className,
 }: {
   readonly status: PromotionStatus;
   /** Tamano de la insignia. En el hero conviene `sm`, junto al antetitulo. */
   readonly size?: BadgeSize;
+  /**
+   * `solid` es el chip que corona el titular del hero: fondo pleno del tono y
+   * texto casi negro. Se pasa desde la pantalla y no se decide aqui porque el
+   * peso depende de DONDE esta la insignia, no de que estado representa.
+   */
+  readonly emphasis?: BadgeEmphasis;
+  readonly shape?: BadgeShape;
   readonly className?: string;
 }) {
   const statusLabel = usePromotionStatusLabel();
@@ -34,6 +49,8 @@ export function PromotionStatusBadge({
     <Badge
       tone={toneFor(status)}
       {...(size === undefined ? {} : { size })}
+      {...(emphasis === undefined ? {} : { emphasis })}
+      {...(shape === undefined ? {} : { shape })}
       {...(className === undefined ? {} : { className })}
     >
       {statusLabel(status)}
@@ -50,7 +67,12 @@ export function PromotionStatusBadge({
 function toneFor(status: PromotionStatus): BadgeTone {
   switch (status) {
     case "ACTIVE":
-      return "success";
+      // ORO, no verde. En este sistema el oro es el color con el que la marca
+      // afirma, y "abierta" es la afirmacion principal de una promocion; el
+      // verde de `success` queda para confirmaciones de accion, donde de verdad
+      // significa "ha salido bien". Ademas es el tono que hace que el chip
+      // solido del hero sea el chip dorado de la referencia visual.
+      return "brand";
     case "SCHEDULED":
       return "info";
     case "EXPORT_PREPARATION":

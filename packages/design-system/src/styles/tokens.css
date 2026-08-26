@@ -305,6 +305,55 @@
   --lsw-shadow-md: 0 0 0 1px rgb(201 162 39 / 0.06), 0 4px 12px -2px rgb(0 0 0 / 0.8);
   --lsw-shadow-lg: 0 0 0 1px rgb(201 162 39 / 0.09), 0 12px 28px -8px rgb(0 0 0 / 0.85);
   --lsw-shadow-xl: 0 0 0 1px rgb(201 162 39 / 0.12), 0 28px 60px -16px rgb(0 0 0 / 0.9);
+
+  /* --- Patrones -----------------------------------------------------------
+   *
+   * PATRON TOPOGRAFICO (segunda pasada de DEC-038)
+   *
+   * Curvas de nivel, como las de un mapa de terreno. Es la firma decorativa de
+   * la referencia visual y lo que impide que una banda de color plano lea como
+   * un rectangulo vacio: da materia sin meter ruido ni una sola peticion de red.
+   *
+   * Tres decisiones que importan:
+   *
+   * 1. **La opacidad va DENTRO del SVG**, no fuera. Una capa de
+   *    `background-image` no acepta opacidad propia, asi que la unica forma de
+   *    tenerla al 4-7% sin un pseudo-elemento adicional -que chocaria con los
+   *    que ya usan `.lsw-atmosphere` y `.lsw-grain`- es bajar el
+   *    `stroke-opacity` del trazo. Consecuencia deseada: el patron se puede
+   *    APILAR como una capa mas sobre los degradados existentes.
+   * 2. **Hay dos tintas.** La dorada es para las superficies negras; la negra
+   *    (`-ink`) es para la unica banda clara del sitio, la del premio. Un
+   *    patron dorado sobre oro no se ve, y aclarar el oro para que se viera
+   *    rompeeria el contraste del texto negro que lleva encima.
+   * 3. **Las curvas empiezan y terminan a la misma altura** en los dos bordes
+   *    verticales del mosaico (`y` en `x=0` es `y` en `x=640`), de modo que la
+   *    repeticion horizontal no deja costura visible.
+   *
+   * El patron es DECORACION: se aplica siempre como imagen de fondo, nunca como
+   * `<img>` ni como elemento con contenido, y por tanto no entra en el arbol de
+   * accesibilidad. */
+  --lsw-pattern-topo-size: 640px 420px;
+  --lsw-pattern-topo: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='640' height='420' viewBox='0 0 640 420'%3E%3Cg fill='none' stroke='%23c9a227' stroke-opacity='0.07' stroke-width='1.25'%3E%3Cpath d='M0 22 C 60 2 130 52 200 30 C 270 8 340 56 420 34 C 500 12 570 42 640 22'/%3E%3Cpath d='M0 58 C 70 36 140 86 210 62 C 290 36 350 88 430 68 C 510 48 580 80 640 58'/%3E%3Cpath d='M0 86 C 80 64 150 112 230 92 C 310 72 380 118 460 96 C 540 74 590 104 640 86'/%3E%3Cpath d='M0 140 C 60 116 140 166 220 144 C 300 122 370 170 450 148 C 530 126 580 160 640 140'/%3E%3Cpath d='M0 178 C 70 156 150 202 230 182 C 320 160 390 206 470 184 C 550 162 590 196 640 178'/%3E%3Cpath d='M0 238 C 60 216 140 264 220 244 C 300 224 380 268 460 248 C 540 228 590 258 640 238'/%3E%3Cpath d='M0 296 C 80 274 150 320 240 300 C 320 282 390 324 470 304 C 550 284 590 314 640 296'/%3E%3Cpath d='M0 328 C 60 310 140 352 230 332 C 310 314 380 356 460 336 C 540 316 590 344 640 328'/%3E%3Cpath d='M0 392 C 70 372 150 416 235 396 C 315 378 390 418 470 398 C 550 378 590 408 640 392'/%3E%3C/g%3E%3C/svg%3E");
+  --lsw-pattern-topo-ink: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='640' height='420' viewBox='0 0 640 420'%3E%3Cg fill='none' stroke='%23000000' stroke-opacity='0.11' stroke-width='1.4'%3E%3Cpath d='M0 22 C 60 2 130 52 200 30 C 270 8 340 56 420 34 C 500 12 570 42 640 22'/%3E%3Cpath d='M0 58 C 70 36 140 86 210 62 C 290 36 350 88 430 68 C 510 48 580 80 640 58'/%3E%3Cpath d='M0 86 C 80 64 150 112 230 92 C 310 72 380 118 460 96 C 540 74 590 104 640 86'/%3E%3Cpath d='M0 140 C 60 116 140 166 220 144 C 300 122 370 170 450 148 C 530 126 580 160 640 140'/%3E%3Cpath d='M0 178 C 70 156 150 202 230 182 C 320 160 390 206 470 184 C 550 162 590 196 640 178'/%3E%3Cpath d='M0 238 C 60 216 140 264 220 244 C 300 224 380 268 460 248 C 540 228 590 258 640 238'/%3E%3Cpath d='M0 296 C 80 274 150 320 240 300 C 320 282 390 324 470 304 C 550 284 590 314 640 296'/%3E%3Cpath d='M0 328 C 60 310 140 352 230 332 C 310 314 380 356 460 336 C 540 316 590 344 640 328'/%3E%3Cpath d='M0 392 C 70 372 150 416 235 396 C 315 378 390 418 470 398 C 550 378 590 408 640 392'/%3E%3C/g%3E%3C/svg%3E");
+
+  /* Rayas diagonales de la barra de progreso. Dos oros contiguos: el relleno se
+     ve como una cinta rayada y no como una barra plana, sin introducir un
+     segundo color en el sistema. */
+  --lsw-pattern-stripes: repeating-linear-gradient(
+    135deg,
+    rgb(var(--lsw-color-brand)) 0 7px,
+    rgb(var(--lsw-color-brand-active)) 7px 14px
+  );
+
+  /* --- Movimiento decorativo ----------------------------------------------
+   *
+   * NO se reutilizan `--lsw-duration-*`: bajo `prefers-reduced-motion` esos
+   * valen 0ms, y una animacion infinita de 0ms no se detiene, se vuelve un
+   * parpadeo. Las piezas decorativas continuas declaran su duracion aqui y se
+   * apagan con `animation: none` explicito bajo la misma preferencia. */
+  --lsw-marquee-duration: 46s;
+  --lsw-announce-duration: 15s;
 }
 
 /* Preferencia de movimiento reducido: los tokens de duracion se anulan en el

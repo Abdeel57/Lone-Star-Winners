@@ -172,19 +172,45 @@ export function Countdown({
         aria-hidden="true"
         className={cn(
           scoreboard
-            ? // Cuatro columnas IGUALES. Con `flex-wrap`, el dia numero 100
-              // ensancha su casilla y descuadra el marcador entero; con una
-              // rejilla fija, la cifra crece dentro de su casilla.
-              "grid w-full max-w-lg grid-cols-4 gap-2 sm:gap-3"
+            ? // Cuatro columnas IGUALES separadas por dos puntos, como el
+              // marcador de un estadio. `flex-1 basis-0` reparte el ancho a
+              // partes iguales y deja que los separadores ocupen solo lo suyo;
+              // con `flex-wrap` -que es lo que habia antes de la rejilla- el
+              // dia numero 100 ensanchaba su casilla y descuadraba el marcador
+              // entero. La cifra crece DENTRO de su casilla.
+              "flex w-full max-w-lg items-stretch gap-1 sm:gap-2"
             : "flex flex-wrap items-end gap-3",
         )}
       >
         <CountdownUnit value={parts.days} label={unitLabels.days} scoreboard={scoreboard} />
+        {scoreboard ? <CountdownSeparator /> : null}
         <CountdownUnit value={parts.hours} label={unitLabels.hours} scoreboard={scoreboard} />
+        {scoreboard ? <CountdownSeparator /> : null}
         <CountdownUnit value={parts.minutes} label={unitLabels.minutes} scoreboard={scoreboard} />
+        {scoreboard ? <CountdownSeparator /> : null}
         <CountdownUnit value={parts.seconds} label={unitLabels.seconds} scoreboard={scoreboard} />
       </ul>
     </div>
+  );
+}
+
+/**
+ * Los dos puntos entre casillas del marcador.
+ *
+ * Es DECORACION: la lista entera ya va `aria-hidden`, y el equivalente
+ * accesible del contador es el plazo absoluto, no una lectura digito a digito.
+ * Se alinea con la cifra -no con la caja- porque la etiqueta de unidad ocupa la
+ * parte baja de cada casilla y unos dos puntos centrados verticalmente en la
+ * caja quedarian por debajo de los numeros.
+ */
+function CountdownSeparator() {
+  return (
+    <li
+      aria-hidden="true"
+      className="flex shrink-0 items-start pt-s3 font-display text-heading-lg font-bold leading-none text-brand/70 sm:pt-s4 sm:text-display-md"
+    >
+      :
+    </li>
   );
 }
 
@@ -199,7 +225,16 @@ function CountdownUnit({
 }) {
   if (scoreboard) {
     return (
-      <li className="relative flex min-w-0 flex-col items-center overflow-hidden rounded-lg border border-border bg-surface-raised px-1 py-s3 sm:py-s4">
+      <li
+        className={cn(
+          "relative flex min-w-0 flex-1 basis-0 flex-col items-center overflow-hidden",
+          // Caja de marcador: superficie elevada, filete claro y sombra que la
+          // separa del fondo. Sobre negro la sombra sola no eleva nada, asi que
+          // el borde es la mitad que hace el trabajo (ver los tokens de
+          // elevacion en `@lsw/design-system`).
+          "rounded-lg border border-border-strong bg-surface-raised px-1 py-s3 shadow-lg sm:py-s4",
+        )}
+      >
         {/* Filete dorado superior: es lo que convierte cuatro cajas grises en
             un marcador. Se compone con utilidades del preset y no con una clase
             de la aplicacion: este paquete no puede depender de CSS que viva en
@@ -208,6 +243,11 @@ function CountdownUnit({
           aria-hidden="true"
           className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-brand/60 to-transparent"
         />
+
+        {/* Ranura horizontal a media altura: es el detalle que hace que la caja
+            se lea como un digito de reloj de aletas y no como una tarjeta. Va
+            al 55% y no al 50% para que caiga bajo la cifra y no la parta. */}
+        <span aria-hidden="true" className="absolute inset-x-0 top-[55%] h-px bg-overlay/70" />
 
         {/* `tabular-nums` evita que la caja cambie de ancho cada segundo. */}
         <span className="font-display text-display-md font-bold tabular-nums text-text sm:text-display-lg">

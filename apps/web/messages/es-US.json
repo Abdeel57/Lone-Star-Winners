@@ -7,7 +7,11 @@
     "primaryNavigation": "Principal",
     "promotionCountdown": "Tiempo restante",
     "promotionTimeline": "Avance de la promoción",
-    "skipToContent": "Saltar al contenido principal"
+    "skipToContent": "Saltar al contenido principal",
+    "announcements": "Avisos del sitio",
+    "mobileNavigation": "Menú del sitio",
+    "marquee": "Lema del sitio",
+    "winnersList": "Ganadores publicados"
   },
   "amoe": {
     "CODE": "Para esta promoción existe un método gratuito de participación mediante código. Las Reglas Oficiales indican cómo obtener y enviar un código.",
@@ -159,7 +163,11 @@
   "footer": {
     "copyright": "© {year} Lone Star Winners",
     "legalNote": "Cada promoción se rige por sus propias Reglas Oficiales.",
-    "mockDataNotice": "Compilación de desarrollo. Los datos de esta página vienen de una API simulada y no son reales."
+    "mockDataNotice": "Compilación de desarrollo. Los datos de esta página vienen de una API simulada y no son reales.",
+    "help": "Ayuda",
+    "rulesBlockBody": "Cada promoción de este sitio se rige por sus propias Reglas Oficiales. Ese documento indica quién puede participar, cómo se otorgan las participaciones y cómo se selecciona a un ganador.",
+    "rulesBlockCta": "Leer las Reglas Oficiales",
+    "country": "Estados Unidos"
   },
   "home": {
     "closesLabel": "Cierra",
@@ -168,7 +176,8 @@
     "featured": {
       "title": "Mercancía destacada",
       "body": "Algunos artículos de la tienda. En cada tarjeta se indica si forma parte de la promoción vigente.",
-      "viewAll": "Ver toda la mercancía"
+      "viewAll": "Ver toda la mercancía",
+      "eyebrow": "Desde la tienda"
     },
     "howItWorks": {
       "step1": {
@@ -183,7 +192,8 @@
         "body": "Tu cuenta muestra de dónde viene cada participación y en qué estado está.",
         "title": "Sigue tus participaciones"
       },
-      "title": "Cómo funciona"
+      "title": "Cómo funciona",
+      "eyebrow": "Tres pasos"
     },
     "opensLabel": "Abre",
     "prizeValueLabel": "Valor declarado del premio",
@@ -193,10 +203,27 @@
     "trust": {
       "body": "Las Reglas Oficiales son el documento que rige cada promoción: quién puede participar, cómo se otorgan las participaciones y cómo se selecciona al ganador. Léelas antes de hacer un pedido.",
       "faqLink": "Leer las preguntas frecuentes",
-      "title": "Antes de participar"
+      "title": "Antes de participar",
+      "eyebrow": "Lo que este sitio garantiza",
+      "pillar1": {
+        "title": "Un documento que gobierna",
+        "body": "Cada promoción se rige por sus propias Reglas Oficiales, publicadas íntegras y enlazadas desde cada página de este sitio."
+      },
+      "pillar2": {
+        "title": "Cada participación conserva su origen",
+        "body": "De dónde salió una participación, cuándo se registró y en qué estado está puede reconstruirse. Nada se borra en silencio: un reembolso o una reversión se registra como movimiento propio."
+      },
+      "pillar3": {
+        "title": "Administrador independiente",
+        "body": "Cuando una promoción declara que su sorteo lo realiza un administrador independiente, su página lo dice e informa de cada paso del proceso."
+      }
     },
     "viewOfficialRules": "Ver las Reglas Oficiales",
-    "viewPromotion": "Ver el detalle de la promoción"
+    "viewPromotion": "Ver el detalle de la promoción",
+    "prizeBand": {
+      "eyebrow": "El premio",
+      "note": "El valor declarado, el premio y todo lo relativo a su entrega se rigen por las Reglas Oficiales."
+    }
   },
   "ineligibility": {
     "PRODUCT_NOT_ELIGIBLE": "Este artículo no forma parte de la promoción vigente, así que no cuenta para las participaciones promocionales.",
@@ -215,7 +242,9 @@
     "faq": "Preguntas frecuentes",
     "officialRules": "Reglas Oficiales",
     "promotions": "Promociones",
-    "shop": "Tienda"
+    "shop": "Tienda",
+    "menu": "Menú",
+    "closeMenu": "Cerrar menú"
   },
   "notFound": {
     "backHome": "Ir a la página de inicio",
@@ -346,7 +375,8 @@
     "notEligibleBadge": "No forma parte de la promoción vigente",
     "priceFrom": "Desde {price}",
     "title": "Mercancía elegible",
-    "view": "Ver el artículo"
+    "view": "Ver el artículo",
+    "viewLabel": "Ver {name}"
   },
   "states": {
     "loadFailed": {
@@ -359,5 +389,27 @@
       "body": "Cuando abra la siguiente promoción, aparecerá aquí.",
       "title": "Ahora mismo no hay ninguna promoción abierta"
     }
+  },
+  "announcement": {
+    "withDeadline": "{status} — {when}",
+    "opensOn": "abre el {date}",
+    "closesOn": "cierra el {date}",
+    "officialRules": "Las Reglas Oficiales rigen cada promoción"
+  },
+  "marquee": {
+    "item1": "Mercancía elegible",
+    "item2": "Participaciones promocionales conforme a las Reglas Oficiales",
+    "item3": "Lone Star Winners"
+  },
+  "promotionProgress": {
+    "label": "Parte transcurrida del periodo de la promoción",
+    "value": "Ha transcurrido el {percent} del periodo entre la apertura y el cierre."
+  },
+  "winners": {
+    "eyebrow": "Resultados publicados",
+    "title": "Ganadores confirmados",
+    "intro": "Aquí solo se publican los ganadores cuya verificación se ha completado conforme a las Reglas Oficiales.",
+    "promotionLabel": "Promoción",
+    "locationLabel": "Ubicación"
   }
 }

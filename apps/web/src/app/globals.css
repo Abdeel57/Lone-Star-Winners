@@ -194,7 +194,13 @@
     position: relative;
     isolation: isolate;
     background-color: rgb(var(--lsw-color-bg));
+    /* El patron topografico va como PRIMERA capa -es decir, la de encima- para
+       que las curvas se lean sobre la luz dorada y no queden lavadas por ella.
+       Su tamano de mosaico se declara en el mismo orden que las capas: `auto`
+       para los tres degradados, que se dimensionan solos. */
+    background-size: var(--lsw-pattern-topo-size), auto, auto, auto;
     background-image:
+      var(--lsw-pattern-topo),
       radial-gradient(
         62rem 40rem at 72% 8%,
         rgb(var(--lsw-color-brand) / 0.2) 0%,
@@ -253,12 +259,154 @@
     position: relative;
     background-color: rgb(var(--lsw-color-surface));
     border-block: 1px solid rgb(var(--lsw-color-border));
+    background-image: var(--lsw-pattern-topo);
+    background-size: var(--lsw-pattern-topo-size);
   }
 
   .lsw-band-sunken {
     position: relative;
     background-color: rgb(var(--lsw-color-surface-sunken));
     border-block: 1px solid rgb(var(--lsw-color-border));
+    background-image: var(--lsw-pattern-topo);
+    background-size: var(--lsw-pattern-topo-size);
+  }
+
+  /* -------------------------------------------------------------------------
+   * Patron topografico suelto
+   *
+   * Para las superficies que no son una banda de seccion: el pie, la barra de
+   * anuncio, la caja del marcador. Se aplica como IMAGEN DE FONDO sobre el
+   * color que ya tenga el elemento, sin pseudo-elemento y sin nodo adicional,
+   * de modo que no entra en el arbol de accesibilidad y no choca con los
+   * `::before` / `::after` que ya usan la atmosfera y la textura.
+   * ---------------------------------------------------------------------- */
+  .lsw-topo {
+    background-image: var(--lsw-pattern-topo);
+    background-size: var(--lsw-pattern-topo-size);
+  }
+
+  /* La variante de tinta negra, para la unica banda clara del sitio. */
+  .lsw-topo-ink {
+    background-image: var(--lsw-pattern-topo-ink);
+    background-size: var(--lsw-pattern-topo-size);
+  }
+
+  /* -------------------------------------------------------------------------
+   * Banda del premio
+   *
+   * El unico bloque CLARO de la pagina, y por eso golpea. Degradado de oro con
+   * el patron topografico en negro encima. El texto que lleva va en
+   * `text-inverse` (casi negro): sobre el oro base el contraste es 9,4:1, muy
+   * por encima del minimo AA, y sube todavia mas sobre los tramos claros del
+   * degradado.
+   * ---------------------------------------------------------------------- */
+  .lsw-prize-band {
+    background-color: rgb(var(--lsw-color-brand));
+    background-size: var(--lsw-pattern-topo-size), auto;
+    background-image:
+      var(--lsw-pattern-topo-ink),
+      linear-gradient(
+        118deg,
+        rgb(var(--lsw-color-brand)) 0%,
+        rgb(var(--lsw-color-brand-active)) 46%,
+        rgb(var(--lsw-color-brand-hover)) 72%,
+        rgb(var(--lsw-color-brand)) 100%
+      );
+  }
+
+  /* -------------------------------------------------------------------------
+   * Barra de progreso rayada
+   *
+   * Representa el tramo REAL transcurrido entre la apertura y el cierre de la
+   * promocion. No es un recurso de urgencia: no acelera, no cambia de color al
+   * acercarse al final y no afirma nada que las dos fechas de al lado no digan
+   * ya. Es la misma informacion, vista de un golpe.
+   * ---------------------------------------------------------------------- */
+  .lsw-stripes {
+    background-image: var(--lsw-pattern-stripes);
+  }
+
+  /* -------------------------------------------------------------------------
+   * Cinta de texto en movimiento (marquee)
+   *
+   * La pista se duplica y se desplaza media pista: al llegar a -50% el
+   * fotograma coincide exactamente con el inicio, de modo que el bucle no tiene
+   * salto. La copia duplicada va `aria-hidden` desde el componente, y el texto
+   * accesible se expone una sola vez.
+   *
+   * Con `prefers-reduced-motion` la animacion se APAGA por completo (no se
+   * acelera ni se acorta): la cinta queda quieta mostrando el primer tramo, que
+   * es texto legible por si mismo.
+   * ---------------------------------------------------------------------- */
+  .lsw-marquee-track {
+    display: flex;
+    width: max-content;
+    animation: lsw-marquee var(--lsw-marquee-duration) linear infinite;
+  }
+
+  @keyframes lsw-marquee {
+    from {
+      transform: translateX(0);
+    }
+    to {
+      transform: translateX(-50%);
+    }
+  }
+
+  /* -------------------------------------------------------------------------
+   * Barra de anuncio: rotacion entre dos frases
+   *
+   * Sin JavaScript. Las dos frases se apilan en la MISMA celda de rejilla y se
+   * alternan por opacidad, de modo que la barra no cambia de altura ni provoca
+   * reflujo. La segunda lleva medio ciclo de retraso.
+   *
+   * Bajo `prefers-reduced-motion` no hay rotacion: se muestra la primera frase
+   * -la que dice en que estado esta la promocion, que es la informativa- y la
+   * segunda se retira. Nada queda a medio desvanecer.
+   * ---------------------------------------------------------------------- */
+  .lsw-announce-item {
+    grid-area: 1 / 1;
+    /* La opacidad de partida se declara AQUI y no con una utilidad
+       (`opacity-0`) en el componente. Tailwind emite las utilidades en una capa
+       POSTERIOR a esta, asi que `opacity-0` ganaria a la regla de movimiento
+       reducido de mas abajo y las frases quedarian invisibles para justamente
+       quien pidio que nada se moviera. */
+    opacity: 0;
+    animation: lsw-announce-cycle var(--lsw-announce-duration) linear infinite;
+  }
+
+  .lsw-announce-item:nth-child(2) {
+    animation-delay: calc(var(--lsw-announce-duration) / -2);
+  }
+
+  @keyframes lsw-announce-cycle {
+    0%,
+    2% {
+      opacity: 0;
+    }
+    6%,
+    44% {
+      opacity: 1;
+    }
+    48%,
+    100% {
+      opacity: 0;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .lsw-marquee-track {
+      animation: none;
+    }
+
+    .lsw-announce-item {
+      animation: none;
+      opacity: 1;
+    }
+
+    .lsw-announce-item:nth-child(2) {
+      display: none;
+    }
   }
 
   /* -------------------------------------------------------------------------

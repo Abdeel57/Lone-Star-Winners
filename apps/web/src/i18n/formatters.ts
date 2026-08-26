@@ -142,6 +142,20 @@ export interface ZonedInstantOptions {
   readonly timeZone: string;
   /** Si se muestra tambien el nombre de la zona. Recomendado en plazos. */
   readonly showTimeZoneName?: boolean;
+  /**
+   * Longitud de la fecha. `long` es la de siempre y sigue siendo el valor por
+   * defecto: es la que se usa en todo plazo que el participante pueda querer
+   * apuntar.
+   *
+   * `medium` existe para UN sitio -la banda de anuncio, que es una linea de
+   * texto en caja alta que tiene que caber en 360px- y no debe extenderse a
+   * ningun plazo. Acorta el MES, nunca el ano: "30 dic 2026" sigue siendo una
+   * fecha completa y sin ambiguedad, que es lo unico innegociable.
+   *
+   * Solo lo lee `formatZonedDate`; `formatZonedDateTime` mantiene su formato
+   * largo porque ahi la hora y la zona son parte del dato.
+   */
+  readonly dateStyle?: "long" | "medium";
 }
 
 /**
@@ -188,6 +202,26 @@ function toDate(value: unknown): Date | null {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
+/**
+ * Formatea una fraccion (0..1) como porcentaje.
+ *
+ * Se usa UNICAMENTE para el equivalente accesible de la barra de progreso de la
+ * promocion. No formatea ninguna cifra de participaciones ni de dinero: esas
+ * tienen sus propias funciones y sus propias reglas (DEC-010).
+ *
+ * Sin decimales a proposito. "El 47,3 % del periodo" sugiere una precision que
+ * el dato no tiene ninguna necesidad de exhibir, y el plazo exacto ya esta
+ * escrito al lado como fecha absoluta en la zona legal de la promocion.
+ */
+export function formatPercent(fraction: number, locale: Locale): string {
+  if (!Number.isFinite(fraction)) return "";
+
+  return new Intl.NumberFormat(localeTag(locale), {
+    style: "percent",
+    maximumFractionDigits: 0,
+  }).format(fraction);
+}
+
 /** Igual que `formatZonedDateTime` pero sin la hora. */
 export function formatZonedDate(
   isoInstant: string,
@@ -198,7 +232,7 @@ export function formatZonedDate(
   if (date === null) return null;
 
   return new Intl.DateTimeFormat(localeTag(locale), {
-    dateStyle: "long",
+    dateStyle: options.dateStyle ?? "long",
     timeZone: options.timeZone,
   }).format(date);
 }

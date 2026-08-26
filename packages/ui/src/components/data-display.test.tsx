@@ -20,6 +20,41 @@ describe("Badge", () => {
     const { container } = render(<Badge>Abierta</Badge>);
     expect(container.querySelector("[role]")).toBeNull();
   });
+
+  it("la version solida invierte el tono en vez de aclararlo", () => {
+    // El chip dorado del hero: fondo pleno de marca y texto casi negro. Si
+    // alguien lo resolviera con el mismo fondo al 12% que la version tenue, la
+    // insignia desapareceria sobre la banda con luz para la que existe.
+    const { container } = render(
+      <Badge tone="brand" emphasis="solid">
+        Abierta
+      </Badge>,
+    );
+
+    const badge = container.firstElementChild;
+    expect(badge?.className).toContain("bg-brand");
+    expect(badge?.className).toContain("text-on-brand");
+    expect(badge?.className).not.toContain("bg-brand/12");
+  });
+
+  it("la forma esquinada sustituye a la pildora, no se suma a ella", () => {
+    // Las dos clases de radio a la vez dependerian del orden de la hoja de
+    // estilos para decidir la forma, que es como una insignia sale redonda en
+    // una pantalla y esquinada en otra.
+    const { container } = render(<Badge shape="square">Abierta</Badge>);
+
+    const badge = container.firstElementChild;
+    expect(badge?.className).toContain("rounded-sm");
+    expect(badge?.className).not.toContain("rounded-pill");
+  });
+
+  it("por defecto sigue siendo la insignia de siempre", () => {
+    const { container } = render(<Badge tone="brand">Abierta</Badge>);
+
+    const badge = container.firstElementChild;
+    expect(badge?.className).toContain("rounded-pill");
+    expect(badge?.className).toContain("bg-brand/12");
+  });
 });
 
 interface Row {

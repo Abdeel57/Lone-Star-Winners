@@ -6,8 +6,12 @@ import { getTranslations, setRequestLocale } from "next-intl/server";
 import { AmoeCallout } from "@/components/amoe-callout";
 import { ApiErrorState } from "@/components/api-error-state";
 import { EntryOfferPanel } from "@/components/entry-offer-panel";
+import { MarqueeBand } from "@/components/marquee-band";
+import { PrizeBand } from "@/components/prize-band";
 import { PromotionHero } from "@/components/promotion-hero";
 import { SectionHeading } from "@/components/section-heading";
+import { TrustBand } from "@/components/trust-band";
+import { WinnersShowcase, type PublishedWinner } from "@/components/winners-showcase";
 import { Link } from "@/i18n/navigation";
 import { routing } from "@/i18n/routing";
 import { ProductCard } from "@/components/product-card";
@@ -47,6 +51,17 @@ const FEATURED_COUNT = 3;
 
 /** Los tres pasos de "como funciona", en orden. */
 const STEPS = ["step1", "step2", "step3"] as const;
+
+/**
+ * Ganadores publicados.
+ *
+ * VACIA, Y NO POR ACCIDENTE. Ver la nota de la seccion de ganadores mas abajo:
+ * no existe ruta de ganadores en el contrato, y el frontend no llama a una que
+ * no esta publicada ni fabrica el dato. La constante existe para que el dia que
+ * `backend` publique la ruta el cambio sea una lectura y no una reforma de la
+ * portada.
+ */
+const PUBLISHED_WINNERS: readonly PublishedWinner[] = [];
 
 /**
  * Portada.
@@ -211,12 +226,29 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
         </div>
       )}
 
+      {/* Cinta de marca. Tres afirmaciones permanentes, en movimiento continuo.
+          Va justo antes de la banda del premio para que el ojo pase de una
+          franja negra y fina a la unica superficie clara de la pagina: es ese
+          salto, y no el tamano de la banda, lo que la hace destacar. */}
+      <MarqueeBand />
+
+      {/* Banda del premio: el unico bloque claro. Solo aparece si la promocion
+          declara premio; hoy el backend no tiene modelo de premio y el campo
+          llega `null` en produccion, asi que la portada tiene que verse bien sin
+          ella (y se ve: el bloque siguiente es "como funciona"). */}
+      {detail === null ? null : <PrizeBand promotion={detail} locale={locale} />}
+
       {/* Como funciona. Fondo hundido y numeracion dorada: son tres afirmaciones
           y la primera es la que importa -lo que se adquiere es mercancia-, asi
           que se leen como pasos numerados y no como tres tarjetas iguales. */}
       <section aria-labelledby="how-it-works" className="lsw-band-sunken py-s16 lg:py-s20">
         <div className="lsw-container">
-          <SectionHeading id="how-it-works" title={t("home.howItWorks.title")} size="lg" />
+          <SectionHeading
+            id="how-it-works"
+            eyebrow={t("home.howItWorks.eyebrow")}
+            title={t("home.howItWorks.title")}
+            size="lg"
+          />
 
           <ol className="mt-s10 grid list-none gap-s8 sm:grid-cols-2 lg:grid-cols-3 lg:gap-s10">
             {STEPS.map((key, index) => {
@@ -246,22 +278,22 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
 
       {featured.length === 0 ? null : (
         <section aria-labelledby="featured" className="lsw-container py-s16 lg:py-s20">
-          <div className="flex flex-col gap-s6 sm:flex-row sm:items-end sm:justify-between">
-            <SectionHeading
-              id="featured"
-              eyebrow={t("nav.shop")}
-              title={t("home.featured.title")}
-              lead={t("home.featured.body")}
-              size="lg"
-            />
-
-            <Link
-              href="/shop"
-              className={`shrink-0 ${buttonVariants({ variant: "secondary", size: "lg" })}`}
-            >
-              {t("home.featured.viewAll")}
-            </Link>
-          </div>
+          {/* El "ver todo" a la derecha del titular ya no se compone aqui: es
+              una prop de `SectionHeading`, para que todas las secciones con
+              accion lo alineen igual (a la base del titular, no a su centro) y
+              bajen igual de linea en telefono. */}
+          <SectionHeading
+            id="featured"
+            eyebrow={t("home.featured.eyebrow")}
+            title={t("home.featured.title")}
+            lead={t("home.featured.body")}
+            size="lg"
+            action={
+              <Link href="/shop" className={buttonVariants({ variant: "secondary", size: "lg" })}>
+                {t("home.featured.viewAll")}
+              </Link>
+            }
+          />
 
           <ul className="mt-s10 grid list-none gap-s5 sm:grid-cols-2 lg:grid-cols-3">
             {featured.map((product) => (
@@ -271,37 +303,31 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
         </section>
       )}
 
-      {/* Cierre de confianza: lo ultimo que se lee antes del pie son las Reglas
-          Oficiales. Sobre atmosfera, para que el bloque cierre la pagina con el
-          mismo material con el que la abrio. */}
-      <section
-        aria-labelledby="trust"
-        className="lsw-atmosphere lsw-grain relative isolate py-s16 lg:py-s20"
-      >
-        <div className="lsw-container max-w-narrow text-center">
-          <SectionHeading
-            id="trust"
-            title={t("home.trust.title")}
-            size="lg"
-            className="items-center [&>div]:mx-auto"
-          />
+      {/*
+       * GANADORES PUBLICADOS.
+       *
+       * La lista llega VACIA y por eso la seccion no se renderiza. No es un
+       * descuido: `winner_publication_enabled` esta apagado (DEC-032) y, aunque
+       * estuviera encendido, `docs/API_CONTRACT.md` no publica hoy ninguna ruta
+       * de ganadores -el dominio `winner.*` esta reservado a `backend` y
+       * `security`-. La pantalla existe y esta probada con fixtures; lo que no
+       * existe es una fuente de la que sacar el dato, y el frontend no se
+       * inventa una.
+       *
+       * El flag se comprueba igualmente: si algun dia hubiera lista y el flag
+       * estuviera apagado, la seccion seguiria sin renderizarse.
+       */}
+      <WinnersShowcase
+        winners={
+          isFeatureEnabled(uiConfig.flags, "winner_publication_enabled") ? PUBLISHED_WINNERS : []
+        }
+        locale={locale}
+      />
 
-          <p className="mt-s6 text-body-lg text-text-muted">{t("home.trust.body")}</p>
-
-          <div className="mt-s8 flex flex-col justify-center gap-3 sm:flex-row">
-            <Link
-              href="/official-rules"
-              className={buttonVariants({ variant: "primary", size: "lg" })}
-            >
-              {t("nav.officialRules")}
-            </Link>
-
-            <Link href="/faq" className={buttonVariants({ variant: "secondary", size: "lg" })}>
-              {t("home.trust.faqLink")}
-            </Link>
-          </div>
-        </div>
-      </section>
+      {/* Cierre: lo ultimo que se lee antes del pie son las Reglas Oficiales.
+          Sobre atmosfera, para que el bloque cierre la pagina con el mismo
+          material con el que la abrio. */}
+      <TrustBand />
     </>
   );
 }

@@ -7,7 +7,11 @@
     "primaryNavigation": "Primary",
     "promotionCountdown": "Time remaining",
     "promotionTimeline": "Promotion progress",
-    "skipToContent": "Skip to main content"
+    "skipToContent": "Skip to main content",
+    "announcements": "Site announcements",
+    "mobileNavigation": "Site menu",
+    "marquee": "Site motto",
+    "winnersList": "Published winners"
   },
   "amoe": {
     "CODE": "A free code-based method of entry is available for this promotion. The Official Rules state how to obtain and submit a code.",
@@ -159,7 +163,11 @@
   "footer": {
     "copyright": "© {year} Lone Star Winners",
     "legalNote": "Each promotion is governed by its own Official Rules.",
-    "mockDataNotice": "Development build. The data on this page comes from a simulated API and is not real."
+    "mockDataNotice": "Development build. The data on this page comes from a simulated API and is not real.",
+    "help": "Help",
+    "rulesBlockBody": "Every promotion on this site is governed by its own Official Rules. That document states who may take part, how entries are awarded and how a winner is selected.",
+    "rulesBlockCta": "Read the Official Rules",
+    "country": "United States"
   },
   "home": {
     "closesLabel": "Closes",
@@ -168,7 +176,8 @@
     "featured": {
       "title": "Featured merchandise",
       "body": "A few items from the shop. Whether each one is part of the current promotion is shown on its card.",
-      "viewAll": "See all merchandise"
+      "viewAll": "See all merchandise",
+      "eyebrow": "From the shop"
     },
     "howItWorks": {
       "step1": {
@@ -183,7 +192,8 @@
         "body": "Your account shows where each entry came from and its current status.",
         "title": "Follow your entries"
       },
-      "title": "How it works"
+      "title": "How it works",
+      "eyebrow": "Three steps"
     },
     "opensLabel": "Opens",
     "prizeValueLabel": "Stated prize value",
@@ -193,10 +203,27 @@
     "trust": {
       "body": "The Official Rules are the document that governs each promotion: who may take part, how entries are awarded, and how a winner is selected. Read them before you order.",
       "faqLink": "Read the frequently asked questions",
-      "title": "Before you take part"
+      "title": "Before you take part",
+      "eyebrow": "What this site guarantees",
+      "pillar1": {
+        "title": "One governing document",
+        "body": "Every promotion is governed by its own Official Rules, published in full and linked from every page of this site."
+      },
+      "pillar2": {
+        "title": "Every entry keeps its origin",
+        "body": "Where an entry came from, when it was recorded and what its current status is can be reconstructed. Nothing is removed in silence: a refund or a reversal is recorded as its own movement."
+      },
+      "pillar3": {
+        "title": "Independent administrator",
+        "body": "When a promotion states that its drawing is conducted by an independent administrator, its promotion page says so and reports each step of the process."
+      }
     },
     "viewOfficialRules": "View Official Rules",
-    "viewPromotion": "See promotion details"
+    "viewPromotion": "See promotion details",
+    "prizeBand": {
+      "eyebrow": "The prize",
+      "note": "The stated value, the prize itself and everything about how it is awarded are governed by the Official Rules."
+    }
   },
   "ineligibility": {
     "PRODUCT_NOT_ELIGIBLE": "This item is not part of the current promotion, so it does not count toward promotional entries.",
@@ -215,7 +242,9 @@
     "faq": "FAQ",
     "officialRules": "Official Rules",
     "promotions": "Promotions",
-    "shop": "Shop"
+    "shop": "Shop",
+    "menu": "Menu",
+    "closeMenu": "Close menu"
   },
   "notFound": {
     "backHome": "Go to the home page",
@@ -346,7 +375,8 @@
     "notEligibleBadge": "Not part of the current promotion",
     "priceFrom": "From {price}",
     "title": "Eligible merchandise",
-    "view": "View item"
+    "view": "View item",
+    "viewLabel": "View {name}"
   },
   "states": {
     "loadFailed": {
@@ -359,5 +389,27 @@
       "body": "When the next promotion opens, it will appear here.",
       "title": "No promotion is open right now"
     }
+  },
+  "announcement": {
+    "withDeadline": "{status} — {when}",
+    "opensOn": "opens {date}",
+    "closesOn": "closes {date}",
+    "officialRules": "The Official Rules govern every promotion"
+  },
+  "marquee": {
+    "item1": "Eligible merchandise",
+    "item2": "Promotional entries under the Official Rules",
+    "item3": "Lone Star Winners"
+  },
+  "promotionProgress": {
+    "label": "Elapsed portion of the promotion period",
+    "value": "{percent} of the period between the opening and the closing date has elapsed."
+  },
+  "winners": {
+    "eyebrow": "Published results",
+    "title": "Confirmed winners",
+    "intro": "Only winners whose verification is complete under the Official Rules are published here.",
+    "promotionLabel": "Promotion",
+    "locationLabel": "Location"
   }
 }

@@ -7,6 +7,7 @@ import { hasLocale, NextIntlClientProvider } from "next-intl";
 import { getMessages, getTranslations, setRequestLocale } from "next-intl/server";
 import type { ReactNode } from "react";
 
+import { AnnouncementBar } from "@/components/announcement-bar";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { localeTag } from "@/i18n/locales";
@@ -105,6 +106,13 @@ export default async function LocaleLayout({
           <a href="#main" className="lsw-skip-link">
             {t("skipToContent")}
           </a>
+
+          {/* La banda de anuncio va POR ENCIMA de la cabecera y no es pegajosa:
+              dos elementos fijos apilados se comen un tercio de la pantalla de
+              un telefono. Si no hay promocion vigente -o la lectura falla- no
+              renderiza nada, de modo que la cabecera queda exactamente donde
+              estaba. */}
+          <AnnouncementBar locale={locale} />
 
           <SiteHeader />
 

@@ -155,3 +155,62 @@ describe("Countdown", () => {
     expect(screen.getByText("El plazo ha terminado")).toBeInTheDocument();
   });
 });
+
+describe("Countdown en marcador (DEC-038)", () => {
+  /*
+   * Reloj congelado, igual que en el bloque anterior. Sin esto, el primer tic
+   * del efecto usa el reloj REAL -que va muy por delante de las fechas del
+   * test- y el componente pasa al texto de plazo terminado, que no tiene ni
+   * casillas ni separadores. La prueba fallaria por el calendario, no por el
+   * componente.
+   */
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("separa las cuatro casillas con dos puntos, y son decorativos", () => {
+    // El marcador de estadio: cuatro cajas y tres separadores. La lista entera
+    // ya va `aria-hidden`, asi que los dos puntos no llegan a anunciarse; lo
+    // que esta prueba impide es que alguien los convierta en texto real dentro
+    // de una casilla, donde un lector de pantalla los leeria como parte de la
+    // cifra.
+    const { container } = render(
+      <Countdown
+        targetIso="2026-01-11T00:00:00.000Z"
+        nowIso="2026-01-01T00:00:00.000Z"
+        unitLabels={LABELS}
+        deadlineLabel="11 de enero de 2026"
+        completedLabel="El plazo ha terminado"
+        size="scoreboard"
+      />,
+    );
+
+    const list = container.querySelector("ul");
+    expect(list?.getAttribute("aria-hidden")).toBe("true");
+
+    const separators = [...(list?.children ?? [])].filter(
+      (item) => item.textContent?.trim() === ":",
+    );
+    expect(separators).toHaveLength(3);
+  });
+
+  it("el plazo absoluto sigue siendo el unico equivalente accesible", () => {
+    render(
+      <Countdown
+        targetIso="2026-01-11T00:00:00.000Z"
+        nowIso="2026-01-01T00:00:00.000Z"
+        unitLabels={LABELS}
+        deadlineLabel="11 de enero de 2026"
+        completedLabel="El plazo ha terminado"
+        size="scoreboard"
+      />,
+    );
+
+    expect(screen.getByText("11 de enero de 2026")).toBeInTheDocument();
+  });
+});
