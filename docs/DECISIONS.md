@@ -1670,3 +1670,49 @@ Affected areas: `packages/design-system`, `apps/web` (shop, franja destacada).
 
 Proposed by: usuario (con captura de referencia)
 Agreed by: Team Lead
+
+---
+
+## DEC-040
+
+Status: Accepted
+
+Date: 2026-08-25
+
+Decision:
+**Ampliación del alcance de DEC-039.** La banda clara y el estudio claro de
+imágenes se extienden a:
+
+- la **galería de la ficha de producto** (`/products/[slug]`), como panel
+  claro dentro de una página que por lo demás sigue oscura;
+- la **miniatura de línea del carrito**, con marco claro;
+- el **módulo de media entero**: el estudio de los placeholders pasa a fondo
+  claro para todo el sitio, no solo para las dos secciones de DEC-039.
+
+El resto de DEC-039 no cambia: cabecera, hero, marcador, banda del premio y
+pie siguen oscuros.
+
+Context:
+La revisión adversarial de cumplimiento detectó que la implementación de
+DEC-039 tocaba tres sitios que su "Affected areas" no cubría, y que la
+justificación vivía en un comentario del código
+(`products/[slug]/page.tsx`) en vez de en este registro. Es el orden inverso
+al protocolo de `CLAUDE.md` §3: se implementó y se documentó después.
+
+Alternatives:
+Revertir esos tres cambios para ceñirse a la letra de DEC-039 (descartado: la
+extensión es coherente — un producto fotografiado sobre estudio claro en la
+tienda y sobre estudio oscuro en su ficha sería la incoherencia real, y la
+miniatura del carrito debe coincidir con la tarjeta de la que viene).
+
+Reason:
+La decisión es correcta; lo que faltaba era registrarla. Este DEC la hace
+oficial y deja constancia de cómo se detectó, para que el patrón no se
+repita: **cualquier extensión de alcance durante la implementación se
+registra aquí antes de commitear, no en un comentario.**
+
+Affected areas: `apps/web` (ficha de producto, carrito), `packages/ui`
+(`MediaFrame`), módulo de media.
+
+Proposed by: frontend (por criterio propio durante DEC-039)
+Agreed by: Team Lead, tras el hallazgo B1 del revisor de cumplimiento
