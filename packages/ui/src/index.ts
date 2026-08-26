@@ -87,7 +87,12 @@ export {
   type IconButtonVariant,
 } from "./components/icon-button";
 export { Input, type InputProps, type InputSize } from "./components/input";
-export { MediaFrame, type MediaFrameProps, type MediaRatio } from "./components/media-frame";
+export {
+  MediaFrame,
+  type MediaFrameProps,
+  type MediaRatio,
+  type MediaTone,
+} from "./components/media-frame";
 export { Modal, type ModalProps } from "./components/modal";
 export {
   Pagination,

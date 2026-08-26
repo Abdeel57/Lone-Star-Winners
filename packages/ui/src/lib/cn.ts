@@ -35,6 +35,12 @@ const twMerge = extendTailwindMerge({
         },
       ],
       rounded: [{ rounded: ["pill"] }],
+      // DEC-039: `shadow-light-sm` no es un tamano de camiseta, asi que sin
+      // esto `tailwind-merge` no lo reconoce como elevacion y convive con el
+      // `shadow-none` que trae `Card` en vez de sustituirlo. Hoy ganaria por
+      // orden de emision del CSS, que es exactamente la clase de acuerdo
+      // tacito que se rompe sin que nadie lo note.
+      shadow: [{ shadow: ["light-sm", "light-md"] }],
       "font-weight": [{ font: ["regular", "medium", "semibold", "bold"] }],
     },
   },

@@ -99,6 +99,30 @@ describe("MediaFrame", () => {
     expect(screen.getByText("Sin imagen")).toBeInTheDocument();
   });
 
+  it("el tono decide el fondo del marco (DEC-039)", () => {
+    // La banda clara de mercancia y la oscura del resto del sitio conviven en
+    // la misma pagina. Si el marco no distinguiera, un articulo sin foto en el
+    // catalogo seria un rectangulo casi negro dentro de una tarjeta blanca.
+    const dark = render(<MediaFrame />).container.firstElementChild?.className ?? "";
+    const light = render(<MediaFrame tone="light" />).container.firstElementChild?.className ?? "";
+
+    expect(dark).toContain("bg-surface-sunken");
+    expect(light).toContain("bg-light-surface-sunken");
+    expect(light).not.toContain("bg-surface-sunken ");
+  });
+
+  it("el texto de hueco vacio cambia de tinta con el tono", () => {
+    // Es lo unico que se LEE en un marco sin imagen, y el token oscuro sobre el
+    // fondo claro se queda en 3,2:1: por debajo del minimo AA. Esta es la razon
+    // de que el tono sea una prop y no una clase que ponga el consumidor: el
+    // color de este texto vive dentro del componente.
+    const { rerender } = render(<MediaFrame emptyLabel="Sin imagen" />);
+    expect(screen.getByText("Sin imagen").className).toContain("text-text-subtle");
+
+    rerender(<MediaFrame tone="light" emptyLabel="Sin imagen" />);
+    expect(screen.getByText("Sin imagen").className).toContain("text-light-text-muted");
+  });
+
   it("con contenido no pinta la etiqueta de hueco vacio", () => {
     render(
       <MediaFrame emptyLabel="Sin imagen">

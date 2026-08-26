@@ -1625,3 +1625,48 @@ Affected areas: `packages/design-system`, `packages/ui`, `apps/web`.
 Proposed by: usuario
 Agreed by: Team Lead; el copy sigue sujeto a la revisión de compliance de
 `security` antes de INTEGRATE
+
+---
+
+## DEC-039
+
+Status: Accepted
+
+Date: 2026-08-25
+
+Decision:
+**Enmienda a DEC-038: las secciones de mercancía van sobre banda CLARA.**
+
+El usuario, viendo la captura móvil real de LGND, señaló que la sección de
+productos sobre fondo blanco "lo hace ver limpio" y que la disposición móvil
+(grid de 2 columnas, tarjetas con imagen dominante, chip arriba-izquierda,
+botón "+" abajo-derecha, nombre bold debajo) es lo que busca.
+
+- El grid del catálogo (`/shop`) y la franja de mercancía destacada de la
+  portada pasan a **banda clara** (blanco cálido), con tinta oscura para
+  texto y el oro como acento.
+- El resto del sitio (cabecera, hero, marcador, banda del premio, pie)
+  sigue oscuro. El resultado es exactamente la estructura real de LGND:
+  bandas oscuras de promoción + secciones de producto claras.
+- Grid móvil de **2 columnas desde 360px** con gutters estrechos.
+- Los tokens de banda clara viven en el design system, no hardcodeados.
+
+Context:
+DEC-038 fijó dark-first total. Esta enmienda no la revierte: ajusta las
+secciones de mercancía al patrón que el usuario aprobó con captura en mano.
+La opción "híbrido" se le ofreció al inicio y la descartó; al ver el
+resultado y la referencia real, la eligió para la mercancía. Su criterio
+visual manda (DEC-038 lo establece).
+
+Alternatives:
+Mantener el grid oscuro (descartado por el usuario con referencia visual).
+
+Reason:
+En LGND real las tarjetas de producto viven sobre blanco y es lo que produce
+la sensación "limpia" que el usuario quiere. El contraste banda oscura ↔
+banda clara además hace que ambas golpeen más.
+
+Affected areas: `packages/design-system`, `apps/web` (shop, franja destacada).
+
+Proposed by: usuario (con captura de referencia)
+Agreed by: Team Lead

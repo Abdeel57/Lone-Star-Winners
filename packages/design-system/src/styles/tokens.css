@@ -264,6 +264,48 @@
   --lsw-color-accent-subtle: 44 35 12;
   --lsw-color-on-accent: 10 10 11;
 
+  /* --- Color: BANDA CLARA (DEC-039) ---------------------------------------
+   *
+   * DEC-038 fijo un solo tema, oscuro, y esa sigue siendo la regla del sitio.
+   * DEC-039 la enmienda en un punto concreto y acotado: las secciones de
+   * MERCANCIA -la rejilla de `/shop` y la franja destacada de la portada- van
+   * sobre blanco calido, porque es lo que produce la sensacion limpia de la
+   * referencia real y es lo que el usuario aprobo con la captura delante.
+   *
+   * Esto NO es un segundo tema. Un tema se aplica al documento entero y obliga
+   * a que cada componente sepa en cual esta. Esto es una PALETA DE BANDA: un
+   * punado de tokens que solo consumen las piezas que viven dentro de
+   * `.lsw-band-light`, declarados en el mismo `:root` que los demas y sin
+   * ningun selector de tema de por medio. La cabecera, el hero, el marcador, la
+   * banda del premio y el pie siguen siendo oscuros y siguen usando `bg`,
+   * `surface` y `text` sin enterarse de que esto existe.
+   *
+   * Blanco CALIDO y no blanco puro (#faf8f4 y no #ffffff) para el FONDO de la
+   * banda: el blanco puro junto al oro tira a azul y delata que son dos
+   * sistemas distintos. La TARJETA si es blanco puro, de modo que se separa del
+   * fondo por luminosidad y no necesita un borde grueso que la recorte.
+   *
+   * Contrastes medidos sobre `--lsw-color-light-bg` (#faf8f4):
+   *   light-text        #0d0c0a  18.4:1
+   *   light-text-muted  #5a554c   7.0:1
+   *   light-text-subtle #6f6a5f   5.1:1
+   *   light-gold        #7a6116   5.6:1
+   * Los cuatro por encima de 4.5:1, que es el minimo AA para texto normal.
+   *
+   * `light-gold` es el ORO DE TINTA, y existe por una razon medida: el oro de
+   * marca (#c9a227) da 2.3:1 sobre este fondo, asi que NO puede llevar texto
+   * sobre claro. No es un color nuevo, es el mismo acento llevado a la sombra:
+   * sobre negro manda `--lsw-color-brand`, sobre claro manda este. */
+  --lsw-color-light-bg: 250 248 244;
+  --lsw-color-light-surface: 255 255 255;
+  --lsw-color-light-surface-sunken: 242 238 230;
+  --lsw-color-light-border: 228 222 211;
+  --lsw-color-light-border-strong: 199 191 176;
+  --lsw-color-light-text: 13 12 10;
+  --lsw-color-light-text-muted: 90 85 76;
+  --lsw-color-light-text-subtle: 111 106 95;
+  --lsw-color-light-gold: 122 97 22;
+
   /* --- Color: estados -----------------------------------------------------
    *
    * El rojo es SOLO para errores (DEC-038). Nada de rojo decorativo, nada de
@@ -306,6 +348,19 @@
   --lsw-shadow-lg: 0 0 0 1px rgb(201 162 39 / 0.09), 0 12px 28px -8px rgb(0 0 0 / 0.85);
   --lsw-shadow-xl: 0 0 0 1px rgb(201 162 39 / 0.12), 0 28px 60px -16px rgb(0 0 0 / 0.9);
 
+  /* Elevacion de la BANDA CLARA (DEC-039). Sobre blanco pasa lo contrario que
+     sobre negro: la sombra SI existe, y lo que no funciona es el filete dorado
+     -sobre blanco se lee como un subrayado-. Estos dos escalones son sombra de
+     tinta muy abierta y muy poco opaca, mas un filete de un pixel al 5-7% que
+     hace de contorno. La tarjeta se separa del fondo sin recortarse contra el,
+     que es lo que hace un borde solido de 1px sobre blanco. */
+  --lsw-shadow-light-sm:
+    0 0 0 1px rgb(var(--lsw-color-light-text) / 0.05),
+    0 1px 2px 0 rgb(var(--lsw-color-light-text) / 0.05);
+  --lsw-shadow-light-md:
+    0 0 0 1px rgb(var(--lsw-color-light-text) / 0.07),
+    0 10px 24px -10px rgb(var(--lsw-color-light-text) / 0.22);
+
   /* --- Patrones -----------------------------------------------------------
    *
    * PATRON TOPOGRAFICO (segunda pasada de DEC-038)
@@ -336,6 +391,14 @@
   --lsw-pattern-topo-size: 640px 420px;
   --lsw-pattern-topo: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='640' height='420' viewBox='0 0 640 420'%3E%3Cg fill='none' stroke='%23c9a227' stroke-opacity='0.07' stroke-width='1.25'%3E%3Cpath d='M0 22 C 60 2 130 52 200 30 C 270 8 340 56 420 34 C 500 12 570 42 640 22'/%3E%3Cpath d='M0 58 C 70 36 140 86 210 62 C 290 36 350 88 430 68 C 510 48 580 80 640 58'/%3E%3Cpath d='M0 86 C 80 64 150 112 230 92 C 310 72 380 118 460 96 C 540 74 590 104 640 86'/%3E%3Cpath d='M0 140 C 60 116 140 166 220 144 C 300 122 370 170 450 148 C 530 126 580 160 640 140'/%3E%3Cpath d='M0 178 C 70 156 150 202 230 182 C 320 160 390 206 470 184 C 550 162 590 196 640 178'/%3E%3Cpath d='M0 238 C 60 216 140 264 220 244 C 300 224 380 268 460 248 C 540 228 590 258 640 238'/%3E%3Cpath d='M0 296 C 80 274 150 320 240 300 C 320 282 390 324 470 304 C 550 284 590 314 640 296'/%3E%3Cpath d='M0 328 C 60 310 140 352 230 332 C 310 314 380 356 460 336 C 540 316 590 344 640 328'/%3E%3Cpath d='M0 392 C 70 372 150 416 235 396 C 315 378 390 418 470 398 C 550 378 590 408 640 392'/%3E%3C/g%3E%3C/svg%3E");
   --lsw-pattern-topo-ink: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='640' height='420' viewBox='0 0 640 420'%3E%3Cg fill='none' stroke='%23000000' stroke-opacity='0.11' stroke-width='1.4'%3E%3Cpath d='M0 22 C 60 2 130 52 200 30 C 270 8 340 56 420 34 C 500 12 570 42 640 22'/%3E%3Cpath d='M0 58 C 70 36 140 86 210 62 C 290 36 350 88 430 68 C 510 48 580 80 640 58'/%3E%3Cpath d='M0 86 C 80 64 150 112 230 92 C 310 72 380 118 460 96 C 540 74 590 104 640 86'/%3E%3Cpath d='M0 140 C 60 116 140 166 220 144 C 300 122 370 170 450 148 C 530 126 580 160 640 140'/%3E%3Cpath d='M0 178 C 70 156 150 202 230 182 C 320 160 390 206 470 184 C 550 162 590 196 640 178'/%3E%3Cpath d='M0 238 C 60 216 140 264 220 244 C 300 224 380 268 460 248 C 540 228 590 258 640 238'/%3E%3Cpath d='M0 296 C 80 274 150 320 240 300 C 320 282 390 324 470 304 C 550 284 590 314 640 296'/%3E%3Cpath d='M0 328 C 60 310 140 352 230 332 C 310 314 380 356 460 336 C 540 316 590 344 640 328'/%3E%3Cpath d='M0 392 C 70 372 150 416 235 396 C 315 378 390 418 470 398 C 550 378 590 408 640 392'/%3E%3C/g%3E%3C/svg%3E");
+  /* Tercera tinta del mismo mosaico (DEC-039): la MISMA topografia en negro,
+     al 4,5% en vez de al 11%. La variante `-ink` esta calibrada para el oro de
+     la banda del premio; sobre el blanco calido de la banda de mercancia ese
+     mismo trazo se ve y compite con las fotografias. Este escalon deja el
+     fondo con materia de papel y desaparece en cuanto una tarjeta blanca se
+     apoya encima, que es exactamente lo que se buscaba: textura en los
+     margenes, cero ruido dentro de la rejilla. */
+  --lsw-pattern-topo-ink-soft: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='640' height='420' viewBox='0 0 640 420'%3E%3Cg fill='none' stroke='%23000000' stroke-opacity='0.045' stroke-width='1.15'%3E%3Cpath d='M0 22 C 60 2 130 52 200 30 C 270 8 340 56 420 34 C 500 12 570 42 640 22'/%3E%3Cpath d='M0 58 C 70 36 140 86 210 62 C 290 36 350 88 430 68 C 510 48 580 80 640 58'/%3E%3Cpath d='M0 86 C 80 64 150 112 230 92 C 310 72 380 118 460 96 C 540 74 590 104 640 86'/%3E%3Cpath d='M0 140 C 60 116 140 166 220 144 C 300 122 370 170 450 148 C 530 126 580 160 640 140'/%3E%3Cpath d='M0 178 C 70 156 150 202 230 182 C 320 160 390 206 470 184 C 550 162 590 196 640 178'/%3E%3Cpath d='M0 238 C 60 216 140 264 220 244 C 300 224 380 268 460 248 C 540 228 590 258 640 238'/%3E%3Cpath d='M0 296 C 80 274 150 320 240 300 C 320 282 390 324 470 304 C 550 284 590 314 640 296'/%3E%3Cpath d='M0 328 C 60 310 140 352 230 332 C 310 314 380 356 460 336 C 540 316 590 344 640 328'/%3E%3Cpath d='M0 392 C 70 372 150 416 235 396 C 315 378 390 418 470 398 C 550 378 590 408 640 392'/%3E%3C/g%3E%3C/svg%3E");
 
   /* Rayas diagonales de la barra de progreso. Dos oros contiguos: el relleno se
      ve como una cinta rayada y no como una barra plana, sin introducir un

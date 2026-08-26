@@ -1,4 +1,4 @@
-import { buttonVariants, EmptyState } from "@lsw/ui";
+import { buttonVariants, cn, EmptyState } from "@lsw/ui";
 import { notFound } from "next/navigation";
 import { hasLocale } from "next-intl";
 import { getTranslations, setRequestLocale } from "next-intl/server";
@@ -44,10 +44,14 @@ export const dynamic = "force-dynamic";
 /**
  * Cuantos articulos se destacan en la portada.
  *
- * Tres: es lo que ocupa una fila completa de la rejilla en escritorio. Con
- * cuatro quedaria una segunda fila con un solo articulo y un hueco al lado.
+ * CUATRO, y la cifra la decide la rejilla, no el gusto. DEC-039 fija dos
+ * columnas desde 360px, asi que en telefono -que es donde se mira esta
+ * seccion- cualquier numero impar deja una tarjeta sola en la ultima fila con
+ * un hueco al lado. Cuatro llena 2x2 en telefono y una fila completa en
+ * escritorio, que es exactamente el mismo criterio por el que antes eran tres:
+ * lo que cambio es la rejilla debajo.
  */
-const FEATURED_COUNT = 3;
+const FEATURED_COUNT = 4;
 
 /** Los tres pasos de "como funciona", en orden. */
 const STEPS = ["step1", "step2", "step3"] as const;
@@ -99,6 +103,12 @@ const PUBLISHED_WINNERS: readonly PublishedWinner[] = [];
  * lo ultimo que se lee antes de salir son las Reglas Oficiales. Lo que cambia
  * es que ahora cada bloque se distingue del anterior, en vez de ser seis
  * secciones seguidas sobre el mismo fondo.
+ *
+ * DEC-039 anade el contraste que faltaba: la franja de MERCANCIA DESTACADA
+ * pasa a banda clara. La pagina queda negro -> oro (premio) -> negro hundido
+ * (como funciona) -> BLANCO (mercancia) -> negro (cierre). Esa alternancia es
+ * la estructura real de la referencia, y es lo que hace que la seccion de
+ * producto se lea como catalogo y no como una seccion mas de la promocion.
  */
 export default async function HomePage({ params }: { params: Promise<{ locale: string }> }) {
   const { locale } = await params;
@@ -276,30 +286,71 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
         </div>
       </section>
 
+      {/*
+       * MERCANCIA DESTACADA, sobre BANDA CLARA (DEC-039).
+       *
+       * Es el unico bloque blanco de la portada -la banda del premio es dorada,
+       * no clara- y el corte de oro de `.lsw-band-light` lo declara como tal.
+       * Todo lo que cae dentro usa la paleta `light-*`: el encabezado por su
+       * prop `tone`, las tarjetas por construccion, y el enlace de seccion por
+       * la variante `inkGhost`. Un `secondary` aqui seria oro sobre blanco:
+       * 2,3:1, ilegible.
+       */}
       {featured.length === 0 ? null : (
-        <section aria-labelledby="featured" className="lsw-container py-s16 lg:py-s20">
-          {/* El "ver todo" a la derecha del titular ya no se compone aqui: es
-              una prop de `SectionHeading`, para que todas las secciones con
-              accion lo alineen igual (a la base del titular, no a su centro) y
-              bajen igual de linea en telefono. */}
-          <SectionHeading
-            id="featured"
-            eyebrow={t("home.featured.eyebrow")}
-            title={t("home.featured.title")}
-            lead={t("home.featured.body")}
-            size="lg"
-            action={
-              <Link href="/shop" className={buttonVariants({ variant: "secondary", size: "lg" })}>
-                {t("home.featured.viewAll")}
-              </Link>
-            }
-          />
+        <section aria-labelledby="featured" className="lsw-band-light py-s12 lg:py-s16">
+          <div className="lsw-container">
+            {/* El "ver todo" a la derecha del titular ya no se compone aqui: es
+                una prop de `SectionHeading`, para que todas las secciones con
+                accion lo alineen igual (a la base del titular, no a su centro) y
+                bajen igual de linea en telefono. */}
+            <SectionHeading
+              id="featured"
+              eyebrow={t("home.featured.eyebrow")}
+              title={t("home.featured.title")}
+              lead={t("home.featured.body")}
+              size="lg"
+              tone="light"
+              action={
+                <Link
+                  href="/shop"
+                  // `cn` y no la cadena de `buttonVariants` a pelo: la variante
+                  // reasigna `ring-offset` sobre una clase que ya trae la base, y
+                  // sin fusionar quedarian las dos y decidiria el orden de emision
+                  // del CSS, que no es un contrato.
+                  className={cn(buttonVariants({ variant: "inkGhost", size: "lg" }), "px-0")}
+                >
+                  {t("home.featured.viewAll")}
+                  {/* Galon decorativo: repite lo que el enlace ya dice. */}
+                  <svg
+                    viewBox="0 0 12 12"
+                    aria-hidden="true"
+                    focusable="false"
+                    className="h-3 w-3 shrink-0"
+                  >
+                    <path
+                      d="M4.5 2.5 8 6l-3.5 3.5"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.7"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                </Link>
+              }
+            />
 
-          <ul className="mt-s10 grid list-none gap-s5 sm:grid-cols-2 lg:grid-cols-3">
-            {featured.map((product) => (
-              <ProductCard key={product.id} product={product} locale={locale} />
-            ))}
-          </ul>
+            {/* DOS COLUMNAS DESDE 360px, con calles estrechas (12px, 16px desde
+                `sm`). Es la disposicion de la referencia movil: en un telefono,
+                una sola columna de tarjetas grandes obliga a desplazarse para
+                comparar dos articulos, que es justo lo que se hace en un
+                catalogo. En escritorio la fila se completa con las cuatro. */}
+            <ul className="mt-s8 grid list-none grid-cols-2 gap-s3 sm:gap-s4 lg:grid-cols-4 lg:gap-s5">
+              {featured.map((product) => (
+                <ProductCard key={product.id} product={product} locale={locale} />
+              ))}
+            </ul>
+          </div>
         </section>
       )}
 

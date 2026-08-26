@@ -61,7 +61,13 @@ export function CartLineRow({
   return (
     <Card as="li" elevation="flat" className="flex flex-col gap-4 sm:flex-row">
       <div className="w-full shrink-0 sm:w-32">
-        <MediaFrame className="lsw-studio border border-border">
+        {/* Miniatura CLARA dentro de una tarjeta oscura (DEC-039). La
+            fotografia de producto es de estudio claro en todo el sitio -hay un
+            solo `image_url` por articulo, no uno por color de fondo- y forzar
+            aqui un marco oscuro dejaria un halo blanco alrededor de la pieza.
+            Un recorte sobre blanco dentro de una tarjeta negra es ademas lo
+            normal en comercio electronico, y destaca. */}
+        <MediaFrame tone="light" className="lsw-studio-light border border-brand/40">
           {line.image_url === null ? null : (
             // Ver `product-card.tsx`: faltan dominios de imagen en `next.config`.
             // eslint-disable-next-line @next/next/no-img-element

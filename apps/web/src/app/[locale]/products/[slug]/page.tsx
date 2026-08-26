@@ -144,6 +144,27 @@ export default async function ProductDetailPage({
  * catalogo, la segunda foto suele ser el detalle que decide la compra, y
  * marcarlas todas como decorativas dejaria a quien usa lector de pantalla sin
  * ese contenido.
+ *
+ * ES CLARA, Y SOLO ELLA (DEC-039)
+ * -------------------------------
+ * La fotografia de producto pasa a estudio claro con DEC-039, asi que la
+ * galeria tiene que serlo tambien: una imagen sobre blanco dentro de un marco
+ * casi negro deja un halo alrededor de cada foto y la hace parecer mal
+ * recortada.
+ *
+ * Lo que NO se lleva la ficha entera a claro es deliberado, y es la unica
+ * decision de esta ronda que se tomo por criterio propio y no por la captura.
+ * La columna de la derecha son precio, disponibilidad, aviso de elegibilidad y
+ * formulario de compra: cuatro piezas que hoy hablan la paleta oscura, dos de
+ * ellas con tonos de estado (`warning`, `info`) que estan calibrados sobre
+ * negro. Pasarlas a claro sin recalibrarlas produciria exactamente el fallo que
+ * DEC-039 quiere evitar. El panel de galeria, en cambio, no tiene texto: es
+ * marco y foto.
+ *
+ * El resultado en telefono es bloque claro arriba, bloque oscuro debajo, con el
+ * mismo filete de oro que separa las bandas del resto del sitio. Si al usuario
+ * le convence menos que una ficha entera clara, esa es una ronda de trabajo
+ * acotada a esta pantalla y a esos cuatro componentes.
  */
 function ProductGallery({
   product,
@@ -159,16 +180,21 @@ function ProductGallery({
 
   if (images.length === 0) {
     return (
-      <div>
-        <MediaFrame ratio="square" emptyLabel={t("noImage")} className="lsw-studio" />
+      <div className={GALLERY_PANEL}>
+        <MediaFrame
+          ratio="square"
+          tone="light"
+          emptyLabel={t("noImage")}
+          className="lsw-studio-light rounded-sm"
+        />
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col gap-s4">
+    <div className={GALLERY_PANEL}>
       {images.map((image, index) => (
-        <MediaFrame key={image} ratio="square" className="lsw-studio border border-border">
+        <MediaFrame key={image} ratio="square" tone="light" className="lsw-studio-light rounded-sm">
           {/* Ver `product-card.tsx`: faltan dominios de imagen. */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
@@ -185,6 +211,16 @@ function ProductGallery({
     </div>
   );
 }
+
+/**
+ * Panel de la galeria.
+ *
+ * Filete de oro de 2px, igual que el corte de `.lsw-band-light`: en todo el
+ * sitio, una superficie clara empieza y acaba en oro. Sin el, un rectangulo
+ * blanco pegado a una pagina negra parece un fallo de carga y no una decision.
+ */
+const GALLERY_PANEL =
+  "lsw-topo-ink-soft flex flex-col gap-s3 rounded-md border-2 border-brand bg-light-bg p-s3 sm:p-s4";
 
 const BACK_LINK =
   "lsw-display inline-flex min-h-touch items-center rounded-md text-body-sm text-text-muted hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-bg";

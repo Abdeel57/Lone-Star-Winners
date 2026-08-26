@@ -47,6 +47,18 @@ export const COLOR_TOKENS = [
   "focus",
   "overlay",
   "skeleton",
+  // DEC-039: paleta de la banda clara. Se listan aqui por el mismo motivo que
+  // las demas -que el nombre sea un tipo- y NO porque haya un segundo tema:
+  // solo las consumen las secciones de mercancia.
+  "light-bg",
+  "light-surface",
+  "light-surface-sunken",
+  "light-border",
+  "light-border-strong",
+  "light-text",
+  "light-text-muted",
+  "light-text-subtle",
+  "light-gold",
 ] as const;
 
 export type ColorToken = (typeof COLOR_TOKENS)[number];
@@ -75,8 +87,14 @@ export const RADIUS_TOKENS = ["none", "sm", "md", "lg", "xl", "2xl", "pill"] as 
 
 export type RadiusToken = (typeof RADIUS_TOKENS)[number];
 
-/** Nombres de los tokens de elevacion, sin el prefijo `--lsw-shadow-`. */
-export const ELEVATION_TOKENS = ["none", "sm", "md", "lg", "xl"] as const;
+/**
+ * Nombres de los tokens de elevacion, sin el prefijo `--lsw-shadow-`.
+ *
+ * Los dos ultimos son los de la banda clara (DEC-039): sobre blanco la sombra
+ * si eleva, y los escalones oscuros -calibrados para no verse sobre negro- ahi
+ * no valen.
+ */
+export const ELEVATION_TOKENS = ["none", "sm", "md", "lg", "xl", "light-sm", "light-md"] as const;
 
 export type ElevationToken = (typeof ELEVATION_TOKENS)[number];
 

@@ -91,6 +91,25 @@ const preset = {
           subtle: color("--lsw-color-info-subtle"),
         },
         "on-info": color("--lsw-color-on-info"),
+        // DEC-039: paleta de la BANDA CLARA. Solo la consumen las secciones de
+        // mercancia (`.lsw-band-light`). Va agrupada bajo `light` para que en el
+        // marcado se vea de un vistazo que una clase pertenece a la banda clara
+        // (`text-light-text`) y no al sistema oscuro (`text-text`): son dos
+        // paletas que conviven en la misma pagina y confundirlas es el unico
+        // fallo de contraste que este diseno puede producir.
+        light: {
+          bg: color("--lsw-color-light-bg"),
+          surface: color("--lsw-color-light-surface"),
+          "surface-sunken": color("--lsw-color-light-surface-sunken"),
+          border: color("--lsw-color-light-border"),
+          "border-strong": color("--lsw-color-light-border-strong"),
+          text: color("--lsw-color-light-text"),
+          "text-muted": color("--lsw-color-light-text-muted"),
+          "text-subtle": color("--lsw-color-light-text-subtle"),
+          // Oro de tinta: el acento de marca llevado a la sombra para que
+          // pueda llevar texto sobre blanco (5,6:1). Ver `tokens.css`.
+          gold: color("--lsw-color-light-gold"),
+        },
         focus: color("--lsw-color-focus"),
         overlay: color("--lsw-color-overlay"),
         skeleton: color("--lsw-color-skeleton"),
@@ -244,6 +263,11 @@ const preset = {
         md: raw("--lsw-shadow-md"),
         lg: raw("--lsw-shadow-lg"),
         xl: raw("--lsw-shadow-xl"),
+        // DEC-039: sobre blanco la sombra SI eleva, asi que la banda clara
+        // tiene sus propios escalones en vez de reutilizar unos calibrados
+        // para no verse sobre negro.
+        "light-sm": raw("--lsw-shadow-light-sm"),
+        "light-md": raw("--lsw-shadow-light-md"),
       },
 
       maxWidth: {

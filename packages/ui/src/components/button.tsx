@@ -45,6 +45,33 @@ export const buttonVariants = cva(
         ghost: "bg-transparent text-text-muted hover:bg-surface-raised hover:text-text",
         /** Accion destructiva. Nunca es la accion por defecto de un formulario. */
         danger: "bg-danger text-on-danger hover:bg-danger/90 active:bg-danger/80",
+        /**
+         * Accion sobre BANDA CLARA (DEC-039): contorno de tinta sobre blanco.
+         *
+         * Existe porque `secondary` NO se puede usar ahi. Su contorno y su texto
+         * son el oro de marca, que sobre el blanco calido de la banda da 2,3:1:
+         * ilegible, y ademas el unico fallo de contraste que esta composicion
+         * puede producir. Esta variante lleva tinta (18,4:1) y reserva el oro de
+         * tinta para el estado de hover, donde marca la accion sin depender solo
+         * del color para decir que hay un control.
+         */
+        ink: cn(
+          "border border-light-border-strong bg-light-surface text-light-text",
+          "hover:border-light-gold hover:text-light-gold active:bg-light-bg",
+          // El offset del anillo de foco se pinta sobre el fondo de la banda, no
+          // sobre el negro de pagina: un halo negro alrededor de un boton blanco
+          // se lee como un borde, no como foco.
+          "focus-visible:ring-offset-light-bg",
+        ),
+        /**
+         * La misma banda clara, sin caja: el enlace de seccion (el “ver todo” que
+         * va a la derecha del titular). En la referencia esa accion es texto, no
+         * un boton, y darle caja la pondria a competir con las tarjetas.
+         */
+        inkGhost: cn(
+          "bg-transparent text-light-text hover:text-light-gold",
+          "focus-visible:ring-offset-light-bg",
+        ),
       },
       size: {
         /** Solo para superficies densas de escritorio (tablas del admin). */

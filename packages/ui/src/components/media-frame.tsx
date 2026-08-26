@@ -10,6 +10,46 @@ export type MediaRatio = "square" | "portrait" | "wide";
  * `switch` exhaustivo y no un objeto indexado: anadir una proporcion al tipo
  * deja de compilar aqui en vez de devolver `undefined` y colapsar el marco.
  */
+/**
+ * Sobre que banda vive el marco.
+ *
+ * DEC-039 introduce bandas claras para las secciones de mercancia, y un marco
+ * de imagen es justo la pieza que no puede adivinarlo: su fondo y el color del
+ * texto de "sin imagen" son lo unico que se ve cuando el articulo no trae foto,
+ * y en la banda equivocada eso es gris claro sobre gris claro.
+ *
+ * Es una prop y no una clase suelta del consumidor porque el color del texto
+ * vive DENTRO del componente: desde fuera no hay forma de alcanzarlo sin un
+ * selector descendente, que es peor que dos ramas explicitas.
+ */
+export type MediaTone = "dark" | "light";
+
+/** Fondo del marco segun la banda. */
+function toneSurfaceClass(tone: MediaTone): string {
+  switch (tone) {
+    case "dark":
+      return "bg-surface-sunken";
+    case "light":
+      return "bg-light-surface-sunken";
+  }
+}
+
+/**
+ * Color del texto de "sin imagen".
+ *
+ * En claro se usa `light-text-muted` (7,0:1) y no `light-text-subtle`: el texto
+ * va sobre el fondo del marco, que es mas oscuro que el de la banda, y el
+ * escalon `subtle` se quedaria en 4,6:1 con muy poco margen.
+ */
+function toneLabelClass(tone: MediaTone): string {
+  switch (tone) {
+    case "dark":
+      return "text-text-subtle";
+    case "light":
+      return "text-light-text-muted";
+  }
+}
+
 function ratioClass(ratio: MediaRatio): string {
   switch (ratio) {
     case "square":
@@ -23,6 +63,8 @@ function ratioClass(ratio: MediaRatio): string {
 
 export interface MediaFrameProps {
   readonly ratio?: MediaRatio;
+  /** Banda sobre la que se pinta el marco. Por defecto, la oscura del sistema. */
+  readonly tone?: MediaTone;
   /**
    * Contenido del marco: normalmente una imagen. Puede ser `null` o
    * `undefined`, y entonces se pinta el hueco sin contenido.
@@ -52,13 +94,20 @@ export interface MediaFrameProps {
  * NO decide como se carga la imagen. `next/image`, `<img>` o lo que sea es
  * decision de `apps/web`; este paquete no depende de Next.
  */
-export function MediaFrame({ ratio = "square", children, emptyLabel, className }: MediaFrameProps) {
+export function MediaFrame({
+  ratio = "square",
+  tone = "dark",
+  children,
+  emptyLabel,
+  className,
+}: MediaFrameProps) {
   const hasContent = children !== undefined && children !== null && children !== false;
 
   return (
     <div
       className={cn(
-        "relative w-full overflow-hidden rounded-lg bg-surface-sunken",
+        "relative w-full overflow-hidden rounded-lg",
+        toneSurfaceClass(tone),
         ratioClass(ratio),
         className,
       )}
@@ -70,7 +119,7 @@ export function MediaFrame({ ratio = "square", children, emptyLabel, className }
       ) : (
         <div className="absolute inset-0 flex items-center justify-center p-4 text-center">
           {emptyLabel === undefined ? null : (
-            <span className="text-caption text-text-subtle">{emptyLabel}</span>
+            <span className={cn("text-caption", toneLabelClass(tone))}>{emptyLabel}</span>
           )}
         </div>
       )}

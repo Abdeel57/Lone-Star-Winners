@@ -181,6 +181,21 @@
     );
   }
 
+  /* El mismo filete para la BANDA CLARA (DEC-039). No es el mismo color con
+     otra opacidad: es el oro de tinta, porque el oro de marca sobre blanco
+     calido da 2,3:1 y a 1px de alto sencillamente no se ve. */
+  .lsw-gold-rule-ink {
+    height: 1px;
+    border: 0;
+    background-image: linear-gradient(
+      90deg,
+      rgb(var(--lsw-color-light-gold) / 0) 0%,
+      rgb(var(--lsw-color-light-gold) / 0.7) 22%,
+      rgb(var(--lsw-color-light-gold) / 0.7) 78%,
+      rgb(var(--lsw-color-light-gold) / 0) 100%
+    );
+  }
+
   /* -------------------------------------------------------------------------
    * Atmosfera del hero
    *
@@ -272,6 +287,38 @@
   }
 
   /* -------------------------------------------------------------------------
+   * BANDA CLARA DE MERCANCIA (DEC-039)
+   *
+   * La rejilla del catalogo y la franja destacada de la portada, y NADA MAS.
+   * Cabecera, hero, marcador, banda del premio y pie siguen oscuros: la
+   * alternancia oscuro -> claro -> oscuro es la estructura de la referencia, y
+   * es lo que hace que las dos golpeen. Una pagina toda clara seria otro
+   * producto; una toda oscura es la que el usuario miro y corrigio.
+   *
+   * TRES decisiones deliberadas:
+   *
+   * 1. **El corte es un filete de oro de 2px arriba y abajo.** El salto de
+   *    negro a blanco necesita una costura o parece un fallo de carga. Dos
+   *    pixeles de oro pleno -no de tinta: aqui el oro va contra el negro de
+   *    arriba, no contra el blanco- lo convierten en una decision.
+   * 2. **La topografia va en la tinta MAS SUAVE**, al 4,5%. Se ve en los
+   *    margenes y en las calles de la rejilla, y desaparece bajo cada tarjeta,
+   *    que es blanco opaco. Textura sin ruido dentro del grid.
+   * 3. **La banda declara `color`**, de modo que cualquier texto que caiga
+   *    dentro sin clase propia hereda tinta y no el blanco calido del sistema
+   *    oscuro. Es la red que impide el unico fallo grave posible en esta
+   *    composicion: texto claro sobre fondo claro.
+   * ---------------------------------------------------------------------- */
+  .lsw-band-light {
+    position: relative;
+    background-color: rgb(var(--lsw-color-light-bg));
+    background-image: var(--lsw-pattern-topo-ink-soft);
+    background-size: var(--lsw-pattern-topo-size);
+    border-block: 2px solid rgb(var(--lsw-color-brand));
+    color: rgb(var(--lsw-color-light-text));
+  }
+
+  /* -------------------------------------------------------------------------
    * Patron topografico suelto
    *
    * Para las superficies que no son una banda de seccion: el pie, la barra de
@@ -288,6 +335,13 @@
   /* La variante de tinta negra, para la unica banda clara del sitio. */
   .lsw-topo-ink {
     background-image: var(--lsw-pattern-topo-ink);
+    background-size: var(--lsw-pattern-topo-size);
+  }
+
+  /* Y la tinta suave, para superficies claras que no son una banda entera (la
+     galeria de la ficha de producto). */
+  .lsw-topo-ink-soft {
+    background-image: var(--lsw-pattern-topo-ink-soft);
     background-size: var(--lsw-pattern-topo-size);
   }
 
@@ -422,6 +476,24 @@
       70% 60% at 50% 38%,
       rgb(var(--lsw-color-brand) / 0.12) 0%,
       transparent 70%
+    );
+  }
+
+  /* El mismo tratamiento para la banda clara (DEC-039): fondo de estudio
+     blanco con caida a gris calido en las esquinas. No lleva charco de luz
+     dorada -sobre blanco, el oro al 12% solo ensucia- sino la caida de
+     luminosidad, que es lo que hace que la pieza parezca apoyada sobre una
+     superficie y no recortada sobre un rectangulo plano.
+
+     La foto real llegara ya con su propio fondo; esto es lo que sostiene el
+     encuadre mientras tanto y lo que rellena el aire alrededor de una imagen
+     que no cubra el marco entero. */
+  .lsw-studio-light {
+    background-color: rgb(var(--lsw-color-light-surface-sunken));
+    background-image: radial-gradient(
+      72% 62% at 50% 40%,
+      rgb(var(--lsw-color-light-surface)) 0%,
+      rgb(var(--lsw-color-light-surface-sunken)) 72%
     );
   }
 

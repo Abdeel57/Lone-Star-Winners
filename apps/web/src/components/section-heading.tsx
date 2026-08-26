@@ -17,6 +17,18 @@ import type { ReactNode } from "react";
  * El NIVEL de encabezado es una prop obligatoria en la practica -por defecto
  * `h2`- porque lo decide la jerarquia real de la pagina, no el tamano deseado:
  * el tamano lo da `size`.
+ *
+ * EL TONO (DEC-039)
+ * -----------------
+ * Con la banda clara de mercancia hay dos fondos posibles, y este componente es
+ * el que mas se nota al equivocarse: antetitulo, titular y filete son los tres
+ * elementos dorados o blancos de cada seccion. Sobre banda clara los tres
+ * cambian de token -oro de tinta, tinta casi negra, filete de tinta- porque el
+ * oro de marca sobre blanco calido da 2,3:1.
+ *
+ * Es una prop y no una clase suelta: el `className` del consumidor llega al
+ * contenedor, no a los tres nodos internos, y resolverlo desde fuera obligaria
+ * a selectores descendentes en cada pagina.
  */
 export function SectionHeading({
   id,
@@ -26,6 +38,7 @@ export function SectionHeading({
   action,
   level = "h2",
   size = "md",
+  tone = "dark",
   className,
 }: {
   /** Se usa como destino de `aria-labelledby` desde la seccion contenedora. */
@@ -46,17 +59,23 @@ export function SectionHeading({
   readonly action?: ReactNode;
   readonly level?: HeadingLevel;
   readonly size?: "md" | "lg";
+  /** Banda sobre la que se compone el encabezado. Ver la nota de cabecera. */
+  readonly tone?: "dark" | "light";
   readonly className?: string;
 }) {
+  const light = tone === "light";
   const heading = (
     <div className="flex flex-col">
-      {eyebrow === undefined ? null : <p className="lsw-eyebrow mb-s3">{eyebrow}</p>}
+      {eyebrow === undefined ? null : (
+        <p className={cn("lsw-eyebrow mb-s3", light && "text-light-gold")}>{eyebrow}</p>
+      )}
 
       <Heading
         level={level}
         {...(id === undefined ? {} : { id })}
         className={cn(
-          "lsw-display text-text",
+          "lsw-display",
+          light ? "text-light-text" : "text-text",
           size === "lg"
             ? "text-display-md sm:text-display-lg"
             : "text-heading-lg sm:text-display-md",
@@ -65,7 +84,10 @@ export function SectionHeading({
         {title}
       </Heading>
 
-      <div aria-hidden="true" className="lsw-gold-rule mt-s4 max-w-[7rem]" />
+      <div
+        aria-hidden="true"
+        className={cn("mt-s4 max-w-[7rem]", light ? "lsw-gold-rule-ink" : "lsw-gold-rule")}
+      />
     </div>
   );
 
@@ -81,7 +103,14 @@ export function SectionHeading({
       )}
 
       {lead === undefined ? null : (
-        <p className="mt-s5 max-w-narrow text-body-lg text-text-muted">{lead}</p>
+        <p
+          className={cn(
+            "mt-s5 max-w-narrow text-body-lg",
+            light ? "text-light-text-muted" : "text-text-muted",
+          )}
+        >
+          {lead}
+        </p>
       )}
     </div>
   );

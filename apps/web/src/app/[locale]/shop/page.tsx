@@ -1,4 +1,4 @@
-import { Alert, buttonVariants, EmptyState } from "@lsw/ui";
+import { Alert, buttonVariants, cn, EmptyState } from "@lsw/ui";
 import { notFound } from "next/navigation";
 import { hasLocale } from "next-intl";
 import { getTranslations, setRequestLocale } from "next-intl/server";
@@ -46,6 +46,25 @@ const PAGE_SIZE = 24;
  * lista. Es el comportamiento correcto para un cursor: acumular en cliente
  * obligaria a mantener en memoria una lista que el servidor ya no garantiza que
  * siga siendo la misma.
+ *
+ * ---------------------------------------------------------------------------
+ * DOS BANDAS (DEC-039)
+ * ---------------------------------------------------------------------------
+ * La pagina se parte en dos superficies con proposito distinto:
+ *
+ *   1. **Cabecera OSCURA.** Titulo, entradilla, filtros y el aviso de "no hay
+ *      promocion vigente". Es contexto: dice donde estas y sobre que se filtra.
+ *   2. **Rejilla sobre BANDA CLARA.** Solo producto.
+ *
+ * Los filtros se quedan arriba, en el oscuro, y no dentro de la banda clara. No
+ * es una comodidad de implementacion -aunque tambien evita repintar `Select` y
+ * `FormField` en una segunda paleta-: la banda clara existe para que la
+ * mercancia se lea limpia, y un formulario dentro de ella es la primera cosa
+ * que rompe eso. En la referencia, la seccion blanca es rejilla y nada mas.
+ *
+ * El estado vacio y el de error se quedan FUERA de la banda clara, sobre el
+ * fondo de pagina. Una banda de mercancia sin mercancia no es una banda: seria
+ * un rectangulo blanco con un cartel dentro.
  */
 export default async function ShopPage({
   params,
@@ -72,11 +91,30 @@ export default async function ShopPage({
 
   const result = await fetchProducts(locale, request);
 
+  /*
+   * Los articulos, o ninguno.
+   *
+   * Se resuelve ANTES del marcado porque tres decisiones distintas dependen de
+   * la misma respuesta -si hay aviso de "sin promocion", si hay banda clara y
+   * si hay rejilla- y encadenarlas dentro del JSX obligaria a repetir el mismo
+   * `result.ok` en tres sitios.
+   */
+  const items = result.ok ? result.data.items : [];
+
+  /*
+   * Entre promociones el catalogo sigue en pie, pero ningun articulo trae
+   * elegibilidad. Se dice UNA VEZ arriba, en la cabecera, en vez de repetir la
+   * misma insignia gris en cada tarjeta.
+   */
+  const noPromotion =
+    items.length > 0 && items.every((product) => product.entry_eligibility === null);
+
   return (
     <div className="pb-s16">
       {/* Cabecera de la tienda sobre atmosfera: es la segunda pantalla mas
           visitada del sitio y necesita entrada propia, no un titulo suelto
-          encima de una rejilla (DEC-038). */}
+          encima de una rejilla (DEC-038). Lleva ademas los filtros y el aviso
+          de promocion: es la banda de CONTEXTO. */}
       <div className="lsw-atmosphere lsw-grain relative isolate py-s12 lg:py-s16">
         <div className="lsw-container">
           <SectionHeading
@@ -86,68 +124,73 @@ export default async function ShopPage({
             level="h1"
             size="lg"
           />
+
+          {!result.ok ? null : (
+            <div className="mt-s8 flex flex-col gap-s5">
+              <ShopFilters
+                action={`/${locale}/shop`}
+                categories={categoriesOf(items)}
+                selectedCategory={category}
+              />
+
+              {noPromotion ? (
+                <Alert tone="info" className="max-w-narrow">
+                  {t("shop.noPromotionNotice")}
+                </Alert>
+              ) : null}
+            </div>
+          )}
         </div>
       </div>
 
-      <div className="lsw-container pt-s10">
-        {!result.ok ? (
+      {!result.ok ? (
+        <div className="lsw-container pt-s10">
           <ApiErrorState failure={result.error} headingLevel="h2" />
-        ) : (
-          <>
-            <ShopFilters
-              action={`/${locale}/shop`}
-              categories={categoriesOf(result.data.items)}
-              selectedCategory={category}
-            />
-
-            {/* Entre promociones el catalogo sigue en pie, pero ningun articulo
-                trae elegibilidad. Se dice una vez arriba en vez de repetir la
-                misma insignia gris en cada tarjeta. */}
-            {result.data.items.length > 0 &&
-            result.data.items.every((product) => product.entry_eligibility === null) ? (
-              <Alert tone="info" className="mt-s6">
-                {t("shop.noPromotionNotice")}
-              </Alert>
-            ) : null}
-
-            <div className="mt-s8">
-              {result.data.items.length === 0 ? (
-                <EmptyState
-                  headingLevel="h2"
-                  title={category === null ? t("shop.catalogEmpty.title") : t("shop.empty.title")}
-                  description={
-                    category === null ? t("shop.catalogEmpty.body") : t("shop.empty.body")
-                  }
-                  action={
-                    category === null ? undefined : (
-                      <Link href="/shop" className={buttonVariants({ variant: "secondary" })}>
-                        {t("shop.clear")}
-                      </Link>
-                    )
-                  }
-                />
-              ) : (
-                <ul className="grid list-none gap-s5 sm:grid-cols-2 lg:grid-cols-3">
-                  {result.data.items.map((product) => (
-                    <ProductCard key={product.id} product={product} locale={locale} />
-                  ))}
-                </ul>
-              )}
-            </div>
+        </div>
+      ) : items.length === 0 ? (
+        <div className="lsw-container pt-s10">
+          <EmptyState
+            headingLevel="h2"
+            title={category === null ? t("shop.catalogEmpty.title") : t("shop.empty.title")}
+            description={category === null ? t("shop.catalogEmpty.body") : t("shop.empty.body")}
+            action={
+              category === null ? undefined : (
+                <Link href="/shop" className={buttonVariants({ variant: "secondary" })}>
+                  {t("shop.clear")}
+                </Link>
+              )
+            }
+          />
+        </div>
+      ) : (
+        /* BANDA CLARA (DEC-039): a partir de aqui todo es `light-*`. */
+        <section className="lsw-band-light py-s10 lg:py-s12">
+          <div className="lsw-container">
+            {/* DOS COLUMNAS DESDE 360px con calles estrechas, como la
+                referencia movil. Sube a tres en tableta y a cuatro en
+                escritorio ancho: el ancho de tarjeta se mantiene casi constante
+                en vez de estirarse hasta parecer un banner. */}
+            <ul className="grid list-none grid-cols-2 gap-s3 sm:gap-s4 md:grid-cols-3 lg:gap-s5 xl:grid-cols-4">
+              {items.map((product) => (
+                <ProductCard key={product.id} product={product} locale={locale} />
+              ))}
+            </ul>
 
             {result.data.next_cursor === null ? null : (
               <div className="mt-s10 flex justify-center">
                 <Link
                   href={`/shop?${nextPageQuery(result.data.next_cursor, category)}`}
-                  className={buttonVariants({ variant: "secondary", size: "lg" })}
+                  // `ink` y no `secondary`: sobre el blanco de la banda, el
+                  // contorno dorado de `secondary` da 2,3:1 y su texto tambien.
+                  className={cn(buttonVariants({ variant: "ink", size: "lg" }))}
                 >
                   {t("shop.loadMore")}
                 </Link>
               </div>
             )}
-          </>
-        )}
-      </div>
+          </div>
+        </section>
+      )}
     </div>
   );
 }

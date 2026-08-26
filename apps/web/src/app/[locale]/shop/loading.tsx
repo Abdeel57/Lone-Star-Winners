@@ -16,12 +16,19 @@ import { useTranslations } from "next-intl";
  * -----------------------------------
  * `Skeleton` es `aria-hidden`: un lector de pantalla no debe leer cajas vacias.
  * Quien anuncia es este contenedor, con `aria-busy` y un texto traducido.
+ *
+ * LAS DOS BANDAS SE PINTAN YA (DEC-039)
+ * -------------------------------------
+ * La cabecera oscura y la banda clara son COLOR, no dato: se dibujan en el
+ * primer fotograma. Si el esqueleto no las trajera, la pagina entraria negra y
+ * al llegar los datos aparecerian de golpe dos superficies nuevas -que es el
+ * salto que este archivo existe para evitar, solo que a escala de pagina.
  */
 export default function ShopLoading() {
   const t = useTranslations("states");
 
   return (
-    <div aria-busy="true" aria-live="polite">
+    <div aria-busy="true" aria-live="polite" className="pb-s16">
       <span className="sr-only">{t("loading")}</span>
 
       {/* La banda de atmosfera se pinta YA, antes de que llegue nada: es color
@@ -31,23 +38,40 @@ export default function ShopLoading() {
         <div className="lsw-container">
           <Skeleton className="h-14 w-2/3 max-w-md" />
           <SkeletonText lines={2} className="mt-s6 max-w-narrow" />
+          {/* Fila de filtros: existe casi siempre, y sin ella la rejilla real
+              aparece 60px mas abajo que su esqueleto. */}
+          <Skeleton className="mt-s8 h-control-md w-full max-w-xs" />
         </div>
       </div>
 
       {/* La forma del esqueleto sigue a la de `ProductCard`: imagen a sangre en
-          la parte superior y cuerpo con relleno propio. Un esqueleto con otra
+          la parte superior, nombre y precio debajo. Un esqueleto con otra
           maquetacion que la tarjeta real produce exactamente el salto que se
-          intentaba evitar. */}
-      <ul className="lsw-container mt-s10 grid list-none gap-s5 sm:grid-cols-2 lg:grid-cols-3">
-        {[0, 1, 2, 3, 4, 5].map((index) => (
-          <Card as="li" key={index} elevation="flat" padding="none">
-            <Skeleton className="aspect-square w-full rounded-none" />
-            <div className="p-s5">
-              <SkeletonText lines={3} />
-            </div>
-          </Card>
-        ))}
-      </ul>
+          intentaba evitar.
+
+          Los marcadores van en `light-border` y no en el token `skeleton`: ese
+          esta calibrado para verse sobre negro, y sobre una tarjeta blanca cada
+          barra seria un bloque casi negro -mas llamativo que el contenido que
+          esta simulando. */}
+      <section className="lsw-band-light py-s10 lg:py-s12">
+        <ul className="lsw-container grid list-none grid-cols-2 gap-s3 sm:gap-s4 md:grid-cols-3 lg:gap-s5 xl:grid-cols-4">
+          {[0, 1, 2, 3, 4, 5].map((index) => (
+            <Card
+              as="li"
+              key={index}
+              elevation="flat"
+              padding="none"
+              className="overflow-hidden rounded-md border-light-border bg-light-surface shadow-light-sm"
+            >
+              <Skeleton className="aspect-square w-full rounded-none bg-light-surface-sunken" />
+              <div className="flex flex-col gap-s3 p-s3 sm:p-s4">
+                <Skeleton className="h-4 w-4/5 bg-light-border" />
+                <Skeleton className="h-5 w-1/2 bg-light-border" />
+              </div>
+            </Card>
+          ))}
+        </ul>
+      </section>
     </div>
   );
 }
