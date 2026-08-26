@@ -36,6 +36,34 @@
       "when": 1787616004000,
       "tag": "0004_rbac_catalog_unification",
       "breakpoints": false
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1787616005000,
+      "tag": "0005_feature_flags",
+      "breakpoints": false
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1787616006000,
+      "tag": "0006_entry_ledger",
+      "breakpoints": false
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1787616007000,
+      "tag": "0007_rbac_read_capabilities",
+      "breakpoints": false
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1787616008000,
+      "tag": "0008_permission_feature_flag_key",
+      "breakpoints": false
     }
   ]
 }

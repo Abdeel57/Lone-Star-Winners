@@ -1221,3 +1221,188 @@ manifiestos.
 
 Proposed by: frontend
 Agreed by: Team Lead
+
+---
+
+## DEC-032
+
+Status: Accepted
+
+Date: 2026-08-25
+
+Decision:
+**Lista canónica de feature flags**, en `snake_case` minúscula, todos
+persistidos en base de datos (DEC-013) y **desactivados por defecto**, con una
+sola excepción.
+
+| Flag                                          | Default    | Gobierna                       |
+| --------------------------------------------- | ---------- | ------------------------------ |
+| `amoe_enabled`                                | `false`    | Existencia de la vía AMOE      |
+| `visible_entry_numbers_enabled`               | `false`    | Rangos "mis números" visibles  |
+| `internal_draw_enabled`                       | `false`    | Sorteo interno (DEC-017)       |
+| `state_eligibility_enforcement_enabled`       | `false`    | Restricción por jurisdicción   |
+| `age_gate_enabled`                            | `false`    | Verificación de edad mínima    |
+| `entry_multipliers_enabled`                   | `false`    | Multiplicadores                |
+| `entry_caps_enabled`                          | `false`    | Límites de entries             |
+| `entry_expiration_enabled`                    | `false`    | Caducidad de entries (DEC-033) |
+| `winner_publication_enabled`                  | `false`    | Publicación de ganadores       |
+| `manual_adjustments_enabled`                  | `false`    | Ajustes manuales de admin      |
+| `provisional_entries_enabled`                 | `false`    | Entries provisionales          |
+| `dual_approval_for_sensitive_actions_enabled` | **`true`** | Segunda aprobación             |
+
+Además, **`amoe_mode` es un enum, no un booleano**:
+`ONLINE_FORM` \| `MAIL_IN_REVIEW` \| `CODE` \| `EXTERNAL_INSTRUCTIONS`.
+
+Context:
+Resuelve `HO-003`. Los tres agentes usaban listas y convenciones distintas:
+`frontend` 6 flags en minúscula, `backend` 9 en mayúscula,
+`security` 8 en minúscula. Se fusionan sin perder ninguno.
+
+Fusiones aplicadas: `jurisdiction_gate_enabled` y
+`state_eligibility_enforcement_enabled` eran el mismo flag con dos nombres;
+`DUAL_APPROVAL_ADJUSTMENTS` y `dual_approval_for_sensitive_actions_enabled`
+también.
+
+Alternatives:
+`SCREAMING_SNAKE_CASE` (descartado: dos de los tres agentes ya usaban
+minúscula, y coincide con la convención de columnas de base de datos y de
+claves JSON, que es donde estos flags viven de verdad).
+
+Reason:
+`dual_approval_for_sensitive_actions_enabled` es el único que arranca en
+`true`, por el principio #12: seguridad por encima de comodidad. Un flag que
+hay que acordarse de activar para estar protegido acabará desactivado.
+
+`amoe_mode` es enum porque un booleano no permite decidir **qué interfaz
+renderizar**, y las cuatro modalidades exigen pantallas distintas. Lo señaló
+`frontend`; el enum coincide exactamente con el modelado de `backend`.
+
+Affected areas: `packages/database`, `packages/security`, `apps/api`,
+`apps/web`, admin.
+
+Proposed by: Team Lead (fusionando las tres listas)
+Agreed by: pendiente de objeción de los tres
+
+---
+
+## DEC-033
+
+Status: Accepted
+
+Date: 2026-08-25
+
+Decision:
+**El entry ledger se construye ahora, soportando caducidad de entries como
+configuración desactivada.**
+
+- `entry_transaction` incluye `expires_at timestamptz NULL`.
+- El flag `entry_expiration_enabled` arranca en `false` (DEC-032).
+- La vista de saldo se escribe desde el principio para cubrir ambos casos:
+
+```sql
+SUM(quantity_delta)
+WHERE status = 'POSTED'
+  AND effective_at <= <corte>
+  AND (expires_at IS NULL OR expires_at > <corte>)
+```
+
+Con el flag apagado, `expires_at` es siempre `NULL` y la expresión se comporta
+exactamente como una suma pura.
+
+Context:
+`HO-006` sigue sin respuesta del abogado. `backend` advirtió, con razón, que si
+las Official Rules contemplan caducidad, el saldo deja de ser una suma pura y
+pasa a depender de ventanas temporales, lo que cambia el diseño del ledger. Eso
+bloqueaba el hito B1, que es **el núcleo del producto**.
+
+Alternatives:
+Esperar a la respuesta del abogado (**descartado**: paraliza indefinidamente lo
+más importante del sistema, y la fecha de respuesta no depende de nosotros).
+Construir sin caducidad y migrar después (descartado: sería una migración sobre
+una tabla append-only con datos reales, justo lo que DEC-007 hace costoso a
+propósito).
+
+Reason:
+Es exactamente lo que ordenan los principios #3 y #14: lo que depende de las
+Official Rules se modela como **configuración**, no como código. Una columna
+nullable y un predicado de más no tienen coste medible con el flag apagado.
+
+Si el abogado dice que no hay caducidad, el flag no se enciende jamás y no se
+ha perdido nada. Si dice que sí, ya está soportado. **La asimetría de riesgo es
+evidente en una sola dirección.**
+
+`HO-006` **no se cierra** con esta decisión: la respuesta sigue haciendo falta
+para activar cualquier promoción (DEC-012). Lo que se desbloquea es la
+construcción, no la activación.
+
+Affected areas: `packages/database`, `packages/sweepstakes`, `packages/tpa`.
+
+Proposed by: Team Lead (desbloqueando B1)
+Agreed by: pendiente de revisión de security por afectar a DEC-007 y DEC-016
+
+---
+
+## DEC-034
+
+Status: Accepted
+
+Date: 2026-08-25
+
+Decision:
+**Enmienda a DEC-033.** Una transacción de reversal **hereda `expires_at` de la
+transacción que revierte**, y el CHECK se relaja a:
+
+```sql
+CHECK (expires_at IS NULL
+       OR expires_at > effective_at
+       OR reverses_transaction_id IS NOT NULL)
+```
+
+Context:
+Al revisar la implementación de DEC-033, `security` encontró un **defecto de
+corrección real en la decisión del Team Lead**: con el flag de caducidad
+encendido, revertir una entry ya caducada deja el saldo **negativo**.
+
+- T1: `PURCHASE_EARNED` +10, `effective_at = T1`, `expires_at = T2`
+- T3 > T2: refund → `REFUND_REVERSAL` −10, `effective_at = T3`, `expires_at = NULL`
+- Saldo en cualquier corte posterior a T3: la original queda excluida por
+  caducidad, la reversal se cuenta → **−10**
+
+El arreglo evidente estaba bloqueado por el propio CHECK
+`entry_transactions_expiry_after_effect`, que prohibía copiar `expires_at` de
+la original cuando el refund llega después de la caducidad. No era una línea de
+trigger: era una decisión de diseño.
+
+Alternatives:
+Excluir las reversals del predicado de caducidad (descartado: obligaría a un
+join y el saldo dejaría de ser un `SUM` plano). Emitir un movimiento
+compensatorio al caducar (descartado por `backend` con mejor argumento: haría
+que el `ExportSnapshot` dependiera de que un job hubiera corrido antes del
+corte, rompiendo DEC-016).
+
+Reason:
+Correcto en las tres ventanas —antes de caducar +10, entre caducidad y refund
+0, después del refund 0— y el saldo sigue siendo una suma plana.
+
+Cuesta cinco líneas hoy, con `expires_at` siempre `NULL` porque el flag está
+apagado. Después de que existan datos costaría una migración sobre una tabla
+append-only, que DEC-007 hace deliberadamente cara.
+
+Affected areas: `packages/database`, `packages/sweepstakes`, `packages/tpa`.
+
+Proposed by: security (revisión de DEC-033)
+Agreed by: Team Lead
+
+Nota: `security` valida dos aciertos de la implementación de `backend`. Que
+`lsw_entry_balances_at()` sea **parametrizada por corte** en vez de una vista
+con `now()` incrustado evita la trampa que habría roto la reproducibilidad de
+DEC-016 en silencio. Y no emitir fila `EXPIRATION` es mejor que la alternativa
+que el propio `security` proponía.
+
+Dos apuntes registrados para S3 y S4: la caducidad es un cambio de saldo **sin
+fila**, invisible a la hash chain de DEC-008, así que el manifiesto del
+snapshot debe registrar el corte y la versión del predicado, y el informe de
+reconciliación debe sacar "entries excluidas por caducidad a este corte" como
+línea propia. Y la semántica de bordes (`effective_at <=` inclusivo,
+`expires_at >` exclusivo, intervalo semiabierto) pertenece a
+`canonicalization_version`.

@@ -1,6 +1,7 @@
 {
   "brand": {
-    "name": "Lone Star Winners"
+    "name": "Lone Star Winners",
+    "tagline": "Eligible merchandise and promotional entries, governed by the Official Rules."
   },
   "localeName": {
     "en": "English",
@@ -10,21 +11,31 @@
     "skipToContent": "Skip to main content",
     "mainLandmark": "Main content",
     "primaryNavigation": "Primary",
+    "footerNavigation": "Legal and help",
     "languageSwitcher": "Language",
-    "currentLanguage": "Current language"
+    "currentLanguage": "Current language",
+    "promotionTimeline": "Promotion progress",
+    "promotionCountdown": "Time remaining"
   },
   "metadata": {
     "title": "Lone Star Winners",
     "description": "Eligible merchandise and promotional sweepstakes entries, governed by the Official Rules."
   },
+  "nav": {
+    "promotions": "Promotions",
+    "faq": "FAQ",
+    "officialRules": "Official Rules"
+  },
   "home": {
     "eyebrow": "Current promotion",
-    "prizeValueLabel": "Prize value",
+    "prizeValueLabel": "Stated prize value",
     "opensLabel": "Opens",
     "closesLabel": "Closes",
     "timeZoneNote": "Times are shown in the official time zone of the promotion.",
     "entriesDisclaimer": "Promotional entries are awarded and governed by the Official Rules of each promotion.",
     "rulesNotPublished": "The Official Rules for this promotion have not been published yet.",
+    "viewOfficialRules": "View Official Rules",
+    "viewPromotion": "See promotion details",
     "howItWorks": {
       "title": "How it works",
       "step1": {
@@ -39,7 +50,25 @@
         "title": "Follow your entries",
         "body": "Your account shows where each entry came from and its current status."
       }
+    },
+    "trust": {
+      "title": "Before you take part",
+      "body": "The Official Rules are the document that governs each promotion: who may take part, how entries are awarded, and how a winner is selected. Read them before you order.",
+      "faqLink": "Read the frequently asked questions"
     }
+  },
+  "promotion": {
+    "detailsHeading": "Promotion details",
+    "prizeHeading": "Prize",
+    "prizeValueLabel": "Stated prize value",
+    "administratorHeading": "Independent administrator",
+    "administratorBody": "This promotion states that the drawing is conducted by an independent administrator.",
+    "timelineHeading": "What happens and when",
+    "backToPromotions": "All promotions",
+    "notListed": "No promotions to show right now.",
+    "listHeading": "Promotions",
+    "listIntro": "Every promotion is governed by its own Official Rules.",
+    "winnerPendingPublication": "Winner information for this promotion has not been published yet."
   },
   "promotionStatus": {
     "upcoming": "Opens soon",
@@ -48,6 +77,108 @@
     "administrator_processing": "With the independent administrator",
     "winner_verification": "Winner verification in progress",
     "completed": "Completed"
+  },
+  "promotionState": {
+    "upcoming": {
+      "title": "This promotion has not opened yet",
+      "body": "It opens on the date shown above. Nothing you do before then counts toward it."
+    },
+    "active": {
+      "title": "This promotion is open",
+      "body": "Entries are awarded and governed by the Official Rules."
+    },
+    "ended": {
+      "title": "This promotion is closed",
+      "body": "No further entries are accepted. The next steps are described in the Official Rules."
+    },
+    "administratorProcessing": {
+      "title": "The drawing is with the independent administrator",
+      "body": "The promotion is closed and the independent administrator is carrying out the drawing described in the Official Rules. This page is updated when that step finishes."
+    },
+    "winnerVerification": {
+      "title": "A potential winner is being verified",
+      "body": "A potential winner has been selected and is going through the verification described in the Official Rules. A potential winner is not a confirmed winner until that verification is complete."
+    },
+    "completed": {
+      "title": "This promotion is complete",
+      "body": "The promotion has finished. What was published about it is governed by the Official Rules."
+    }
+  },
+  "countdown": {
+    "days": "days",
+    "hours": "hrs",
+    "minutes": "min",
+    "seconds": "sec",
+    "opensIn": "Opens in",
+    "closesIn": "Closes in",
+    "elapsed": "The time shown has passed. This page reflects the status reported by our systems.",
+    "clockNote": "The countdown is a convenience. The status of a promotion is the one shown on this page."
+  },
+  "entryOffer": {
+    "heading": "Entries in this promotion",
+    "ratio": "This promotion awards {entries} entries per {amount} of eligible merchandise.",
+    "ratioUnavailable": "This promotion does not state an entry offer.",
+    "multiplierBadge": "{multiplier}× entry period active",
+    "multiplierUntil": "Active until {until}.",
+    "governedNote": "Entry amounts are calculated by our systems and governed by the Official Rules. The figures shown here are informational."
+  },
+  "amoe": {
+    "heading": "Free method of entry",
+    "ONLINE_FORM": "A free online entry form is available for this promotion. The Official Rules state the requirements and the limits that apply.",
+    "MAIL_IN_REVIEW": "A free mail-in method of entry is available for this promotion. The Official Rules state the mailing address, the required format and the limits that apply.",
+    "CODE": "A free code-based method of entry is available for this promotion. The Official Rules state how to obtain and submit a code.",
+    "EXTERNAL_INSTRUCTIONS": "A free method of entry is available for this promotion. The Official Rules describe how to use it.",
+    "modeNotPublished": "A free method of entry is available for this promotion. The details have not been published yet."
+  },
+  "officialRules": {
+    "title": "Official Rules",
+    "intro": "This document governs the promotion. It is published by Lone Star Winners and reproduced here exactly as issued.",
+    "promotionLabel": "Promotion",
+    "versionLabel": "Version",
+    "effectiveLabel": "Effective",
+    "timeZoneNote": "The effective date is shown in the official time zone of the promotion.",
+    "print": "Print this document",
+    "notPublished": {
+      "title": "The Official Rules are not published yet",
+      "body": "When the Official Rules for this promotion are published, they appear here in full."
+    },
+    "noPromotion": {
+      "title": "No promotion is open right now",
+      "body": "Official Rules belong to a specific promotion. When the next promotion opens, its Official Rules appear here."
+    },
+    "controlling": "This {language} version is the legally controlling text.",
+    "informational": "This {language} version is an informational translation. The {controllingLanguage} version is the legally controlling text.",
+    "allControlling": "Every published version of this document is legally controlling.",
+    "noControllingDeclared": "This document does not identify which language version is legally controlling.",
+    "localeNotPublished": "This document is not published in {language}. It is shown below in the language in which it was issued."
+  },
+  "faq": {
+    "title": "Frequently asked questions",
+    "intro": "These answers describe how the site works. What governs a promotion is its Official Rules.",
+    "q1": {
+      "question": "What is Lone Star Winners?",
+      "answer": "Lone Star Winners is an online store. Buying eligible merchandise may earn promotional entries into the promotion described in the Official Rules."
+    },
+    "q2": {
+      "question": "Am I buying entries?",
+      "answer": "No. What you buy is merchandise. Entries are a promotional benefit awarded under the Official Rules, and they are not the product you pay for."
+    },
+    "q3": {
+      "question": "Is there a free way to take part?",
+      "answer": "Whether a promotion offers a free method of entry, and how it works, is stated in the Official Rules of that promotion."
+    },
+    "q4": {
+      "question": "Who may take part?",
+      "answer": "Eligibility is defined in the Official Rules of each promotion, and nowhere else on this site."
+    },
+    "q5": {
+      "question": "How is a winner selected?",
+      "answer": "Winner selection is described in the Official Rules of each promotion. When the drawing is carried out by an independent administrator, the promotion page says so."
+    },
+    "q6": {
+      "question": "What happens after a promotion closes?",
+      "answer": "The promotion page keeps reporting where the process stands: with the administrator, in winner verification, or complete."
+    }
   },
   "states": {
     "loading": "Loading",
@@ -66,7 +197,8 @@
     "NETWORK_UNAVAILABLE": "We could not reach the service. Check your connection and try again.",
     "MALFORMED_RESPONSE": "We received an unexpected response. Our team has been notified.",
     "INTERNAL_ERROR": "Something went wrong on our side. Please try again in a moment.",
-    "PROMOTION_NOT_FOUND": "That promotion is no longer available."
+    "PROMOTION_NOT_FOUND": "That promotion is no longer available.",
+    "RULES_VERSION_NOT_PUBLISHED": "The Official Rules for this promotion have not been published yet."
   },
   "notFound": {
     "title": "We could not find that page",
@@ -80,6 +212,7 @@
   },
   "footer": {
     "copyright": "© {year} Lone Star Winners",
+    "legalNote": "Each promotion is governed by its own Official Rules.",
     "mockDataNotice": "Development build. The data on this page comes from a simulated API and is not real."
   }
 }

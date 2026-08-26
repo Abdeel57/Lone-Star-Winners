@@ -60,3 +60,72 @@ export const rulesVersionStatusEnum = pgEnum("rules_version_status", [
 export const productStatusEnum = pgEnum("product_status", ["DRAFT", "ACTIVE", "ARCHIVED"]);
 
 export const localeCodeEnum = pgEnum("locale_code", ["en-US", "es-US"]);
+
+// ---------------------------------------------------------------------------
+// Feature flags (DEC-013, DEC-032) - migracion 0005
+// ---------------------------------------------------------------------------
+
+/**
+ * ENUM y no `text`: crear un flag exige una migracion revisada. Con `text`
+ * bastaria un INSERT para inventar un flag que nadie ha discutido, y el
+ * catalogo canonico de DEC-032 pasaria a ser una sugerencia.
+ */
+export const featureFlagKeyEnum = pgEnum("feature_flag_key", [
+  "amoe_enabled",
+  "visible_entry_numbers_enabled",
+  "internal_draw_enabled",
+  "state_eligibility_enforcement_enabled",
+  "age_gate_enabled",
+  "entry_multipliers_enabled",
+  "entry_caps_enabled",
+  "entry_expiration_enabled",
+  "winner_publication_enabled",
+  "manual_adjustments_enabled",
+  "provisional_entries_enabled",
+  "dual_approval_for_sensitive_actions_enabled",
+]);
+
+/**
+ * DEC-032. SIN valor `DISABLED`: la pregunta "existe via AMOE?" la responde el
+ * flag `amoe_enabled` y solo el. Ver la cabecera de la migracion 0005.
+ */
+export const amoeModeEnum = pgEnum("amoe_mode", [
+  "ONLINE_FORM",
+  "MAIL_IN_REVIEW",
+  "CODE",
+  "EXTERNAL_INSTRUCTIONS",
+]);
+
+// ---------------------------------------------------------------------------
+// Entry ledger (DEC-007, DEC-009, DEC-033) - migracion 0006
+// ---------------------------------------------------------------------------
+
+/** Principio 9: compra y AMOE en el mismo universo, conservando procedencia. */
+export const entrySourceTypeEnum = pgEnum("entry_source_type", [
+  "PURCHASE",
+  "AMOE",
+  "ADMIN",
+  "SYSTEM",
+]);
+
+export const entryTransactionTypeEnum = pgEnum("entry_transaction_type", [
+  "PURCHASE_EARNED",
+  "AMOE_EARNED",
+  "PROMOTION_BONUS",
+  "REFUND_REVERSAL",
+  "PARTIAL_REFUND_REVERSAL",
+  "CHARGEBACK_REVERSAL",
+  "FRAUD_REVERSAL",
+  "DISQUALIFICATION_REVERSAL",
+  "MANUAL_CREDIT",
+  "MANUAL_DEBIT",
+  "ADMIN_CORRECTION",
+]);
+
+/** Se fija en la insercion y no se mueve: la tabla entera es append-only. */
+export const entryTransactionStatusEnum = pgEnum("entry_transaction_status", [
+  "POSTED",
+  "PROVISIONAL",
+]);
+
+export const entryActorTypeEnum = pgEnum("entry_actor_type", ["PARTICIPANT", "ADMIN", "SYSTEM"]);

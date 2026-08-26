@@ -59,6 +59,26 @@ export default tseslint.config(
     rules: { "security/detect-non-literal-fs-filename": "off" },
   },
   {
+    // `detect-unsafe-regex` usa una heuristica de altura de estrella, y aqui
+    // marca tres patrones que no son explotables:
+    //
+    //   - `(?:new\s+)?RegExp\s*\(\s*` : los cuantificadores estan separados por
+    //     literales obligatorios (`RegExp`, `(`), asi que el retroceso esta
+    //     acotado. Ademas se aplica linea a linea sobre ficheros del propio
+    //     repositorio.
+    //   - el identificador con forma de capacidad de `api-contract.test.ts`:
+    //     cada repeticion del grupo exterior tiene que consumir un punto
+    //     literal, lo que impide el solapamiento que causa el retroceso
+    //     catastrofico.
+    //
+    // En los dos casos la entrada es un fichero versionado en el repositorio,
+    // no texto de un tercero. Se desactiva por FICHERO y por REGLA, nunca de
+    // forma global: un aviso de ReDoS que aparece siempre acaba ignorandose el
+    // dia que senala uno de verdad.
+    files: ["src/contract/api-contract.test.ts", "src/lint/no-unraw-regexp-source.test.ts"],
+    rules: { "security/detect-unsafe-regex": "off" },
+  },
+  {
     // Los escaneres de invariante construyen sus patrones concatenando
     // fragmentos para no detectarse a si mismos (ver la cabecera de cada
     // fichero). Los argumentos son constantes de ambito de modulo formadas por

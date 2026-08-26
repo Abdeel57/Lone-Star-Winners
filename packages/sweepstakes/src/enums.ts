@@ -67,19 +67,30 @@ export type LocaleCode = (typeof LOCALE_CODES)[number];
  * Procedencia de una entry. Compra y AMOE conviven en el MISMO universo
  * elegible conservando su origen (principio #9). Nunca se separan en dos
  * modelos ni en dos tablas.
+ *
+ * Un movimiento de correccion CONSERVA la procedencia de lo que corrige: la
+ * devolucion de una compra sigue siendo un movimiento de origen `PURCHASE`. Si
+ * un reversal cambiase de procedencia, el reparto compra/AMOE del universo
+ * elegible dejaria de cuadrar en cuanto hubiera una sola devolucion.
+ *
+ * `ADMIN` es lo que teclea una persona; `SYSTEM`, lo que emite un job. La
+ * distincion importa en la auditoria: no es lo mismo un ajuste manual que una
+ * correccion automatica.
  */
-export const ENTRY_SOURCE_TYPES = ["PURCHASE", "AMOE", "PROMOTIONAL", "ADMINISTRATIVE"] as const;
+export const ENTRY_SOURCE_TYPES = ["PURCHASE", "AMOE", "ADMIN", "SYSTEM"] as const;
 export type EntrySourceType = (typeof ENTRY_SOURCE_TYPES)[number];
 
 /**
  * Tipos de movimiento del entry ledger (DEC-007: append-only; una correccion
  * es una fila nueva con delta de signo contrario).
  *
- * AVISO DE ALCANCE (hito B0): esta union esta declarada pero el ledger NO esta
- * implementado. `HO-006` (expiracion de entries) sigue sin respuesta del
- * abogado y condiciona el diseno del saldo. Por eso NO existe aqui un tipo
- * `EXPIRATION`: anadirlo requiere la respuesta legal primero, y despues su
- * propio `DEC-xxx`. Ver `docs/LEGAL_PENDING.md` -> "Entry expiration".
+ * NO EXISTE UN TIPO `EXPIRATION`, Y NO ES UN OLVIDO.
+ *
+ * DEC-033 modela la caducidad como una PROPIEDAD de la transaccion original
+ * (`expires_at`), evaluada por el predicado del saldo. Un movimiento
+ * compensatorio de caducidad haria que el saldo dependiera de que un proceso
+ * lo hubiera emitido a tiempo; con un predicado, el saldo es correcto aunque
+ * no haya corrido nada.
  */
 export const ENTRY_TRANSACTION_TYPES = [
   "PURCHASE_EARNED",
@@ -114,14 +125,33 @@ export const ENTRY_TRANSACTION_SIGN: Readonly<
 });
 
 /**
- * Modalidad AMOE (`HO-003` pide explicitamente un enum, no un booleano: un
- * booleano no basta para decidir que interfaz renderizar).
+ * Estado de una transaccion del ledger.
  *
- * `DISABLED` es el valor por defecto y el unico seguro mientras
- * `docs/LEGAL_PENDING.md` -> "AMOE mechanism" siga en `TBD`.
+ * NO ES UNA MAQUINA DE ESTADOS. Se fija en la insercion y no se mueve nunca,
+ * porque la tabla entera es append-only (DEC-007). Convertir una entry
+ * provisional en elegible es OTRA fila, no una edicion de esta.
+ */
+export const ENTRY_TRANSACTION_STATUSES = ["POSTED", "PROVISIONAL"] as const;
+export type EntryTransactionStatus = (typeof ENTRY_TRANSACTION_STATUSES)[number];
+
+/** Quien origino el movimiento. Un job y una persona no se auditan igual. */
+export const ENTRY_ACTOR_TYPES = ["PARTICIPANT", "ADMIN", "SYSTEM"] as const;
+export type EntryActorType = (typeof ENTRY_ACTOR_TYPES)[number];
+
+/**
+ * Modalidad AMOE (DEC-032: un enum, no un booleano; un booleano no basta para
+ * decidir que interfaz renderizar).
+ *
+ * NO HAY VALOR `DISABLED`, a proposito. La pregunta "existe via AMOE?" la
+ * responde el flag `amoe_enabled` y solo el. Con un `DISABLED` dentro del enum
+ * habria dos sitios contestando lo mismo, y el dia que discrepasen -flag
+ * encendido, modalidad DISABLED- no habria respuesta correcta. Es el
+ * anti-patron de dos fuentes de verdad que prohibe `CLAUDE.md` seccion 4.
+ *
+ * `null` significa "modalidad todavia no elegida", que es el estado real
+ * mientras `docs/LEGAL_PENDING.md` -> "AMOE mechanism" siga en `TBD`.
  */
 export const AMOE_MODES = [
-  "DISABLED",
   "ONLINE_FORM",
   "MAIL_IN_REVIEW",
   "CODE",

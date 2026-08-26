@@ -20,6 +20,8 @@ import security from "eslint-plugin-security";
 import prettier from "eslint-config-prettier";
 import globals from "globals";
 
+import { noUnrawRegexpSource } from "./packages/security/dist/index.js";
+
 /**
  * POR QUE NINGUN GLOB DE ESTE ARCHIVO LLEVA PREFIJO DE DIRECTORIO
  *
@@ -233,6 +235,56 @@ export default tseslint.config(
         },
       ],
       "security/detect-pseudoRandomBytes": "error",
+    },
+  },
+
+  // -------------------------------------------------------------------------
+  // 3.bis  HO-014 - una expresion regular no se construye desde una cadena con
+  //        barras invertidas.
+  //
+  //    NO NEGOCIABLE, y en TODO el workspace, no solo en los paquetes
+  //    criticos. La regla la escribio `security` y vive en
+  //    `packages/security/src/lint/`; aqui solo se conecta, porque
+  //    `eslint.config.mjs` es zona neutral raiz (DEC-024).
+  //
+  //    POR QUE HACE FALTA HABIENDO YA `no-useless-escape`
+  //
+  //      `no-useless-escape` solo avisa cuando el escape es INUTIL, es decir
+  //      cuando `\x` no es una secuencia valida de cadena y colapsa a `x`. Deja
+  //      fuera el caso peor: `\b`, `\n`, `\t`, `\0`, `\xNN` SI son validos en
+  //      una cadena, y significan algo completamente distinto en una expresion
+  //      regular.
+  //
+  //      Una plantilla que use un limite de palabra alrededor de una variable,
+  //      sin String.raw, compila, corre y no encuentra nada nunca. (El ejemplo
+  //      literal no se escribe aqui a proposito: el escaner de invariante de
+  //      `tests/security` recorre el repositorio en texto plano y lo detectaria
+  //      como una infraccion real, que es exactamente lo que debe hacer.)
+  //
+  //      Eso ya paso aqui tres veces en dos dominios distintos: un escaner que
+  //      reportaba verde por AUSENCIA de busqueda, no por limpieza. Ninguna
+  //      regla estandar lo detecta.
+  //
+  //    POR QUE SE IMPORTA DE `dist` Y NO DEL FUENTE
+  //
+  //      `eslint.config.mjs` lo carga Node directamente, sin pasar por
+  //      TypeScript, asi que no puede leer un `.ts`. La tarea `lint` de
+  //      `turbo.json` declara `dependsOn: ["^build"]` para que el paquete este
+  //      compilado antes de que ESLint arranque.
+  //
+  //      Si el `dist` no existe, la carga de esta configuracion falla y NO se
+  //      lintea nada. Es deliberado: la alternativa -desactivar la regla en
+  //      silencio cuando falta el build- convertiria un gate de seguridad en
+  //      algo que depende de si alguien compilo antes.
+  // -------------------------------------------------------------------------
+  {
+    files: WORKSPACE_TS,
+    plugins: { lsw: { rules: { "no-unraw-regexp-source": noUnrawRegexpSource } } },
+    rules: {
+      "lsw/no-unraw-regexp-source": "error",
+      // HO-014, punto 2: deja de tratarse como cosmetico. En este proyecto es
+      // el indicador de un patron corrupto, no de un estilo descuidado.
+      "no-useless-escape": "error",
     },
   },
 

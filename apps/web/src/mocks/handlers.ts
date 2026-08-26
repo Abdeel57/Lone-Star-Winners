@@ -1,19 +1,26 @@
 import { http, HttpResponse, type JsonBodyType } from "msw";
 
-import { API_PATHS, apiBaseUrl, type ApiErrorEnvelope } from "@/lib/api";
+import {
+  API_PATHS,
+  apiBaseUrl,
+  officialRulesPath,
+  promotionPath,
+  type ApiErrorEnvelope,
+} from "@/lib/api";
 
-import { allFlagsOff } from "./fixtures/config";
-import { activePromotion } from "./fixtures/promotions";
+import { defaultConfig } from "./fixtures/config";
+import { officialRules } from "./fixtures/official-rules";
+import { activePromotion, activePromotionDetail, promotionsByStatus } from "./fixtures/promotions";
 
 /**
  * Handlers de MSW.
  *
- * Sustituyen a un backend que todavia no existe (`docs/API_CONTRACT.md` esta
- * vacio). Dos cosas que NO son:
+ * Sustituyen a un backend que todavia no describe estos recursos en
+ * `docs/API_CONTRACT.md`. Dos cosas que NO son:
  *
  * - No son un contrato. Que un handler responda algo no significa que ese
  *   endpoint exista ni que vaya a tener esa forma. Lo acordado se escribe en
- *   `docs/API_CONTRACT.md`, y hoy no hay nada acordado.
+ *   `docs/API_CONTRACT.md`.
  * - No son logica de negocio. Aqui no se calcula ni una sola participacion.
  *   El calculo de entries es de `backend` (CLAUDE.md #15, requisito R13 de
  *   security: los numeros los produce el backend). Estos handlers solo
@@ -41,8 +48,13 @@ export function errorEnvelope(code: string): ApiErrorEnvelope {
 }
 
 export const handlers = [
-  http.get(url(API_PATHS.siteConfig), () => HttpResponse.json(allFlagsOff)),
+  http.get(url(API_PATHS.siteConfig), () => HttpResponse.json(defaultConfig)),
   http.get(url(API_PATHS.activePromotion), () => HttpResponse.json(activePromotion)),
+  http.get(url(API_PATHS.promotions), () => HttpResponse.json({ promotions: promotionsByStatus })),
+  http.get(url(promotionPath(activePromotion.slug)), () =>
+    HttpResponse.json(activePromotionDetail),
+  ),
+  http.get(url(officialRulesPath(activePromotion.slug)), () => HttpResponse.json(officialRules)),
 ];
 
 /**
@@ -61,6 +73,22 @@ export const scenarios = {
 
   promotion: (body: JsonBodyType) =>
     http.get(url(API_PATHS.activePromotion), () => HttpResponse.json(body)),
+
+  promotionDetail: (slug: string, body: JsonBodyType) =>
+    http.get(url(promotionPath(slug)), () => HttpResponse.json(body)),
+
+  promotionNotFound: (slug: string) =>
+    http.get(url(promotionPath(slug)), () =>
+      HttpResponse.json(errorEnvelope("PROMOTION_NOT_FOUND"), { status: 404 }),
+    ),
+
+  officialRules: (slug: string, body: JsonBodyType) =>
+    http.get(url(officialRulesPath(slug)), () => HttpResponse.json(body)),
+
+  officialRulesNotPublished: (slug: string) =>
+    http.get(url(officialRulesPath(slug)), () =>
+      HttpResponse.json(errorEnvelope("RULES_VERSION_NOT_PUBLISHED"), { status: 404 }),
+    ),
 
   siteConfig: (body: JsonBodyType) =>
     http.get(url(API_PATHS.siteConfig), () => HttpResponse.json(body)),

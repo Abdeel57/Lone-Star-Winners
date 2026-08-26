@@ -8,16 +8,33 @@
  */
 
 export type {
+  AmoeMode,
   ApiErrorEnvelope,
+  EntryOffer,
   FeatureFlagKey,
   LocalizedText,
   MoneyMinor,
+  OfficialRulesContent,
+  OfficialRulesDocument,
+  OfficialRulesSection,
+  PromotionDetail,
+  PromotionListResponse,
+  PromotionPrize,
   PromotionStatus,
   PromotionSummary,
   SiteConfigResponse,
 } from "./contract";
-export { FEATURE_FLAG_KEYS } from "./contract";
+export { AMOE_MODES, FEATURE_FLAG_KEYS, PROMOTION_STATUSES } from "./contract";
 export { apiBaseUrl } from "./http";
 export { isCompleteLocalizedText, pickLocalized } from "./localized";
-export { API_PATHS, fetchActivePromotion, fetchSiteConfig } from "./resources";
+export {
+  API_PATHS,
+  fetchActivePromotion,
+  fetchOfficialRules,
+  fetchPromotion,
+  fetchPromotions,
+  fetchSiteConfig,
+  officialRulesPath,
+  promotionPath,
+} from "./resources";
 export type { ApiFailure, ApiFailureKind, ApiResult } from "./result";

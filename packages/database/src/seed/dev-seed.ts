@@ -21,7 +21,20 @@
  *      del abogado, el storefront se desarrolla contra promociones `DRAFT` y
  *      `SCHEDULED`. Ver la nota en `docs/AGENT_HANDOFF.md`.
  *
- *   2. No genera ninguna entry. El ledger no existe todavia (`HO-006`).
+ *   2. No genera ninguna entry.
+ *
+ *      El ledger YA existe (migracion `0006`). Lo que falta es a que anclarlas:
+ *      toda transaccion apunta a una `PromotionRulesVersion`, y aqui todas
+ *      estan en `DRAFT` con las claves legales en `TBD`.
+ *
+ *      Sembrar entries bajo una version de reglas en borrador produciria datos
+ *      de desarrollo que el sistema no generaria jamas en produccion, y el
+ *      portal del participante se construiria contra una forma que no existe.
+ *      Es el mismo motivo del punto 1, un paso mas abajo.
+ *
+ *      Lo que si se siembra es la SECUENCIA de numeros de cada promocion: se
+ *      asigna siempre, para que un rango sea reconstruible hacia atras, y el
+ *      flag `visible_entry_numbers_enabled` solo decide si se muestra.
  */
 
 import { eq, sql } from "drizzle-orm";
@@ -36,6 +49,7 @@ import {
   productTranslations,
   productVariants,
   products,
+  promotionEntryNumberSequences,
   promotionRulesDocuments,
   promotionRulesVersions,
   promotionTranslations,
@@ -367,8 +381,8 @@ export async function seedDevelopmentData(db: Database): Promise<SeedResult> {
             partial_refund_rounding_policy: "TBD",
             entry_expiration: "TBD",
             amoe: {
-              mode: "DISABLED",
-              note: "DEC-013: apagado por defecto. La modalidad la decide el abogado.",
+              mode: null,
+              note: "DEC-032: la modalidad AMOE no tiene valor DISABLED. Si hay via AMOE lo responde el flag amoe_enabled; null es la modalidad todavia sin elegir.",
             },
           },
           createdByAdminUserId: promotionManagerId,
@@ -400,6 +414,16 @@ export async function seedDevelopmentData(db: Database): Promise<SeedResult> {
         },
       ]);
 
+      // Secuencia de numeros de entry (DEC-009). Se inicializa aunque no haya
+      // ni una entry: el rango se asigna siempre -para que sea reconstruible
+      // hacia atras- y el flag `visible_entry_numbers_enabled` solo decide si
+      // se MUESTRA.
+      await tx.insert(promotionEntryNumberSequences).values({
+        promotionId: promotion.id,
+        formatPrefix: "DEV26",
+        formatDigits: 9,
+      });
+
       if (spec.schedule) {
         await tx
           .update(promotions)
@@ -412,7 +436,10 @@ export async function seedDevelopmentData(db: Database): Promise<SeedResult> {
       "No se ha creado ninguna promocion ACTIVE: DEC-012 lo impide mientras las claves legales requeridas sigan en TBD (docs/LEGAL_PENDING.md).",
     );
     warnings.push(
-      "No se ha creado ninguna entry: el ledger todavia no existe (HO-006, expiracion de entries).",
+      "No se ha creado ninguna entry. El ledger YA existe, pero toda transaccion se ancla a una PromotionRulesVersion, y aqui todas estan en DRAFT con las claves legales en TBD. Sembrar entries bajo una version de reglas en borrador crearia datos de desarrollo que el sistema no produciria jamas en produccion, y el portal se construiria contra una forma que no existe.",
+    );
+    warnings.push(
+      "Los 12 feature flags los siembra la migracion 0005, no esta semilla: son catalogo, no datos de desarrollo. Todos arrancan apagados salvo dual_approval_for_sensitive_actions_enabled (DEC-032).",
     );
     warnings.push(
       "Ninguna cuenta administrativa tiene credencial: el hash Argon2id y el TOTP los implementa packages/security (DEC-006).",

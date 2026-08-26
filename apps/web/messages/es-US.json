@@ -1,6 +1,7 @@
 {
   "brand": {
-    "name": "Lone Star Winners"
+    "name": "Lone Star Winners",
+    "tagline": "Mercancía elegible y participaciones promocionales, sujetas a las Reglas Oficiales."
   },
   "localeName": {
     "en": "English",
@@ -10,21 +11,31 @@
     "skipToContent": "Saltar al contenido principal",
     "mainLandmark": "Contenido principal",
     "primaryNavigation": "Principal",
+    "footerNavigation": "Legal y ayuda",
     "languageSwitcher": "Idioma",
-    "currentLanguage": "Idioma actual"
+    "currentLanguage": "Idioma actual",
+    "promotionTimeline": "Avance de la promoción",
+    "promotionCountdown": "Tiempo restante"
   },
   "metadata": {
     "title": "Lone Star Winners",
     "description": "Mercancía elegible y participaciones promocionales, sujetas a las Reglas Oficiales."
   },
+  "nav": {
+    "promotions": "Promociones",
+    "faq": "Preguntas frecuentes",
+    "officialRules": "Reglas Oficiales"
+  },
   "home": {
     "eyebrow": "Promoción vigente",
-    "prizeValueLabel": "Valor del premio",
+    "prizeValueLabel": "Valor declarado del premio",
     "opensLabel": "Abre",
     "closesLabel": "Cierra",
     "timeZoneNote": "Los horarios se muestran en la zona horaria oficial de la promoción.",
     "entriesDisclaimer": "Las participaciones promocionales se otorgan conforme a las Reglas Oficiales de cada promoción.",
     "rulesNotPublished": "Las Reglas Oficiales de esta promoción todavía no se han publicado.",
+    "viewOfficialRules": "Ver las Reglas Oficiales",
+    "viewPromotion": "Ver el detalle de la promoción",
     "howItWorks": {
       "title": "Cómo funciona",
       "step1": {
@@ -39,7 +50,25 @@
         "title": "Sigue tus participaciones",
         "body": "Tu cuenta muestra de dónde viene cada participación y en qué estado está."
       }
+    },
+    "trust": {
+      "title": "Antes de participar",
+      "body": "Las Reglas Oficiales son el documento que rige cada promoción: quién puede participar, cómo se otorgan las participaciones y cómo se selecciona al ganador. Léelas antes de hacer un pedido.",
+      "faqLink": "Leer las preguntas frecuentes"
     }
+  },
+  "promotion": {
+    "detailsHeading": "Detalle de la promoción",
+    "prizeHeading": "Premio",
+    "prizeValueLabel": "Valor declarado del premio",
+    "administratorHeading": "Administrador independiente",
+    "administratorBody": "Esta promoción declara que el sorteo lo realiza un administrador independiente.",
+    "timelineHeading": "Qué ocurre y cuándo",
+    "backToPromotions": "Todas las promociones",
+    "notListed": "Ahora mismo no hay promociones que mostrar.",
+    "listHeading": "Promociones",
+    "listIntro": "Cada promoción se rige por sus propias Reglas Oficiales.",
+    "winnerPendingPublication": "La información del ganador de esta promoción todavía no se ha publicado."
   },
   "promotionStatus": {
     "upcoming": "Abre pronto",
@@ -48,6 +77,108 @@
     "administrator_processing": "En manos del administrador independiente",
     "winner_verification": "Verificación del ganador potencial en curso",
     "completed": "Finalizada"
+  },
+  "promotionState": {
+    "upcoming": {
+      "title": "Esta promoción todavía no ha abierto",
+      "body": "Abre en la fecha indicada arriba. Nada de lo que hagas antes cuenta para ella."
+    },
+    "active": {
+      "title": "Esta promoción está abierta",
+      "body": "Las participaciones se otorgan conforme a las Reglas Oficiales."
+    },
+    "ended": {
+      "title": "Esta promoción está cerrada",
+      "body": "Ya no se aceptan más participaciones. Los pasos siguientes se describen en las Reglas Oficiales."
+    },
+    "administratorProcessing": {
+      "title": "El sorteo está en manos del administrador independiente",
+      "body": "La promoción está cerrada y el administrador independiente está realizando el sorteo descrito en las Reglas Oficiales. Esta página se actualiza cuando ese paso termina."
+    },
+    "winnerVerification": {
+      "title": "Se está verificando a un ganador potencial",
+      "body": "Se ha seleccionado a un ganador potencial y está pasando por la verificación descrita en las Reglas Oficiales. Un ganador potencial no es un ganador confirmado hasta que esa verificación concluye."
+    },
+    "completed": {
+      "title": "Esta promoción ha finalizado",
+      "body": "La promoción ha terminado. Lo que se haya publicado sobre ella se rige por las Reglas Oficiales."
+    }
+  },
+  "countdown": {
+    "days": "días",
+    "hours": "h",
+    "minutes": "min",
+    "seconds": "s",
+    "opensIn": "Abre en",
+    "closesIn": "Cierra en",
+    "elapsed": "El plazo mostrado ya ha pasado. Esta página refleja el estado que reportan nuestros sistemas.",
+    "clockNote": "La cuenta atrás es una comodidad. El estado de una promoción es el que se muestra en esta página."
+  },
+  "entryOffer": {
+    "heading": "Participaciones en esta promoción",
+    "ratio": "Esta promoción otorga {entries} participaciones por cada {amount} de mercancía elegible.",
+    "ratioUnavailable": "Esta promoción no declara ninguna oferta de participaciones.",
+    "multiplierBadge": "Periodo de {multiplier}× participaciones activo",
+    "multiplierUntil": "Activo hasta el {until}.",
+    "governedNote": "Las cantidades de participaciones las calculan nuestros sistemas y se rigen por las Reglas Oficiales. Las cifras que se muestran aquí son informativas."
+  },
+  "amoe": {
+    "heading": "Método gratuito de participación",
+    "ONLINE_FORM": "Para esta promoción existe un formulario gratuito de participación en línea. Las Reglas Oficiales indican los requisitos y los límites aplicables.",
+    "MAIL_IN_REVIEW": "Para esta promoción existe un método gratuito de participación por correo postal. Las Reglas Oficiales indican la dirección de envío, el formato requerido y los límites aplicables.",
+    "CODE": "Para esta promoción existe un método gratuito de participación mediante código. Las Reglas Oficiales indican cómo obtener y enviar un código.",
+    "EXTERNAL_INSTRUCTIONS": "Para esta promoción existe un método gratuito de participación. Las Reglas Oficiales describen cómo utilizarlo.",
+    "modeNotPublished": "Para esta promoción existe un método gratuito de participación. Los detalles todavía no se han publicado."
+  },
+  "officialRules": {
+    "title": "Reglas Oficiales",
+    "intro": "Este documento rige la promoción. Lo publica Lone Star Winners y aquí se reproduce exactamente tal como fue emitido.",
+    "promotionLabel": "Promoción",
+    "versionLabel": "Versión",
+    "effectiveLabel": "En vigor desde",
+    "timeZoneNote": "La fecha de entrada en vigor se muestra en la zona horaria oficial de la promoción.",
+    "print": "Imprimir este documento",
+    "notPublished": {
+      "title": "Las Reglas Oficiales todavía no se han publicado",
+      "body": "Cuando se publiquen las Reglas Oficiales de esta promoción, aparecerán aquí íntegras."
+    },
+    "noPromotion": {
+      "title": "Ahora mismo no hay ninguna promoción abierta",
+      "body": "Las Reglas Oficiales pertenecen a una promoción concreta. Cuando abra la siguiente promoción, sus Reglas Oficiales aparecerán aquí."
+    },
+    "controlling": "Esta versión en {language} es el texto legalmente controlante.",
+    "informational": "Esta versión en {language} es una traducción informativa. La versión en {controllingLanguage} es el texto legalmente controlante.",
+    "allControlling": "Todas las versiones publicadas de este documento son legalmente controlantes.",
+    "noControllingDeclared": "Este documento no identifica qué versión de idioma es la legalmente controlante.",
+    "localeNotPublished": "Este documento no está publicado en {language}. A continuación se muestra en el idioma en que fue emitido."
+  },
+  "faq": {
+    "title": "Preguntas frecuentes",
+    "intro": "Estas respuestas describen cómo funciona el sitio. Lo que rige una promoción son sus Reglas Oficiales.",
+    "q1": {
+      "question": "¿Qué es Lone Star Winners?",
+      "answer": "Lone Star Winners es una tienda en línea. Adquirir mercancía elegible puede otorgar participaciones promocionales en la promoción descrita en las Reglas Oficiales."
+    },
+    "q2": {
+      "question": "¿Estoy comprando participaciones?",
+      "answer": "No. Lo que compras es mercancía. Las participaciones son un beneficio promocional que se otorga conforme a las Reglas Oficiales, y no son el producto por el que pagas."
+    },
+    "q3": {
+      "question": "¿Hay una forma gratuita de participar?",
+      "answer": "Si una promoción ofrece un método gratuito de participación, y cómo funciona, se indica en las Reglas Oficiales de esa promoción."
+    },
+    "q4": {
+      "question": "¿Quién puede participar?",
+      "answer": "La elegibilidad se define en las Reglas Oficiales de cada promoción, y en ningún otro lugar de este sitio."
+    },
+    "q5": {
+      "question": "¿Cómo se selecciona al ganador?",
+      "answer": "La selección del ganador se describe en las Reglas Oficiales de cada promoción. Cuando el sorteo lo realiza un administrador independiente, la página de la promoción lo indica."
+    },
+    "q6": {
+      "question": "¿Qué pasa cuando una promoción cierra?",
+      "answer": "La página de la promoción sigue informando de en qué punto está el proceso: en manos del administrador, en verificación del ganador, o finalizada."
+    }
   },
   "states": {
     "loading": "Cargando",
@@ -66,7 +197,8 @@
     "NETWORK_UNAVAILABLE": "No hemos podido conectar con el servicio. Revisa tu conexión e inténtalo de nuevo.",
     "MALFORMED_RESPONSE": "Hemos recibido una respuesta inesperada. Nuestro equipo ya está avisado.",
     "INTERNAL_ERROR": "Ha ocurrido un problema por nuestra parte. Inténtalo de nuevo en un momento.",
-    "PROMOTION_NOT_FOUND": "Esa promoción ya no está disponible."
+    "PROMOTION_NOT_FOUND": "Esa promoción ya no está disponible.",
+    "RULES_VERSION_NOT_PUBLISHED": "Las Reglas Oficiales de esta promoción todavía no se han publicado."
   },
   "notFound": {
     "title": "No hemos encontrado esa página",
@@ -80,6 +212,7 @@
   },
   "footer": {
     "copyright": "© {year} Lone Star Winners",
+    "legalNote": "Cada promoción se rige por sus propias Reglas Oficiales.",
     "mockDataNotice": "Compilación de desarrollo. Los datos de esta página vienen de una API simulada y no son reales."
   }
 }

@@ -162,7 +162,7 @@ YES — bloquea el hito FE-M3 (storefront y carrito).
 
 ---
 
-## HO-003
+## HO-003 — RESUELTO por DEC-032
 
 Status: OPEN
 
@@ -504,7 +504,7 @@ Blocking: NO
 
 ---
 
-## HO-013
+## HO-013 — RESUELTO por security (11 capacidades anadidas)
 
 Status: OPEN
 
@@ -549,7 +549,7 @@ YES para las rutas de lectura de admin.
 
 ---
 
-## HO-014
+## HO-014 — REGLA ESCRITA por security; falta conectarla en la config raiz
 
 Status: OPEN
 

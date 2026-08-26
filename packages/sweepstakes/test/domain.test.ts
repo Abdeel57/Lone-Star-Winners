@@ -23,13 +23,22 @@ describe("enumeraciones del dominio", () => {
     }
   });
 
-  it("no declara todavia un tipo EXPIRATION: HO-006 sigue sin respuesta del abogado", () => {
+  it("no declara un tipo EXPIRATION: DEC-033 modela la caducidad como propiedad, no como movimiento", () => {
+    // Con un movimiento compensatorio, el saldo dependeria de que un proceso
+    // lo hubiera emitido a tiempo. Con `expires_at` mas predicado, el saldo es
+    // correcto aunque no haya corrido nada.
     expect(ENTRY_TRANSACTION_TYPES).not.toContain("EXPIRATION");
   });
 
-  it("AMOE es un enum de modalidades, no un booleano (HO-003), y DISABLED es el primer valor", () => {
-    expect(AMOE_MODES[0]).toBe("DISABLED");
-    expect(AMOE_MODES.length).toBeGreaterThan(2);
+  it("AMOE es un enum de modalidades, no un booleano (DEC-032)", () => {
+    expect(AMOE_MODES.length).toBe(4);
+  });
+
+  it("el enum de modalidades AMOE NO lleva DISABLED: esa pregunta la responde el flag", () => {
+    // Con un DISABLED aqui habria dos fuentes de verdad sobre si existe via
+    // AMOE -este enum y el flag `amoe_enabled`- y ninguna respuesta correcta
+    // el dia que discrepasen. CLAUDE.md seccion 4.
+    expect(AMOE_MODES).not.toContain("DISABLED");
   });
 
   it("el estado inicial de una promocion es DRAFT", () => {
@@ -109,7 +118,12 @@ describe("zona horaria legal (DEC-011)", () => {
 });
 
 describe("version del motor", () => {
-  it("declara el motor como no implementado en el hito B0", () => {
-    expect(ENTRY_CALCULATION_ENGINE_VERSION).toBe(ENGINE_VERSION_UNIMPLEMENTED);
+  it("el motor ya esta implementado: la version deja de ser la de B0", () => {
+    expect(ENTRY_CALCULATION_ENGINE_VERSION).toBeGreaterThan(ENGINE_VERSION_UNIMPLEMENTED);
+  });
+
+  it("la version es un entero positivo: se persiste con cada calculo (DEC-007)", () => {
+    expect(Number.isInteger(ENTRY_CALCULATION_ENGINE_VERSION)).toBe(true);
+    expect(ENTRY_CALCULATION_ENGINE_VERSION).toBeGreaterThanOrEqual(1);
   });
 });

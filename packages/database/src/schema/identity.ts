@@ -17,6 +17,7 @@ import {
 
 import {
   adminUserStatusEnum,
+  featureFlagKeyEnum,
   identityStatusEnum,
   localeCodeEnum,
   participantReviewStateEnum,
@@ -107,7 +108,21 @@ export const adminPermissions = pgTable("admin_permissions", {
   requiresSecondApproval: boolean("requires_second_approval").notNull(),
   emitsAuditEvent: boolean("emits_audit_event").notNull(),
   touchesPii: boolean("touches_pii").notNull(),
-  dependsOnFeatureFlag: boolean("depends_on_feature_flag").notNull(),
+  /**
+   * DEC-032: QUE flag gobierna esta capacidad, no solo si alguno lo hace.
+   *
+   * Sin esta columna, `apps/api` tendria que escribir el nombre del flag a mano
+   * en cada handler -principio 14- y repartido en tantos sitios como rutas.
+   * Con ella, la comprobacion es un JOIN.
+   */
+  featureFlagKey: featureFlagKeyEnum("feature_flag_key"),
+  /**
+   * Columna GENERADA (`feature_flag_key IS NOT NULL`). Solo lectura: no puede
+   * discrepar de la anterior porque no se escribe por separado.
+   */
+  dependsOnFeatureFlag: boolean("depends_on_feature_flag").generatedAlwaysAs(
+    sql`(feature_flag_key IS NOT NULL)`,
+  ),
   /** Entrada de `docs/LEGAL_PENDING.md` de la que depende, o `null`. */
   legalDependency: text("legal_dependency"),
   createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),

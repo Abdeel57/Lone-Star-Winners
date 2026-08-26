@@ -280,11 +280,40 @@ const preset = {
         "lsw-spin": {
           to: { transform: "rotate(360deg)" },
         },
+        // Entradas de superficies temporales (modal, drawer, toast). Son
+        // desplazamientos cortos y opacidad: nada de rebotes ni escalados
+        // llamativos, que es estetica de casino y esta prohibida.
+        "lsw-fade-in": {
+          from: { opacity: "0" },
+          to: { opacity: "1" },
+        },
+        "lsw-slide-in-right": {
+          from: { transform: "translateX(100%)" },
+          to: { transform: "translateX(0)" },
+        },
+        "lsw-slide-in-left": {
+          from: { transform: "translateX(-100%)" },
+          to: { transform: "translateX(0)" },
+        },
+        "lsw-slide-in-bottom": {
+          from: { transform: "translateY(100%)" },
+          to: { transform: "translateY(0)" },
+        },
       },
 
       animation: {
         "lsw-pulse": "lsw-pulse 1.6s cubic-bezier(0.4, 0, 0.6, 1) infinite",
         "lsw-spin": "lsw-spin 0.7s linear infinite",
+        // La duracion sale de los tokens: con `prefers-reduced-motion` valen
+        // 0ms en el origen, asi que la animacion desaparece sin que ningun
+        // componente tenga que acordarse (ademas de `motion-reduce`).
+        "lsw-fade-in": "lsw-fade-in var(--lsw-duration-fast) var(--lsw-ease-standard)",
+        "lsw-slide-in-right":
+          "lsw-slide-in-right var(--lsw-duration-base) var(--lsw-ease-emphasized)",
+        "lsw-slide-in-left":
+          "lsw-slide-in-left var(--lsw-duration-base) var(--lsw-ease-emphasized)",
+        "lsw-slide-in-bottom":
+          "lsw-slide-in-bottom var(--lsw-duration-base) var(--lsw-ease-emphasized)",
       },
     },
   },

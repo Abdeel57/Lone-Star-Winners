@@ -15,11 +15,14 @@
  * `emitsAuditEvent` marca lo que un tercero debe poder reconstruir despues.
  */
 
+import { type FeatureFlagKey } from "./flags.js";
+
 export const CAPABILITY_DOMAINS = [
   "session",
   "participant",
   "pii",
   "order",
+  "product",
   "payment",
   "entry",
   "amoe",
@@ -32,6 +35,7 @@ export const CAPABILITY_DOMAINS = [
   "audit",
   "rbac",
   "reconciliation",
+  "dashboard",
   "tpa",
   "system",
 ] as const;
@@ -60,10 +64,21 @@ export interface CapabilityDefinition {
   /** Accede a datos personales identificables. */
   readonly touchesPii: boolean;
   /**
-   * La capacidad esta ademas condicionada por un feature flag persistido en
-   * base de datos (DEC-013). El identificador canonico del flag esta pendiente
-   * de `HO-003`: enumerarlo aqui ahora seria cerrar en solitario un acuerdo que
-   * corresponde a los tres agentes.
+   * Feature flag persistido (DEC-013) que ademas condiciona la capacidad, o
+   * `null` si no depende de ninguno.
+   *
+   * DEC-032 cerro `HO-003` y fijo el vocabulario, asi que el flag ya se puede
+   * NOMBRAR. Antes esto era un booleano suelto, y un booleano no le dice a
+   * `apps/api` QUE flag consultar: el identificador habria acabado escrito a
+   * mano en cada handler, que es justo el hardcoding que prohibe el principio
+   * #14. `authorize()` sigue exigiendo que alguien lo haya consultado; lo que
+   * cambia es que ahora se sabe cual.
+   */
+  readonly featureFlagKey: FeatureFlagKey | null;
+  /**
+   * Derivado de `featureFlagKey`, nunca independiente. Se conserva porque es la
+   * columna que siembra `packages/database`, y porque dos campos que pueden
+   * contradecirse acaban contradiciendose.
    */
   readonly dependsOnFeatureFlag: boolean;
   /** Entrada de `docs/LEGAL_PENDING.md` de la que depende, si aplica. */
@@ -77,7 +92,7 @@ interface CapabilityOptions {
   readonly requiresSecondApproval?: boolean;
   readonly emitsAuditEvent?: boolean;
   readonly touchesPii?: boolean;
-  readonly dependsOnFeatureFlag?: boolean;
+  readonly featureFlag?: FeatureFlagKey;
   readonly legalDependency?: string;
 }
 
@@ -100,7 +115,8 @@ function define(
     // auditar algo hay que escribirlo explicitamente, y eso se ve en revision.
     emitsAuditEvent: options.emitsAuditEvent ?? sensitivity !== "ROUTINE",
     touchesPii: options.touchesPii ?? false,
-    dependsOnFeatureFlag: options.dependsOnFeatureFlag ?? false,
+    featureFlagKey: options.featureFlag ?? null,
+    dependsOnFeatureFlag: options.featureFlag !== undefined,
     legalDependency: options.legalDependency ?? null,
   });
 }
@@ -143,7 +159,7 @@ export const CAPABILITIES = Object.freeze({
     "amoe",
     "SENSITIVE",
     "Enviar una participacion sin compra. El metodo exacto lo fijan las Official Rules.",
-    { dependsOnFeatureFlag: true, legalDependency: "AMOE" },
+    { featureFlag: "amoe_enabled", legalDependency: "AMOE" },
   ),
 
   // ---------------------------------------------------------------------
@@ -189,6 +205,24 @@ export const CAPABILITIES = Object.freeze({
       touchesPii: true,
     },
   ),
+  "dashboard.read": define(
+    "dashboard.read",
+    "dashboard",
+    "ROUTINE",
+    "Entrar al panel y ver sus agregados de cabecera. No devuelve PII ni cifras del ledger: la reconciliacion vive detras de reconciliation.read.",
+  ),
+  "promotion.read": define(
+    "promotion.read",
+    "promotion",
+    "ROUTINE",
+    "Ver promociones desde el panel, incluidas las que estan en DRAFT. La vista publica del storefront NO usa esta capacidad: es una ruta PUBLIC que solo expone promociones ya activas.",
+  ),
+  "product.read": define(
+    "product.read",
+    "product",
+    "ROUTINE",
+    "Ver el catalogo desde el panel, incluidos borradores y archivados. El storefront publico tampoco usa esta capacidad.",
+  ),
   "order.read": define(
     "order.read",
     "order",
@@ -226,6 +260,12 @@ export const CAPABILITIES = Object.freeze({
     "Iniciar un reembolso. Genera la reversal correspondiente en el ledger.",
     { requiresStepUp: true, requiresReason: true },
   ),
+  "payment.webhook.read": define(
+    "payment.webhook.read",
+    "payment",
+    "SENSITIVE",
+    "Inspeccionar los webhooks de pago ya persistidos y su resultado de proceso. Reprocesar sin poder leer seria operar a ciegas sobre dinero.",
+  ),
   "payment.webhook.replay": define(
     "payment.webhook.replay",
     "payment",
@@ -242,7 +282,7 @@ export const CAPABILITIES = Object.freeze({
       requiresStepUp: true,
       requiresReason: true,
       requiresSecondApproval: true,
-      dependsOnFeatureFlag: true,
+      featureFlag: "manual_adjustments_enabled",
     },
   ),
   "entry.adjust.approve": define(
@@ -268,6 +308,26 @@ export const CAPABILITIES = Object.freeze({
   ),
 
   // ---------------------------------------------------------------------
+  // Catalogo de mercancia.
+  //
+  // Aqui no hay ninguna capacidad sobre entries, igual que `products` no tiene
+  // ninguna columna de entries: que una compra genere participaciones lo decide
+  // la `PromotionRulesVersion` (DEC-012), nunca el producto.
+  // ---------------------------------------------------------------------
+  "product.write": define(
+    "product.write",
+    "product",
+    "SENSITIVE",
+    "Crear y editar productos, variantes y traducciones. No cambia lo que se puede comprar: eso es product.publish.",
+  ),
+  "product.publish": define(
+    "product.publish",
+    "product",
+    "SENSITIVE",
+    "Cambiar el estado de un producto o variante: publicar, retirar, archivar. Se separa de product.write porque es lo unico que altera la mercancia realmente adquirible durante una promocion viva.",
+  ),
+
+  // ---------------------------------------------------------------------
   // AMOE
   // ---------------------------------------------------------------------
   "amoe.review.read": define(
@@ -282,14 +342,14 @@ export const CAPABILITIES = Object.freeze({
     "amoe",
     "CRITICAL",
     "Aprobar una participacion AMOE y generar su entry.",
-    { requiresReason: true, dependsOnFeatureFlag: true, legalDependency: "AMOE" },
+    { requiresReason: true, featureFlag: "amoe_enabled", legalDependency: "AMOE" },
   ),
   "amoe.review.reject": define(
     "amoe.review.reject",
     "amoe",
     "CRITICAL",
     "Rechazar una participacion AMOE. El motivo es obligatorio y el historico se conserva.",
-    { requiresReason: true, dependsOnFeatureFlag: true, legalDependency: "AMOE" },
+    { requiresReason: true, featureFlag: "amoe_enabled", legalDependency: "AMOE" },
   ),
 
   // ---------------------------------------------------------------------
@@ -315,6 +375,12 @@ export const CAPABILITIES = Object.freeze({
     "CRITICAL",
     "Cerrar la promocion. DEC-011: el deadline se evalua en el servidor contra la timezone legal.",
     { requiresStepUp: true, requiresReason: true, legalDependency: "OFFICIAL_RULES" },
+  ),
+  "rules.version.read": define(
+    "rules.version.read",
+    "rules",
+    "SENSITIVE",
+    "Leer una version de reglas, incluidas las que estan en DRAFT. Sensible porque un borrador es texto legal todavia no aprobado por el abogado del cliente, y porque un tercero debe poder reconstruir quien consulto que version antes de un corte.",
   ),
   "rules.version.create": define(
     "rules.version.create",
@@ -356,6 +422,12 @@ export const CAPABILITIES = Object.freeze({
   // distintas: si fueran la misma, "lo revise yo mismo" seria toda la
   // evidencia disponible.
   // ---------------------------------------------------------------------
+  "export.snapshot.read": define(
+    "export.snapshot.read",
+    "export",
+    "SENSITIVE",
+    "Listar snapshots y leer su manifiesto: estado, corte, version de reglas, recuentos y hash. No descarga el contenido, que es export.download. Sin ella, DRAW_OFFICER no podria ni siquiera saber sobre que snapshot va a sortear.",
+  ),
   "export.snapshot.create": define(
     "export.snapshot.create",
     "export",
@@ -389,6 +461,12 @@ export const CAPABILITIES = Object.freeze({
     "Entregar el export al administrador externo por el canal configurado.",
     { requiresStepUp: true, requiresReason: true, touchesPii: true },
   ),
+  "tpa.config.read": define(
+    "tpa.config.read",
+    "tpa",
+    "SENSITIVE",
+    "Leer la configuracion del administrador externo: destino, esquema y version. NUNCA devuelve credenciales; los secretos viven fuera del repositorio y no se exponen por API.",
+  ),
   "tpa.config.update": define(
     "tpa.config.update",
     "tpa",
@@ -409,7 +487,7 @@ export const CAPABILITIES = Object.freeze({
     {
       requiresStepUp: true,
       requiresReason: true,
-      dependsOnFeatureFlag: true,
+      featureFlag: "internal_draw_enabled",
       legalDependency: "INTERNAL_DRAW",
     },
   ),
@@ -422,7 +500,7 @@ export const CAPABILITIES = Object.freeze({
       requiresStepUp: true,
       requiresReason: true,
       requiresSecondApproval: true,
-      dependsOnFeatureFlag: true,
+      featureFlag: "internal_draw_enabled",
       legalDependency: "INTERNAL_DRAW",
     },
   ),
@@ -461,7 +539,7 @@ export const CAPABILITIES = Object.freeze({
       requiresReason: true,
       requiresSecondApproval: true,
       touchesPii: true,
-      dependsOnFeatureFlag: true,
+      featureFlag: "winner_publication_enabled",
       legalDependency: "WINNER_PUBLICATION",
     },
   ),
@@ -469,6 +547,13 @@ export const CAPABILITIES = Object.freeze({
   // ---------------------------------------------------------------------
   // Cuentas, roles y sistema
   // ---------------------------------------------------------------------
+  "rbac.admin.read": define(
+    "rbac.admin.read",
+    "rbac",
+    "SENSITIVE",
+    "Listar cuentas de personal y sus roles vigentes. Es la evidencia con la que se le demuestra a un tercero que la separacion de funciones se cumplio de verdad, y no solo que estaba configurada.",
+    { touchesPii: true },
+  ),
   "rbac.admin.create": define(
     "rbac.admin.create",
     "rbac",
@@ -482,6 +567,13 @@ export const CAPABILITIES = Object.freeze({
     "CRITICAL",
     "Asignar o retirar roles. Es la via mas corta para saltarse cualquier otro control, asi que exige segunda aprobacion.",
     { requiresStepUp: true, requiresReason: true, requiresSecondApproval: true },
+  ),
+  "session.read.any": define(
+    "session.read.any",
+    "session",
+    "SENSITIVE",
+    "Listar las sesiones vivas de cualquier usuario. Sin ella, session.revoke.any obligaria a revocar a ciegas.",
+    { touchesPii: true },
   ),
   "session.revoke.any": define(
     "session.revoke.any",

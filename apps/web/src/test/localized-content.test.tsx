@@ -1,7 +1,33 @@
 import { render, screen } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import type { ReactNode } from "react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+// `Link` de next-intl necesita el router del App Router, que no existe en
+// jsdom. El doble reproduce su contrato documentado: anade el prefijo de
+// idioma cuando se le pasa uno.
+vi.mock("@/i18n/navigation", async () => {
+  const { createElement } = await import("react");
+
+  return {
+    usePathname: () => "/",
+    Link: ({
+      href,
+      locale,
+      children,
+      ...rest
+    }: {
+      href: string;
+      locale?: string;
+      children: ReactNode;
+    }) =>
+      createElement(
+        "a",
+        { href: locale === undefined ? href : `/${locale}${href}`, ...rest },
+        children,
+      ),
+  };
+});
 
 import { PromotionHero } from "@/components/promotion-hero";
 import { formatMoney, formatZonedDate } from "@/i18n/formatters";
@@ -22,6 +48,15 @@ import esMessages from "../../messages/es-US.json";
  * premio con `t()` "funciona" hasta que la clave no existe. Por eso hacen falta
  * redes explicitas.
  */
+
+/**
+ * Instante de referencia fijo.
+ *
+ * La cuenta atras necesita el instante del render del servidor para que el
+ * primer render de cliente coincida. En un test se fija para que el resultado
+ * no dependa de cuando se ejecute.
+ */
+const NOW = "2026-08-25T12:00:00.000Z";
 
 function renderIn(locale: Locale, ui: ReactNode) {
   return render(
@@ -108,14 +143,17 @@ describe("DEC-030: contenido dinamico localizado", () => {
   });
 
   it("el hero pinta el titulo del backend en cada idioma sin pasar por el diccionario", () => {
-    const first = renderIn("en", <PromotionHero promotion={activePromotion} locale="en" />);
+    const first = renderIn(
+      "en",
+      <PromotionHero promotion={activePromotion} locale="en" nowIso={NOW} />,
+    );
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
       activePromotion.title["en-US"],
     );
 
     first.unmount();
 
-    renderIn("es", <PromotionHero promotion={activePromotion} locale="es" />);
+    renderIn("es", <PromotionHero promotion={activePromotion} locale="es" nowIso={NOW} />);
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
       activePromotion.title["es-US"],
     );

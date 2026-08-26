@@ -72,6 +72,11 @@ export interface PermissionSeedRow {
   readonly emitsAuditEvent: boolean;
   readonly touchesPii: boolean;
   readonly dependsOnFeatureFlag: boolean;
+  /**
+   * DEC-032: QUE flag gobierna la capacidad, no solo si alguno lo hace.
+   * `dependsOnFeatureFlag` se DERIVA de esto en la base de datos.
+   */
+  readonly featureFlagKey: string | null;
   readonly legalDependency: string | null;
 }
 
@@ -106,6 +111,7 @@ export const PERMISSIONS: readonly PermissionSeedRow[] = CAPABILITY_IDS.map(
       emitsAuditEvent: capability.emitsAuditEvent,
       touchesPii: capability.touchesPii,
       dependsOnFeatureFlag: capability.dependsOnFeatureFlag,
+      featureFlagKey: capability.featureFlagKey,
       legalDependency: capability.legalDependency,
     };
   },

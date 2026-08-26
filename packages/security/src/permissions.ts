@@ -35,6 +35,9 @@ export const ROLE_CAPABILITIES: Readonly<Record<RoleId, readonly CapabilityId[]>
   SUPPORT: [
     "session.self.read",
     "session.self.revoke",
+    "dashboard.read",
+    "promotion.read",
+    "product.read",
     "participant.list",
     "participant.read",
     "pii.view.masked",
@@ -47,6 +50,7 @@ export const ROLE_CAPABILITIES: Readonly<Record<RoleId, readonly CapabilityId[]>
   PROMOTION_MANAGER: [
     "session.self.read",
     "session.self.revoke",
+    "dashboard.read",
     "participant.list",
     "participant.read",
     "pii.view.masked",
@@ -57,10 +61,15 @@ export const ROLE_CAPABILITIES: Readonly<Record<RoleId, readonly CapabilityId[]>
     "amoe.review.read",
     "amoe.review.approve",
     "amoe.review.reject",
+    "product.read",
+    "product.write",
+    "product.publish",
+    "promotion.read",
     "promotion.create",
     "promotion.update",
     "promotion.activate",
     "promotion.close",
+    "rules.version.read",
     "rules.version.create",
     "flag.read",
     "reconciliation.read",
@@ -70,17 +79,22 @@ export const ROLE_CAPABILITIES: Readonly<Record<RoleId, readonly CapabilityId[]>
   COMPLIANCE_OFFICER: [
     "session.self.read",
     "session.self.revoke",
+    "dashboard.read",
+    "promotion.read",
+    "product.read",
     "participant.list",
     "participant.read",
     "pii.view.masked",
     "pii.view.full",
     "order.read",
+    "payment.webhook.read",
     "entry.ledger.read",
     "entry.adjust.approve",
     "participant.disqualify",
     "amoe.review.read",
     "amoe.review.approve",
     "amoe.review.reject",
+    "rules.version.read",
     "rules.version.create",
     "rules.version.activate",
     "flag.read",
@@ -88,6 +102,12 @@ export const ROLE_CAPABILITIES: Readonly<Record<RoleId, readonly CapabilityId[]>
     "reconciliation.read",
     "audit.read",
     "audit.integrity.verify",
+    // Lectura, no administracion: COMPLIANCE_OFFICER no crea cuentas ni asigna
+    // roles. Necesita ver quien tenia que rol para poder EVIDENCIAR ante un
+    // tercero que la separacion de funciones se respeto.
+    "rbac.admin.read",
+    "tpa.config.read",
+    "export.snapshot.read",
     "export.snapshot.create",
     "export.snapshot.validate",
     "export.finalize",
@@ -103,7 +123,14 @@ export const ROLE_CAPABILITIES: Readonly<Record<RoleId, readonly CapabilityId[]>
   DRAW_OFFICER: [
     "session.self.read",
     "session.self.revoke",
+    "dashboard.read",
     "flag.read",
+    // Sin estas tres, DEC-017 seria inaplicable en la practica: no se puede
+    // comprobar que un snapshot esta FINALIZED, ni bajo que version de reglas
+    // se corto, sobre un objeto que no se puede leer.
+    "promotion.read",
+    "rules.version.read",
+    "export.snapshot.read",
     "draw.initiate",
     "draw.result.read",
     "winner.workflow.read",
@@ -114,11 +141,16 @@ export const ROLE_CAPABILITIES: Readonly<Record<RoleId, readonly CapabilityId[]>
   EXPORT_OFFICER: [
     "session.self.read",
     "session.self.revoke",
+    "dashboard.read",
     "flag.read",
+    "promotion.read",
+    "rules.version.read",
     "reconciliation.read",
+    "export.snapshot.read",
     "export.snapshot.validate",
     "export.download",
     "export.deliver",
+    "tpa.config.read",
     "tpa.config.update",
   ],
 
@@ -127,7 +159,10 @@ export const ROLE_CAPABILITIES: Readonly<Record<RoleId, readonly CapabilityId[]>
   SECURITY_ADMIN: [
     "session.self.read",
     "session.self.revoke",
+    "dashboard.read",
+    "session.read.any",
     "session.revoke.any",
+    "rbac.admin.read",
     "rbac.admin.create",
     "rbac.role.assign",
     "flag.read",
@@ -141,7 +176,12 @@ export const ROLE_CAPABILITIES: Readonly<Record<RoleId, readonly CapabilityId[]>
   SYSTEM: [
     "system.job.run",
     "audit.integrity.verify",
+    // Un job que asienta una reversal tiene que poder leer el ledger sobre el
+    // que la asienta, y el reproceso de un webhook empieza por leerlo. No es
+    // ensanchar el actor: es dejar de pedirle que escriba a ciegas.
+    "entry.ledger.read",
     "entry.reversal.create",
+    "payment.webhook.read",
     "payment.webhook.replay",
   ],
 });
@@ -184,6 +224,109 @@ export const SEPARATION_OF_DUTIES: readonly SeparationOfDutiesConstraint[] = Obj
       "Quien declara correcto el contenido y quien se lo lleva al administrador externo deben ser personas distintas.",
   },
 ]);
+
+/**
+ * Cobertura de lectura: toda escritura tiene una lectura que la acompana.
+ *
+ * POR QUE ESTO EXISTE
+ *   `HO-013`. El catalogo concedia a `PROMOTION_MANAGER` crear, editar, activar
+ *   y cerrar una promocion, y NO concedia leerla. El agujero no lo detecto
+ *   ninguna prueba porque todas las que habia miraban lo contrario -que nadie
+ *   tuviera de mas- y ninguna miraba que nadie tuviera de menos. Deny-by-default
+ *   tiene ese punto ciego: los permisos que faltan no fallan hasta que alguien
+ *   intenta usarlos, y para entonces el atajo evidente es conceder algo mas
+ *   ancho de lo necesario, que es como se degrada una matriz de permisos.
+ *
+ *   Concretamente, `backend` acabo reapuntando tests a `order.read` porque no
+ *   habia nada mejor. Ese es exactamente el mecanismo del que hablo.
+ *
+ * QUE IMPONE
+ *   Dos cosas, ambas comprobadas en `tests/security`:
+ *     1. Toda capacidad de escritura esta emparejada con una de lectura, o
+ *        figura en la lista cerrada de excepciones. Una capacidad de escritura
+ *        nueva obliga a decidirlo a proposito.
+ *     2. Ningun rol tiene la escritura sin tener su lectura.
+ *
+ * QUE NO IMPONE
+ *   Lo contrario. Tener la lectura sin la escritura es lo normal y deseable:
+ *   `SUPPORT` lee promociones y no las toca.
+ */
+export interface ReadCoverageRule {
+  readonly write: CapabilityId;
+  readonly read: CapabilityId;
+}
+
+export const CAPABILITY_READ_COVERAGE: readonly ReadCoverageRule[] = Object.freeze([
+  { write: "session.self.revoke", read: "session.self.read" },
+  { write: "session.revoke.any", read: "session.read.any" },
+  { write: "participant.self.update", read: "participant.self.read" },
+  { write: "amoe.self.submit", read: "entry.self.read" },
+  { write: "pii.export", read: "pii.view.full" },
+  { write: "order.refund.initiate", read: "order.read" },
+  { write: "payment.webhook.replay", read: "payment.webhook.read" },
+  { write: "entry.adjust.create", read: "entry.ledger.read" },
+  { write: "entry.adjust.approve", read: "entry.ledger.read" },
+  { write: "entry.reversal.create", read: "entry.ledger.read" },
+  { write: "participant.disqualify", read: "participant.read" },
+  { write: "amoe.review.approve", read: "amoe.review.read" },
+  { write: "amoe.review.reject", read: "amoe.review.read" },
+  { write: "product.write", read: "product.read" },
+  { write: "product.publish", read: "product.read" },
+  { write: "promotion.create", read: "promotion.read" },
+  { write: "promotion.update", read: "promotion.read" },
+  { write: "promotion.activate", read: "promotion.read" },
+  { write: "promotion.close", read: "promotion.read" },
+  { write: "rules.version.create", read: "rules.version.read" },
+  { write: "rules.version.activate", read: "rules.version.read" },
+  { write: "flag.update", read: "flag.read" },
+  { write: "flag.update.legally_material", read: "flag.read" },
+  { write: "export.snapshot.create", read: "export.snapshot.read" },
+  { write: "export.snapshot.validate", read: "export.snapshot.read" },
+  { write: "export.finalize", read: "export.snapshot.read" },
+  { write: "export.download", read: "export.snapshot.read" },
+  { write: "export.deliver", read: "export.snapshot.read" },
+  { write: "tpa.config.update", read: "tpa.config.read" },
+  // El sorteo se inicia sobre un snapshot: sin poder leerlo no hay forma de
+  // comprobar el cerrojo 4 de DEC-017 (entrada inmutable verificada).
+  { write: "draw.authorization.create", read: "promotion.read" },
+  { write: "draw.initiate", read: "export.snapshot.read" },
+  { write: "winner.status.update", read: "winner.workflow.read" },
+  { write: "winner.publish", read: "winner.workflow.read" },
+  { write: "rbac.admin.create", read: "rbac.admin.read" },
+  { write: "rbac.role.assign", read: "rbac.admin.read" },
+]);
+
+/**
+ * Capacidades de escritura sin lectura emparejada, a proposito.
+ *
+ * Lista CERRADA. Cada entrada tiene que poder justificarse por escrito, igual
+ * que una ruta publica.
+ */
+export const READ_COVERAGE_EXEMPTIONS: Readonly<Record<string, string>> = Object.freeze({
+  "system.job.run":
+    "No opera sobre un recurso concreto: dispara trabajos del sistema. Cada trabajo lee con las capacidades que su propia tarea exija.",
+});
+
+/** Segmentos que identifican una capacidad de lectura. */
+const READ_SEGMENTS: ReadonlySet<string> = new Set(["read", "list", "view", "verify"]);
+
+export function isReadCapability(capability: CapabilityId): boolean {
+  return capability.split(".").some((segment) => READ_SEGMENTS.has(segment));
+}
+
+/**
+ * Lecturas que le faltan a un actor para poder usar las escrituras que tiene.
+ *
+ * No deniega: el punto ciego de `HO-013` no es un permiso de mas, es un
+ * permiso de menos, y denegar por eso solo empeoraria las cosas. Se usa como
+ * comprobacion sobre la matriz y al revisar una combinacion de roles.
+ */
+export function findMissingReadCoverage(roles: readonly RoleId[]): readonly ReadCoverageRule[] {
+  const effective = capabilitiesForRoles(roles);
+  return CAPABILITY_READ_COVERAGE.filter(
+    (rule) => effective.has(rule.write) && !effective.has(rule.read),
+  );
+}
 
 const ROLE_CAPABILITY_ENTRIES = ROLE_IDS.map(
   (role): readonly [RoleId, ReadonlySet<CapabilityId>] => [

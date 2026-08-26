@@ -173,6 +173,165 @@ describe("cobertura de estados de promocion", () => {
   });
 });
 
+describe("cobertura de la maquina de estados", () => {
+  it("cada fase tiene titulo y cuerpo en los dos idiomas", () => {
+    // La insignia dice COMO se llama el estado; el aviso dice QUE significa.
+    // Sin la segunda mitad, los dos estados intermedios volverian a ser
+    // indistinguibles de "cerrado", que es lo que la maquina de estados existe
+    // para evitar.
+    const noticeKeys = [
+      "upcoming",
+      "active",
+      "ended",
+      "administratorProcessing",
+      "winnerVerification",
+      "completed",
+    ];
+
+    for (const key of noticeKeys) {
+      for (const field of ["title", "body"]) {
+        expect(en.has(`promotionState.${key}.${field}`), `falta en en-US: ${key}.${field}`).toBe(
+          true,
+        );
+        expect(es.has(`promotionState.${key}.${field}`), `falta en es-US: ${key}.${field}`).toBe(
+          true,
+        );
+      }
+    }
+  });
+});
+
+describe("cobertura de modalidades AMOE (DEC-032)", () => {
+  it("las cuatro modalidades tienen texto en los dos idiomas", () => {
+    // `amoe_mode` es enum precisamente porque cada modalidad necesita su propia
+    // pantalla. Una modalidad sin texto dejaria sin explicacion el unico metodo
+    // de participacion que no exige comprar nada.
+    const modes = ["ONLINE_FORM", "MAIL_IN_REVIEW", "CODE", "EXTERNAL_INSTRUCTIONS"];
+
+    for (const mode of modes) {
+      expect(en.has(`amoe.${mode}`), `falta en en-US: ${mode}`).toBe(true);
+      expect(es.has(`amoe.${mode}`), `falta en es-US: ${mode}`).toBe(true);
+    }
+
+    // Y el caso de flag encendido sin modalidad publicada.
+    expect(en.has("amoe.modeNotPublished")).toBe(true);
+    expect(es.has("amoe.modeNotPublished")).toBe(true);
+  });
+
+  it("las cuatro modalidades dicen cosas distintas en cada idioma", () => {
+    const modes = ["ONLINE_FORM", "MAIL_IN_REVIEW", "CODE", "EXTERNAL_INSTRUCTIONS"];
+
+    for (const dictionary of [en, es]) {
+      const texts = modes.map((mode) => dictionary.get(`amoe.${mode}`));
+      expect(new Set(texts).size).toBe(modes.length);
+    }
+  });
+});
+
+describe("lenguaje de cumplimiento (CLAUDE.md seccion 1)", () => {
+  /**
+   * El producto NO es una rifa, ni una loteria, ni una venta de boletos, y el
+   * texto no puede describirlo asi en ninguno de los dos idiomas.
+   *
+   * Esto importa especialmente en espanol: una traduccion laxa -"compra tus
+   * boletos", "oportunidades de ganar"- crearia una representacion legal
+   * distinta de la inglesa sobre el mismo producto. El riesgo no es de estilo.
+   *
+   * Se comprueba sobre el DICCIONARIO ENTERO y no sobre las pantallas: asi la
+   * red cubre tambien el texto que todavia no se usa en ninguna pantalla.
+   */
+  const FORBIDDEN: readonly { readonly pattern: RegExp; readonly why: string }[] = [
+    { pattern: /\braffles?\b/i, why: "rifa" },
+    { pattern: /\blotter(y|ies)\b/i, why: "loteria" },
+    { pattern: /\brifas?\b/i, why: "rifa" },
+    { pattern: /\bloter[ií]as?\b/i, why: "loteria" },
+    { pattern: /\bboletos?\b/i, why: "boletos" },
+    { pattern: /\bticket(s)?\b/i, why: "boletos" },
+    { pattern: /\bgambl\w*/i, why: "juego de azar" },
+    { pattern: /\bapuestas?\b/i, why: "apuestas" },
+    { pattern: /\bcasino\b/i, why: "casino" },
+    // Describir la compra como adquisicion de participaciones u oportunidades.
+    //
+    // Los verbos van con todas sus formas a proposito. La primera version de
+    // esta red solo cazaba `buy entries` y dejaba pasar `buying entries`, de
+    // modo que marcaba la pregunta del FAQ en espanol y no su equivalente en
+    // ingles. Una red asimetrica entre los dos idiomas es peor que no tenerla:
+    // da por bueno en uno lo que prohibe en el otro.
+    //
+    // La ventana intermedia esta ACOTADA (`{0,12}`) en vez de usar un grupo
+    // opcional con `\s+` dentro: dos cuantificadores anidados sobre el mismo
+    // conjunto de caracteres es el patron que dispara retroceso catastrofico, y
+    // no hace falta ninguno para cazar "buying the entries".
+    {
+      pattern:
+        /\b(?:buy|buys|buying|bought|purchase|purchases|purchasing)\b[^.!?]{0,12}\b(?:entries|entry|chances|tickets)\b/i,
+      why: "comprar participaciones",
+    },
+    { pattern: /\bchances?\s+to\s+win\b/i, why: "oportunidades de ganar" },
+    {
+      pattern:
+        /\b(?:compr|adquir)[a-zé]{1,8}\b[^.!?]{0,12}\b(?:participaciones|boletos|oportunidades)\b/i,
+      why: "comprar participaciones",
+    },
+    { pattern: /\boportunidades?\s+de\s+ganar\b/i, why: "oportunidades de ganar" },
+  ];
+
+  /**
+   * Excepciones, por CLAVE y no por idioma.
+   *
+   * Que la excepcion sea la clave y no la cadena es deliberado: exime a la vez
+   * a los dos idiomas, de modo que no puede existir una version inglesa mas
+   * permisiva que la espanola ni al reves.
+   *
+   * `faq.q2.question` es la unica: la frase aparece formulada como PREGUNTA
+   * ("¿estoy comprando participaciones?" / "am I buying entries?") y la
+   * respuesta contigua la niega expresamente. Es el sitio donde el producto
+   * aclara la confusion, no donde la comete.
+   */
+  const ALLOWED_KEYS: readonly string[] = ["faq.q2.question"];
+
+  it("ningun texto describe la compra como una rifa, una loteria o boletos", () => {
+    const offenders: string[] = [];
+
+    for (const [tag, dictionary] of [
+      ["en-US", en],
+      ["es-US", es],
+    ] as const) {
+      for (const [key, value] of dictionary) {
+        if (typeof value !== "string") continue;
+        if (ALLOWED_KEYS.includes(key)) continue;
+
+        for (const { pattern, why } of FORBIDDEN) {
+          if (pattern.test(value)) offenders.push(`${tag}:${key} (${why}): "${value}"`);
+        }
+      }
+    }
+
+    expect(offenders, `lenguaje prohibido:\n${offenders.join("\n")}`).toEqual([]);
+  });
+
+  it("toda excepcion existe en los dos idiomas y su respuesta niega la premisa", () => {
+    for (const key of ALLOWED_KEYS) {
+      expect(en.has(key), `excepcion sin equivalente en en-US: ${key}`).toBe(true);
+      expect(es.has(key), `excepcion sin equivalente en es-US: ${key}`).toBe(true);
+    }
+
+    // La excepcion solo se sostiene mientras la respuesta siga negandolo. Si
+    // alguien reescribiera la respuesta, esto lo detiene.
+    expect(en.get("faq.q2.answer")).toMatch(/^No\./);
+    expect(es.get("faq.q2.answer")).toMatch(/^No\./);
+  });
+
+  it("las Reglas Oficiales se nombran igual en todo el producto", () => {
+    // Si el documento aparece con tres nombres distintos, deja de ser evidente
+    // que las tres referencias hablan del mismo texto vinculante.
+    expect(en.get("nav.officialRules")).toBe("Official Rules");
+    expect(es.get("nav.officialRules")).toBe("Reglas Oficiales");
+    expect(en.get("officialRules.title")).toBe("Official Rules");
+    expect(es.get("officialRules.title")).toBe("Reglas Oficiales");
+  });
+});
+
 describe("etiquetas BCP-47", () => {
   it("cada locale de ruta se corresponde con la variante estadounidense", () => {
     const tags = LOCALES.map((locale: Locale) => localeTag(locale));
