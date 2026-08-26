@@ -1,38 +1,32 @@
-import { http, HttpResponse, type JsonBodyType } from "msw";
+import { http, HttpResponse, type JsonBodyType, type RequestHandler } from "msw";
 
 import {
   API_PATHS,
   apiBaseUrl,
-  cartItemPath,
   officialRulesPath,
   productPath,
   promotionPath,
   type ApiErrorEnvelope,
 } from "@/lib/api";
 
-import { cartWithQuote, emptyCartWithQuote } from "./fixtures/cart";
-import { catalog, productDetails } from "./fixtures/catalog";
-import { defaultConfig } from "./fixtures/config";
-import { officialRules } from "./fixtures/official-rules";
-import { activePromotion, activePromotionDetail, publicPromotions } from "./fixtures/promotions";
+import { mockRoutes, MOCK_REQUEST_ID, type MockMethod } from "./routes";
 
 /**
- * Handlers de MSW.
+ * Handlers de MSW, DERIVADOS de `routes.ts`.
  *
- * Sustituyen a un backend cuyas rutas `docs/API_CONTRACT.md` marca como
- * `PROPOSED`: acordadas en papel y NO implementadas. Dos cosas que estos
- * handlers no son:
+ * Los mismos fixtures se sirven en `next dev` por un servidor HTTP de verdad
+ * (`dev-server.ts`), porque interceptar dentro del proceso de Next resulto no
+ * ser fiable; la explicacion medida esta en ese archivo. Aqui, dentro de
+ * Vitest, MSW si es fiable y se sigue usando.
  *
- * - No son un contrato. Que un handler responda algo no significa que ese
- *   endpoint exista ni que vaya a tener esa forma. Lo acordado se escribe en
- *   `docs/API_CONTRACT.md`.
- * - No son logica de negocio. Aqui no se calcula ni una sola participacion,
- *   ni un subtotal, ni un total de linea. El calculo es de `backend`
- *   (requisito R13 de `security`). Estos handlers devuelven fixtures fijos.
+ * Lo importante es que NINGUNO de los dos declara sus rutas: ambos las leen de
+ * `routes.ts`. Un fixture que exista en los tests existe en el navegador, y al
+ * reves, sin que nadie tenga que acordarse de sincronizarlos.
  *
- * Las mutaciones del carrito devuelven un fixture y NO acumulan estado. Un
- * carrito de mentira que sumara lineas seria una implementacion de carrito
- * viviendo en el frontend, que es exactamente lo que DEC-023 saca de aqui.
+ * Estos handlers NO son un contrato -lo acordado se escribe en
+ * `docs/API_CONTRACT.md`- ni logica de negocio: no se calcula aqui ni una sola
+ * participacion, ni un subtotal, ni un total de linea (requisito R13 de
+ * `security`).
  */
 
 function url(path: string): string {
@@ -51,37 +45,27 @@ export function errorEnvelope(code: string, details?: unknown): ApiErrorEnvelope
     error: {
       code,
       ...(details === undefined ? {} : { details }),
-      request_id: "req_mock_000000000000",
+      request_id: MOCK_REQUEST_ID,
     },
   };
 }
 
-export const handlers = [
-  http.get(url(API_PATHS.siteConfig), () => HttpResponse.json(defaultConfig)),
+/**
+ * Constructor de handler por metodo.
+ *
+ * El mapa explicito evita indexar `http` con una cadena: si `MockMethod` crece,
+ * deja de compilar aqui en vez de fallar en tiempo de ejecucion.
+ */
+const BY_METHOD: Record<MockMethod, typeof http.get> = {
+  GET: http.get,
+  POST: http.post,
+  PATCH: http.patch,
+  DELETE: http.delete,
+};
 
-  // Promociones
-  http.get(url(API_PATHS.activePromotion), () => HttpResponse.json(activePromotion)),
-  http.get(url(API_PATHS.promotions), () =>
-    HttpResponse.json({ items: publicPromotions, next_cursor: null }),
-  ),
-  http.get(url(promotionPath(activePromotion.slug)), () =>
-    HttpResponse.json(activePromotionDetail),
-  ),
-  http.get(url(officialRulesPath(activePromotion.slug)), () => HttpResponse.json(officialRules)),
-
-  // Catalogo
-  http.get(url(API_PATHS.products), () => HttpResponse.json({ items: catalog, next_cursor: null })),
-  ...productDetails.map((product) =>
-    http.get(url(productPath(product.slug)), () => HttpResponse.json(product)),
-  ),
-
-  // Carrito
-  http.get(url(API_PATHS.cart), () => HttpResponse.json(emptyCartWithQuote)),
-  http.get(url(API_PATHS.cartEntryQuote), () => HttpResponse.json(emptyCartWithQuote.entry_quote)),
-  http.post(url(API_PATHS.cartItems), () => HttpResponse.json(cartWithQuote)),
-  http.patch(url(cartItemPath(":itemId")), () => HttpResponse.json(cartWithQuote)),
-  http.delete(url(cartItemPath(":itemId")), () => HttpResponse.json(emptyCartWithQuote)),
-];
+export const handlers: readonly RequestHandler[] = mockRoutes.map((route) =>
+  BY_METHOD[route.method](url(route.path), () => HttpResponse.json(route.body as JsonBodyType)),
+);
 
 /**
  * Handlers alternativos para escenarios concretos.

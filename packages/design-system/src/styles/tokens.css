@@ -10,53 +10,110 @@
  * Convenciones
  * ------------
  * 1. Los tokens de color se declaran como CANALES RGB separados por espacio
- *    (15 42 74), no como notacion hexadecimal. Es lo que permite a Tailwind
+ *    (201 162 39), no como notacion hexadecimal. Es lo que permite a Tailwind
  *    aplicar modificadores de opacidad (bg-brand/10) mediante <alpha-value>.
  *    En CSS plano se consumen como rgb(var(--lsw-color-brand)).
  * 2. Los nombres son SEMANTICOS (surface, text-muted, danger), nunca
- *    literales (azul-oscuro). Cambiar la marca no debe obligar a tocar ningun
- *    componente.
- * 3. El tema oscuro redefine tokens; nunca redefine componentes.
+ *    literales (oro-claro). Cambiar la marca no debe obligar a tocar ningun
+ *    componente. Esta misma reescritura es la prueba: el sistema paso de azul
+ *    marino sobre blanco a oro sobre negro sin que ningun componente de
+ *    `@lsw/ui` cambiara de nombre de color.
+ * 3. Hay UN SOLO TEMA. Ver mas abajo.
  *
- * Direccion de marca: marca americana premium y sobria. Azul marino profundo
- * como color primario, carmesi contenido como acento, neutros calidos.
- * Prohibido explicitamente: oro brillante, degradados neon, sombras de brillo
- * y cualquier otro recurso de estetica de casino (CLAUDE.md, seccion 1).
+ * ---------------------------------------------------------------------------
+ * DIRECCION DE MARCA (DEC-038)
+ * ---------------------------------------------------------------------------
+ * Negro profundo como superficie, ORO como acento, blanco calido para texto.
+ * La gama sale del logotipo entregado por el cliente (`apps/web/brand/
+ * logo.jpeg`): estrella negra biselada con filete dorado, coronada, sobre
+ * negro. La referencia de composicion es dark-first y de titulares enormes.
+ *
+ * NOTA SUPERSEDED. La version anterior de este archivo declaraba: "Prohibido
+ * explicitamente: oro brillante, degradados neon, sombras de brillo y cualquier
+ * otro recurso de estetica de casino". DEC-038 deja sin efecto la parte
+ * cromatica de esa nota y explica por que: la proteccion real contra la
+ * estetica de casino nunca fue el color, sino el LENGUAJE, y esa parte se
+ * mantiene entera. Siguen prohibidos, ahora por escrito:
+ *
+ *   - describir la compra como boletos, oportunidades o participaciones a la
+ *     venta (CLAUDE.md, seccion 1);
+ *   - cifras de participaciones fuera del carrito, que es donde las produce el
+ *     backend (DEC-023);
+ *   - urgencia fabricada, parpadeos, contadores que "deciden" nada.
+ *
+ * Lo que DEC-038 autoriza es cromatico y tipografico: oro, negro, titulares
+ * grandes en mayusculas y secciones de alto contraste.
+ *
+ * ---------------------------------------------------------------------------
+ * UN SOLO TEMA, OSCURO (DEC-038)
+ * ---------------------------------------------------------------------------
+ * La dualidad claro/oscuro desaparece. El logotipo es negro y oro y la
+ * identidad es dark-first: un tema claro seria una segunda marca a mantener,
+ * no una preferencia. `color-scheme: dark` se declara para que los controles
+ * nativos del navegador (scrollbars, selectores de fecha, autocompletado)
+ * lleguen ya en oscuro en vez de aparecer como rectangulos blancos dentro de
+ * una pagina negra.
+ *
+ * Consecuencia practica: NINGUN color se define dentro de un bloque de tema.
+ * Todos viven en `:root` y no hay nada que reasignar.
  * ------------------------------------------------------------------------- */
 
 :root {
-  color-scheme: light dark;
+  color-scheme: dark;
 
   /* --- Tipografia: familias ---------------------------------------------- */
+  /* Las dos familias de marca las inyecta `next/font` en el elemento raiz como
+     `--font-lsw-sans` y `--font-lsw-display` (ver apps/web/src/app/fonts.ts).
+     Se referencian aqui con respaldo completo: si la app no las declara -por
+     ejemplo en un test que renderiza una primitiva suelta- la cadena sigue
+     resolviendo a una familia real. */
   --lsw-font-sans:
-    ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial,
-    "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
-  /* La familia de display se separa desde el principio para poder introducir
-     una tipografia de marca con next/font sin tocar ni un componente. */
-  --lsw-font-display: var(--lsw-font-sans);
+    var(--font-lsw-sans), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+  /* Display: condensada, alta y pesada. Los titulares van en MAYUSCULAS con
+     tracking (ver `.lsw-display` en globals.css). Los respaldos son las
+     condensadas que existen de serie en Windows y macOS, por ese orden, para
+     que un fallo de la fuente de marca degrade a algo estrecho y no a la misma
+     sans del cuerpo. */
+  --lsw-font-display:
+    var(--font-lsw-display), "Oswald", "Haettenschweiler", "Arial Narrow",
+    "Helvetica Neue Condensed", "Impact", var(--lsw-font-sans);
   --lsw-font-mono:
     ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
 
-  /* --- Tipografia: escala (mobile-first mediante clamp) ------------------- */
-  --lsw-text-display-lg-size: clamp(2.125rem, 1.55rem + 2.6vw, 3.5rem);
-  --lsw-text-display-lg-line: 1.06;
-  --lsw-text-display-lg-tracking: -0.022em;
+  /* --- Tipografia: escala (mobile-first mediante clamp) -------------------
+   *
+   * `display-xl` es nueva con DEC-038: es el titular del hero, y su minimo
+   * (2.5rem) esta calculado para que un titulo de dos palabras largas quepa en
+   * 360px sin desbordar. El maximo es deliberadamente grande: la referencia
+   * visual construye la jerarquia con tamano, no con adornos.
+   *
+   * Los `tracking` positivos de `display-*` son consecuencia de la condensada
+   * en mayusculas: sin ellos las astas se tocan y el titular se lee como una
+   * mancha. */
+  --lsw-text-display-xl-size: clamp(2.5rem, 1.15rem + 6vw, 5.5rem);
+  --lsw-text-display-xl-line: 0.96;
+  --lsw-text-display-xl-tracking: 0.005em;
+
+  --lsw-text-display-lg-size: clamp(2.125rem, 1.4rem + 3.2vw, 3.75rem);
+  --lsw-text-display-lg-line: 1;
+  --lsw-text-display-lg-tracking: 0.006em;
 
   --lsw-text-display-md-size: clamp(1.75rem, 1.35rem + 1.8vw, 2.5rem);
-  --lsw-text-display-md-line: 1.12;
-  --lsw-text-display-md-tracking: -0.018em;
+  --lsw-text-display-md-line: 1.06;
+  --lsw-text-display-md-tracking: 0.008em;
 
   --lsw-text-heading-lg-size: clamp(1.5rem, 1.3rem + 0.9vw, 1.875rem);
-  --lsw-text-heading-lg-line: 1.2;
-  --lsw-text-heading-lg-tracking: -0.012em;
+  --lsw-text-heading-lg-line: 1.15;
+  --lsw-text-heading-lg-tracking: 0.01em;
 
   --lsw-text-heading-md-size: 1.25rem;
-  --lsw-text-heading-md-line: 1.3;
-  --lsw-text-heading-md-tracking: -0.008em;
+  --lsw-text-heading-md-line: 1.25;
+  --lsw-text-heading-md-tracking: 0.012em;
 
   --lsw-text-heading-sm-size: 1.0625rem;
-  --lsw-text-heading-sm-line: 1.35;
-  --lsw-text-heading-sm-tracking: -0.004em;
+  --lsw-text-heading-sm-line: 1.3;
+  --lsw-text-heading-sm-tracking: 0.012em;
 
   --lsw-text-body-lg-size: 1.125rem;
   --lsw-text-body-lg-line: 1.65;
@@ -72,7 +129,7 @@
 
   --lsw-text-label-size: 0.8125rem;
   --lsw-text-label-line: 1.4;
-  --lsw-text-label-tracking: 0.01em;
+  --lsw-text-label-tracking: 0.02em;
 
   --lsw-text-caption-size: 0.75rem;
   --lsw-text-caption-line: 1.45;
@@ -80,12 +137,17 @@
 
   --lsw-text-overline-size: 0.6875rem;
   --lsw-text-overline-line: 1.3;
-  --lsw-text-overline-tracking: 0.12em;
+  --lsw-text-overline-tracking: 0.18em;
 
   --lsw-font-weight-regular: 400;
   --lsw-font-weight-medium: 500;
   --lsw-font-weight-semibold: 600;
   --lsw-font-weight-bold: 700;
+
+  /* Tracking de los titulares en mayusculas. Se expone como token propio
+     porque lo consumen tanto `.lsw-display` como utilidades de Tailwind. */
+  --lsw-tracking-display: 0.04em;
+  --lsw-tracking-wide: 0.12em;
 
   /* --- Espaciado ---------------------------------------------------------- */
   --lsw-space-0: 0rem;
@@ -102,13 +164,17 @@
   --lsw-space-20: 5rem;
   --lsw-space-24: 6rem;
 
-  /* --- Radios ------------------------------------------------------------- */
+  /* --- Radios -------------------------------------------------------------
+   *
+   * DEC-038 los estrecha. La referencia visual es de esquinas casi rectas:
+   * sobre negro, un radio grande lee como interfaz de aplicacion, y uno
+   * pequeno lee como pieza impresa o de automocion, que es la direccion. */
   --lsw-radius-none: 0rem;
-  --lsw-radius-sm: 0.25rem;
-  --lsw-radius-md: 0.5rem;
-  --lsw-radius-lg: 0.75rem;
-  --lsw-radius-xl: 1rem;
-  --lsw-radius-2xl: 1.5rem;
+  --lsw-radius-sm: 0.125rem;
+  --lsw-radius-md: 0.25rem;
+  --lsw-radius-lg: 0.375rem;
+  --lsw-radius-xl: 0.5rem;
+  --lsw-radius-2xl: 0.75rem;
   --lsw-radius-pill: 9999px;
 
   /* --- Superficies y contenedores ---------------------------------------- */
@@ -118,10 +184,12 @@
   /* La altura por defecto (`md`) son 44px: el minimo comodo de area tactil en
      movil (principio #13). `sm` queda por debajo a proposito y esta reservada a
      superficies densas de escritorio, como las tablas del admin, donde sigue
-     cumpliendo el minimo de 24px de WCAG 2.5.8. */
+     cumpliendo el minimo de 24px de WCAG 2.5.8. `xl` es para el CTA principal
+     del hero, que DEC-038 quiere grande de verdad. */
   --lsw-control-height-sm: 2rem;
   --lsw-control-height-md: 2.75rem;
   --lsw-control-height-lg: 3.25rem;
+  --lsw-control-height-xl: 3.875rem;
 
   /* --- Movimiento --------------------------------------------------------- */
   --lsw-duration-instant: 80ms;
@@ -143,173 +211,100 @@
   --lsw-focus-ring-width: 2px;
   --lsw-focus-ring-offset: 2px;
 
-  /* --- Color: tema claro -------------------------------------------------- */
-  --lsw-color-bg: 250 249 246;
-  --lsw-color-surface: 255 255 255;
-  --lsw-color-surface-raised: 255 255 255;
-  --lsw-color-surface-sunken: 243 242 238;
+  /* --- Color: superficies -------------------------------------------------
+   *
+   * Cinco escalones de negro, no dos. Sobre fondo oscuro la elevacion no se
+   * percibe por la sombra -una sombra negra sobre negro no existe- sino por la
+   * diferencia de luminosidad entre superficies y por el filete del borde. Por
+   * eso los escalones estan medidos para ser perceptibles: cada uno sube unos
+   * 6-7 puntos de luminancia sobre el anterior. */
+  --lsw-color-bg: 8 8 10;
+  --lsw-color-surface: 16 16 19;
+  --lsw-color-surface-raised: 24 24 28;
+  --lsw-color-surface-sunken: 4 4 5;
 
-  --lsw-color-border: 224 221 214;
-  --lsw-color-border-strong: 190 186 177;
+  --lsw-color-border: 38 38 44;
+  --lsw-color-border-strong: 66 64 72;
 
-  --lsw-color-text: 23 28 35;
-  --lsw-color-text-muted: 82 89 99;
-  --lsw-color-text-subtle: 110 118 129;
-  --lsw-color-text-inverse: 255 255 255;
+  /* --- Color: texto -------------------------------------------------------
+   *
+   * Blanco CALIDO, no blanco puro: el blanco puro sobre negro vibra y cansa, y
+   * ademas choca con el oro. Contrastes medidos sobre `--lsw-color-bg`:
+   *   text        #f6f2e9  ~17.8:1
+   *   text-muted  #b5aea0   ~9.0:1
+   *   text-subtle #8a8377   ~5.3:1  (AA para texto normal; se usa en captions)
+   * Todos por encima de 4.5:1, que es el minimo AA. */
+  --lsw-color-text: 246 242 233;
+  --lsw-color-text-muted: 181 174 160;
+  --lsw-color-text-subtle: 138 131 119;
+  /* Texto sobre superficies claras: solo existe sobre oro (botones, insignias
+     solidas), donde lo correcto es casi negro. */
+  --lsw-color-text-inverse: 10 10 11;
 
-  --lsw-color-brand: 15 42 74;
-  --lsw-color-brand-hover: 11 32 58;
-  --lsw-color-brand-active: 8 24 44;
-  --lsw-color-brand-subtle: 232 238 246;
-  --lsw-color-on-brand: 255 255 255;
+  /* --- Color: oro ---------------------------------------------------------
+   *
+   * `brand` es el oro del logotipo. #c9a227 sobre el fondo da 9.4:1, asi que
+   * cumple AA incluso en texto pequeno; aun asi, la regla de composicion es
+   * reservarlo para titulares, filetes, iconos y cifras destacadas, y llevar el
+   * cuerpo en blanco calido. La razon no es de contraste sino de jerarquia: si
+   * todo es oro, nada lo es.
+   *
+   * `brand-hover` y `brand-active` ACLARAN en vez de oscurecer. Sobre fondo
+   * oscuro, oscurecer un color al pasar el raton se lee como desactivarlo. */
+  --lsw-color-brand: 201 162 39;
+  --lsw-color-brand-hover: 227 197 102;
+  --lsw-color-brand-active: 240 217 138;
+  --lsw-color-brand-subtle: 36 29 8;
+  --lsw-color-on-brand: 10 10 11;
 
-  --lsw-color-accent: 164 32 43;
-  --lsw-color-accent-hover: 138 25 35;
-  --lsw-color-accent-subtle: 251 235 236;
-  --lsw-color-on-accent: 255 255 255;
+  /* Oro intenso, para lo que tiene que destacar POR ENCIMA del oro base: la
+     cifra de participaciones del carrito, el badge del periodo activo. */
+  --lsw-color-accent: 227 197 102;
+  --lsw-color-accent-hover: 244 223 158;
+  --lsw-color-accent-subtle: 44 35 12;
+  --lsw-color-on-accent: 10 10 11;
 
-  --lsw-color-success: 21 94 51;
-  --lsw-color-success-subtle: 235 247 239;
-  --lsw-color-on-success: 255 255 255;
+  /* --- Color: estados -----------------------------------------------------
+   *
+   * El rojo es SOLO para errores (DEC-038). Nada de rojo decorativo, nada de
+   * rojo de urgencia. */
+  --lsw-color-success: 122 200 150;
+  --lsw-color-success-subtle: 14 32 22;
+  --lsw-color-on-success: 6 20 12;
 
-  --lsw-color-warning: 140 80 12;
-  --lsw-color-warning-subtle: 253 246 230;
-  --lsw-color-on-warning: 255 255 255;
+  --lsw-color-warning: 226 173 88;
+  --lsw-color-warning-subtle: 40 30 12;
+  --lsw-color-on-warning: 26 18 4;
 
-  --lsw-color-danger: 173 30 34;
-  --lsw-color-danger-subtle: 253 236 236;
-  --lsw-color-on-danger: 255 255 255;
+  --lsw-color-danger: 240 122 122;
+  --lsw-color-danger-subtle: 46 18 18;
+  --lsw-color-on-danger: 32 6 6;
 
-  --lsw-color-info: 28 72 120;
-  --lsw-color-info-subtle: 234 241 250;
-  --lsw-color-on-info: 255 255 255;
+  /* `info` es el tono de los avisos legales, que en este producto son
+     frecuentes y no son alarmas: champan apagado sobre un fondo casi negro.
+     Un azul aqui seria el unico color frio del sistema y se leeria como un
+     componente de otra marca. */
+  --lsw-color-info: 214 202 172;
+  --lsw-color-info-subtle: 26 23 16;
+  --lsw-color-on-info: 12 11 8;
 
-  --lsw-color-focus: 22 90 168;
-  --lsw-color-overlay: 12 16 22;
-  --lsw-color-skeleton: 231 229 223;
+  /* El anillo de foco es oro claro: es el color mas visible del sistema sobre
+     cualquiera de las cinco superficies. */
+  --lsw-color-focus: 242 214 128;
+  --lsw-color-overlay: 0 0 0;
+  --lsw-color-skeleton: 30 30 35;
 
-  /* --- Elevacion ---------------------------------------------------------- */
+  /* --- Elevacion ----------------------------------------------------------
+   *
+   * Sobre negro, una sombra sola no eleva nada. Cada escalon lleva DOS partes:
+   * un filete dorado tenue en el borde superior del contorno -que es lo que de
+   * verdad separa la pieza del fondo- y una sombra negra profunda que la asienta
+   * sobre la pagina. */
   --lsw-shadow-none: none;
-  --lsw-shadow-sm: 0 1px 2px 0 rgb(16 24 40 / 0.05);
-  --lsw-shadow-md: 0 1px 3px 0 rgb(16 24 40 / 0.08), 0 1px 2px -1px rgb(16 24 40 / 0.06);
-  --lsw-shadow-lg: 0 8px 20px -6px rgb(16 24 40 / 0.12), 0 2px 6px -2px rgb(16 24 40 / 0.06);
-  --lsw-shadow-xl: 0 20px 40px -12px rgb(16 24 40 / 0.18), 0 4px 10px -4px rgb(16 24 40 / 0.08);
-}
-
-/* ---------------------------------------------------------------------------
- * Tema oscuro.
- *
- * Se aplica de dos formas:
- *   1. prefers-color-scheme: dark, salvo que el usuario haya elegido claro
- *      explicitamente ([data-theme="light"]).
- *   2. [data-theme="dark"], que siempre gana.
- *
- * Nunca se define un color UNICAMENTE dentro de un bloque de tema: todos los
- * tokens existen ya en :root, aqui solo se reasignan.
- * ------------------------------------------------------------------------- */
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --lsw-color-bg: 14 17 22;
-    --lsw-color-surface: 20 24 31;
-    --lsw-color-surface-raised: 27 32 40;
-    --lsw-color-surface-sunken: 11 14 18;
-
-    --lsw-color-border: 44 51 61;
-    --lsw-color-border-strong: 70 79 92;
-
-    --lsw-color-text: 236 238 241;
-    --lsw-color-text-muted: 166 173 183;
-    --lsw-color-text-subtle: 138 146 158;
-    --lsw-color-text-inverse: 14 17 22;
-
-    --lsw-color-brand: 141 180 232;
-    --lsw-color-brand-hover: 163 196 240;
-    --lsw-color-brand-active: 184 210 245;
-    --lsw-color-brand-subtle: 24 36 54;
-    --lsw-color-on-brand: 10 20 34;
-
-    --lsw-color-accent: 233 137 144;
-    --lsw-color-accent-hover: 243 160 166;
-    --lsw-color-accent-subtle: 56 24 28;
-    --lsw-color-on-accent: 40 8 12;
-
-    --lsw-color-success: 118 197 148;
-    --lsw-color-success-subtle: 19 40 29;
-    --lsw-color-on-success: 8 26 16;
-
-    --lsw-color-warning: 227 178 96;
-    --lsw-color-warning-subtle: 48 38 18;
-    --lsw-color-on-warning: 34 24 6;
-
-    --lsw-color-danger: 240 141 143;
-    --lsw-color-danger-subtle: 56 24 26;
-    --lsw-color-on-danger: 40 8 10;
-
-    --lsw-color-info: 142 181 226;
-    --lsw-color-info-subtle: 22 36 54;
-    --lsw-color-on-info: 10 20 34;
-
-    --lsw-color-focus: 141 180 232;
-    --lsw-color-overlay: 4 6 9;
-    --lsw-color-skeleton: 36 42 51;
-
-    --lsw-shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.4);
-    --lsw-shadow-md: 0 1px 3px 0 rgb(0 0 0 / 0.5), 0 1px 2px -1px rgb(0 0 0 / 0.4);
-    --lsw-shadow-lg: 0 8px 20px -6px rgb(0 0 0 / 0.55), 0 2px 6px -2px rgb(0 0 0 / 0.4);
-    --lsw-shadow-xl: 0 20px 40px -12px rgb(0 0 0 / 0.65), 0 4px 10px -4px rgb(0 0 0 / 0.45);
-  }
-}
-
-:root[data-theme="dark"] {
-  --lsw-color-bg: 14 17 22;
-  --lsw-color-surface: 20 24 31;
-  --lsw-color-surface-raised: 27 32 40;
-  --lsw-color-surface-sunken: 11 14 18;
-
-  --lsw-color-border: 44 51 61;
-  --lsw-color-border-strong: 70 79 92;
-
-  --lsw-color-text: 236 238 241;
-  --lsw-color-text-muted: 166 173 183;
-  --lsw-color-text-subtle: 138 146 158;
-  --lsw-color-text-inverse: 14 17 22;
-
-  --lsw-color-brand: 141 180 232;
-  --lsw-color-brand-hover: 163 196 240;
-  --lsw-color-brand-active: 184 210 245;
-  --lsw-color-brand-subtle: 24 36 54;
-  --lsw-color-on-brand: 10 20 34;
-
-  --lsw-color-accent: 233 137 144;
-  --lsw-color-accent-hover: 243 160 166;
-  --lsw-color-accent-subtle: 56 24 28;
-  --lsw-color-on-accent: 40 8 12;
-
-  --lsw-color-success: 118 197 148;
-  --lsw-color-success-subtle: 19 40 29;
-  --lsw-color-on-success: 8 26 16;
-
-  --lsw-color-warning: 227 178 96;
-  --lsw-color-warning-subtle: 48 38 18;
-  --lsw-color-on-warning: 34 24 6;
-
-  --lsw-color-danger: 240 141 143;
-  --lsw-color-danger-subtle: 56 24 26;
-  --lsw-color-on-danger: 40 8 10;
-
-  --lsw-color-info: 142 181 226;
-  --lsw-color-info-subtle: 22 36 54;
-  --lsw-color-on-info: 10 20 34;
-
-  --lsw-color-focus: 141 180 232;
-  --lsw-color-overlay: 4 6 9;
-  --lsw-color-skeleton: 36 42 51;
-
-  --lsw-shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.4);
-  --lsw-shadow-md: 0 1px 3px 0 rgb(0 0 0 / 0.5), 0 1px 2px -1px rgb(0 0 0 / 0.4);
-  --lsw-shadow-lg: 0 8px 20px -6px rgb(0 0 0 / 0.55), 0 2px 6px -2px rgb(0 0 0 / 0.4);
-  --lsw-shadow-xl: 0 20px 40px -12px rgb(0 0 0 / 0.65), 0 4px 10px -4px rgb(0 0 0 / 0.45);
+  --lsw-shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.7);
+  --lsw-shadow-md: 0 0 0 1px rgb(201 162 39 / 0.06), 0 4px 12px -2px rgb(0 0 0 / 0.8);
+  --lsw-shadow-lg: 0 0 0 1px rgb(201 162 39 / 0.09), 0 12px 28px -8px rgb(0 0 0 / 0.85);
+  --lsw-shadow-xl: 0 0 0 1px rgb(201 162 39 / 0.12), 0 28px 60px -16px rgb(0 0 0 / 0.9);
 }
 
 /* Preferencia de movimiento reducido: los tokens de duracion se anulan en el

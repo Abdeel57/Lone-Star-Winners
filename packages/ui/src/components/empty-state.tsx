@@ -47,8 +47,11 @@ export function EmptyState({
   return (
     <div
       className={cn(
-        "flex flex-col items-center gap-3 rounded-lg border border-dashed border-border",
-        "bg-surface-sunken px-s5 py-s10 text-center",
+        "flex flex-col items-center gap-3 rounded-lg border border-dashed border-border-strong",
+        // DEC-038: sobre negro, un estado vacio con el fondo MAS OSCURO que la
+        // pagina desaparece y parece un hueco de maquetacion. Se sube a
+        // `surface` para que se lea como una pieza deliberada.
+        "bg-surface px-s5 py-s10 text-center",
         className,
       )}
     >
@@ -71,10 +74,17 @@ export function EmptyState({
 
 export function Heading({
   level,
+  id,
   className,
   children,
 }: {
   readonly level: HeadingLevel;
+  /**
+   * Destino de `aria-labelledby` desde la seccion que este encabezado nombra.
+   * Sin el, quien compone una seccion con este componente tendria que renunciar
+   * a nombrarla o escribir el encabezado a mano.
+   */
+  readonly id?: string;
   readonly className?: string;
   readonly children: ReactNode;
 }) {
@@ -82,12 +92,28 @@ export function Heading({
   // vez de caer silenciosamente en el `h3` por defecto.
   switch (level) {
     case "h1":
-      return <h1 className={className}>{children}</h1>;
+      return (
+        <h1 id={id} className={className}>
+          {children}
+        </h1>
+      );
     case "h2":
-      return <h2 className={className}>{children}</h2>;
+      return (
+        <h2 id={id} className={className}>
+          {children}
+        </h2>
+      );
     case "h4":
-      return <h4 className={className}>{children}</h4>;
+      return (
+        <h4 id={id} className={className}>
+          {children}
+        </h4>
+      );
     case "h3":
-      return <h3 className={className}>{children}</h3>;
+      return (
+        <h3 id={id} className={className}>
+          {children}
+        </h3>
+      );
   }
 }

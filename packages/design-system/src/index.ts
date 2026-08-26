@@ -82,6 +82,7 @@ export type ElevationToken = (typeof ELEVATION_TOKENS)[number];
 
 /** Nombres de los pasos de la escala tipografica, sin prefijo. */
 export const TEXT_TOKENS = [
+  "display-xl",
   "display-lg",
   "display-md",
   "heading-lg",

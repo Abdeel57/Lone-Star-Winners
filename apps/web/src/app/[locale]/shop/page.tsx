@@ -5,6 +5,7 @@ import { getTranslations, setRequestLocale } from "next-intl/server";
 
 import { ApiErrorState } from "@/components/api-error-state";
 import { ProductCard } from "@/components/product-card";
+import { SectionHeading } from "@/components/section-heading";
 import { ShopFilters } from "@/components/shop-filters";
 import { Link } from "@/i18n/navigation";
 import { routing } from "@/i18n/routing";
@@ -72,69 +73,81 @@ export default async function ShopPage({
   const result = await fetchProducts(locale, request);
 
   return (
-    <div className="lsw-container py-s10">
-      <h1 className="text-display-md font-bold text-text">{t("shop.title")}</h1>
-      <p className="mt-s3 max-w-narrow text-body-lg text-text-muted">{t("shop.intro")}</p>
-
-      {!result.ok ? (
-        <div className="mt-s8">
-          <ApiErrorState failure={result.error} headingLevel="h2" />
+    <div className="pb-s16">
+      {/* Cabecera de la tienda sobre atmosfera: es la segunda pantalla mas
+          visitada del sitio y necesita entrada propia, no un titulo suelto
+          encima de una rejilla (DEC-038). */}
+      <div className="lsw-atmosphere lsw-grain relative isolate py-s12 lg:py-s16">
+        <div className="lsw-container">
+          <SectionHeading
+            eyebrow={t("nav.shop")}
+            title={t("shop.title")}
+            lead={t("shop.intro")}
+            level="h1"
+            size="lg"
+          />
         </div>
-      ) : (
-        <>
-          <div className="mt-s6">
+      </div>
+
+      <div className="lsw-container pt-s10">
+        {!result.ok ? (
+          <ApiErrorState failure={result.error} headingLevel="h2" />
+        ) : (
+          <>
             <ShopFilters
               action={`/${locale}/shop`}
               categories={categoriesOf(result.data.items)}
               selectedCategory={category}
             />
-          </div>
 
-          {/* Entre promociones el catalogo sigue en pie, pero ningun articulo
-              trae elegibilidad. Se dice una vez arriba en vez de repetir la
-              misma insignia gris en cada tarjeta. */}
-          {result.data.items.length > 0 &&
-          result.data.items.every((product) => product.entry_eligibility === null) ? (
-            <Alert tone="info" className="mt-s6">
-              {t("shop.noPromotionNotice")}
-            </Alert>
-          ) : null}
+            {/* Entre promociones el catalogo sigue en pie, pero ningun articulo
+                trae elegibilidad. Se dice una vez arriba en vez de repetir la
+                misma insignia gris en cada tarjeta. */}
+            {result.data.items.length > 0 &&
+            result.data.items.every((product) => product.entry_eligibility === null) ? (
+              <Alert tone="info" className="mt-s6">
+                {t("shop.noPromotionNotice")}
+              </Alert>
+            ) : null}
 
-          <div className="mt-s8">
-            {result.data.items.length === 0 ? (
-              <EmptyState
-                headingLevel="h2"
-                title={category === null ? t("shop.catalogEmpty.title") : t("shop.empty.title")}
-                description={category === null ? t("shop.catalogEmpty.body") : t("shop.empty.body")}
-                action={
-                  category === null ? undefined : (
-                    <Link href="/shop" className={buttonVariants({ variant: "secondary" })}>
-                      {t("shop.clear")}
-                    </Link>
-                  )
-                }
-              />
-            ) : (
-              <ul className="grid list-none gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {result.data.items.map((product) => (
-                  <ProductCard key={product.id} product={product} locale={locale} />
-                ))}
-              </ul>
-            )}
-          </div>
-
-          {result.data.next_cursor === null ? null : (
             <div className="mt-s8">
-              <Link
-                href={`/shop?${nextPageQuery(result.data.next_cursor, category)}`}
-                className={buttonVariants({ variant: "secondary", size: "lg" })}
-              >
-                {t("shop.loadMore")}
-              </Link>
+              {result.data.items.length === 0 ? (
+                <EmptyState
+                  headingLevel="h2"
+                  title={category === null ? t("shop.catalogEmpty.title") : t("shop.empty.title")}
+                  description={
+                    category === null ? t("shop.catalogEmpty.body") : t("shop.empty.body")
+                  }
+                  action={
+                    category === null ? undefined : (
+                      <Link href="/shop" className={buttonVariants({ variant: "secondary" })}>
+                        {t("shop.clear")}
+                      </Link>
+                    )
+                  }
+                />
+              ) : (
+                <ul className="grid list-none gap-s5 sm:grid-cols-2 lg:grid-cols-3">
+                  {result.data.items.map((product) => (
+                    <ProductCard key={product.id} product={product} locale={locale} />
+                  ))}
+                </ul>
+              )}
             </div>
-          )}
-        </>
-      )}
+
+            {result.data.next_cursor === null ? null : (
+              <div className="mt-s10 flex justify-center">
+                <Link
+                  href={`/shop?${nextPageQuery(result.data.next_cursor, category)}`}
+                  className={buttonVariants({ variant: "secondary", size: "lg" })}
+                >
+                  {t("shop.loadMore")}
+                </Link>
+              </div>
+            )}
+          </>
+        )}
+      </div>
     </div>
   );
 }

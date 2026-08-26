@@ -21,17 +21,30 @@ export default function ShopLoading() {
   const t = useTranslations("states");
 
   return (
-    <div className="lsw-container py-s10" aria-busy="true" aria-live="polite">
+    <div aria-busy="true" aria-live="polite">
       <span className="sr-only">{t("loading")}</span>
 
-      <Skeleton className="h-10 w-2/3 max-w-sm" />
-      <SkeletonText lines={2} className="mt-s4 max-w-narrow" />
+      {/* La banda de atmosfera se pinta YA, antes de que llegue nada: es color
+          de fondo, no dato, y sostener la entrada de la pagina desde el primer
+          fotograma es la mitad de la sensacion de rapidez (DEC-038). */}
+      <div className="lsw-atmosphere lsw-grain relative isolate py-s12 lg:py-s16">
+        <div className="lsw-container">
+          <Skeleton className="h-14 w-2/3 max-w-md" />
+          <SkeletonText lines={2} className="mt-s6 max-w-narrow" />
+        </div>
+      </div>
 
-      <ul className="mt-s8 grid list-none gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      {/* La forma del esqueleto sigue a la de `ProductCard`: imagen a sangre en
+          la parte superior y cuerpo con relleno propio. Un esqueleto con otra
+          maquetacion que la tarjeta real produce exactamente el salto que se
+          intentaba evitar. */}
+      <ul className="lsw-container mt-s10 grid list-none gap-s5 sm:grid-cols-2 lg:grid-cols-3">
         {[0, 1, 2, 3, 4, 5].map((index) => (
-          <Card as="li" key={index} elevation="flat">
-            <Skeleton className="aspect-square w-full" />
-            <SkeletonText lines={3} className="mt-s4" />
+          <Card as="li" key={index} elevation="flat" padding="none">
+            <Skeleton className="aspect-square w-full rounded-none" />
+            <div className="p-s5">
+              <SkeletonText lines={3} />
+            </div>
           </Card>
         ))}
       </ul>

@@ -17,14 +17,18 @@ export default function ProductLoading() {
 
       <Skeleton className="h-5 w-40" />
 
-      <div className="mt-s4 grid gap-s8 lg:grid-cols-2">
+      {/* Las alturas siguen a las de la ficha rediseñada (DEC-038): el titulo
+          es ahora un titular de marca, no una linea de texto, y un esqueleto de
+          10 unidades donde luego aparecen 16 produce el salto que se intentaba
+          evitar. */}
+      <div className="mt-s6 grid gap-s8 lg:grid-cols-2 lg:gap-s12">
         <Skeleton className="aspect-square w-full" />
 
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-s5 lg:pt-s2">
           <Skeleton className="h-4 w-24" />
-          <Skeleton className="h-10 w-3/4" />
+          <Skeleton className="h-16 w-3/4" />
           <SkeletonText lines={3} />
-          <Skeleton className="h-8 w-32" />
+          <Skeleton className="h-12 w-40" />
           <Skeleton className="h-control-md w-full" />
           <Skeleton className="h-control-lg w-full" />
         </div>

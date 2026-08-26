@@ -79,8 +79,9 @@ export default async function CartPage({
       : null;
 
   return (
-    <div className="lsw-container py-s10">
-      <h1 className="text-display-md font-bold text-text">{t("cart.title")}</h1>
+    <div className="lsw-container py-s10 pb-s16">
+      <h1 className="lsw-display text-display-md text-text">{t("cart.title")}</h1>
+      <div aria-hidden="true" className="lsw-gold-rule mt-s4 max-w-[7rem]" />
 
       {errorCode === null ? null : (
         <div className="mt-s5">
@@ -129,11 +130,11 @@ export default async function CartPage({
       ) : (
         <div className="mt-s8 grid gap-s6 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
           <section aria-labelledby="cart-items">
-            <h2 id="cart-items" className="text-heading-lg font-semibold text-text">
+            <h2 id="cart-items" className="lsw-display text-heading-lg text-text">
               {t("cart.itemsHeading")}
             </h2>
 
-            <ul className="mt-s4 flex list-none flex-col gap-4">
+            <ul className="mt-s5 flex list-none flex-col gap-s4">
               {cartResult.data.cart.items.map((line) => (
                 <CartLineRow
                   key={line.line_id}
@@ -155,7 +156,7 @@ export default async function CartPage({
                 {t("cart.subtotal")}
               </CardTitle>
 
-              <p className="mt-s2 text-heading-lg font-semibold text-text">
+              <p className="font-display mt-s2 text-display-md font-bold tabular-nums text-text">
                 {formatMoney(cartResult.data.cart.subtotal, locale)}
               </p>
 

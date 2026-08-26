@@ -1,4 +1,4 @@
-import { Alert, Badge, Card, CardTitle, EmptyState, StatCard } from "@lsw/ui";
+import { Alert, Badge, Card, CardTitle, EmptyState } from "@lsw/ui";
 import { useTranslations } from "next-intl";
 
 import {
@@ -82,19 +82,32 @@ export function EntryQuotePanel({
   const cappedDown = quote.final_entries !== quote.entries_before_caps;
 
   return (
-    <Card as="section" elevation="flat" padding="md" className="flex flex-col gap-4">
+    <Card as="section" elevation="raised" padding="md" className="flex flex-col gap-4">
       <CardTitle as="h2" size="sm">
         {t("heading")}
       </CardTitle>
 
       {stale ? <Alert tone="warning">{t("stale")}</Alert> : null}
 
-      <StatCard
-        label={t("heading")}
-        value={t("entries", {
-          entries: formatEntryCount(quote.final_entries, locale),
-        })}
-      />
+      {/*
+       * LA CIFRA, CON EL PESO QUE LE CORRESPONDE (DEC-038).
+       *
+       * Es el UNICO numero de participaciones de todo el sitio: el catalogo no
+       * lo declara y la portada no lo calcula. Que sea el unico es lo que
+       * justifica que sea tambien el mas grande y el unico en oro.
+       *
+       * Etiqueta propia, no el titulo de la tarjeta: repetir la misma frase
+       * dentro del recuadro que hay justo debajo del titulo hace dudar de si
+       * son dos cosas distintas.
+       */}
+      <div className="rounded-lg border border-brand/40 bg-brand/10 p-s5">
+        <p className="lsw-eyebrow text-brand">{t("statLabel")}</p>
+        <p className="lsw-display lsw-gold-sheen mt-s2 text-display-md tabular-nums">
+          {t("entries", {
+            entries: formatEntryCount(quote.final_entries, locale),
+          })}
+        </p>
+      </div>
 
       <div className="flex flex-col gap-1 text-body-sm text-text-muted">
         {/* `entries_before_caps` solo se enseña cuando difiere de la cifra

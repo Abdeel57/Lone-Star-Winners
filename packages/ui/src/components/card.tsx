@@ -3,12 +3,20 @@ import type { HTMLAttributes, ReactNode } from "react";
 
 import { cn } from "../lib/cn";
 
+/*
+ * DEC-038: sobre fondo negro, la elevacion no se percibe por la sombra -una
+ * sombra negra sobre negro no existe- sino por dos cosas: cuanto MAS CLARA es
+ * la superficie que el fondo, y como de visible es su filete. De ahi que los
+ * tres escalones cambien de color de superficie y de borde, y no solo de
+ * sombra. Los tokens de sombra ya incorporan ademas un filete dorado tenue
+ * (ver `tokens.css`), que es lo que separa de verdad la pieza de la pagina.
+ */
 const cardVariants = cva("rounded-lg bg-surface text-text", {
   variants: {
     elevation: {
       flat: "border border-border shadow-none",
       raised: "border border-border bg-surface-raised shadow-md",
-      floating: "border border-border bg-surface-raised shadow-lg",
+      floating: "border border-border-strong bg-surface-raised shadow-lg",
     },
     padding: {
       none: "p-0",
@@ -84,7 +92,9 @@ export interface CardTitleProps {
 
 export function CardTitle({ as = "h3", size = "md", id, className, children }: CardTitleProps) {
   const classes = cn(
-    "font-display font-semibold text-text",
+    // Caja alta y tracking: los titulos de tarjeta son titulares de marca
+    // (DEC-038), no texto en negrita.
+    "font-display font-semibold uppercase tracking-display text-text",
     size === "lg" && "text-heading-lg",
     size === "md" && "text-heading-md",
     size === "sm" && "text-heading-sm",

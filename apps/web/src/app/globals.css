@@ -7,7 +7,8 @@
  *
  * Los VALORES no estan aqui: vienen de `@lsw/design-system/tokens.css`, que el
  * layout importa antes que este archivo. Aqui solo se decide que elemento usa
- * que token.
+ * que token, y se declaran las pocas composiciones que no caben en una clase de
+ * utilidad (la atmosfera del hero, la textura, el filete dorado).
  * ------------------------------------------------------------------------- */
 
 @layer base {
@@ -15,6 +16,10 @@
     /* Evita que iOS agrande el texto al girar el dispositivo. */
     -webkit-text-size-adjust: 100%;
     scroll-behavior: smooth;
+    /* El fondo tambien en `html`: al hacer scroll elastico en iOS, la zona de
+       rebote la pinta el elemento raiz, y sin esto aparece blanca sobre una
+       pagina negra. */
+    background-color: rgb(var(--lsw-color-bg));
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -53,7 +58,8 @@
   }
 
   ::selection {
-    background-color: rgb(var(--lsw-color-brand) / 0.18);
+    background-color: rgb(var(--lsw-color-brand) / 0.3);
+    color: rgb(var(--lsw-color-text));
   }
 
   /* Las imagenes nunca desbordan horizontalmente su contenedor. */
@@ -107,5 +113,179 @@
 
   .lsw-skip-link:focus-visible {
     transform: translateY(0);
+  }
+
+  /* -------------------------------------------------------------------------
+   * Titulares de marca (DEC-038)
+   *
+   * Condensada, caja alta y tracking. Se declara como clase y no se repite en
+   * cada pantalla porque la combinacion es indivisible: la caja alta sin
+   * tracking se lee mal, y el tracking sin caja alta separa palabras que no lo
+   * necesitan.
+   * ---------------------------------------------------------------------- */
+  .lsw-display {
+    font-family: var(--lsw-font-display);
+    font-weight: var(--lsw-font-weight-bold);
+    text-transform: uppercase;
+    letter-spacing: var(--lsw-tracking-display);
+  }
+
+  /* Antetitulo: la linea corta que va encima de un titular. */
+  .lsw-eyebrow {
+    font-family: var(--lsw-font-display);
+    font-size: var(--lsw-text-overline-size);
+    line-height: var(--lsw-text-overline-line);
+    font-weight: var(--lsw-font-weight-semibold);
+    text-transform: uppercase;
+    letter-spacing: var(--lsw-tracking-wide);
+    color: rgb(var(--lsw-color-brand));
+  }
+
+  /* -------------------------------------------------------------------------
+   * Oro con brillo
+   *
+   * Relleno de texto con un degradado dorado. El `color` de respaldo se declara
+   * ANTES y sin condicion: si el navegador no soporta `background-clip: text`,
+   * el texto queda en oro plano y legible, nunca transparente.
+   * ---------------------------------------------------------------------- */
+  .lsw-gold-sheen {
+    color: rgb(var(--lsw-color-brand-hover));
+  }
+
+  @supports (background-clip: text) or (-webkit-background-clip: text) {
+    .lsw-gold-sheen {
+      background-image: linear-gradient(
+        100deg,
+        rgb(var(--lsw-color-brand)) 0%,
+        rgb(var(--lsw-color-brand-active)) 34%,
+        rgb(var(--lsw-color-brand-hover)) 52%,
+        rgb(var(--lsw-color-brand)) 78%
+      );
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+  }
+
+  /* Filete dorado que se apaga hacia los extremos. Separa secciones sin meter
+     una linea dura de lado a lado. */
+  .lsw-gold-rule {
+    height: 1px;
+    border: 0;
+    background-image: linear-gradient(
+      90deg,
+      rgb(var(--lsw-color-brand) / 0) 0%,
+      rgb(var(--lsw-color-brand) / 0.55) 22%,
+      rgb(var(--lsw-color-brand) / 0.55) 78%,
+      rgb(var(--lsw-color-brand) / 0) 100%
+    );
+  }
+
+  /* -------------------------------------------------------------------------
+   * Atmosfera del hero
+   *
+   * Tres capas de luz sobre negro: un foco dorado alto y descentrado, un rebote
+   * mas frio abajo, y una vineta que cierra los bordes. Todo con degradados
+   * CSS: ni una peticion de red, y escala a cualquier tamano sin pixelar.
+   *
+   * `isolation: isolate` acota el `mix-blend-mode` de la textura a esta caja.
+   * ---------------------------------------------------------------------- */
+  .lsw-atmosphere {
+    position: relative;
+    isolation: isolate;
+    background-color: rgb(var(--lsw-color-bg));
+    background-image:
+      radial-gradient(
+        62rem 40rem at 72% 8%,
+        rgb(var(--lsw-color-brand) / 0.2) 0%,
+        rgb(var(--lsw-color-brand) / 0.07) 38%,
+        transparent 72%
+      ),
+      radial-gradient(
+        48rem 30rem at 8% 92%,
+        rgb(var(--lsw-color-brand) / 0.09) 0%,
+        transparent 68%
+      ),
+      linear-gradient(180deg, rgb(var(--lsw-color-surface)) 0%, rgb(var(--lsw-color-bg)) 58%);
+  }
+
+  /* Vineta: oscurece las esquinas para que la luz del centro parezca luz. */
+  .lsw-atmosphere::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background-image: radial-gradient(
+      120% 90% at 50% 30%,
+      transparent 42%,
+      rgb(var(--lsw-color-overlay) / 0.55) 100%
+    );
+  }
+
+  /* -------------------------------------------------------------------------
+   * Textura
+   *
+   * Grano fino generado con `feTurbulence` y embebido como `data:` URI. Rompe
+   * las bandas que los degradados grandes producen en paneles de 8 bits, y da
+   * al negro algo de materia. Muy sutil a proposito: si se ve, sobra.
+   * ---------------------------------------------------------------------- */
+  .lsw-grain::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    opacity: 0.35;
+    mix-blend-mode: overlay;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)' opacity='0.32'/%3E%3C/svg%3E");
+  }
+
+  /* -------------------------------------------------------------------------
+   * Banda de seccion
+   *
+   * Bloques de gran contraste que se suceden: el fondo alterna entre el negro
+   * de pagina y una superficie apenas mas clara, con un filete dorado tenue
+   * arriba. Es lo que produce la sensacion de bloques apilados de la referencia
+   * sin recurrir a bordes duros.
+   * ---------------------------------------------------------------------- */
+  .lsw-band {
+    position: relative;
+    background-color: rgb(var(--lsw-color-surface));
+    border-block: 1px solid rgb(var(--lsw-color-border));
+  }
+
+  .lsw-band-sunken {
+    position: relative;
+    background-color: rgb(var(--lsw-color-surface-sunken));
+    border-block: 1px solid rgb(var(--lsw-color-border));
+  }
+
+  /* -------------------------------------------------------------------------
+   * Marco de estudio
+   *
+   * El tratamiento de las imagenes de producto: fondo casi negro, un halo
+   * dorado muy tenue detras de la pieza y un filete que se ilumina al pasar el
+   * raton. Convierte una rejilla de fotos sueltas en una serie.
+   * ---------------------------------------------------------------------- */
+  .lsw-studio {
+    background-color: rgb(var(--lsw-color-surface-sunken));
+    background-image: radial-gradient(
+      70% 60% at 50% 38%,
+      rgb(var(--lsw-color-brand) / 0.12) 0%,
+      transparent 70%
+    );
+  }
+
+  /* Impresion de las Reglas Oficiales: el documento sale en negro sobre blanco.
+     Un documento legal se archiva en papel, y gastar el toner de media oficina
+     en un fondo negro no es una decision de diseno, es un descuido. */
+  @media print {
+    .lsw-print-document,
+    .lsw-print-document * {
+      background: #fff !important;
+      color: #000 !important;
+      border-color: #999 !important;
+    }
   }
 }

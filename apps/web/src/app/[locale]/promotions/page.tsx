@@ -5,10 +5,12 @@ import { getTranslations, setRequestLocale } from "next-intl/server";
 
 import { ApiErrorState } from "@/components/api-error-state";
 import { PromotionStatusBadge } from "@/components/promotion-status-badge";
+import { SectionHeading } from "@/components/section-heading";
 import { formatZonedDate } from "@/i18n/formatters";
 import { Link } from "@/i18n/navigation";
 import { routing } from "@/i18n/routing";
 import { fetchPromotions, pickLocalized } from "@/lib/api";
+import { presentPromotion } from "@/lib/promotion-state";
 
 /**
  * Render por peticion, siempre (DEC-013).
@@ -45,39 +47,83 @@ export default async function PromotionsPage({ params }: { params: Promise<{ loc
   const result = await fetchPromotions(locale);
 
   return (
-    <div className="lsw-container py-s10">
-      <h1 className="text-display-md font-bold text-text">{t("promotion.listHeading")}</h1>
-      <p className="mt-s3 max-w-narrow text-body-lg text-text-muted">{t("promotion.listIntro")}</p>
+    <div className="pb-s16">
+      <div className="lsw-atmosphere lsw-grain relative isolate py-s12 lg:py-s16">
+        <div className="lsw-container">
+          <SectionHeading
+            title={t("promotion.listHeading")}
+            lead={t("promotion.listIntro")}
+            level="h1"
+            size="lg"
+          />
+        </div>
+      </div>
 
-      <div className="mt-s8">
+      <div className="lsw-container pt-s10">
         {!result.ok ? (
           <ApiErrorState failure={result.error} headingLevel="h2" />
         ) : result.data.items.length === 0 ? (
           <EmptyState headingLevel="h2" title={t("promotion.notListed")} />
         ) : (
-          <ul className="grid list-none gap-4 sm:grid-cols-2">
+          <ul className="grid list-none gap-s5 sm:grid-cols-2">
             {result.data.items.map((promotion) => {
-              const closesAt = formatZonedDate(promotion.ends_at, locale, {
+              /*
+               * La fecha de la tarjeta depende del estado.
+               *
+               * Con "Cierra el 30 de agosto de 2024" bajo una promocion
+               * FINALIZADA, la tarjeta se contradice a si misma: anuncia en
+               * presente algo que ya paso. Y una promocion que todavia no ha
+               * abierto tiene una fecha mas util que la de cierre.
+               *
+               * Las tres ramas salen de la misma maquina de estados que el
+               * resto del sitio (`presentPromotion`), no de una lista de
+               * estados escrita aparte que pueda desincronizarse.
+               */
+              const presentation = presentPromotion(promotion.status);
+              const showsOpening = presentation.countdownTarget === "starts_at";
+
+              const dateIso = showsOpening ? promotion.starts_at : promotion.ends_at;
+              const dateLabel = showsOpening
+                ? t("home.opensLabel")
+                : presentation.acceptsEntries
+                  ? t("home.closesLabel")
+                  : t("promotion.closedOnLabel");
+
+              const shownDate = formatZonedDate(dateIso, locale, {
                 timeZone: promotion.legal_timezone,
               });
 
               return (
-                <Card as="li" key={promotion.id} elevation="flat">
-                  <div className="flex items-start justify-between gap-3">
-                    <CardTitle as="h2" size="sm">
+                <Card
+                  as="li"
+                  key={promotion.id}
+                  elevation="flat"
+                  padding="lg"
+                  className="flex flex-col transition-colors duration-base ease-standard hover:border-brand/45"
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <CardTitle as="h2" size="md">
                       {pickLocalized(promotion.title, locale)}
                     </CardTitle>
-                    <PromotionStatusBadge status={promotion.status} className="shrink-0" />
+                    <PromotionStatusBadge
+                      status={promotion.status}
+                      size="sm"
+                      className="shrink-0"
+                    />
                   </div>
 
-                  <p className="mt-s3 text-body-sm text-text-muted">
+                  <p className="mt-s4 flex-1 text-body-md text-text-muted">
                     {pickLocalized(promotion.summary, locale)}
                   </p>
 
-                  {closesAt === null ? null : (
-                    <p className="mt-s3 text-caption text-text-subtle">
-                      <span className="mr-1">{t("home.closesLabel")}</span>
-                      <time dateTime={promotion.ends_at}>{closesAt}</time>
+                  {shownDate === null ? null : (
+                    <p className="mt-s5 border-t border-border pt-s4 text-caption text-text-subtle">
+                      <span className="mr-1 font-display uppercase tracking-wide text-brand">
+                        {dateLabel}
+                      </span>
+                      <time dateTime={dateIso} className="tabular-nums">
+                        {shownDate}
+                      </time>
                     </p>
                   )}
 

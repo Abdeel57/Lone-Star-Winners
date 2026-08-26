@@ -32,7 +32,13 @@ const preset = {
   // Marcador obligatorio para un preset: el consumidor define su propio
   // `content`, porque solo el sabe que archivos suyos hay que escanear.
   content: [],
-  darkMode: ["class", '[data-theme="dark"]'],
+  // DEC-038: hay UN SOLO TEMA, oscuro. No queda ninguna variante `dark:` que
+  // generar, y por eso el selector deja de apuntar a `[data-theme="dark"]`: ese
+  // atributo ya no existe en ninguna parte, y dejarlo declarado sugeriria que la
+  // dualidad claro/oscuro sigue viva. La clave se conserva en su forma mas
+  // inerte porque Tailwind la espera; si algun dia hubiera un segundo tema,
+  // vuelve aqui.
+  darkMode: "class",
   theme: {
     extend: {
       colors: {
@@ -97,6 +103,16 @@ const preset = {
       },
 
       fontSize: {
+        // Titular del hero (DEC-038). No existia antes de la reescritura de
+        // marca: la portada anterior no tenia ningun tamano por encima de
+        // `display-lg` porque no tenia hero a pantalla completa.
+        "display-xl": [
+          raw("--lsw-text-display-xl-size"),
+          {
+            lineHeight: raw("--lsw-text-display-xl-line"),
+            letterSpacing: raw("--lsw-text-display-xl-tracking"),
+          },
+        ],
         "display-lg": [
           raw("--lsw-text-display-lg-size"),
           {
@@ -176,6 +192,15 @@ const preset = {
         ],
       },
 
+      // Tracking de los titulares en caja alta. `tracking-display` es lo que
+      // impide que una condensada en mayusculas se lea como una mancha; los
+      // pasos de la escala ya traen el suyo, esto es para composiciones que
+      // mezclan tamanos (el marcador de la cuenta atras, el bloque de marca).
+      letterSpacing: {
+        display: raw("--lsw-tracking-display"),
+        wide: raw("--lsw-tracking-wide"),
+      },
+
       fontWeight: {
         regular: raw("--lsw-font-weight-regular"),
         medium: raw("--lsw-font-weight-medium"),
@@ -230,12 +255,14 @@ const preset = {
         "control-sm": raw("--lsw-control-height-sm"),
         "control-md": raw("--lsw-control-height-md"),
         "control-lg": raw("--lsw-control-height-lg"),
+        "control-xl": raw("--lsw-control-height-xl"),
       },
 
       minHeight: {
         "control-sm": raw("--lsw-control-height-sm"),
         "control-md": raw("--lsw-control-height-md"),
         "control-lg": raw("--lsw-control-height-lg"),
+        "control-xl": raw("--lsw-control-height-xl"),
         // Area tactil minima recomendada; se usa como suelo, no como altura.
         touch: "44px",
       },

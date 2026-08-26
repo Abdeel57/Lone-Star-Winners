@@ -61,7 +61,7 @@ export function CartLineRow({
   return (
     <Card as="li" elevation="flat" className="flex flex-col gap-4 sm:flex-row">
       <div className="w-full shrink-0 sm:w-32">
-        <MediaFrame>
+        <MediaFrame className="lsw-studio border border-border">
           {line.image_url === null ? null : (
             // Ver `product-card.tsx`: faltan dominios de imagen en `next.config`.
             // eslint-disable-next-line @next/next/no-img-element
@@ -72,10 +72,10 @@ export function CartLineRow({
 
       <div className="flex flex-1 flex-col gap-3">
         <div>
-          <h3 className="text-heading-sm font-semibold text-text">
+          <h3 className="lsw-display text-heading-sm text-text">
             <Link
               href={`/products/${line.product_slug}`}
-              className="rounded-md underline underline-offset-4 hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
+              className="rounded-md underline underline-offset-4 transition-colors duration-fast ease-standard hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
             >
               {productName}
             </Link>

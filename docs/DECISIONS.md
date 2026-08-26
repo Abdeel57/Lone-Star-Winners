@@ -1567,3 +1567,61 @@ Affected areas: `packages/audit`, `packages/tpa`, infraestructura.
 
 Proposed by: security
 Agreed by: Team Lead
+
+---
+
+## DEC-038
+
+Status: Accepted
+
+Date: 2026-08-25
+
+Decision:
+**Rebrand visual completo a la identidad del logo: negro + dorado, dark-first.**
+
+- La paleta del design system pasa a la del logo (`Logo/logo.jpeg`): negros
+  profundos como superficie, dorado como acento, un solo tema oscuro.
+- Tipografía bold de alto impacto, titulares en mayúsculas, al estilo de la
+  referencia aportada por el usuario (lgndsupplyco.com).
+- **Queda superseded la nota de los tokens que prohibía el oro.** Esa
+  prohibición protegía contra la estética de casino; la protección real nunca
+  fue el color sino el **lenguaje**, y esa parte se mantiene íntegra (ver
+  abajo).
+- El logo se incorpora en cabecera, pie y favicon.
+
+**Límite vinculante — "look LGND, copy legal":** se adopta la energía visual de
+la referencia (hero a pantalla completa con el premio, cuenta atrás dramática,
+badges dorados, secciones de gran impacto) pero **no su encuadre comercial**.
+Siguen prohibidos: multiplicadores o cifras de entries en las tarjetas del
+catálogo (el contrato no las expone), CTAs que vendan la compra como
+participación ("ENTER NOW" sobre un producto), y cualquier copy que describa
+la compra como boletos u oportunidades de ganar (`CLAUDE.md` §1). Las cifras
+de participaciones siguen apareciendo solo donde las produce el backend: el
+carrito.
+
+Imágenes: fotografía placeholder generada por IA cuando haya créditos
+disponibles; hasta entonces, dirección de arte SVG premium coherente con la
+identidad. Ambas marcadas como provisionales.
+
+Context:
+Decisión del usuario (2026-08-25), con referencia visual explícita
+(lgndsupplyco.com) y logo entregado en `Logo/logo.jpeg`. Las tres preguntas de
+alcance se respondieron: rebrand total, look LGND con copy legal, fotos
+generadas.
+
+Alternatives:
+Híbrido hero oscuro / tienda clara (descartado por el usuario). Mantener
+paleta actual (descartado por el usuario). Réplica total de LGND incluyendo
+multiplicadores por producto (descartada: exigía cambiar contrato y flags y
+acercaba el copy al límite legal).
+
+Reason:
+El logo es negro y oro; la referencia es dark-first. La coherencia de marca lo
+decide. La separación look/copy permite adoptar la fuerza visual sin heredar el
+riesgo de compliance que `security` ya señaló sobre el lenguaje del checkout.
+
+Affected areas: `packages/design-system`, `packages/ui`, `apps/web`.
+
+Proposed by: usuario
+Agreed by: Team Lead; el copy sigue sujeto a la revisión de compliance de
+`security` antes de INTEGRATE

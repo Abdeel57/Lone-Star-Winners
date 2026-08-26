@@ -15,7 +15,11 @@ import { VisuallyHidden } from "./visually-hidden";
 export const buttonVariants = cva(
   cn(
     "inline-flex select-none items-center justify-center gap-2 whitespace-nowrap",
-    "rounded-md font-semibold",
+    // DEC-038: los botones son tipografia de marca en caja alta. La caja alta
+    // NO altera el DOM: `text-transform` es presentacion, asi que el nombre
+    // accesible que anuncia un lector de pantalla sigue siendo el texto
+    // traducido tal cual llego del diccionario.
+    "rounded-md font-display font-semibold uppercase tracking-display",
     "transition-colors duration-fast ease-standard",
     FOCUS_VISIBLE_CLASSES,
     "disabled:pointer-events-none disabled:opacity-50",
@@ -25,13 +29,20 @@ export const buttonVariants = cva(
       variant: {
         /** Accion principal de la pantalla. Como maximo una por vista. */
         primary: "bg-brand text-on-brand hover:bg-brand-hover active:bg-brand-active",
-        /** Accion secundaria con el mismo peso visual pero menos enfasis. */
+        /**
+         * Accion secundaria: contorno dorado sobre el fondo de la pagina.
+         *
+         * Sobre negro, una accion secundaria RELLENA compite con la principal
+         * -dos rectangulos solidos uno al lado del otro- mientras que un
+         * contorno se lee como segunda opcion sin dejar de ser visible.
+         */
         secondary:
-          "border border-border-strong bg-surface text-text hover:bg-surface-sunken active:bg-surface-sunken",
-        /** Accion terciaria sobre fondos claros de marca. */
-        subtle: "bg-brand-subtle text-brand hover:bg-brand-subtle/70",
+          "border border-brand/45 bg-transparent text-brand hover:border-brand hover:bg-brand/12 active:bg-brand/20",
+        /** Accion terciaria: superficie elevada, sin oro. */
+        subtle:
+          "border border-border bg-surface-raised text-text hover:border-border-strong hover:bg-surface",
         /** Accion de bajo peso; solo texto. */
-        ghost: "bg-transparent text-text hover:bg-surface-sunken",
+        ghost: "bg-transparent text-text-muted hover:bg-surface-raised hover:text-text",
         /** Accion destructiva. Nunca es la accion por defecto de un formulario. */
         danger: "bg-danger text-on-danger hover:bg-danger/90 active:bg-danger/80",
       },
@@ -41,6 +52,13 @@ export const buttonVariants = cva(
         /** Por defecto. 44px de alto: area tactil comoda en movil. */
         md: "h-control-md px-5 text-body-sm",
         lg: "h-control-lg px-6 text-body-md",
+        /**
+         * Llamada principal del hero. Existe con DEC-038: la referencia visual
+         * pide un CTA que no se pueda pasar por alto, y agrandar `lg` con
+         * clases sueltas en la portada habria dejado el tamano fuera del
+         * sistema.
+         */
+        xl: "h-control-xl px-8 text-body-lg",
       },
       fullWidth: {
         true: "w-full",

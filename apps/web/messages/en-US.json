@@ -44,7 +44,9 @@
   },
   "brand": {
     "name": "Lone Star Winners",
-    "tagline": "Eligible merchandise and promotional entries, governed by the Official Rules."
+    "tagline": "Eligible merchandise and promotional entries, governed by the Official Rules.",
+    "wordmarkLead": "Lone Star",
+    "wordmarkTail": "Winners"
   },
   "cart": {
     "checkout": "Checkout",
@@ -68,6 +70,7 @@
       "entries": "{entries} entries",
       "evaluatedAt": "Quoted at {when}.",
       "heading": "Promotional entries quoted for this cart",
+      "statLabel": "Current quote",
       "ineligibleHeading": "Items that do not count toward entries",
       "multipliersHeading": "Applied entry multipliers",
       "refresh": "Refresh the figure",
@@ -162,6 +165,11 @@
     "closesLabel": "Closes",
     "entriesDisclaimer": "Promotional entries are awarded and governed by the Official Rules of each promotion.",
     "eyebrow": "Current promotion",
+    "featured": {
+      "title": "Featured merchandise",
+      "body": "A few items from the shop. Whether each one is part of the current promotion is shown on its card.",
+      "viewAll": "See all merchandise"
+    },
     "howItWorks": {
       "step1": {
         "body": "Every product page shows whether it is part of the current promotion.",
@@ -254,6 +262,7 @@
     "variantLabel": "Option"
   },
   "promotion": {
+    "closedOnLabel": "Closed on",
     "administratorBody": "This promotion states that the drawing is conducted by an independent administrator.",
     "administratorHeading": "Independent administrator",
     "backToPromotions": "All promotions",

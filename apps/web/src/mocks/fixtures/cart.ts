@@ -1,6 +1,7 @@
 import type { Cart, CartLine, CartWithQuote, EntryQuote } from "@/lib/api";
 
 import { eligibleProduct, ineligibleProduct } from "./catalog";
+import { mugImage, teeImage } from "./media";
 import { activePromotion } from "./promotions";
 
 /**
@@ -39,8 +40,8 @@ const ELIGIBLE_LINE: CartLine = {
   product_slug: eligibleProduct.slug,
   sku: ELIGIBLE_VARIANT?.sku ?? "TEE-S",
   product_name: eligibleProduct.name,
-  variant_name: ELIGIBLE_VARIANT?.name ?? { "en-US": "Small", "es-US": "Pequena" },
-  image_url: null,
+  variant_name: ELIGIBLE_VARIANT?.name ?? { "en-US": "Small", "es-US": "Pequeña" },
+  image_url: teeImage,
   unit_price: { amount_minor: "2500", currency: "USD" },
   quantity: 2,
   line_total: { amount_minor: "5000", currency: "USD" },
@@ -53,8 +54,8 @@ const INELIGIBLE_LINE: CartLine = {
   product_slug: ineligibleProduct.slug,
   sku: INELIGIBLE_VARIANT?.sku ?? "MUG-STD",
   product_name: ineligibleProduct.name,
-  variant_name: INELIGIBLE_VARIANT?.name ?? { "en-US": "Standard", "es-US": "Estandar" },
-  image_url: null,
+  variant_name: INELIGIBLE_VARIANT?.name ?? { "en-US": "Standard", "es-US": "Estándar" },
+  image_url: mugImage,
   unit_price: { amount_minor: "1800", currency: "USD" },
   quantity: 1,
   line_total: { amount_minor: "1800", currency: "USD" },

@@ -27,10 +27,11 @@ const ENGLISH_CONTENT: OfficialRulesDocumentContent = {
   locale: "en-US",
   is_legally_controlling: true,
   is_informational_translation: false,
-  title: "Official Rules (placeholder document)",
+  title: "Official Rules — awaiting the approved text",
   body: [
-    "This document is a placeholder served by the simulated API. It is not a set of Official Rules and it states no eligibility, no dates and no method of participation.",
-    "The approved text is drafted by the client attorney and delivered through the backend.",
+    "This is not a set of Official Rules. It is a placeholder served by the development API so that this page can be built and reviewed before the approved document exists.",
+    "It deliberately states nothing: no eligibility, no minimum age, no covered states or territories, no promotion dates, no method of entry, no odds and no winner selection procedure. Every one of those is determined by the client attorney and reaches this page from the backend, exactly as issued.",
+    "Until that text is published, this page shows what is here and nothing more. Nothing on this screen may be relied on.",
   ].join("\n\n"),
 };
 
@@ -38,10 +39,11 @@ const SPANISH_CONTENT: OfficialRulesDocumentContent = {
   locale: "es-US",
   is_legally_controlling: false,
   is_informational_translation: true,
-  title: "Reglas Oficiales (documento de relleno)",
+  title: "Reglas Oficiales — a la espera del texto aprobado",
   body: [
-    "Este documento es relleno servido por la API simulada. No son Reglas Oficiales y no establece elegibilidad, ni fechas, ni metodo de participacion.",
-    "El texto aprobado lo redacta el abogado del cliente y llega desde el backend.",
+    "Esto no son Reglas Oficiales. Es un texto de relleno servido por la API de desarrollo, para poder construir y revisar esta página antes de que exista el documento aprobado.",
+    "No afirma nada, y es deliberado: ni elegibilidad, ni edad mínima, ni estados o territorios cubiertos, ni fechas de la promoción, ni método de participación, ni probabilidades, ni procedimiento de selección del ganador. Todo eso lo determina el abogado del cliente y llega a esta página desde el backend, tal como fue emitido.",
+    "Hasta que se publique ese texto, esta página muestra lo que hay aquí y nada más. Nada de esta pantalla puede darse por válido.",
   ].join("\n\n"),
 };
 

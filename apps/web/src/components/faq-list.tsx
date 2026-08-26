@@ -66,13 +66,31 @@ export function FaqList() {
         return (
           <details
             key={key}
-            className="rounded-lg border border-border bg-surface px-s4 py-s3 open:bg-surface-raised"
+            className="group rounded-lg border border-border bg-surface px-s5 py-s4 transition-colors duration-fast ease-standard open:border-brand/40 open:bg-surface-raised hover:border-border-strong"
           >
-            <summary className="cursor-pointer list-none text-body-md font-semibold text-text marker:hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-bg">
+            <summary className="lsw-display flex cursor-pointer list-none items-center justify-between gap-4 text-heading-sm text-text marker:hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-bg">
               {entry.question}
+
+              {/* Signo de apertura: gira al desplegar. Es decorativo -el estado
+                  real lo anuncia el propio `details`- y por eso queda oculto
+                  para tecnologia de asistencia. */}
+              <svg
+                viewBox="0 0 20 20"
+                fill="none"
+                aria-hidden="true"
+                focusable="false"
+                className="h-5 w-5 shrink-0 text-brand transition-transform duration-fast ease-standard group-open:rotate-45 motion-reduce:transition-none"
+              >
+                <path
+                  d="M10 4v12M4 10h12"
+                  stroke="currentColor"
+                  strokeWidth="1.75"
+                  strokeLinecap="round"
+                />
+              </svg>
             </summary>
 
-            <p className="mt-s3 text-body-md text-text-muted">{entry.answer}</p>
+            <p className="mt-s4 text-body-md text-text-muted">{entry.answer}</p>
           </details>
         );
       })}

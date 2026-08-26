@@ -44,7 +44,9 @@
   },
   "brand": {
     "name": "Lone Star Winners",
-    "tagline": "Mercancía elegible y participaciones promocionales, sujetas a las Reglas Oficiales."
+    "tagline": "Mercancía elegible y participaciones promocionales, sujetas a las Reglas Oficiales.",
+    "wordmarkLead": "Lone Star",
+    "wordmarkTail": "Winners"
   },
   "cart": {
     "checkout": "Finalizar pedido",
@@ -68,6 +70,7 @@
       "entries": "{entries} participaciones",
       "evaluatedAt": "Cotizado el {when}.",
       "heading": "Participaciones promocionales cotizadas para este carrito",
+      "statLabel": "Cotización vigente",
       "ineligibleHeading": "Artículos que no cuentan para las participaciones",
       "multipliersHeading": "Multiplicadores de participaciones aplicados",
       "refresh": "Actualizar la cifra",
@@ -162,6 +165,11 @@
     "closesLabel": "Cierra",
     "entriesDisclaimer": "Las participaciones promocionales se otorgan conforme a las Reglas Oficiales de cada promoción.",
     "eyebrow": "Promoción vigente",
+    "featured": {
+      "title": "Mercancía destacada",
+      "body": "Algunos artículos de la tienda. En cada tarjeta se indica si forma parte de la promoción vigente.",
+      "viewAll": "Ver toda la mercancía"
+    },
     "howItWorks": {
       "step1": {
         "body": "Cada página de producto indica si forma parte de la promoción vigente.",
@@ -254,6 +262,7 @@
     "variantLabel": "Opción"
   },
   "promotion": {
+    "closedOnLabel": "Cerró el",
     "administratorBody": "Esta promoción declara que el sorteo lo realiza un administrador independiente.",
     "administratorHeading": "Administrador independiente",
     "backToPromotions": "Todas las promociones",

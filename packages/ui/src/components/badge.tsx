@@ -4,20 +4,26 @@ import type { ReactNode } from "react";
 import { cn } from "../lib/cn";
 
 const badgeVariants = cva(
-  "inline-flex max-w-full items-center gap-1.5 rounded-pill border font-semibold",
+  cn(
+    "inline-flex max-w-full items-center gap-1.5 rounded-pill border",
+    // DEC-038: las insignias son tipografia de marca en caja alta. Con el
+    // rediseno son ademas un elemento protagonista -la insignia dorada de
+    // "forma parte de la promocion" en el catalogo- y necesitaban peso.
+    "font-display font-semibold uppercase tracking-wide",
+  ),
   {
     variants: {
       tone: {
-        neutral: "border-border-strong bg-surface-sunken text-text-muted",
-        brand: "border-brand/30 bg-brand-subtle text-brand",
-        accent: "border-accent/30 bg-accent-subtle text-accent",
-        success: "border-success/30 bg-success-subtle text-success",
-        warning: "border-warning/40 bg-warning-subtle text-warning",
-        danger: "border-danger/40 bg-danger-subtle text-danger",
-        info: "border-info/30 bg-info-subtle text-info",
+        neutral: "border-border-strong bg-surface-raised text-text-muted",
+        brand: "border-brand/50 bg-brand/12 text-brand",
+        accent: "border-accent/50 bg-accent/12 text-accent",
+        success: "border-success/40 bg-success-subtle text-success",
+        warning: "border-warning/45 bg-warning-subtle text-warning",
+        danger: "border-danger/45 bg-danger-subtle text-danger",
+        info: "border-info/35 bg-info-subtle text-info",
       },
       size: {
-        sm: "px-2 py-0.5 text-overline uppercase",
+        sm: "px-2.5 py-0.5 text-overline",
         md: "px-3 py-1 text-caption",
       },
     },

@@ -113,7 +113,10 @@ export function OfficialRulesDocumentView({
       {/* `lang` explicito: si el documento se muestra en un idioma distinto al
           de la interfaz, un lector de pantalla debe cambiar de voz. Sin esto,
           leeria ingles con pronunciacion espanola o al reves. */}
-      <div lang={shown.locale} className="flex flex-col gap-s4">
+      <div lang={shown.locale} className="flex flex-col gap-s4 border-t border-border pt-s6">
+        {/* El titulo del documento NO va en caja alta: es texto del documento
+            legal, no un titular de marca, y transformarlo -aunque sea solo en
+            presentacion- lo alejaria de como fue emitido. */}
         <h2 className="font-display text-heading-lg font-semibold text-text">{shown.title}</h2>
 
         {toParagraphs(shown.body).map((paragraph, index) => (

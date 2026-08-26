@@ -26,6 +26,7 @@ export function PromotionCountdown({
   locale,
   timeZone,
   variant,
+  size = "inline",
 }: {
   readonly targetIso: string;
   readonly nowIso: string;
@@ -33,6 +34,12 @@ export function PromotionCountdown({
   readonly timeZone: string;
   /** Si la cuenta atras apunta a la apertura o al cierre. */
   readonly variant: "opens" | "closes";
+  /**
+   * `scoreboard` es el tratamiento del hero (DEC-038): cuatro casillas grandes
+   * con digitos de marcador. `inline` es el discreto, para el detalle de
+   * promocion, donde la cuenta atras acompana pero no manda.
+   */
+  readonly size?: "inline" | "scoreboard";
 }) {
   const t = useTranslations("countdown");
   const tA11y = useTranslations("a11y");
@@ -47,9 +54,17 @@ export function PromotionCountdown({
   // unico equivalente accesible seria "Invalid Date".
   if (absolute === null) return null;
 
+  const scoreboard = size === "scoreboard";
+
   return (
-    <div className="flex flex-col gap-2">
-      <p className="text-label font-medium text-text-muted">
+    <div className="flex flex-col gap-s3">
+      <p
+        className={
+          scoreboard
+            ? "font-display text-overline uppercase tracking-wide text-brand"
+            : "text-label font-medium text-text-muted"
+        }
+      >
         {variant === "opens" ? t("opensIn") : t("closesIn")}
       </p>
 
@@ -64,8 +79,12 @@ export function PromotionCountdown({
         }}
         deadlineLabel={`${tA11y("promotionCountdown")}: ${absolute}`}
         completedLabel={t("elapsed")}
+        size={size}
       />
 
+      {/* Se conserva palabra por palabra: la cuenta atras es una comodidad y el
+          estado que manda es el que reporta el servidor. Que ahora sea
+          espectacular no la convierte en fuente de verdad. */}
       <p className="text-caption text-text-subtle">{t("clockNote")}</p>
     </div>
   );

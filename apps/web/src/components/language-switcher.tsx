@@ -45,11 +45,12 @@ export function LanguageSwitcher({ className }: { readonly className?: string })
                 hrefLang={locale}
                 aria-current={isCurrent ? "true" : undefined}
                 className={cn(
-                  "inline-flex min-h-touch items-center rounded-md px-3 text-body-sm",
+                  "lsw-display inline-flex min-h-touch items-center rounded-md px-3 text-body-sm",
+                  "transition-colors duration-fast ease-standard",
                   "outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
                   isCurrent
-                    ? "bg-brand-subtle font-semibold text-brand"
-                    : "text-text-muted hover:bg-surface-sunken hover:text-text",
+                    ? "border border-brand/45 bg-brand/12 font-semibold text-brand"
+                    : "border border-transparent text-text-muted hover:text-brand",
                 )}
               >
                 {locale === "en" ? t("localeName.en") : t("localeName.es")}

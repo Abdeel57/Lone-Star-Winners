@@ -1,4 +1,4 @@
-import { Badge, type BadgeTone } from "@lsw/ui";
+import { Badge, type BadgeSize, type BadgeTone } from "@lsw/ui";
 
 import { usePromotionStatusLabel } from "@/i18n/promotion-labels";
 import type { PromotionStatus } from "@/lib/api";
@@ -20,15 +20,22 @@ import type { PromotionStatus } from "@/lib/api";
  */
 export function PromotionStatusBadge({
   status,
+  size,
   className,
 }: {
   readonly status: PromotionStatus;
+  /** Tamano de la insignia. En el hero conviene `sm`, junto al antetitulo. */
+  readonly size?: BadgeSize;
   readonly className?: string;
 }) {
   const statusLabel = usePromotionStatusLabel();
 
   return (
-    <Badge tone={toneFor(status)} {...(className === undefined ? {} : { className })}>
+    <Badge
+      tone={toneFor(status)}
+      {...(size === undefined ? {} : { size })}
+      {...(className === undefined ? {} : { className })}
+    >
       {statusLabel(status)}
     </Badge>
   );

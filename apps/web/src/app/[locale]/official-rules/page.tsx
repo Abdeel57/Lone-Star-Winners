@@ -129,6 +129,15 @@ export default async function OfficialRulesPage({
   );
 }
 
+/**
+ * Marco de la pagina.
+ *
+ * El documento va sobre una superficie propia y al ancho de lectura: es lo
+ * unico del sitio que se lee entero, palabra por palabra, y necesita el
+ * tratamiento contrario al de un hero. La clase `lsw-print-document` es lo que
+ * hace que al imprimirlo salga negro sobre blanco en vez de gastar el toner de
+ * media oficina en un fondo negro; un documento legal se archiva en papel.
+ */
 function Shell({
   title,
   children,
@@ -137,9 +146,19 @@ function Shell({
   readonly children: React.ReactNode;
 }) {
   return (
-    <div className="lsw-container max-w-narrow py-s10">
-      <h1 className="text-display-md font-bold text-text">{title}</h1>
-      <div className="mt-s6">{children}</div>
+    <div className="pb-s16">
+      <div className="lsw-atmosphere lsw-grain relative isolate py-s12">
+        <div className="lsw-container max-w-narrow">
+          <h1 className="lsw-display text-display-md text-text">{title}</h1>
+          <div aria-hidden="true" className="lsw-gold-rule mt-s5 max-w-[7rem]" />
+        </div>
+      </div>
+
+      <div className="lsw-container max-w-narrow pt-s10">
+        <div className="lsw-print-document rounded-lg border border-border bg-surface p-s6 sm:p-s8">
+          {children}
+        </div>
+      </div>
     </div>
   );
 }

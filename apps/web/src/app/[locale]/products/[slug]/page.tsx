@@ -70,35 +70,42 @@ export default async function ProductDetailPage({
   const price = formatMoney(product.price_from, locale);
 
   return (
-    <div className="lsw-container py-s10">
-      <Link
-        href="/shop"
-        className="inline-flex min-h-touch items-center rounded-md text-body-sm text-text-muted underline underline-offset-4 hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
-      >
+    <div className="lsw-container py-s10 pb-s16">
+      <Link href="/shop" className={BACK_LINK}>
         {t("product.backToShop")}
       </Link>
 
-      <div className="mt-s4 grid gap-s8 lg:grid-cols-2">
+      <div className="mt-s6 grid gap-s8 lg:grid-cols-2 lg:gap-s12">
         <ProductGallery product={product} locale={locale} />
 
-        <div className="flex flex-col gap-s5">
+        <div className="flex flex-col gap-s6 lg:pt-s2">
           <div>
             <ProductCategory categoryKey={product.category_key} />
 
-            <h1 className="mt-1 text-display-md font-bold text-text">
+            <h1 className="lsw-display mt-s3 text-display-md text-text sm:text-display-lg">
               {pickLocalized(product.name, locale)}
             </h1>
 
-            <p className="mt-s3 text-body-lg text-text-muted">
+            <p className="mt-s4 text-body-lg text-text-muted">
               {pickLocalized(product.summary, locale)}
             </p>
           </div>
 
-          {price === null ? null : (
-            <p className="text-heading-lg font-semibold text-text">{price}</p>
-          )}
+          {/* El precio, con el peso que le corresponde: lo que se adquiere aqui
+              es mercancia, y su precio es el dato comercial de la pantalla. Va
+              en blanco calido y no en oro: el oro esta reservado en todo el
+              sitio a lo promocional -valor del premio, cifra de
+              participaciones-, y mezclarlo con el precio confundiria las dos
+              cosas, que es justo lo que este producto no puede permitirse. */}
+          <div className="flex flex-wrap items-center gap-s5 border-y border-border py-s5">
+            {price === null ? null : (
+              <p className="font-display text-display-md font-bold tabular-nums text-text">
+                {price}
+              </p>
+            )}
 
-          <ProductAvailability product={product} />
+            <ProductAvailability product={product} />
+          </div>
 
           <EligibilityNotice product={product} />
 
@@ -106,11 +113,12 @@ export default async function ProductDetailPage({
         </div>
       </div>
 
-      <section aria-labelledby="product-description" className="mt-s10 max-w-narrow">
-        <h2 id="product-description" className="text-heading-lg font-semibold text-text">
+      <section aria-labelledby="product-description" className="mt-s12 max-w-narrow">
+        <h2 id="product-description" className="lsw-display text-heading-lg text-text">
           {t("product.descriptionHeading")}
         </h2>
-        <p className="mt-s3 whitespace-pre-line text-body-md text-text-muted">
+        <div aria-hidden="true" className="lsw-gold-rule mt-s4 max-w-[7rem]" />
+        <p className="mt-s5 whitespace-pre-line text-body-md text-text-muted">
           {pickLocalized(product.description, locale)}
         </p>
       </section>
@@ -152,15 +160,15 @@ function ProductGallery({
   if (images.length === 0) {
     return (
       <div>
-        <MediaFrame ratio="square" emptyLabel={t("noImage")} />
+        <MediaFrame ratio="square" emptyLabel={t("noImage")} className="lsw-studio" />
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-s4">
       {images.map((image, index) => (
-        <MediaFrame key={image} ratio="square">
+        <MediaFrame key={image} ratio="square" className="lsw-studio border border-border">
           {/* Ver `product-card.tsx`: faltan dominios de imagen. */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
@@ -177,6 +185,9 @@ function ProductGallery({
     </div>
   );
 }
+
+const BACK_LINK =
+  "lsw-display inline-flex min-h-touch items-center rounded-md text-body-sm text-text-muted hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-bg";
 
 function nonNull(value: string | null): readonly string[] {
   return value === null ? [] : [value];

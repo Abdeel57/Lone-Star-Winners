@@ -104,6 +104,17 @@ export interface CountdownProps {
   readonly deadlineLabel: string;
   /** Texto mostrado cuando el plazo ya paso, ya traducido. */
   readonly completedLabel: ReactNode;
+  /**
+   * Tratamiento visual.
+   *
+   * `inline` es la cuenta atras discreta que acompana a un dato. `scoreboard`
+   * es la de DEC-038: cuatro casillas grandes, digitos de marcador y filete
+   * dorado. Se eligio una prop y no una clase del consumidor porque la
+   * diferencia no es de tamano sino de ESTRUCTURA -la rejilla de cuatro
+   * columnas iguales es la que impide que el marcador se descuadre cuando los
+   * dias pasan de una cifra a dos.
+   */
+  readonly size?: "inline" | "scoreboard";
   readonly className?: string;
 }
 
@@ -113,6 +124,7 @@ export function Countdown({
   unitLabels,
   deadlineLabel,
   completedLabel,
+  size = "inline",
   className,
 }: CountdownProps) {
   const [parts, setParts] = useState<CountdownParts>(() =>
@@ -134,11 +146,20 @@ export function Countdown({
 
   if (parts.isComplete) {
     return (
-      <p className={cn("text-body-md font-medium text-text-muted", className)}>
+      <p
+        className={cn(
+          "text-body-md font-medium text-text-muted",
+          size === "scoreboard" &&
+            "rounded-lg border border-border bg-surface-raised px-s5 py-s4 text-body-lg",
+          className,
+        )}
+      >
         <time dateTime={targetIso}>{completedLabel}</time>
       </p>
     );
   }
+
+  const scoreboard = size === "scoreboard";
 
   return (
     <div className={cn("flex flex-col gap-1", className)}>
@@ -147,21 +168,59 @@ export function Countdown({
         <time dateTime={targetIso}>{deadlineLabel}</time>
       </span>
 
-      <ul aria-hidden="true" className="flex flex-wrap items-end gap-3">
-        <CountdownUnit value={parts.days} label={unitLabels.days} />
-        <CountdownUnit value={parts.hours} label={unitLabels.hours} />
-        <CountdownUnit value={parts.minutes} label={unitLabels.minutes} />
-        <CountdownUnit value={parts.seconds} label={unitLabels.seconds} />
+      <ul
+        aria-hidden="true"
+        className={cn(
+          scoreboard
+            ? // Cuatro columnas IGUALES. Con `flex-wrap`, el dia numero 100
+              // ensancha su casilla y descuadra el marcador entero; con una
+              // rejilla fija, la cifra crece dentro de su casilla.
+              "grid w-full max-w-lg grid-cols-4 gap-2 sm:gap-3"
+            : "flex flex-wrap items-end gap-3",
+        )}
+      >
+        <CountdownUnit value={parts.days} label={unitLabels.days} scoreboard={scoreboard} />
+        <CountdownUnit value={parts.hours} label={unitLabels.hours} scoreboard={scoreboard} />
+        <CountdownUnit value={parts.minutes} label={unitLabels.minutes} scoreboard={scoreboard} />
+        <CountdownUnit value={parts.seconds} label={unitLabels.seconds} scoreboard={scoreboard} />
       </ul>
     </div>
   );
 }
 
-function CountdownUnit({ value, label }: { readonly value: number; readonly label: string }) {
+function CountdownUnit({
+  value,
+  label,
+  scoreboard,
+}: {
+  readonly value: number;
+  readonly label: string;
+  readonly scoreboard: boolean;
+}) {
+  if (scoreboard) {
+    return (
+      <li className="relative flex min-w-0 flex-col items-center overflow-hidden rounded-lg border border-border bg-surface-raised px-1 py-s3 sm:py-s4">
+        {/* Filete dorado superior: es lo que convierte cuatro cajas grises en
+            un marcador. Se compone con utilidades del preset y no con una clase
+            de la aplicacion: este paquete no puede depender de CSS que viva en
+            `apps/web`, o la primitiva se veria distinta segun quien la monte. */}
+        <span
+          aria-hidden="true"
+          className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-brand/60 to-transparent"
+        />
+
+        {/* `tabular-nums` evita que la caja cambie de ancho cada segundo. */}
+        <span className="font-display text-display-md font-bold tabular-nums text-text sm:text-display-lg">
+          {String(value).padStart(2, "0")}
+        </span>
+        <span className="mt-1 text-overline uppercase tracking-wide text-brand">{label}</span>
+      </li>
+    );
+  }
+
   return (
-    <li className="flex min-w-[3.25rem] flex-col items-center rounded-md bg-surface-sunken px-3 py-2">
-      {/* `tabular-nums` evita que la caja cambie de ancho cada segundo. */}
-      <span className="text-heading-md font-semibold tabular-nums text-text">
+    <li className="flex min-w-[3.25rem] flex-col items-center rounded-md border border-border bg-surface-raised px-3 py-2">
+      <span className="font-display text-heading-md font-semibold tabular-nums text-text">
         {String(value).padStart(2, "0")}
       </span>
       <span className="text-overline uppercase text-text-subtle">{label}</span>

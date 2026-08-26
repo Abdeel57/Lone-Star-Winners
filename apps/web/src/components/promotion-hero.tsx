@@ -1,4 +1,4 @@
-import { Alert, buttonVariants, Card } from "@lsw/ui";
+import { Alert, buttonVariants } from "@lsw/ui";
 import { useTranslations } from "next-intl";
 
 import { formatMoney, formatZonedDateTime } from "@/i18n/formatters";
@@ -40,6 +40,24 @@ import { PromotionStatusBadge } from "./promotion-status-badge";
  * Salvo que la promocion declare que no tiene version de reglas publicada
  * (DEC-012), en cuyo caso se dice eso mismo en vez de enlazar a un documento
  * que no existe. Un enlace roto a las Reglas Oficiales es peor que no tenerlo.
+ *
+ * ---------------------------------------------------------------------------
+ * COMPOSICION (DEC-038)
+ * ---------------------------------------------------------------------------
+ * Hero a pantalla completa sobre negro con atmosfera: el premio es el titular,
+ * en caja alta y al mayor tamano del sistema, y la cuenta atras es un marcador
+ * de cuatro casillas. Nada de eso es decorativo por si mismo: la jerarquia
+ * -titulo, plazo, valor declarado, llamada a la tienda- es exactamente la que
+ * responde a las cinco preguntas de arriba, solo que ahora se lee de un vistazo.
+ *
+ * DOS BLOQUES, NO UNO
+ * -------------------
+ * El hero termina donde empiezan los AVISOS. El estado de la promocion, el
+ * descargo de participaciones y la ausencia de reglas publicadas viven en una
+ * banda propia justo debajo, con fondo distinto: son texto que hay que leer, y
+ * dentro de un hero de titulares gigantes nadie los lee. Siguen formando parte
+ * de este componente -no de la pagina- porque acompanan a la promocion alla
+ * donde se muestre.
  */
 export function PromotionHero({
   promotion,
@@ -75,96 +93,159 @@ export function PromotionHero({
     promotion.prize_value === null ? null : formatMoney(promotion.prize_value, locale);
 
   return (
-    <section aria-labelledby="promotion-title" className="lsw-container py-s10 sm:py-s16">
-      <p className="text-overline uppercase text-text-subtle">{t("eyebrow")}</p>
+    <>
+      <section
+        aria-labelledby="promotion-title"
+        className="lsw-atmosphere lsw-grain relative isolate overflow-hidden"
+      >
+        {/*
+         * Marca de agua: la estrella coronada del logotipo, enorme y casi
+         * apagada, detras del contenido.
+         *
+         * Va como imagen de FONDO de un `div` decorativo y no como `<img>`:
+         * asi no entra en el arbol de accesibilidad, no compite por el orden de
+         * carga con el contenido, y desaparece por completo en pantallas
+         * pequenas, donde solo restaria contraste al titular.
+         */}
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute -right-24 top-1/2 hidden h-[46rem] w-[46rem] -translate-y-1/2 bg-contain bg-center bg-no-repeat opacity-[0.07] lg:block"
+          style={{ backgroundImage: "url('/brand/lsw-mark.png')" }}
+        />
 
-      <div className="mt-s3 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <h1
-          id="promotion-title"
-          className="max-w-narrow text-display-md font-bold text-text sm:text-display-lg"
-        >
-          {pickLocalized(promotion.title, locale)}
-        </h1>
+        <div className="lsw-container relative flex min-h-[86svh] flex-col justify-center py-s16 lg:min-h-[calc(100svh-5rem)] lg:py-s24">
+          <div className="grid gap-s10 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)] lg:items-center lg:gap-s12">
+            <div>
+              <div className="flex flex-wrap items-center gap-3">
+                <p className="lsw-eyebrow">{t("eyebrow")}</p>
+                <PromotionStatusBadge status={promotion.status} size="sm" />
+              </div>
 
-        <PromotionStatusBadge status={promotion.status} className="shrink-0" />
-      </div>
+              <h1
+                id="promotion-title"
+                className="lsw-display mt-s4 text-display-lg text-text sm:text-display-xl"
+              >
+                {pickLocalized(promotion.title, locale)}
+              </h1>
 
-      <p className="mt-s4 max-w-narrow text-body-lg text-text-muted">
-        {pickLocalized(promotion.summary, locale)}
-      </p>
+              <p className="mt-s5 max-w-narrow text-body-lg text-text-muted">
+                {pickLocalized(promotion.summary, locale)}
+              </p>
 
-      {presentation.countdownTarget === null ? null : (
-        <div className="mt-s8">
-          <PromotionCountdown
-            targetIso={
-              presentation.countdownTarget === "starts_at" ? promotion.starts_at : promotion.ends_at
-            }
-            nowIso={nowIso}
-            locale={locale}
-            timeZone={promotion.legal_timezone}
-            variant={presentation.countdownTarget === "starts_at" ? "opens" : "closes"}
-          />
+              {/*
+               * LA ACCION PRINCIPAL DEPENDE DEL ESTADO.
+               *
+               * Mientras la promocion admite participaciones, lo primero que
+               * hay que poder hacer es ver la MERCANCIA: es lo que se adquiere,
+               * y la promocion es el marco. En cuanto deja de admitirlas, esa
+               * misma llamada seria una afirmacion falsa -invitar a pedir
+               * mercancia "para esta promocion" sobre una promocion cerrada-, y
+               * la accion principal pasa a ser el detalle, que es donde se
+               * explica en que fase esta el proceso.
+               *
+               * La decision NO se toma aqui: sale de la misma maquina de
+               * estados que gobierna el resto del sitio.
+               */}
+              <div className="mt-s8 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+                <Link
+                  href={presentation.showsShopCta ? "/shop" : `/promotions/${promotion.slug}`}
+                  className={buttonVariants({ variant: "primary", size: "xl" })}
+                >
+                  {presentation.showsShopCta ? t("shopCta") : t("viewPromotion")}
+                </Link>
+
+                {hasRules ? (
+                  <Link
+                    href={`/official-rules?promotion=${promotion.slug}`}
+                    className={buttonVariants({ variant: "secondary", size: "xl" })}
+                  >
+                    {t("viewOfficialRules")}
+                  </Link>
+                ) : null}
+
+                {presentation.showsShopCta ? (
+                  <Link
+                    href={`/promotions/${promotion.slug}`}
+                    className={buttonVariants({ variant: "ghost", size: "lg" })}
+                  >
+                    {t("viewPromotion")}
+                  </Link>
+                ) : null}
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-s6">
+              {prizeValue === null ? null : (
+                <div className="rounded-xl border border-brand/30 bg-surface/70 p-s6 shadow-lg backdrop-blur-sm">
+                  <p className="lsw-eyebrow text-text-subtle">{t("prizeValueLabel")}</p>
+                  <p className="lsw-display lsw-gold-sheen mt-s2 text-display-md tabular-nums sm:text-display-lg">
+                    {prizeValue}
+                  </p>
+                </div>
+              )}
+
+              {presentation.countdownTarget === null ? null : (
+                <PromotionCountdown
+                  targetIso={
+                    presentation.countdownTarget === "starts_at"
+                      ? promotion.starts_at
+                      : promotion.ends_at
+                  }
+                  nowIso={nowIso}
+                  locale={locale}
+                  timeZone={promotion.legal_timezone}
+                  variant={presentation.countdownTarget === "starts_at" ? "opens" : "closes"}
+                  size="scoreboard"
+                />
+              )}
+
+              <dl className="flex flex-col gap-s3 border-t border-border pt-s5">
+                {opensAt === null ? null : (
+                  <div className={META_ROW}>
+                    <dt className={META_LABEL}>{t("opensLabel")}</dt>
+                    <dd className={META_VALUE}>
+                      <time dateTime={promotion.starts_at}>{opensAt}</time>
+                    </dd>
+                  </div>
+                )}
+
+                {closesAt === null ? null : (
+                  <div className={META_ROW}>
+                    <dt className={META_LABEL}>{t("closesLabel")}</dt>
+                    <dd className={META_VALUE}>
+                      <time dateTime={promotion.ends_at}>{closesAt}</time>
+                    </dd>
+                  </div>
+                )}
+              </dl>
+
+              <p className="text-caption text-text-subtle">{t("timeZoneNote")}</p>
+            </div>
+          </div>
         </div>
-      )}
+      </section>
 
-      <dl className="mt-s8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {prizeValue === null ? null : (
-          <Card padding="sm" elevation="flat">
-            <dt className="text-label font-medium text-text-muted">{t("prizeValueLabel")}</dt>
-            <dd className="mt-1 text-heading-md font-semibold text-text">{prizeValue}</dd>
-          </Card>
-        )}
+      {/* Banda de avisos. Fondo distinto y ancho de lectura: es el texto que hay
+          que leer de verdad, y necesita el tratamiento contrario al del hero. */}
+      <div className="lsw-band">
+        <div className="lsw-container flex max-w-narrow flex-col gap-3 py-s8">
+          <PromotionStateNotice presentation={presentation} />
 
-        {opensAt === null ? null : (
-          <Card padding="sm" elevation="flat">
-            <dt className="text-label font-medium text-text-muted">{t("opensLabel")}</dt>
-            <dd className="mt-1 text-body-md font-semibold text-text">
-              <time dateTime={promotion.starts_at}>{opensAt}</time>
-            </dd>
-          </Card>
-        )}
+          <Alert tone="info">{t("entriesDisclaimer")}</Alert>
 
-        {closesAt === null ? null : (
-          <Card padding="sm" elevation="flat">
-            <dt className="text-label font-medium text-text-muted">{t("closesLabel")}</dt>
-            <dd className="mt-1 text-body-md font-semibold text-text">
-              <time dateTime={promotion.ends_at}>{closesAt}</time>
-            </dd>
-          </Card>
-        )}
-      </dl>
-
-      <p className="mt-s3 text-caption text-text-subtle">{t("timeZoneNote")}</p>
-
-      <div className="mt-s6 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-        <Link
-          href={`/promotions/${promotion.slug}`}
-          className={buttonVariants({ variant: "primary", size: "lg" })}
-        >
-          {t("viewPromotion")}
-        </Link>
-
-        {hasRules ? (
-          <Link
-            href={`/official-rules?promotion=${promotion.slug}`}
-            className={buttonVariants({ variant: "secondary", size: "lg" })}
-          >
-            {t("viewOfficialRules")}
-          </Link>
-        ) : null}
+          {hasRules ? null : (
+            // DEC-012: una promocion no llega a ACTIVE con claves legales en TBD.
+            // Aun asi la interfaz tiene que saber decirlo sin rellenar el hueco.
+            <Alert tone="warning">{t("rulesNotPublished")}</Alert>
+          )}
+        </div>
       </div>
-
-      <div className="mt-s6 flex flex-col gap-3">
-        <PromotionStateNotice presentation={presentation} />
-
-        <Alert tone="info">{t("entriesDisclaimer")}</Alert>
-
-        {hasRules ? null : (
-          // DEC-012: una promocion no llega a ACTIVE con claves legales en TBD.
-          // Aun asi la interfaz tiene que saber decirlo sin rellenar el hueco.
-          <Alert tone="warning">{t("rulesNotPublished")}</Alert>
-        )}
-      </div>
-    </section>
+    </>
   );
 }
+
+const META_ROW = "flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1";
+
+const META_LABEL = "font-display text-overline uppercase tracking-wide text-text-subtle";
+
+const META_VALUE = "text-body-sm font-medium text-text";
