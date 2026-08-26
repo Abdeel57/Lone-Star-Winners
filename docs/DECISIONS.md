@@ -1716,3 +1716,58 @@ Affected areas: `apps/web` (ficha de producto, carrito), `packages/ui`
 
 Proposed by: frontend (por criterio propio durante DEC-039)
 Agreed by: Team Lead, tras el hallazgo B1 del revisor de cumplimiento
+
+---
+
+## DEC-041
+
+Status: Accepted
+
+Date: 2026-08-25
+
+Decision:
+Tres cambios estructurales en el design system, salidos de la corrección de
+los hallazgos de la auditoría adversarial de DEC-039:
+
+1. **`Badge` gana un eje `surface: dark | light`.** Cada tono tiene su
+   combinación clara, y una unión de tipos impide `surface="light"` con
+   tonos de estado que no existen en paleta clara. El relleno sólido claro es
+   de tinta, espejo exacto del oscuro.
+2. **La geometría del patrón topográfico vive una sola vez**, en
+   `packages/design-system/tailwind-preset.mjs` (`TOPO_PATHS` +
+   `topoPattern()`); un plugin `addBase` emite los cuatro tokens en `:root`.
+   `tokens.css` conserva la prosa de diseño y apunta al preset. El CSS
+   compilado sale byte a byte igual que las cadenas a mano (verificado).
+3. **`--lsw-color-light-border-strong` pasa de `#c7bfb0` a `#938d82`**:
+   de 1.72:1 a **3.11:1** sobre la banda clara y 3.30:1 sobre blanco. Es el
+   token de los contornos que identifican un control; `light-border` sigue
+   tenue a propósito para la separación de tarjetas.
+
+Además, `ProductCard` solo se renderiza desde `MerchandiseBand`, que pinta la
+banda clara siempre; una red DOM y otra estática lo garantizan.
+
+Context:
+La auditoría adversarial de DEC-039 (tres revisores independientes: cumplimiento,
+accesibilidad, fidelidad) encontró cuatro bloqueantes que los cinco gates en
+verde no detectaban: chips con paleta oscura sobre tarjeta blanca en el estado
+por defecto, chip truncado en todos los anchos, anillo de foco a 1.35:1 y texto
+seleccionado a 1.15:1. Más una veintena de menores. Los tres cambios de arriba
+son los que alteran el sistema, no solo el sitio de uso.
+
+Alternatives:
+Arreglar cada chip en su sitio de uso (descartado: el fallo se repetiría en el
+siguiente componente que usara `Badge` sobre claro). Mantener tres copias del
+SVG topográfico con un comentario que las vincule (descartado: ya habían
+divergido).
+
+Reason:
+Los cuatro bloqueantes compartían una causa: las capas que el sistema y el
+navegador pintan por encima (foco, selección, badges por defecto) venían
+calibradas para negro y ninguna red las miraba. Los arreglos van al sistema y
+llevan red propia, para que el siguiente componente sobre banda clara no
+repita el fallo.
+
+Affected areas: `packages/design-system`, `packages/ui`, `apps/web`.
+
+Proposed by: frontend (corrección de hallazgos)
+Agreed by: Team Lead

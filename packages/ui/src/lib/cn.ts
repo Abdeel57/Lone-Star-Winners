@@ -20,6 +20,11 @@ const twMerge = extendTailwindMerge({
       "font-size": [
         {
           text: [
+            // `display-xl` entro con DEC-038 (el titular del hero) y se quedo
+            // fuera de esta lista hasta la revision de DEC-039: sin el,
+            // `cn("text-display-xl", "text-brand")` clasificaba el tamano como
+            // color y descartaba uno de los dos.
+            "display-xl",
             "display-lg",
             "display-md",
             "heading-lg",

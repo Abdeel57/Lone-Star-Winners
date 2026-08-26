@@ -34,9 +34,11 @@ export { Alert, type AlertProps, type AlertTone } from "./components/alert";
 export {
   Badge,
   type BadgeEmphasis,
+  type BadgeLightTone,
   type BadgeProps,
   type BadgeShape,
   type BadgeSize,
+  type BadgeSurface,
   type BadgeTone,
 } from "./components/badge";
 export {

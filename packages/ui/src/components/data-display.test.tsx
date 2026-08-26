@@ -55,6 +55,54 @@ describe("Badge", () => {
     expect(badge?.className).toContain("rounded-pill");
     expect(badge?.className).toContain("bg-brand/12");
   });
+
+  it("sobre banda clara ninguna insignia trae la paleta oscura", () => {
+    // DEC-039/040, hallazgo F1 de la revision: `tone="neutral"` se resolvia a
+    // `bg-surface-raised` (#18181c) con texto claro. Dentro de una tarjeta
+    // blanca eso es un bloque casi negro, y era el estado por defecto de todas
+    // las tarjetas del catalogo entre promociones.
+    for (const emphasis of ["subtle", "solid"] as const) {
+      for (const tone of ["neutral", "brand"] as const) {
+        const { container, unmount } = render(
+          <Badge tone={tone} emphasis={emphasis} surface="light">
+            Abierta
+          </Badge>,
+        );
+
+        const className = container.firstElementChild?.className ?? "";
+        const label = `${tone}/${emphasis}`;
+
+        expect(className, label).not.toMatch(
+          /(^|\s)(bg-surface-raised|text-text|text-text-muted|border-border-strong)(\s|$)/,
+        );
+        // Y lleva ALGO de la paleta clara: si el par no tuviera variante
+        // definida, cva no aplicaria ninguna clase de color y la insignia
+        // quedaria transparente sin que nada fallara.
+        expect(className, label).toMatch(/(^|\s)(bg|text|border)-light-/);
+
+        unmount();
+      }
+    }
+  });
+
+  it("el relleno solido claro es de tinta: es el espejo del oscuro", () => {
+    // Va encima de una fotografia de estudio claro (el "agotado" del catalogo).
+    // Un relleno palido ahi no recortaria nada.
+    const { container } = render(
+      <Badge tone="neutral" emphasis="solid" surface="light">
+        Agotado
+      </Badge>,
+    );
+
+    const className = container.firstElementChild?.className ?? "";
+    expect(className).toContain("bg-light-text");
+    expect(className).toContain("text-light-bg");
+  });
+
+  it("la banda oscura sigue siendo el defecto", () => {
+    const { container } = render(<Badge tone="neutral">Abierta</Badge>);
+    expect(container.firstElementChild?.className).toContain("bg-surface-raised");
+  });
 });
 
 interface Row {

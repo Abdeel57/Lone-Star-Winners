@@ -287,35 +287,120 @@
   }
 
   /* -------------------------------------------------------------------------
-   * BANDA CLARA DE MERCANCIA (DEC-039)
+   * SUPERFICIES CLARAS DE MERCANCIA (DEC-039, ampliado por DEC-040)
    *
-   * La rejilla del catalogo y la franja destacada de la portada, y NADA MAS.
+   * Dos formas de la MISMA receta, y por eso comparten declaracion en vez de
+   * estar escritas dos veces (hallazgo F8 de la revision: la version anterior
+   * tenia la receta a mano en tres sitios y una de las copias ya habia perdido
+   * la topografia):
+   *
+   *   - `.lsw-band-light`: banda a sangre. La rejilla del catalogo y la franja
+   *     destacada de la portada. Corta arriba y abajo con filete de oro.
+   *   - `.lsw-panel-light`: caja. El panel de la galeria de la ficha de
+   *     producto. Mismo fondo y mismo filete, cerrado por los cuatro lados.
+   *
    * Cabecera, hero, marcador, banda del premio y pie siguen oscuros: la
    * alternancia oscuro -> claro -> oscuro es la estructura de la referencia, y
    * es lo que hace que las dos golpeen. Una pagina toda clara seria otro
    * producto; una toda oscura es la que el usuario miro y corrigio.
    *
-   * TRES decisiones deliberadas:
+   * CINCO decisiones deliberadas:
    *
-   * 1. **El corte es un filete de oro de 2px arriba y abajo.** El salto de
-   *    negro a blanco necesita una costura o parece un fallo de carga. Dos
-   *    pixeles de oro pleno -no de tinta: aqui el oro va contra el negro de
-   *    arriba, no contra el blanco- lo convierten en una decision.
+   * 1. **El corte es un filete de oro de 2px.** El salto de negro a blanco
+   *    necesita una costura o parece un fallo de carga. Dos pixeles de oro
+   *    pleno -no de tinta: aqui el oro va contra el negro de fuera, no contra
+   *    el blanco de dentro- lo convierten en una decision.
    * 2. **La topografia va en la tinta MAS SUAVE**, al 4,5%. Se ve en los
    *    margenes y en las calles de la rejilla, y desaparece bajo cada tarjeta,
    *    que es blanco opaco. Textura sin ruido dentro del grid.
-   * 3. **La banda declara `color`**, de modo que cualquier texto que caiga
+   * 3. **La superficie declara `color`**, de modo que cualquier texto que caiga
    *    dentro sin clase propia hereda tinta y no el blanco calido del sistema
    *    oscuro. Es la red que impide el unico fallo grave posible en esta
    *    composicion: texto claro sobre fondo claro.
+   * 4. **`color-scheme: light`** (hallazgo A3). El documento declara
+   *    `color-scheme: dark` en `:root`, asi que el navegador pinta en oscuro
+   *    todo lo que dibuja el: `<select>`, `<input>`, `<progress>`, la barra de
+   *    desplazamiento de un contenedor, el calendario de un campo de fecha. Hoy
+   *    no hay ningun control nativo dentro de una superficie clara -los filtros
+   *    del catalogo se quedan arriba, en la banda oscura, a proposito- pero el
+   *    dia que entre uno apareceria oscuro sobre blanco sin que nadie lo
+   *    hubiera decidido. Una linea cierra la clase entera de fallo.
+   * 5. **`::selection` se reasigna** (hallazgo A2/F4). La regla global pinta el
+   *    texto seleccionado con `--lsw-color-text`, que es blanco calido, sobre un
+   *    velo de oro al 30%. Sobre negro eso da 10,6:1; sobre blanco el velo
+   *    compone a #efe3be y el texto seguia siendo casi blanco: **1,15:1**, es
+   *    decir, seleccionar el nombre o el precio de un articulo lo hacia
+   *    DESAPARECER. Con tinta, la misma seleccion mide 15,3:1.
    * ---------------------------------------------------------------------- */
-  .lsw-band-light {
+  .lsw-band-light,
+  .lsw-panel-light {
     position: relative;
+    color-scheme: light;
     background-color: rgb(var(--lsw-color-light-bg));
     background-image: var(--lsw-pattern-topo-ink-soft);
     background-size: var(--lsw-pattern-topo-size);
-    border-block: 2px solid rgb(var(--lsw-color-brand));
     color: rgb(var(--lsw-color-light-text));
+  }
+
+  .lsw-band-light {
+    border-block: 2px solid rgb(var(--lsw-color-brand));
+  }
+
+  .lsw-panel-light {
+    border: 2px solid rgb(var(--lsw-color-brand));
+    border-radius: var(--lsw-radius-md);
+  }
+
+  /* El selector cubre el propio elemento y sus descendientes: `::selection` no
+     se hereda como una propiedad normal, se resuelve contra el elemento que
+     contiene el texto seleccionado.
+
+     `.lsw-studio-light` entra tambien aunque no sea una superficie de seccion:
+     es el marco claro de las fotografias, y lleva texto -la etiqueta de "sin
+     imagen"- incluso cuando vive dentro de una tarjeta oscura, como en el
+     carrito. */
+  .lsw-band-light::selection,
+  .lsw-band-light ::selection,
+  .lsw-panel-light::selection,
+  .lsw-panel-light ::selection,
+  .lsw-studio-light::selection,
+  .lsw-studio-light ::selection {
+    color: rgb(var(--lsw-color-light-text));
+  }
+
+  /* -------------------------------------------------------------------------
+   * Enlace estirado
+   *
+   * El titulo de una tarjeta de producto es el UNICO enlace de la tarjeta, y su
+   * area pulsable se estira con un pseudo-elemento hasta cubrirla entera: se
+   * puede pulsar en cualquier parte y sigue habiendo un solo destino en el
+   * arbol de accesibilidad, con un nombre que dice de que articulo se trata.
+   *
+   * El anillo de foco NO lo pinta el enlace sino la tarjeta, con
+   * `has-[a:focus-visible]`, porque un anillo alrededor de dos palabras no
+   * diria donde esta el foco de verdad cuando lo pulsable es la tarjeta.
+   *
+   * De ahi el `@supports`: en un navegador sin `:has()` (por debajo del 5%) esa
+   * regla no existe, y como el enlace renuncia a su propio contorno el foco se
+   * quedaria SIN NINGUNA senal. El respaldo devuelve el contorno al enlace, en
+   * oro de tinta porque estas tarjetas viven en banda clara (5,58:1). Hallazgo
+   * A7 de la revision de accesibilidad de DEC-039.
+   * ---------------------------------------------------------------------- */
+  .lsw-stretched-link {
+    outline: none;
+  }
+
+  .lsw-stretched-link::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+  }
+
+  @supports not selector(:has(*)) {
+    .lsw-stretched-link:focus-visible {
+      outline: var(--lsw-focus-ring-width) solid rgb(var(--lsw-color-light-gold));
+      outline-offset: var(--lsw-focus-ring-offset);
+    }
   }
 
   /* -------------------------------------------------------------------------
@@ -332,14 +417,20 @@
     background-size: var(--lsw-pattern-topo-size);
   }
 
-  /* La variante de tinta negra, para la unica banda clara del sitio. */
+  /* La variante de tinta negra, calibrada para el ORO de la banda del premio.
+     Sobre el blanco calido de las superficies de mercancia este mismo trazo
+     compite con las fotografias; ahi va la tinta suave, que ya trae
+     `.lsw-band-light` / `.lsw-panel-light` en su propia receta. */
   .lsw-topo-ink {
     background-image: var(--lsw-pattern-topo-ink);
     background-size: var(--lsw-pattern-topo-size);
   }
 
-  /* Y la tinta suave, para superficies claras que no son una banda entera (la
-     galeria de la ficha de producto). */
+  /* La tinta suave suelta, para claros que no son ninguna de las dos formas
+     anteriores. Hoy no la usa nadie mas que ellas; se conserva porque la
+     tercera tinta existe y esconderla dentro de dos clases obligaria a la
+     siguiente superficie clara a copiar la receta entera (que es como nacio el
+     hallazgo F8). */
   .lsw-topo-ink-soft {
     background-image: var(--lsw-pattern-topo-ink-soft);
     background-size: var(--lsw-pattern-topo-size);
@@ -348,8 +439,10 @@
   /* -------------------------------------------------------------------------
    * Banda del premio
    *
-   * El unico bloque CLARO de la pagina, y por eso golpea. Degradado de oro con
-   * el patron topografico en negro encima. El texto que lleva va en
+   * El bloque DORADO de la pagina: no es una superficie clara de mercancia
+   * -esas son `.lsw-band-light` y `.lsw-panel-light`, blancas- sino oro pleno,
+   * y es el unico sitio del sitio donde el oro hace de fondo y no de acento.
+   * Degradado de oro con el patron topografico en negro encima. El texto va en
    * `text-inverse` (casi negro): sobre el oro base el contraste es 9,4:1, muy
    * por encima del minimo AA, y sube todavia mas sobre los tramos claros del
    * degradado.

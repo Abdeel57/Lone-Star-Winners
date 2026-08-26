@@ -7,6 +7,7 @@ import { AmoeCallout } from "@/components/amoe-callout";
 import { ApiErrorState } from "@/components/api-error-state";
 import { EntryOfferPanel } from "@/components/entry-offer-panel";
 import { MarqueeBand } from "@/components/marquee-band";
+import { MerchandiseBand } from "@/components/merchandise-band";
 import { PrizeBand } from "@/components/prize-band";
 import { PromotionHero } from "@/components/promotion-hero";
 import { SectionHeading } from "@/components/section-heading";
@@ -14,7 +15,6 @@ import { TrustBand } from "@/components/trust-band";
 import { WinnersShowcase, type PublishedWinner } from "@/components/winners-showcase";
 import { Link } from "@/i18n/navigation";
 import { routing } from "@/i18n/routing";
-import { ProductCard } from "@/components/product-card";
 import {
   fetchActivePromotion,
   fetchProducts,
@@ -238,11 +238,11 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
 
       {/* Cinta de marca. Tres afirmaciones permanentes, en movimiento continuo.
           Va justo antes de la banda del premio para que el ojo pase de una
-          franja negra y fina a la unica superficie clara de la pagina: es ese
+          franja negra y fina a una superficie dorada a pantalla completa: es ese
           salto, y no el tamano de la banda, lo que la hace destacar. */}
       <MarqueeBand />
 
-      {/* Banda del premio: el unico bloque claro. Solo aparece si la promocion
+      {/* Banda del premio: el bloque DORADO. Solo aparece si la promocion
           declara premio; hoy el backend no tiene modelo de premio y el campo
           llega `null` en produccion, asi que la portada tiene que verse bien sin
           ella (y se ve: el bloque siguiente es "como funciona"). */}
@@ -297,12 +297,24 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
        * 2,3:1, ilegible.
        */}
       {featured.length === 0 ? null : (
-        <section aria-labelledby="featured" className="lsw-band-light py-s12 lg:py-s16">
-          <div className="lsw-container">
-            {/* El "ver todo" a la derecha del titular ya no se compone aqui: es
-                una prop de `SectionHeading`, para que todas las secciones con
-                accion lo alineen igual (a la base del titular, no a su centro) y
-                bajen igual de linea en telefono. */}
+        <MerchandiseBand
+          labelledBy="featured"
+          products={featured}
+          locale={locale}
+          // `h3` y no `h2`: el titular de esta franja YA es un `h2`, asi que
+          // unas tarjetas en `h2` serian sus hermanas en el esquema del
+          // documento en vez de colgar de el (hallazgo A5). En `/shop` no pasa:
+          // alli la seccion cuelga de un `h1`.
+          headingLevel="h3"
+          // La franja de la portada respira mas que la rejilla del catalogo:
+          // aqui la banda lleva encabezado dentro y es un descanso entre dos
+          // bloques oscuros, no el contenido principal de la pagina.
+          className="py-s12 lg:py-s16"
+          gridClassName="mt-s8"
+          heading={
+            /* El "ver todo" a la derecha del titular no se compone aqui: es una
+               prop de `SectionHeading`, para que todas las secciones con accion
+               lo alineen igual (a la base del titular, no a su centro). */
             <SectionHeading
               id="featured"
               eyebrow={t("home.featured.eyebrow")}
@@ -314,12 +326,20 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
                 <Link
                   href="/shop"
                   // `cn` y no la cadena de `buttonVariants` a pelo: la variante
-                  // reasigna `ring-offset` sobre una clase que ya trae la base, y
-                  // sin fusionar quedarian las dos y decidiria el orden de emision
-                  // del CSS, que no es un contrato.
+                  // reasigna color y offset del anillo sobre clases que ya trae
+                  // la base, y sin fusionar quedarian las dos y decidiria el
+                  // orden de emision del CSS, que no es un contrato.
                   className={cn(buttonVariants({ variant: "inkGhost", size: "lg" }), "px-0")}
                 >
-                  {t("home.featured.viewAll")}
+                  {/* Etiqueta CORTA A LA VISTA, frase completa al oido (hallazgo
+                      F7): en la linea del titular, a la derecha, "Ver toda la
+                      mercancia" ocupa el ancho de media pantalla de telefono.
+                      La frase larga sigue en el diccionario, sin tocar, y es la
+                      que forma el nombre accesible del enlace: una lista de
+                      enlaces anunciada por un lector de pantalla no puede tener
+                      un "ver todo" sin complemento. */}
+                  <span aria-hidden="true">{t("home.featured.viewAllShort")}</span>
+                  <span className="sr-only">{t("home.featured.viewAll")}</span>
                   {/* Galon decorativo: repite lo que el enlace ya dice. */}
                   <svg
                     viewBox="0 0 12 12"
@@ -339,19 +359,8 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
                 </Link>
               }
             />
-
-            {/* DOS COLUMNAS DESDE 360px, con calles estrechas (12px, 16px desde
-                `sm`). Es la disposicion de la referencia movil: en un telefono,
-                una sola columna de tarjetas grandes obliga a desplazarse para
-                comparar dos articulos, que es justo lo que se hace en un
-                catalogo. En escritorio la fila se completa con las cuatro. */}
-            <ul className="mt-s8 grid list-none grid-cols-2 gap-s3 sm:gap-s4 lg:grid-cols-4 lg:gap-s5">
-              {featured.map((product) => (
-                <ProductCard key={product.id} product={product} locale={locale} />
-              ))}
-            </ul>
-          </div>
-        </section>
+          }
+        />
       )}
 
       {/*

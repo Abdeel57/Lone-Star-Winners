@@ -26,6 +26,15 @@ export interface EmptyStateProps {
   readonly icon?: ReactNode;
   /** Nivel de encabezado real dentro de la pagina. */
   readonly headingLevel?: HeadingLevel;
+  /**
+   * Banda sobre la que se compone (DEC-039/040).
+   *
+   * `light` son las superficies de mercancia. Existe porque la banda clara del
+   * catalogo se pinta TAMBIEN cuando no hay articulos que mostrar -si
+   * desapareciera, la pagina saltaria de blanco a negro justo en el estado
+   * vacio- y este componente en paleta oscura seria texto blanco sobre blanco.
+   */
+  readonly tone?: "dark" | "light";
   readonly className?: string;
 }
 
@@ -42,29 +51,45 @@ export function EmptyState({
   action,
   icon,
   headingLevel = "h3",
+  tone = "dark",
   className,
 }: EmptyStateProps) {
+  const light = tone === "light";
+
   return (
     <div
       className={cn(
-        "flex flex-col items-center gap-3 rounded-lg border border-dashed border-border-strong",
+        "flex flex-col items-center gap-3 rounded-lg border border-dashed",
         // DEC-038: sobre negro, un estado vacio con el fondo MAS OSCURO que la
         // pagina desaparece y parece un hueco de maquetacion. Se sube a
-        // `surface` para que se lea como una pieza deliberada.
-        "bg-surface px-s5 py-s10 text-center",
+        // `surface` para que se lea como una pieza deliberada. Sobre la banda
+        // clara pasa lo mismo al reves: la pieza es blanca y el fondo, blanco
+        // calido.
+        light ? "border-light-border-strong bg-light-surface" : "border-border-strong bg-surface",
+        "px-s5 py-s10 text-center",
         className,
       )}
     >
       {icon !== undefined && icon !== null ? (
-        <span className="text-text-subtle">{icon}</span>
+        <span className={light ? "text-light-text-muted" : "text-text-subtle"}>{icon}</span>
       ) : null}
 
-      <Heading level={headingLevel} className="text-heading-sm font-semibold text-text">
+      <Heading
+        level={headingLevel}
+        className={cn("text-heading-sm font-semibold", light ? "text-light-text" : "text-text")}
+      >
         {title}
       </Heading>
 
       {description !== undefined && description !== null ? (
-        <p className="max-w-narrow text-body-sm text-text-muted">{description}</p>
+        <p
+          className={cn(
+            "max-w-narrow text-body-sm",
+            light ? "text-light-text-muted" : "text-text-muted",
+          )}
+        >
+          {description}
+        </p>
       ) : null}
 
       {action !== undefined && action !== null ? <div className="mt-s2">{action}</div> : null}

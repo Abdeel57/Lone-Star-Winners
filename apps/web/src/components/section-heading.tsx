@@ -52,9 +52,16 @@ export function SectionHeading({
    *
    * Existe como prop y no como composicion libre en cada pagina porque la
    * alineacion tiene truco: el enlace se alinea con la BASE del titular, no con
-   * su centro, y por debajo de `sm` baja a su propia linea. Escrito a mano en
-   * cada pantalla, eso se desincroniza a la tercera seccion. Es exactamente el
-   * mismo motivo por el que este componente existe.
+   * su centro. Escrito a mano en cada pantalla, eso se desincroniza a la
+   * tercera seccion. Es exactamente el mismo motivo por el que este componente
+   * existe.
+   *
+   * EN LA LINEA DEL TITULAR TAMBIEN EN MOVIL (hallazgo F7). La version anterior
+   * bajaba la accion a su propia linea por debajo de `sm`, y como el filete
+   * dorado cierra el bloque del titular, el enlace acababa cayendo ENTRE el
+   * filete y la entradilla: un enlace suelto en mitad del encabezado. En la
+   * referencia visual el "VIEW ALL" va a la derecha del titular en telefono
+   * igual que en escritorio, y cabe: la etiqueta que se le pasa es corta.
    */
   readonly action?: ReactNode;
   readonly level?: HeadingLevel;
@@ -65,7 +72,12 @@ export function SectionHeading({
 }) {
   const light = tone === "light";
   const heading = (
-    <div className="flex flex-col">
+    // `min-w-0`: al compartir linea con la accion tambien en movil, sin esto el
+    // titular no podria encogerse por debajo de su palabra mas larga y el bloque
+    // desbordaria a lo ancho en pantallas de 360px. Con el, la palabra larga se
+    // parte (los titulares llevan `overflow-wrap: break-word` en `globals.css`)
+    // y no hay desbordamiento horizontal en ninguna anchura.
+    <div className="flex min-w-0 flex-col">
       {eyebrow === undefined ? null : (
         <p className={cn("lsw-eyebrow mb-s3", light && "text-light-gold")}>{eyebrow}</p>
       )}
@@ -96,7 +108,7 @@ export function SectionHeading({
       {action === undefined ? (
         heading
       ) : (
-        <div className="flex flex-col gap-s5 sm:flex-row sm:items-end sm:justify-between sm:gap-s8">
+        <div className="flex flex-row items-end justify-between gap-s4 sm:gap-s8">
           {heading}
           <div className="shrink-0">{action}</div>
         </div>

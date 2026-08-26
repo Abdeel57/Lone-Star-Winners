@@ -19,6 +19,32 @@ describe("EmptyState", () => {
     // mensajes distintos: confundirlos destruye la confianza del participante.
     expect(screen.queryByRole("alert")).toBeNull();
   });
+
+  it("en tono claro no queda una sola clase de la paleta oscura", () => {
+    // DEC-039/040: la banda clara del catalogo se pinta TAMBIEN cuando no hay
+    // articulos -si desapareciera, la pagina saltaria de blanco a negro justo en
+    // el estado vacio- asi que este componente cae dentro de ella. En paleta
+    // oscura seria un panel casi negro con texto blanco sobre blanco calido.
+    const { container } = render(
+      <EmptyState
+        tone="light"
+        title="No merchandise matches this filter"
+        description="Try again"
+      />,
+    );
+
+    const classNames = [...container.querySelectorAll<HTMLElement>("[class]")].map(
+      (node) => node.className,
+    );
+
+    for (const className of classNames) {
+      expect(className).not.toMatch(
+        /(^|\s)(bg-surface|text-text|text-text-muted|text-text-subtle|border-border-strong)(\s|$)/,
+      );
+    }
+
+    expect(container.firstElementChild?.className).toContain("bg-light-surface");
+  });
 });
 
 describe("ErrorState", () => {

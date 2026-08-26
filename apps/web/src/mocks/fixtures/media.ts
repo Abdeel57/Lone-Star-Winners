@@ -55,21 +55,29 @@
 /**
  * Paleta del estudio.
  *
- * Los oros son los del sistema (`--lsw-color-brand` y sus vecinos) escritos en
- * hexadecimal porque un SVG embebido como `data:` URI no ve las custom
- * properties del documento: se carga como documento independiente.
+ * Los colores de MARCA -los oros, la tinta, el fondo- son tokens del sistema
+ * escritos en hexadecimal, porque un SVG embebido como `data:` URI no ve las
+ * custom properties del documento: se carga como documento independiente. El
+ * hexadecimal es legitimo aqui; lo que no lo es -y era el hallazgo M4/F9 de la
+ * revision- es que el hexadecimal DEJE de coincidir con el token que dice
+ * representar. Cada constante lleva escrito el suyo.
+ *
+ * El grafito del cuerpo es la excepcion declarada: es color de ILUSTRACION, no
+ * corresponde a ningun token y no debe corresponder a ninguno.
  */
 const STUDIO = {
-  /** Centro del fondo: blanco. */
+  /** Centro del fondo: blanco. `--lsw-color-light-surface`. */
   backdropNear: "#ffffff",
-  /** Esquinas del fondo: gris calido, el mismo family que `light-surface-sunken`. */
-  backdropFar: "#eae4d9",
-  /** Oro del filete. */
+  /** Esquinas del fondo: gris calido. `--lsw-color-light-surface-sunken`. */
+  backdropFar: "#f2eee6",
+  /** Oro del filete. `--lsw-color-brand`. */
   goldMid: "#c9a227",
-  goldLight: "#f0d98a",
-  goldDeep: "#8a6f1c",
+  /** `--lsw-color-focus`, el mas claro de los oros del sistema. */
+  goldLight: "#f2d680",
+  /** `--lsw-color-light-gold`, el oro de tinta. */
+  goldDeep: "#7a6116",
   /**
-   * Grafito del cuerpo de la pieza.
+   * Grafito del cuerpo de la pieza. Color de ilustracion, no token.
    *
    * Sobre blanco el cuerpo tiene que ser OSCURO -es lo que hace de silueta- pero
    * no negro puro: un negro plano sobre blanco se lee como un recorte de papel.

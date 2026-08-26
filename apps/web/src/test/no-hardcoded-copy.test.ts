@@ -41,8 +41,22 @@ import { describe, expect, it } from "vitest";
  */
 const HERE = dirname(fileURLToPath(import.meta.url));
 
-/** Carpetas con JSX de interfaz. `mocks` y `test` no pintan nada. */
-const SCANNED_DIRECTORIES = [join(HERE, "..", "app"), join(HERE, "..", "components")];
+/**
+ * Carpetas con JSX de interfaz. `mocks` y `test` no pintan nada.
+ *
+ * `@lsw/ui` entra en el escaneo desde la revision de DEC-039 (hallazgo M8).
+ * Estaba fuera desde el principio, y es justo donde la regla es mas estricta:
+ * DEC-021 y DEC-022 prohiben a las primitivas contener texto -TODO llega
+ * traducido por props, incluidos los nombres accesibles- porque el paquete no
+ * tiene diccionario ni forma de tenerlo. Que hoy ninguna lo incumpla no es una
+ * razon para no vigilarlo: es la razon por la que ampliar el escaner sale
+ * gratis.
+ */
+const SCANNED_DIRECTORIES = [
+  join(HERE, "..", "app"),
+  join(HERE, "..", "components"),
+  join(HERE, "..", "..", "..", "..", "packages", "ui", "src"),
+];
 
 /** Excepciones explicitas, con motivo. Vacio a proposito. */
 const ALLOWED: readonly string[] = [];
@@ -55,7 +69,11 @@ function listTsxFiles(directory: string): string[] {
     const full = join(directory, entry.name);
     if (entry.isDirectory()) {
       files.push(...listTsxFiles(full));
-    } else if (entry.name.endsWith(".tsx")) {
+    } else if (entry.name.endsWith(".tsx") && !entry.name.endsWith(".test.tsx")) {
+      // Los tests quedan fuera, y no es una concesion: un test RENDERIZA el
+      // componente con texto literal a proposito, porque comprueba que el texto
+      // que recibe por props llega al DOM. Escanearlos convertiria la red en un
+      // detector de sus propias fixtures.
       files.push(full);
     }
   }

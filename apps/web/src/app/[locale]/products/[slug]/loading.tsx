@@ -24,12 +24,18 @@ export default function ProductLoading() {
       <div className="mt-s6 grid gap-s8 lg:grid-cols-2 lg:gap-s12">
         {/* El panel de galeria es CLARO y con filete de oro (DEC-039). Se pinta
             ya, como cualquier color de fondo: si el esqueleto lo dejara oscuro,
-            al llegar la foto aparecerian de golpe un marco y un fondo nuevos. */}
-        <div className="rounded-md border-2 border-brand bg-light-bg p-s3 sm:p-s4">
+            al llegar la foto aparecerian de golpe un marco y un fondo nuevos.
+
+            Con la MISMA clase que la ficha real, no con una copia de su receta:
+            la copia que habia aqui ya se habia quedado sin la topografia
+            (hallazgo F8). */}
+        <div className="lsw-panel-light p-s3 sm:p-s4">
           <Skeleton className="aspect-square w-full rounded-sm bg-light-surface-sunken" />
         </div>
 
-        <div className="flex flex-col gap-s5 lg:pt-s2">
+        {/* `gap-s6`, el mismo de la ficha real: con `gap-s5` cada hueco de esta
+            columna se movia unos 4px al llegar los datos. */}
+        <div className="flex flex-col gap-s6 lg:pt-s2">
           <Skeleton className="h-4 w-24" />
           <Skeleton className="h-16 w-3/4" />
           <SkeletonText lines={3} />

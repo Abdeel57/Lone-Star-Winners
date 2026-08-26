@@ -37,9 +37,10 @@ function toneSurfaceClass(tone: MediaTone): string {
 /**
  * Color del texto de "sin imagen".
  *
- * En claro se usa `light-text-muted` (7,0:1) y no `light-text-subtle`: el texto
- * va sobre el fondo del marco, que es mas oscuro que el de la banda, y el
- * escalon `subtle` se quedaria en 4,6:1 con muy poco margen.
+ * En claro se usa `light-text-muted` (7,0:1). La paleta clara no tiene escalon
+ * `subtle` -el que existia se quedaba en 4,6:1 sobre el fondo del marco, que es
+ * mas oscuro que el de la banda, y no lo consumia nadie: se retiro en la
+ * revision de DEC-039 (hallazgo F10)-, asi que aqui manda el escalon `muted`.
  */
 function toneLabelClass(tone: MediaTone): string {
   switch (tone) {

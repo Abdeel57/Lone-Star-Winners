@@ -1,16 +1,23 @@
 // ---------------------------------------------------------------------------
 // Lone Star Winners - preset de Tailwind (@lsw/design-system/tailwind-preset)
 //
-// El preset NO define valores: los toma de las custom properties declaradas en
-// `src/styles/tokens.css`. Consecuencia deliberada: cambiar el tema (claro,
-// oscuro, o un tema de marca futuro) no recompila Tailwind, porque las clases
-// generadas apuntan a variables, no a colores literales.
+// El preset NO define valores de TEMA: los toma de las custom properties
+// declaradas en `src/styles/tokens.css`. Consecuencia deliberada: cambiar el
+// tema (claro, oscuro, o un tema de marca futuro) no recompila Tailwind, porque
+// las clases generadas apuntan a variables, no a colores literales.
+//
+// La unica excepcion es el PATRON TOPOGRAFICO del final del archivo, y no es
+// una grieta en esa regla: no es un valor de tema sino un asset decorativo
+// derivado -tres tintas del mismo mosaico- que CSS no sabe componer a partir de
+// fragmentos. Ver el bloque `--- Patron topografico ---`.
 //
 // Este archivo es JavaScript plano a proposito. La configuracion de Tailwind la
 // carga el propio Tailwind con su resolvedor, fuera del pipeline de TypeScript
 // del monorepo; mantenerlo en `.mjs` evita depender de como jiti resuelva un
 // `.ts` a traves del campo `exports` de un paquete del workspace.
 // ---------------------------------------------------------------------------
+
+import plugin from "tailwindcss/plugin";
 
 /**
  * Envuelve un token de color declarado como canales RGB para que Tailwind pueda
@@ -26,6 +33,100 @@ const color = (variable) => `rgb(var(${variable}) / <alpha-value>)`;
  * @returns {string}
  */
 const raw = (variable) => `var(${variable})`;
+
+// --- Patron topografico ------------------------------------------------------
+//
+// UNA sola definicion de la geometria, tres tintas derivadas de ella.
+//
+// Las tres cadenas vivian escritas a mano en `tokens.css` -~1,5 KB cada una,
+// nueve `path` identicos repetidos tres veces, distintos solo en color, opacidad
+// y grosor- y la tercera nacio copiando la segunda (hallazgo M6 de la revision
+// de DEC-039). CSS no puede componer un `url()` a partir de fragmentos, asi que
+// la unica forma de tener una sola fuente es generar el `data:` URI. Se hace
+// aqui, y no en `src/index.ts`, porque los valores tienen que existir cuando
+// Tailwind construye la capa `base`, antes de que corra ningun TypeScript.
+//
+// Los tokens que salen de aqui se llaman igual que antes y se consumen igual
+// que antes -`var(--lsw-pattern-topo)` desde `globals.css`-, asi que ningun
+// consumidor se entera de que han cambiado de sitio.
+
+/** Ancho y alto del mosaico, en pixeles. La repeticion horizontal no deja
+ *  costura porque cada curva termina a la misma altura a la que empieza. */
+const TOPO_TILE = { width: 640, height: 420 };
+
+/** Las nueve curvas de nivel. Esta es la definicion, y solo existe una vez. */
+const TOPO_PATHS = [
+  "M0 22 C 60 2 130 52 200 30 C 270 8 340 56 420 34 C 500 12 570 42 640 22",
+  "M0 58 C 70 36 140 86 210 62 C 290 36 350 88 430 68 C 510 48 580 80 640 58",
+  "M0 86 C 80 64 150 112 230 92 C 310 72 380 118 460 96 C 540 74 590 104 640 86",
+  "M0 140 C 60 116 140 166 220 144 C 300 122 370 170 450 148 C 530 126 580 160 640 140",
+  "M0 178 C 70 156 150 202 230 182 C 320 160 390 206 470 184 C 550 162 590 196 640 178",
+  "M0 238 C 60 216 140 264 220 244 C 300 224 380 268 460 248 C 540 228 590 258 640 238",
+  "M0 296 C 80 274 150 320 240 300 C 320 282 390 324 470 304 C 550 284 590 314 640 296",
+  "M0 328 C 60 310 140 352 230 332 C 310 314 380 356 460 336 C 540 316 590 344 640 328",
+  "M0 392 C 70 372 150 416 235 396 C 315 378 390 418 470 398 C 550 378 590 408 640 392",
+];
+
+/**
+ * Una tinta del mosaico, como `url("data:...")` listo para `background-image`.
+ *
+ * La opacidad va DENTRO del SVG (`stroke-opacity`) y no fuera: una capa de
+ * `background-image` no acepta opacidad propia, y un pseudo-elemento adicional
+ * chocaria con los que ya usan `.lsw-atmosphere` y `.lsw-grain`.
+ *
+ * No va en base64: el SVG queda legible en las herramientas de desarrollo y
+ * pesa menos. Y no se codifica ENTERO con `encodeURIComponent`, que escaparia
+ * tambien espacios y comillas y engordaria cada token cerca de un kilobyte:
+ * los atributos van entre comillas simples y solo se escapan los tres
+ * caracteres que un `url()` de CSS no puede llevar en claro. Es exactamente la
+ * codificacion que tenian las cadenas escritas a mano, para que el CSS
+ * resultante sea byte a byte el mismo.
+ *
+ * @param {{ stroke: string, opacity: number, width: number }} ink
+ * @returns {string}
+ */
+const topoPattern = ({ stroke, opacity, width }) => {
+  const { width: w, height: h } = TOPO_TILE;
+  const svg = [
+    `<svg xmlns='http://www.w3.org/2000/svg' width='${String(w)}' height='${String(h)}' viewBox='0 0 ${String(w)} ${String(h)}'>`,
+    `<g fill='none' stroke='${stroke}' stroke-opacity='${String(opacity)}' stroke-width='${String(width)}'>`,
+    ...TOPO_PATHS.map((d) => `<path d='${d}'/>`),
+    `</g>`,
+    `</svg>`,
+  ].join("");
+
+  const encoded = svg
+    .replace(/%/g, "%25")
+    .replace(/</g, "%3C")
+    .replace(/>/g, "%3E")
+    .replace(/#/g, "%23");
+
+  return `url("data:image/svg+xml,${encoded}")`;
+};
+
+/**
+ * Los cuatro tokens del patron, emitidos en `:root` por el plugin de mas abajo.
+ *
+ * Tres tintas:
+ *   - la dorada, para las superficies negras;
+ *   - `-ink`, negra al 11%, para la banda del premio (que es dorada: un patron
+ *     dorado sobre oro no se ve);
+ *   - `-ink-soft`, negra al 4,5%, para las superficies claras de mercancia
+ *     (DEC-039/040), donde el trazo al 11% competiria con las fotografias.
+ *
+ * Los colores son literales y no tokens: un `data:` URI se carga como documento
+ * independiente y no ve las custom properties del documento que lo usa.
+ */
+const TOPO_TOKENS = {
+  "--lsw-pattern-topo-size": `${String(TOPO_TILE.width)}px ${String(TOPO_TILE.height)}px`,
+  "--lsw-pattern-topo": topoPattern({ stroke: "#c9a227", opacity: 0.07, width: 1.25 }),
+  "--lsw-pattern-topo-ink": topoPattern({ stroke: "#000000", opacity: 0.11, width: 1.4 }),
+  "--lsw-pattern-topo-ink-soft": topoPattern({ stroke: "#000000", opacity: 0.045, width: 1.15 }),
+};
+
+/** Exportado SOLO para el test que verifica que las tres tintas comparten
+ *  geometria y que ninguna vuelve a escribirse a mano. No lo consume la app. */
+export const topoTokens = () => ({ ...TOPO_TOKENS });
 
 /** @type {import("tailwindcss").Config} */
 const preset = {
@@ -105,7 +206,6 @@ const preset = {
           "border-strong": color("--lsw-color-light-border-strong"),
           text: color("--lsw-color-light-text"),
           "text-muted": color("--lsw-color-light-text-muted"),
-          "text-subtle": color("--lsw-color-light-text-subtle"),
           // Oro de tinta: el acento de marca llevado a la sombra para que
           // pueda llevar texto sobre blanco (5,6:1). Ver `tokens.css`.
           gold: color("--lsw-color-light-gold"),
@@ -368,7 +468,14 @@ const preset = {
       },
     },
   },
-  plugins: [],
+  plugins: [
+    // Emite los tokens del patron topografico en `:root`, dentro de la capa
+    // `base`. Van aqui y no en `tokens.css` porque las tres tintas se DERIVAN de
+    // una sola geometria; ver el bloque `--- Patron topografico ---`.
+    plugin(({ addBase }) => {
+      addBase({ ":root": TOPO_TOKENS });
+    }),
+  ],
 };
 
 export default preset;

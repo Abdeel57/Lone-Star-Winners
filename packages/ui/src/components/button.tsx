@@ -54,23 +54,38 @@ export const buttonVariants = cva(
          * puede producir. Esta variante lleva tinta (18,4:1) y reserva el oro de
          * tinta para el estado de hover, donde marca la accion sin depender solo
          * del color para decir que hay un control.
+         *
+         * EL ANILLO DE FOCO CAMBIA DE COLOR, NO SOLO DE OFFSET.
+         * Es el hallazgo M2/A1 de la revision de DEC-039: la primera version
+         * reasignaba `ring-offset` y dejaba el COLOR del anillo en el que trae
+         * `FOCUS_VISIBLE_CLASSES` (`--lsw-color-focus`, #f2d680), calibrado
+         * sobre el negro de pagina. Medido sobre esta banda ese oro claro da
+         * 1,35:1 contra el fondo (#faf8f4) y 1,43:1 contra el relleno blanco del
+         * boton: el indicador de foco existia en el DOM y no se veia. WCAG
+         * 1.4.11 pide 3:1 a un indicador de foco.
+         *
+         * El oro de TINTA (`--lsw-color-light-gold`, #7a6116) mide 5,58:1 sobre
+         * la banda y 5,92:1 sobre el blanco del boton. Es la misma sustitucion
+         * que ya hacia `ProductCard` para su propio anillo.
          */
         ink: cn(
           "border border-light-border-strong bg-light-surface text-light-text",
           "hover:border-light-gold hover:text-light-gold active:bg-light-bg",
-          // El offset del anillo de foco se pinta sobre el fondo de la banda, no
-          // sobre el negro de pagina: un halo negro alrededor de un boton blanco
-          // se lee como un borde, no como foco.
-          "focus-visible:ring-offset-light-bg",
+          // El offset del anillo se pinta sobre el fondo de la banda, no sobre
+          // el negro de pagina: un halo negro alrededor de un boton blanco se
+          // lee como un borde, no como foco.
+          "focus-visible:ring-light-gold focus-visible:ring-offset-light-bg",
         ),
         /**
          * La misma banda clara, sin caja: el enlace de seccion (el “ver todo” que
          * va a la derecha del titular). En la referencia esa accion es texto, no
          * un boton, y darle caja la pondria a competir con las tarjetas.
+         *
+         * Mismo anillo de tinta que `ink`, y por el mismo motivo medido.
          */
         inkGhost: cn(
           "bg-transparent text-light-text hover:text-light-gold",
-          "focus-visible:ring-offset-light-bg",
+          "focus-visible:ring-light-gold focus-visible:ring-offset-light-bg",
         ),
       },
       size: {

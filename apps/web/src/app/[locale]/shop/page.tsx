@@ -4,7 +4,7 @@ import { hasLocale } from "next-intl";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 
 import { ApiErrorState } from "@/components/api-error-state";
-import { ProductCard } from "@/components/product-card";
+import { MerchandiseBand } from "@/components/merchandise-band";
 import { SectionHeading } from "@/components/section-heading";
 import { ShopFilters } from "@/components/shop-filters";
 import { Link } from "@/i18n/navigation";
@@ -62,9 +62,18 @@ const PAGE_SIZE = 24;
  * mercancia se lea limpia, y un formulario dentro de ella es la primera cosa
  * que rompe eso. En la referencia, la seccion blanca es rejilla y nada mas.
  *
- * El estado vacio y el de error se quedan FUERA de la banda clara, sobre el
- * fondo de pagina. Una banda de mercancia sin mercancia no es una banda: seria
- * un rectangulo blanco con un cartel dentro.
+ * CUANDO HAY BANDA, Y CUANDO NO
+ * -----------------------------
+ * Si la consulta FUNCIONO hay banda, con articulos o sin ellos: el estado vacio
+ * se compone dentro, en paleta clara. La version anterior la pintaba solo con
+ * resultados, y como el esqueleto de carga si la dibuja siempre, un catalogo
+ * vacio producia el salto -blanco de golpe a negro- que el esqueleto existe
+ * para evitar (hallazgo M5).
+ *
+ * Si la consulta FALLO no hay banda. No es una excepcion a la regla anterior
+ * sino la misma regla: sin respuesta no hay superficie de mercancia que pintar,
+ * y una banda blanca vacia con un cartel de error dentro seria decoracion
+ * alrededor de una averia.
  */
 export default async function ShopPage({
   params,
@@ -103,8 +112,17 @@ export default async function ShopPage({
 
   /*
    * Entre promociones el catalogo sigue en pie, pero ningun articulo trae
-   * elegibilidad. Se dice UNA VEZ arriba, en la cabecera, en vez de repetir la
-   * misma insignia gris en cada tarjeta.
+   * elegibilidad.
+   *
+   * El aviso de la cabecera y el chip de cada tarjeta dicen cosas distintas y
+   * por eso conviven: el aviso explica LA SITUACION -no hay promocion abierta,
+   * nada de lo que se pida hoy queda asociado a una, la tienda sigue abierta- y
+   * el chip declara el ESTADO DE ESE ARTICULO. El chip tiene que estar en la
+   * tarjeta porque la misma tarjeta se usa en la portada, donde no hay ninguna
+   * cabecera que lo explique. Lo que si se corrigio (hallazgo F1) es su peso:
+   * era la insignia mas ruidosa de la rejilla -relleno solido, y ademas en
+   * paleta oscura- y ahora es la mas discreta, que es lo que corresponde al
+   * estado normal entre promociones.
    */
   const noPromotion =
     items.length > 0 && items.every((product) => product.entry_eligibility === null);
@@ -147,36 +165,31 @@ export default async function ShopPage({
         <div className="lsw-container pt-s10">
           <ApiErrorState failure={result.error} headingLevel="h2" />
         </div>
-      ) : items.length === 0 ? (
-        <div className="lsw-container pt-s10">
-          <EmptyState
-            headingLevel="h2"
-            title={category === null ? t("shop.catalogEmpty.title") : t("shop.empty.title")}
-            description={category === null ? t("shop.catalogEmpty.body") : t("shop.empty.body")}
-            action={
-              category === null ? undefined : (
-                <Link href="/shop" className={buttonVariants({ variant: "secondary" })}>
-                  {t("shop.clear")}
-                </Link>
-              )
-            }
-          />
-        </div>
       ) : (
         /* BANDA CLARA (DEC-039): a partir de aqui todo es `light-*`. */
-        <section className="lsw-band-light py-s10 lg:py-s12">
-          <div className="lsw-container">
-            {/* DOS COLUMNAS DESDE 360px con calles estrechas, como la
-                referencia movil. Sube a tres en tableta y a cuatro en
-                escritorio ancho: el ancho de tarjeta se mantiene casi constante
-                en vez de estirarse hasta parecer un banner. */}
-            <ul className="grid list-none grid-cols-2 gap-s3 sm:gap-s4 md:grid-cols-3 lg:gap-s5 xl:grid-cols-4">
-              {items.map((product) => (
-                <ProductCard key={product.id} product={product} locale={locale} />
-              ))}
-            </ul>
-
-            {result.data.next_cursor === null ? null : (
+        <MerchandiseBand
+          products={items}
+          locale={locale}
+          empty={
+            <EmptyState
+              headingLevel="h2"
+              tone="light"
+              title={category === null ? t("shop.catalogEmpty.title") : t("shop.empty.title")}
+              description={category === null ? t("shop.catalogEmpty.body") : t("shop.empty.body")}
+              action={
+                category === null ? undefined : (
+                  // `ink` y no `secondary`, igual que el "ver mas": este estado
+                  // vive DENTRO de la banda desde DEC-039, y el contorno dorado
+                  // de `secondary` sobre blanco da 2,3:1.
+                  <Link href="/shop" className={cn(buttonVariants({ variant: "ink" }))}>
+                    {t("shop.clear")}
+                  </Link>
+                )
+              }
+            />
+          }
+          footer={
+            result.data.next_cursor === null ? undefined : (
               <div className="mt-s10 flex justify-center">
                 <Link
                   href={`/shop?${nextPageQuery(result.data.next_cursor, category)}`}
@@ -187,9 +200,9 @@ export default async function ShopPage({
                   {t("shop.loadMore")}
                 </Link>
               </div>
-            )}
-          </div>
-        </section>
+            )
+          }
+        />
       )}
     </div>
   );

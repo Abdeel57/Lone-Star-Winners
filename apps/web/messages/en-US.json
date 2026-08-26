@@ -177,6 +177,7 @@
       "title": "Featured merchandise",
       "body": "A few items from the shop. Whether each one is part of the current promotion is shown on its card.",
       "viewAll": "See all merchandise",
+      "viewAllShort": "View all",
       "eyebrow": "From the shop"
     },
     "howItWorks": {
@@ -363,7 +364,9 @@
     "categoryLabel": "Category",
     "clear": "Clear filters",
     "eligibilityUnknown": "No promotion is open right now",
+    "eligibilityUnknownChip": "No promotion",
     "eligibleBadge": "Part of the current promotion",
+    "eligibleChip": "Eligible",
     "empty": {
       "body": "Try a different category, or clear the filter to see everything available.",
       "title": "No merchandise matches this filter"
@@ -373,6 +376,7 @@
     "loadMore": "Show more",
     "noPromotionNotice": "No promotion is open right now, so nothing ordered today is associated with one. The store stays open.",
     "notEligibleBadge": "Not part of the current promotion",
+    "notEligibleChip": "Not eligible",
     "priceFrom": "From {price}",
     "title": "Eligible merchandise",
     "view": "View item",

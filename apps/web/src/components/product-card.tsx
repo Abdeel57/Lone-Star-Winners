@@ -37,6 +37,21 @@ import { pickLocalized, type ProductSummary } from "@/lib/api";
  * elegible" diria que el articulo esta excluido cuando lo que pasa es que no
  * hay nada de lo que excluirlo.
  *
+ * EL CHIP SE LEE CORTO Y SE ANUNCIA LARGO
+ * ---------------------------------------
+ * Hasta la revision de DEC-039 el chip llevaba la frase entera ("Forma parte de
+ * la promocion vigente", 35 caracteres). En la rejilla de dos columnas a 360px
+ * la insignia dispone de unos 142px y esa frase necesita ~238px: el chip se
+ * truncaba a "FORMA PARTE DE…" -y en espanol seguia truncandose incluso a
+ * cuatro columnas en escritorio- justo en el ancho para el que esta banda se
+ * diseno (hallazgos A4 y F2).
+ *
+ * Ahora el texto VISIBLE es una etiqueta corta y la frase completa viaja como
+ * texto solo para lectores de pantalla. No es una perdida de informacion: quien
+ * ve la tarjeta tiene el contexto (esta en un catalogo, junto a una promocion
+ * anunciada arriba) y quien la escucha recibe la frase entera, que es la que
+ * dice de que promocion se habla. El copy largo no se ha tocado.
+ *
  * ---------------------------------------------------------------------------
  * VIVE SOBRE BANDA CLARA (DEC-039)
  * ---------------------------------------------------------------------------
@@ -47,9 +62,23 @@ import { pickLocalized, type ProductSummary } from "@/lib/api";
  * seria una de ellas muerta desde el primer dia, y ademas la rama muerta es
  * justo donde se cuela un fallo de contraste sin que nadie lo vea.
  *
- * Se separa del fondo por LUMINOSIDAD y sombra (blanco puro contra blanco
- * calido, `shadow-light-sm`), no por un borde. Sobre blanco un borde de 1px
- * solido recorta la tarjeta como una pegatina; la sombra la apoya.
+ * Que ese supuesto se cumpla no depende de la buena memoria de quien componga
+ * la pagina: la tarjeta solo se renderiza desde `MerchandiseBand`, que es quien
+ * pinta la banda, y un test lo comprueba (hallazgo M7).
+ *
+ * SE SEPARA DEL FONDO POR TRES COSAS A LA VEZ
+ * -------------------------------------------
+ * Luminosidad (blanco puro contra blanco calido), sombra (`shadow-light-sm`) y
+ * un borde de contraste MUY bajo (`light-border`, 1,3:1 contra la banda).
+ *
+ * El borde estaba en el codigo y la documentacion decia que no existia
+ * (hallazgo F3). Se queda, y lo que se corrige es la frase: el salto de #ffffff
+ * a #faf8f4 es de un 1,5% de luminancia y el filete al 5% que trae la sombra
+ * compone un gris practicamente igual, asi que sin el borde la tarjeta se
+ * disuelve en la banda. Lo que si seria un error es un borde FUERTE: recortaria
+ * la tarjeta como una pegatina. De ahi `light-border` y no
+ * `light-border-strong`, que es el token de los contornos que identifican un
+ * control y mide 3,1:1.
  *
  * QUE SE QUEDO FUERA, Y POR QUE
  * -----------------------------
@@ -79,9 +108,20 @@ import { pickLocalized, type ProductSummary } from "@/lib/api";
 export function ProductCard({
   product,
   locale,
+  headingLevel = "h2",
 }: {
   readonly product: ProductSummary;
   readonly locale: Locale;
+  /**
+   * Nivel real del titulo dentro de la jerarquia de la PAGINA, no del tamano
+   * deseado (el tamano lo fija la tarjeta).
+   *
+   * En `/shop` la seccion cuelga de un `h1` y las tarjetas son `h2`. En la
+   * portada, la franja destacada ya tiene su propio `h2`, asi que las tarjetas
+   * tienen que ser `h3`: con `h2` quedaban como HERMANAS del titular de su
+   * propia seccion y no debajo de el (hallazgo A5).
+   */
+  readonly headingLevel?: "h2" | "h3";
 }) {
   const t = useTranslations("shop");
   const tProduct = useTranslations("product");
@@ -105,8 +145,11 @@ export function ProductCard({
         // rodeara dos palabras no diria donde esta el foco de verdad.
         //
         // En oro de TINTA, no en el oro de foco del sistema: ese esta calibrado
-        // para verse sobre negro y sobre blanco calido da 1,8:1, por debajo del
-        // 3:1 que WCAG 2.4.11 pide a un indicador de foco.
+        // para verse sobre negro y sobre el blanco calido de la banda da 1,35:1,
+        // muy por debajo del 3:1 que WCAG 1.4.11 (Non-text Contrast) pide a un
+        // indicador de foco. El oro de tinta mide 5,58:1 sobre la banda.
+        // (El criterio es 1.4.11; 2.4.11, que decia la version anterior de esta
+        // nota, es Focus Not Obscured, otra cosa.)
         "has-[a:focus-visible]:ring-2 has-[a:focus-visible]:ring-light-gold",
         "has-[a:focus-visible]:ring-offset-2 has-[a:focus-visible]:ring-offset-light-bg",
       )}
@@ -143,7 +186,11 @@ export function ProductCard({
           <EligibilityBadge product={product} />
 
           {soldOut ? (
-            <Badge tone="neutral" emphasis="solid" shape="square" size="sm">
+            // `surface="light"`: sobre banda clara el relleno solido es de
+            // TINTA, el espejo del relleno claro que esta misma insignia lleva
+            // sobre negro. Va encima de una fotografia de estudio claro, asi que
+            // un relleno palido no recortaria nada.
+            <Badge tone="neutral" emphasis="solid" surface="light" shape="square" size="sm">
               {availabilityLabel(product.availability)}
             </Badge>
           ) : null}
@@ -176,16 +223,19 @@ export function ProductCard({
 
       <div className="flex flex-1 flex-col p-s3 sm:p-s4">
         <CardTitle
-          as="h2"
+          as={headingLevel}
           size="sm"
           className="text-body-sm font-bold text-light-text sm:text-heading-sm"
         >
           <Link
             href={`/products/${product.slug}`}
-            // El pseudo-elemento estira el enlace hasta cubrir la tarjeta. El
-            // `outline-none` no deja el foco sin senal: lo pinta la tarjeta con
-            // `has-[a:focus-visible]`, que es donde de verdad se ve.
-            className="outline-none after:absolute after:inset-0 after:content-[''] group-hover:text-light-gold"
+            // `lsw-stretched-link` estira el enlace con un pseudo-elemento hasta
+            // cubrir la tarjeta y renuncia a su propio contorno de foco, que
+            // pinta la tarjeta con `has-[a:focus-visible]`. La clase vive en
+            // `globals.css` y no en utilidades sueltas porque lleva ademas el
+            // respaldo para navegadores sin `:has()`, donde ese anillo no
+            // existiria y el enlace se quedaria sin ninguna senal de foco.
+            className="lsw-stretched-link group-hover:text-light-gold"
           >
             {name}
             {/* El nombre accesible dice ademas que se va a VER el articulo. Sin
@@ -209,31 +259,63 @@ export function ProductCard({
   );
 }
 
+/**
+ * Chip de elegibilidad.
+ *
+ * TODOS los chips declaran `surface="light"`. Sin eso, `tone="neutral"` se
+ * pinta con la paleta OSCURA -`surface-raised` es #18181c- y el resultado es un
+ * bloque casi negro con texto blanco en la esquina superior de una tarjeta
+ * blanca. No era un caso raro: entre promociones la elegibilidad es `null` en
+ * todos los articulos, asi que lo llevaban todas las tarjetas del catalogo a la
+ * vez (hallazgo F1).
+ *
+ * `emphasis` distingue peso, no color: la insignia de elegible es la
+ * protagonista del catalogo y va en oro pleno; las otras dos son estado
+ * secundario y van discretas, porque repetir un chip de tinta en las 24
+ * tarjetas de la pagina convertiria el estado normal entre promociones en el
+ * elemento mas ruidoso de la rejilla.
+ *
+ * Cada uno se VE corto y se ANUNCIA largo: ver la nota de cabecera.
+ */
 function EligibilityBadge({ product }: { readonly product: ProductSummary }) {
   const t = useTranslations("shop");
 
   if (product.entry_eligibility === null) {
     return (
-      <Badge tone="neutral" emphasis="solid" shape="square" size="sm">
-        {t("eligibilityUnknown")}
+      <Badge tone="neutral" surface="light" shape="square" size="sm">
+        <ChipLabel short={t("eligibilityUnknownChip")} full={t("eligibilityUnknown")} />
       </Badge>
     );
   }
 
   return product.entry_eligibility.is_eligible ? (
     // Oro pleno con texto casi negro: es la insignia protagonista del catalogo
-    // y la unica que la marca destaca de verdad.
-    //
-    // El contorno pasa a oro de TINTA sobre banda clara. El oro de marca contra
-    // el fondo de estudio claro da 2,3:1, asi que el chip perdia el borde y
-    // quedaba flotando; con el contorno oscuro se recorta contra cualquier foto,
-    // incluida una que llegue sobreexpuesta.
-    <Badge tone="brand" emphasis="solid" shape="square" size="sm" className="border-light-gold">
-      {t("eligibleBadge")}
+    // y la unica que la marca destaca de verdad. Su contorno es oro de TINTA
+    // -lo pone la variante `brand solid` de banda clara-: el oro de marca contra
+    // un fondo de estudio claro da 2,3:1, asi que el chip perdia el borde y
+    // quedaba flotando sobre la foto.
+    <Badge tone="brand" emphasis="solid" surface="light" shape="square" size="sm">
+      <ChipLabel short={t("eligibleChip")} full={t("eligibleBadge")} />
     </Badge>
   ) : (
-    <Badge tone="neutral" shape="square" size="sm">
-      {t("notEligibleBadge")}
+    <Badge tone="neutral" surface="light" shape="square" size="sm">
+      <ChipLabel short={t("notEligibleChip")} full={t("notEligibleBadge")} />
     </Badge>
+  );
+}
+
+/**
+ * Etiqueta corta a la vista, frase completa al oido.
+ *
+ * Las dos cadenas llegan ya traducidas. El `aria-hidden` sobre la corta es lo
+ * que evita que un lector de pantalla lea las dos seguidas ("Elegible. Forma
+ * parte de la promocion vigente").
+ */
+function ChipLabel({ short, full }: { readonly short: string; readonly full: string }) {
+  return (
+    <>
+      <span aria-hidden="true">{short}</span>
+      <span className="sr-only">{full}</span>
+    </>
   );
 }

@@ -177,6 +177,7 @@
       "title": "Mercancía destacada",
       "body": "Algunos artículos de la tienda. En cada tarjeta se indica si forma parte de la promoción vigente.",
       "viewAll": "Ver toda la mercancía",
+      "viewAllShort": "Ver todo",
       "eyebrow": "Desde la tienda"
     },
     "howItWorks": {
@@ -363,7 +364,9 @@
     "categoryLabel": "Categoría",
     "clear": "Quitar filtros",
     "eligibilityUnknown": "Ahora mismo no hay ninguna promoción abierta",
+    "eligibilityUnknownChip": "Sin promoción",
     "eligibleBadge": "Forma parte de la promoción vigente",
+    "eligibleChip": "Elegible",
     "empty": {
       "body": "Prueba con otra categoría, o quita el filtro para ver todo lo disponible.",
       "title": "Ningún artículo coincide con este filtro"
@@ -373,6 +376,7 @@
     "loadMore": "Ver más",
     "noPromotionNotice": "Ahora mismo no hay ninguna promoción abierta, así que nada de lo que se pida hoy queda asociado a una. La tienda sigue abierta.",
     "notEligibleBadge": "No forma parte de la promoción vigente",
+    "notEligibleChip": "No elegible",
     "priceFrom": "Desde {price}",
     "title": "Mercancía elegible",
     "view": "Ver el artículo",

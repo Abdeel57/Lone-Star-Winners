@@ -45,17 +45,25 @@
  * grandes en mayusculas y secciones de alto contraste.
  *
  * ---------------------------------------------------------------------------
- * UN SOLO TEMA, OSCURO (DEC-038)
+ * UN SOLO TEMA, OSCURO (DEC-038), CON SUPERFICIES CLARAS ACOTADAS (DEC-039/040)
  * ---------------------------------------------------------------------------
- * La dualidad claro/oscuro desaparece. El logotipo es negro y oro y la
- * identidad es dark-first: un tema claro seria una segunda marca a mantener,
- * no una preferencia. `color-scheme: dark` se declara para que los controles
- * nativos del navegador (scrollbars, selectores de fecha, autocompletado)
- * lleguen ya en oscuro en vez de aparecer como rectangulos blancos dentro de
- * una pagina negra.
+ * La dualidad claro/oscuro desaparece COMO TEMA. El logotipo es negro y oro y
+ * la identidad es dark-first: un tema claro seria una segunda marca a
+ * mantener, no una preferencia. `color-scheme: dark` se declara aqui para que
+ * los controles nativos del navegador (scrollbars, selectores de fecha,
+ * autocompletado) lleguen ya en oscuro en vez de aparecer como rectangulos
+ * blancos dentro de una pagina negra.
+ *
+ * Lo que DEC-039 y DEC-040 anaden no es un segundo tema sino unas SUPERFICIES
+ * claras acotadas -las de mercancia- con su propia paleta `light-*`. Esas
+ * superficies contrarrestan el `color-scheme` del documento en su propia clase
+ * (`.lsw-band-light` / `.lsw-panel-light` en `apps/web`, con
+ * `color-scheme: light`), porque un `<select>` o un `<input>` nativo pintado en
+ * oscuro dentro de una banda blanca es el mismo fallo al reves.
  *
  * Consecuencia practica: NINGUN color se define dentro de un bloque de tema.
- * Todos viven en `:root` y no hay nada que reasignar.
+ * Todos viven en `:root` y no hay nada que reasignar; la paleta clara son
+ * tokens ADICIONALES, no una reasignacion de los oscuros.
  * ------------------------------------------------------------------------- */
 
 :root {
@@ -286,24 +294,34 @@
    * fondo por luminosidad y no necesita un borde grueso que la recorte.
    *
    * Contrastes medidos sobre `--lsw-color-light-bg` (#faf8f4):
-   *   light-text        #0d0c0a  18.4:1
-   *   light-text-muted  #5a554c   7.0:1
-   *   light-text-subtle #6f6a5f   5.1:1
-   *   light-gold        #7a6116   5.6:1
-   * Los cuatro por encima de 4.5:1, que es el minimo AA para texto normal.
+   *   light-text        #0d0c0a  18.4:1  (texto)
+   *   light-text-muted  #5a554c   7.0:1  (texto secundario)
+   *   light-gold        #7a6116   5.6:1  (antetitulo, foco, hover)
+   * Los tres por encima de 4.5:1, que es el minimo AA para texto normal.
    *
    * `light-gold` es el ORO DE TINTA, y existe por una razon medida: el oro de
    * marca (#c9a227) da 2.3:1 sobre este fondo, asi que NO puede llevar texto
    * sobre claro. No es un color nuevo, es el mismo acento llevado a la sombra:
-   * sobre negro manda `--lsw-color-brand`, sobre claro manda este. */
+   * sobre negro manda `--lsw-color-brand`, sobre claro manda este.
+   *
+   * `light-border-strong` es el unico token de esta paleta que NO lleva texto:
+   * es el CONTORNO de un control (el boton `ink`, el chip neutro). WCAG 1.4.11
+   * pide 3:1 a la parte grafica que identifica un control, y el valor original
+   * (#c7bfb0) daba 1.7:1 sobre la banda y 1.8:1 sobre el blanco de la tarjeta:
+   * el boton "cargar mas" se distinguia de un texto suelto por una linea que no
+   * se veia. #938d82 es la misma rampa calida un 26% mas oscura y mide 3.1:1
+   * sobre la banda y 3.3:1 sobre blanco (hallazgo A6 de la revision de
+   * accesibilidad de DEC-039).
+   *
+   * `light-border` sigue siendo tenue (1.3:1) A PROPOSITO: no identifica ningun
+   * control, solo dibuja el canto de una tarjeta blanca sobre blanco calido. */
   --lsw-color-light-bg: 250 248 244;
   --lsw-color-light-surface: 255 255 255;
   --lsw-color-light-surface-sunken: 242 238 230;
   --lsw-color-light-border: 228 222 211;
-  --lsw-color-light-border-strong: 199 191 176;
+  --lsw-color-light-border-strong: 147 141 130;
   --lsw-color-light-text: 13 12 10;
   --lsw-color-light-text-muted: 90 85 76;
-  --lsw-color-light-text-subtle: 111 106 95;
   --lsw-color-light-gold: 122 97 22;
 
   /* --- Color: estados -----------------------------------------------------
@@ -369,7 +387,22 @@
    * la referencia visual y lo que impide que una banda de color plano lea como
    * un rectangulo vacio: da materia sin meter ruido ni una sola peticion de red.
    *
-   * Tres decisiones que importan:
+   * SUS TOKENS NO ESTAN EN ESTE ARCHIVO. Son cuatro
+   * -`--lsw-pattern-topo-size`, `--lsw-pattern-topo`, `--lsw-pattern-topo-ink`
+   * y `--lsw-pattern-topo-ink-soft`- y los emite el preset de Tailwind
+   * (`tailwind-preset.mjs`, plugin `addBase`) a partir de UNA sola definicion
+   * de la geometria.
+   *
+   * El motivo es el hallazgo M6 de la revision de DEC-039: las tres tintas son
+   * el MISMO mosaico de nueve curvas y solo cambian en trazo, color y opacidad.
+   * Escritas a mano eran tres cadenas de ~1,5 KB que habia que editar a la vez,
+   * y la tercera nacio copiando la segunda. CSS no sabe componer un `url()` a
+   * partir de fragmentos, asi que la unica forma de tener una sola fuente es
+   * generarlas; el preset ya es el sitio donde el design system hace trabajo
+   * derivado, y sigue sin decidir NINGUN valor de tema (los colores del patron
+   * son los mismos literales que estaban aqui, no tokens reasignables).
+   *
+   * Las decisiones de diseno del patron, que sobreviven al cambio de sitio:
    *
    * 1. **La opacidad va DENTRO del SVG**, no fuera. Una capa de
    *    `background-image` no acepta opacidad propia, asi que la unica forma de
@@ -377,10 +410,12 @@
    *    que ya usan `.lsw-atmosphere` y `.lsw-grain`- es bajar el
    *    `stroke-opacity` del trazo. Consecuencia deseada: el patron se puede
    *    APILAR como una capa mas sobre los degradados existentes.
-   * 2. **Hay dos tintas.** La dorada es para las superficies negras; la negra
-   *    (`-ink`) es para la unica banda clara del sitio, la del premio. Un
-   *    patron dorado sobre oro no se ve, y aclarar el oro para que se viera
-   *    rompeeria el contraste del texto negro que lleva encima.
+   * 2. **Hay tres tintas.** La dorada es para las superficies negras; la negra
+   *    (`-ink`) es para la banda del premio, que es dorada; y la negra suave
+   *    (`-ink-soft`, DEC-039/040) para las superficies claras de mercancia,
+   *    donde el trazo al 11% competiria con las fotografias. Un patron dorado
+   *    sobre oro no se ve, y aclarar el oro para que se viera romperia el
+   *    contraste del texto negro que lleva encima.
    * 3. **Las curvas empiezan y terminan a la misma altura** en los dos bordes
    *    verticales del mosaico (`y` en `x=0` es `y` en `x=640`), de modo que la
    *    repeticion horizontal no deja costura visible.
@@ -388,17 +423,6 @@
    * El patron es DECORACION: se aplica siempre como imagen de fondo, nunca como
    * `<img>` ni como elemento con contenido, y por tanto no entra en el arbol de
    * accesibilidad. */
-  --lsw-pattern-topo-size: 640px 420px;
-  --lsw-pattern-topo: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='640' height='420' viewBox='0 0 640 420'%3E%3Cg fill='none' stroke='%23c9a227' stroke-opacity='0.07' stroke-width='1.25'%3E%3Cpath d='M0 22 C 60 2 130 52 200 30 C 270 8 340 56 420 34 C 500 12 570 42 640 22'/%3E%3Cpath d='M0 58 C 70 36 140 86 210 62 C 290 36 350 88 430 68 C 510 48 580 80 640 58'/%3E%3Cpath d='M0 86 C 80 64 150 112 230 92 C 310 72 380 118 460 96 C 540 74 590 104 640 86'/%3E%3Cpath d='M0 140 C 60 116 140 166 220 144 C 300 122 370 170 450 148 C 530 126 580 160 640 140'/%3E%3Cpath d='M0 178 C 70 156 150 202 230 182 C 320 160 390 206 470 184 C 550 162 590 196 640 178'/%3E%3Cpath d='M0 238 C 60 216 140 264 220 244 C 300 224 380 268 460 248 C 540 228 590 258 640 238'/%3E%3Cpath d='M0 296 C 80 274 150 320 240 300 C 320 282 390 324 470 304 C 550 284 590 314 640 296'/%3E%3Cpath d='M0 328 C 60 310 140 352 230 332 C 310 314 380 356 460 336 C 540 316 590 344 640 328'/%3E%3Cpath d='M0 392 C 70 372 150 416 235 396 C 315 378 390 418 470 398 C 550 378 590 408 640 392'/%3E%3C/g%3E%3C/svg%3E");
-  --lsw-pattern-topo-ink: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='640' height='420' viewBox='0 0 640 420'%3E%3Cg fill='none' stroke='%23000000' stroke-opacity='0.11' stroke-width='1.4'%3E%3Cpath d='M0 22 C 60 2 130 52 200 30 C 270 8 340 56 420 34 C 500 12 570 42 640 22'/%3E%3Cpath d='M0 58 C 70 36 140 86 210 62 C 290 36 350 88 430 68 C 510 48 580 80 640 58'/%3E%3Cpath d='M0 86 C 80 64 150 112 230 92 C 310 72 380 118 460 96 C 540 74 590 104 640 86'/%3E%3Cpath d='M0 140 C 60 116 140 166 220 144 C 300 122 370 170 450 148 C 530 126 580 160 640 140'/%3E%3Cpath d='M0 178 C 70 156 150 202 230 182 C 320 160 390 206 470 184 C 550 162 590 196 640 178'/%3E%3Cpath d='M0 238 C 60 216 140 264 220 244 C 300 224 380 268 460 248 C 540 228 590 258 640 238'/%3E%3Cpath d='M0 296 C 80 274 150 320 240 300 C 320 282 390 324 470 304 C 550 284 590 314 640 296'/%3E%3Cpath d='M0 328 C 60 310 140 352 230 332 C 310 314 380 356 460 336 C 540 316 590 344 640 328'/%3E%3Cpath d='M0 392 C 70 372 150 416 235 396 C 315 378 390 418 470 398 C 550 378 590 408 640 392'/%3E%3C/g%3E%3C/svg%3E");
-  /* Tercera tinta del mismo mosaico (DEC-039): la MISMA topografia en negro,
-     al 4,5% en vez de al 11%. La variante `-ink` esta calibrada para el oro de
-     la banda del premio; sobre el blanco calido de la banda de mercancia ese
-     mismo trazo se ve y compite con las fotografias. Este escalon deja el
-     fondo con materia de papel y desaparece en cuanto una tarjeta blanca se
-     apoya encima, que es exactamente lo que se buscaba: textura en los
-     margenes, cero ruido dentro de la rejilla. */
-  --lsw-pattern-topo-ink-soft: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='640' height='420' viewBox='0 0 640 420'%3E%3Cg fill='none' stroke='%23000000' stroke-opacity='0.045' stroke-width='1.15'%3E%3Cpath d='M0 22 C 60 2 130 52 200 30 C 270 8 340 56 420 34 C 500 12 570 42 640 22'/%3E%3Cpath d='M0 58 C 70 36 140 86 210 62 C 290 36 350 88 430 68 C 510 48 580 80 640 58'/%3E%3Cpath d='M0 86 C 80 64 150 112 230 92 C 310 72 380 118 460 96 C 540 74 590 104 640 86'/%3E%3Cpath d='M0 140 C 60 116 140 166 220 144 C 300 122 370 170 450 148 C 530 126 580 160 640 140'/%3E%3Cpath d='M0 178 C 70 156 150 202 230 182 C 320 160 390 206 470 184 C 550 162 590 196 640 178'/%3E%3Cpath d='M0 238 C 60 216 140 264 220 244 C 300 224 380 268 460 248 C 540 228 590 258 640 238'/%3E%3Cpath d='M0 296 C 80 274 150 320 240 300 C 320 282 390 324 470 304 C 550 284 590 314 640 296'/%3E%3Cpath d='M0 328 C 60 310 140 352 230 332 C 310 314 380 356 460 336 C 540 316 590 344 640 328'/%3E%3Cpath d='M0 392 C 70 372 150 416 235 396 C 315 378 390 418 470 398 C 550 378 590 408 640 392'/%3E%3C/g%3E%3C/svg%3E");
 
   /* Rayas diagonales de la barra de progreso. Dos oros contiguos: el relleno se
      ve como una cinta rayada y no como una barra plana, sin introducir un

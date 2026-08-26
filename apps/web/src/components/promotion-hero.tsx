@@ -189,11 +189,11 @@ export function PromotionHero({
               {/*
                * EL VALOR DECLARADO YA NO ESTA AQUI.
                *
-               * Vive en la banda dorada del premio (`PrizeBand`), que es la
-               * unica superficie clara de la portada y donde una cifra grande
-               * golpea de verdad. Tenerlo en los dos sitios repetia el mismo
-               * numero a dos pantallas de distancia y le quitaba peso a los
-               * dos.
+               * Vive en la banda dorada del premio (`PrizeBand`), que es donde
+               * una cifra grande golpea de verdad: oro a pantalla completa
+               * entre dos bloques negros. Tenerlo en los dos sitios repetia el
+               * mismo numero a dos pantallas de distancia y le quitaba peso a
+               * los dos.
                *
                * Sigue sin pintarse ninguna etiqueta de valor cuando la
                * promocion no declara premio: aqui porque no hay etiqueta, y en

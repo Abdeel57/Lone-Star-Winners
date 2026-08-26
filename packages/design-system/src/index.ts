@@ -57,7 +57,6 @@ export const COLOR_TOKENS = [
   "light-border-strong",
   "light-text",
   "light-text-muted",
-  "light-text-subtle",
   "light-gold",
 ] as const;
 

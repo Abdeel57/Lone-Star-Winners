@@ -1,6 +1,8 @@
 import { Card, Skeleton, SkeletonText } from "@lsw/ui";
 import { useTranslations } from "next-intl";
 
+import { MERCHANDISE_GRID_CLASS } from "@/components/merchandise-band";
+
 /**
  * Estado de carga del catalogo.
  *
@@ -23,6 +25,16 @@ import { useTranslations } from "next-intl";
  * primer fotograma. Si el esqueleto no las trajera, la pagina entraria negra y
  * al llegar los datos aparecerian de golpe dos superficies nuevas -que es el
  * salto que este archivo existe para evitar, solo que a escala de pagina.
+ *
+ * Eso obliga a la pagina real a pintar la banda SIEMPRE que la consulta
+ * funcione, con articulos o sin ellos, y asi es como esta (ver la nota de
+ * `page.tsx` y `MerchandiseBand`). El unico caso en el que la banda no aparece
+ * es un fallo de API, que ademas es el unico en el que un cambio brusco de
+ * superficie informa de algo.
+ *
+ * La rejilla NO se describe aqui: sus cortes salen de `MERCHANDISE_GRID_CLASS`,
+ * la misma constante que usa la pagina. Escrita a mano en los dos sitios ya
+ * habia divergido una vez (hallazgo F6).
  */
 export default function ShopLoading() {
   const t = useTranslations("states");
@@ -54,8 +66,14 @@ export default function ShopLoading() {
           barra seria un bloque casi negro -mas llamativo que el contenido que
           esta simulando. */}
       <section className="lsw-band-light py-s10 lg:py-s12">
-        <ul className="lsw-container grid list-none grid-cols-2 gap-s3 sm:gap-s4 md:grid-cols-3 lg:gap-s5 xl:grid-cols-4">
-          {[0, 1, 2, 3, 4, 5].map((index) => (
+        {/* DOCE marcadores y no seis: la rejilla tiene dos, tres o cuatro
+            columnas segun el ancho, y doce es el primer numero que completa
+            filas enteras en los tres casos. Con seis, el esqueleto entraba en
+            escritorio con una segunda fila a medias -una forma que la pagina
+            real nunca tiene- y ademas prometia menos catalogo del que hay: la
+            peticion pide veinticuatro articulos. */}
+        <ul className={`lsw-container ${MERCHANDISE_GRID_CLASS}`}>
+          {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map((index) => (
             <Card
               as="li"
               key={index}

@@ -108,7 +108,10 @@ describe("MediaFrame", () => {
 
     expect(dark).toContain("bg-surface-sunken");
     expect(light).toContain("bg-light-surface-sunken");
-    expect(light).not.toContain("bg-surface-sunken ");
+    // Como clase COMPLETA, no como subcadena: `not.toContain("bg-surface-sunken ")`
+    // dependia del espacio final, asi que si la clase oscura sobreviviera al
+    // final de la cadena el test pasaria igual (hallazgo M3 de la revision).
+    expect(light).not.toMatch(/(^|\s)bg-surface-sunken(\s|$)/);
   });
 
   it("el texto de hueco vacio cambia de tinta con el tono", () => {

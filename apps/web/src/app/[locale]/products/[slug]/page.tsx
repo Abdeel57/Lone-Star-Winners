@@ -215,12 +215,17 @@ function ProductGallery({
 /**
  * Panel de la galeria.
  *
- * Filete de oro de 2px, igual que el corte de `.lsw-band-light`: en todo el
- * sitio, una superficie clara empieza y acaba en oro. Sin el, un rectangulo
- * blanco pegado a una pagina negra parece un fallo de carga y no una decision.
+ * `lsw-panel-light` es la MISMA receta que la banda de mercancia -fondo blanco
+ * calido, topografia en tinta suave, filete de oro de 2px, tinta heredada,
+ * `color-scheme: light` y seleccion legible- cerrada por los cuatro lados en vez
+ * de a sangre. En todo el sitio, una superficie clara empieza y acaba en oro:
+ * sin ese filete, un rectangulo blanco pegado a una pagina negra parece un
+ * fallo de carga y no una decision.
+ *
+ * Estaba escrita a mano aqui, y el esqueleto de esta misma pantalla tenia una
+ * tercera copia que ya habia perdido la topografia (hallazgo F8).
  */
-const GALLERY_PANEL =
-  "lsw-topo-ink-soft flex flex-col gap-s3 rounded-md border-2 border-brand bg-light-bg p-s3 sm:p-s4";
+const GALLERY_PANEL = "lsw-panel-light flex flex-col gap-s3 p-s3 sm:p-s4";
 
 const BACK_LINK =
   "lsw-display inline-flex min-h-touch items-center rounded-md text-body-sm text-text-muted hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-bg";
