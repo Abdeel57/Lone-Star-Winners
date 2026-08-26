@@ -1771,3 +1771,58 @@ Affected areas: `packages/design-system`, `packages/ui`, `apps/web`.
 
 Proposed by: frontend (corrección de hallazgos)
 Agreed by: Team Lead
+
+---
+
+## DEC-042
+
+Status: Accepted
+
+Date: 2026-08-26
+
+Decision:
+**Nueva promoción destacada: una camioneta GMC 2025, con un universo total de
+10,000 participaciones.** Y un segundo acento de color, **rojo**, para
+llamadas a la acción y textos de atención, junto al oro de marca.
+
+- La promoción entra como fixture **provisional** y protagoniza el hero al
+  estilo de la referencia (foto de la camioneta a sangre, titular gigante,
+  CTA rojo, línea de disclaimer debajo del botón).
+- El tope de 10,000 participaciones es **configuración de la promoción**
+  (`entry_pool_cap`), no texto fijo. Se muestra como dato de las Reglas
+  Oficiales; cualquier cifra de "emitidas" o "restantes" la produce el
+  backend, nunca el frontend.
+- El rojo es un token semántico nuevo (`accent` / "hot"), distinto de
+  `danger`. Se usa en: CTA principal del hero, botones de compra, fragmentos
+  destacados del titular, barra de progreso y flechas de la barra de anuncio.
+  El oro sigue siendo la marca.
+- La palabra es **promoción**, nunca "rifa", "boletos" ni "sorteo de
+  boletos" (`CLAUDE.md` §1). El CTA rojo principal lleva a la mercancía
+  ("Comprar ahora"), no a "participar": comprar mercancía no es participar.
+- La línea "_No se requiere compra — Nulo donde esté prohibido — Ver Reglas
+  Oficiales_" **es data-driven**: solo se renderiza cuando `amoe_enabled` y
+  la configuración lo respaldan; si no, la línea es "Sujeto a las Reglas
+  Oficiales".
+
+Context:
+Dirección del usuario (2026-08-26) con dos capturas del hero de LGND
+("WIN THIS 682HP ESCALADE V", botón rojo "ENTER NOW", disclaimer debajo,
+barra de anuncio "ENTER NOW TO WIN…"). El usuario usó la palabra "rifa" de
+forma coloquial; el producto sigue siendo lo que define la constitución.
+
+Alternatives:
+Hardcodear el tope (descartado: principio #14). Copiar "ENTER NOW" como CTA
+sobre la tienda (descartado: encuadra la compra como participación, DEC-038).
+
+Reason:
+El tope de participaciones es un parámetro que fijan las Reglas Oficiales
+(`docs/LEGAL_PENDING.md`, "Entry limits"); mostrarlo como dato configurado es
+legítimo, inventar urgencia sobre él no. El rojo es puro énfasis visual y no
+toca el lenguaje.
+
+Affected areas: `packages/design-system` (token `accent`), `packages/ui`
+(variantes rojas de `Button`/`Badge`), `apps/web` (hero, fixtures, barra de
+anuncio, ficha de producto).
+
+Proposed by: usuario
+Agreed by: Team Lead; el tope de 10,000 queda anotado en LEGAL_PENDING

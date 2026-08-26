@@ -149,3 +149,14 @@ ni como "oportunidades de ganar"**, porque contradice `CLAUDE.md` §1. Pide
 revisión de compliance del copy bilingüe **antes** de `INTEGRATE`, en ambos
 idiomas — una traducción laxa al español puede crear una representación legal
 distinta de la del inglés.
+
+## Entry pool cap for the GMC 2025 promotion
+
+TBD
+
+El cliente ha fijado (2026-08-26, DEC-042) un **universo total de 10,000
+participaciones** para la promoción de la camioneta GMC 2025. Debe quedar
+reflejado en las Official Rules: cómo se agota el cupo, qué ocurre con una
+compra elegible cuando ya no quedan participaciones, y si el cupo convive con
+el mecanismo AMOE. Mientras siga TBD, el tope vive como configuración de la
+promoción y la interfaz lo muestra como dato, sin urgencia fabricada.
