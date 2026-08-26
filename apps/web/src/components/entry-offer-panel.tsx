@@ -86,7 +86,11 @@ export function EntryOfferPanel({
 
       {showMultiplier && offer.multiplier !== null ? (
         <div className="mt-s4 flex flex-col items-start gap-2">
-          <Badge tone="accent">
+          {/* ORO (DEC-042). `accent` paso a ser el rojo de accion de compra, y
+              esto no es una accion: es una cifra de participaciones, que en
+              este sistema son siempre doradas. El tono `brand` hace lo mismo
+              que hacia el "oro intenso" anterior. */}
+          <Badge tone="brand">
             {offer.multiplier.denominator === 1
               ? t("multiplierBadge", {
                   numerator: formatInteger(offer.multiplier.numerator, locale),

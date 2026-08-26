@@ -145,7 +145,13 @@ describe("DEC-030: contenido dinamico localizado", () => {
   it("el hero pinta el titulo del backend en cada idioma sin pasar por el diccionario", () => {
     const first = renderIn(
       "en",
-      <PromotionHero promotion={activePromotion} locale="en" nowIso={NOW} />,
+      <PromotionHero
+        promotion={activePromotion}
+        detail={null}
+        locale="en"
+        nowIso={NOW}
+        amoeEnabled={false}
+      />,
     );
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
       activePromotion.title["en-US"],
@@ -153,7 +159,16 @@ describe("DEC-030: contenido dinamico localizado", () => {
 
     first.unmount();
 
-    renderIn("es", <PromotionHero promotion={activePromotion} locale="es" nowIso={NOW} />);
+    renderIn(
+      "es",
+      <PromotionHero
+        promotion={activePromotion}
+        detail={null}
+        locale="es"
+        nowIso={NOW}
+        amoeEnabled={false}
+      />,
+    );
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
       activePromotion.title["es-US"],
     );

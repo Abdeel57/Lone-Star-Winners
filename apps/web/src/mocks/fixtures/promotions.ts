@@ -1,5 +1,15 @@
-import type { EntryOffer, PromotionDetail, PromotionStatus, PromotionSummary } from "@/lib/api";
+import type {
+  EntryOffer,
+  EntryPool,
+  PromotionDetail,
+  PromotionMedia,
+  PromotionStatus,
+  PromotionSummary,
+} from "@/lib/api";
 import { PROMOTION_STATUSES } from "@/lib/api";
+
+import { prizeTruckSquareImage, prizeTruckWideImage } from "./media";
+import { GMC_PRIZE_PHOTO_CANDIDATES, resolvePrizePhoto } from "./prize-photo";
 
 /**
  * Fixtures de promocion.
@@ -48,17 +58,17 @@ export const fractionalEntryOffer: EntryOffer = {
 
 const BASE: PromotionSummary = {
   id: "prm_0000000000000001",
-  slug: "road-trip-2026",
+  slug: "gmc-2025",
   status: "ACTIVE",
   title: {
-    "en-US": "The Lone Star Road Trip Sweepstakes",
-    "es-US": "Sorteo promocional Lone Star Road Trip",
+    "en-US": "The 2025 GMC Pickup Sweepstakes",
+    "es-US": "Sorteo promocional GMC 2025",
   },
   summary: {
     "en-US":
-      "A crew cab pickup with the tow package, and a fuel card to go with it. How this promotion works is set out in the Official Rules.",
+      "A 2025 GMC pickup truck. This promotion has a limited entry pool, and how it works is set out in the Official Rules.",
     "es-US":
-      "Una camioneta doble cabina con paquete de arrastre, y una tarjeta de combustible que la acompaña. Cómo funciona esta promoción se explica en las Reglas Oficiales.",
+      "Una camioneta GMC 2025. Esta promoción tiene un universo limitado de participaciones, y cómo funciona se explica en las Reglas Oficiales.",
   },
   legal_timezone: "America/Chicago",
   starts_at: "2026-08-01T05:00:00.000Z",
@@ -75,8 +85,43 @@ const BASE: PromotionSummary = {
    * PINTAR un valor de premio. La otra mitad del par -que sepa no pintarlo- la
    * cubre `promotionWithoutRules`, que lo trae a `null`.
    */
-  prize_value: { amount_minor: "4500000", currency: "USD" },
+  prize_value: { amount_minor: "6500000", currency: "USD" },
 };
+
+/**
+ * [PROVISIONAL] Imagenes del premio de la promocion protagonista (DEC-042).
+ *
+ * DOS ORIGENES, UNO DE ELLOS PREFERENTE. Si el usuario ha dejado su fotografia
+ * en `apps/web/public/prizes/` se sirve esa; si no, la ilustracion de estudio
+ * de `media.ts`. La decision se toma AQUI, en el origen del dato, y no en el
+ * hero: ver `prize-photo.ts`.
+ *
+ * `alt` es `null`, es decir, DECORATIVA. No es un descuido ni un hueco por
+ * rellenar: la imagen va justo al lado de un titular que ya nombra el premio y
+ * de un resumen que lo describe, asi que un texto alternativo aqui haria que un
+ * lector de pantalla dijera lo mismo dos veces seguidas. El campo existe
+ * nulable precisamente para poder declararlo, en vez de que cada pantalla
+ * improvise una cadena.
+ */
+const GMC_MEDIA: PromotionMedia = {
+  hero_url: resolvePrizePhoto(GMC_PRIZE_PHOTO_CANDIDATES) ?? prizeTruckWideImage,
+  square_url: resolvePrizePhoto(GMC_PRIZE_PHOTO_CANDIDATES) ?? prizeTruckSquareImage,
+  alt: null,
+};
+
+/**
+ * [PROVISIONAL] Universo de participaciones de la promocion protagonista.
+ *
+ * El cliente fijo 10,000 el 2026-08-26 (DEC-042). Es CONFIGURACION de la
+ * promocion, no texto de la interfaz, y su tratamiento legal -como se agota,
+ * que pasa con una compra elegible cuando ya no quedan, si convive con AMOE-
+ * sigue en `docs/LEGAL_PENDING.md`.
+ *
+ * `issued` es una cifra SERVIDA, no calculada, y esta aqui para probar que la
+ * interfaz sabe pintarla. No hay campo de "restantes" ni se deriva: ver la nota
+ * de `EntryPool` en `src/lib/api/contract.ts`.
+ */
+const GMC_ENTRY_POOL: EntryPool = { cap: 10000, issued: 1240 };
 
 /**
  * Contenido de cada edicion de la promocion.
@@ -144,34 +189,25 @@ const EDITIONS: Readonly<Record<PromotionStatus, Edition>> = {
     starts_at: "2027-09-01T05:00:00.000Z",
     ends_at: "2027-12-31T05:59:00.000Z",
   },
+  /*
+   * ROAD TRIP PASA DE ACTIVA A PROGRAMADA (DEC-042).
+   *
+   * La protagonista es ahora la GMC 2025, y el contrato sirve UNA sola
+   * promocion en `/promotions/active`: la que aqui ocupe `ACTIVE`. Road Trip
+   * conserva su copy entero y se traslada a `SCHEDULED` con fechas futuras
+   * coherentes con ese estado.
+   *
+   * La edicion que ocupaba este hueco -"Workshop Build-Out"- se retira. No hay
+   * un decimo estado donde ponerla y duplicar un estado romperia la invariante
+   * de este archivo, que es la que sostiene los tests de estados: exactamente
+   * una promocion por estado del contrato.
+   */
   SCHEDULED: {
-    slug: "workshop-build-out-2027",
-    en: {
-      title: "The Workshop Build-Out Sweepstakes",
-      summary:
-        "A full workshop fit-out: bench, cabinets and the tools to fill them. Opens in the new year.",
-      prize: "Workshop fit-out",
-      prizeDescription:
-        "A full workshop: bench, wall cabinets, dust extraction and the power tools to fill them. Provisional: the prize and its stated value are approved with the Official Rules.",
-    },
-    es: {
-      title: "Sorteo promocional Workshop Build-Out",
-      summary:
-        "Un taller equipado de arriba abajo: banco, gabinetes y las herramientas para llenarlos. Abre a principios de año.",
-      prize: "Taller equipado",
-      prizeDescription:
-        "Un taller completo: banco, gabinetes de pared, extracción de polvo y las herramientas eléctricas para llenarlos. Provisional: el premio y su valor declarado se aprueban junto con las Reglas Oficiales.",
-    },
-    prizeValueMinor: "1800000",
-    starts_at: "2027-01-01T06:00:00.000Z",
-    ends_at: "2027-06-30T04:59:00.000Z",
-  },
-  ACTIVE: {
-    slug: "road-trip-2026",
+    slug: "road-trip-2027",
     en: {
       title: "The Lone Star Road Trip Sweepstakes",
       summary:
-        "A crew cab pickup with the tow package, and a fuel card to go with it. How this promotion works is set out in the Official Rules.",
+        "A crew cab pickup with the tow package, and a fuel card to go with it. It opens in the new year, and how it works is set out in the Official Rules.",
       prize: "Crew cab pickup and fuel card",
       prizeDescription:
         "A full-size crew cab pickup with the tow package, plus a fuel card. Provisional: the prize and its stated value are approved with the Official Rules.",
@@ -179,12 +215,48 @@ const EDITIONS: Readonly<Record<PromotionStatus, Edition>> = {
     es: {
       title: "Sorteo promocional Lone Star Road Trip",
       summary:
-        "Una camioneta doble cabina con paquete de arrastre, y una tarjeta de combustible que la acompaña. Cómo funciona esta promoción se explica en las Reglas Oficiales.",
+        "Una camioneta doble cabina con paquete de arrastre, y una tarjeta de combustible que la acompaña. Abre a principios de año, y cómo funciona se explica en las Reglas Oficiales.",
       prize: "Camioneta doble cabina y tarjeta de combustible",
       prizeDescription:
         "Una camioneta doble cabina de tamaño completo con paquete de arrastre, más una tarjeta de combustible. Provisional: el premio y su valor declarado se aprueban junto con las Reglas Oficiales.",
     },
     prizeValueMinor: "4500000",
+    starts_at: "2027-01-01T06:00:00.000Z",
+    ends_at: "2027-06-30T04:59:00.000Z",
+  },
+  /*
+   * LA PROMOCION PROTAGONISTA (DEC-042).
+   *
+   * Camioneta GMC 2025 y universo de 10,000 participaciones. TODO en esta
+   * edicion es PROVISIONAL, empezando por lo que no dice:
+   *
+   *   - no se declara version, motorizacion ni potencia. El cliente dijo "GMC
+   *     2025" y eso es lo que hay; inventar un acabado seria inventar el premio;
+   *   - el valor declarado ($65,000) existe solo para probar que la interfaz
+   *     sabe pintar un importe, igual que el resto de este archivo;
+   *   - el tope de 10,000 vive en `entry_pool`, no en el copy, porque es
+   *     configuracion (CLAUDE.md #3 y #14) y su tratamiento legal sigue abierto
+   *     en `docs/LEGAL_PENDING.md`.
+   */
+  ACTIVE: {
+    slug: "gmc-2025",
+    en: {
+      title: "The 2025 GMC Pickup Sweepstakes",
+      summary:
+        "A 2025 GMC pickup truck. This promotion has a limited entry pool, and how it works is set out in the Official Rules.",
+      prize: "2025 GMC pickup truck",
+      prizeDescription:
+        "A 2025 GMC pickup truck, delivered ready to drive. Provisional: the prize, its stated value and the limited entry pool are approved with the Official Rules.",
+    },
+    es: {
+      title: "Sorteo promocional GMC 2025",
+      summary:
+        "Una camioneta GMC 2025. Esta promoción tiene un universo limitado de participaciones, y cómo funciona se explica en las Reglas Oficiales.",
+      prize: "Camioneta GMC 2025",
+      prizeDescription:
+        "Una camioneta GMC 2025, entregada lista para circular. Provisional: el premio, su valor declarado y el universo limitado de participaciones se aprueban junto con las Reglas Oficiales.",
+    },
+    prizeValueMinor: "6500000",
     starts_at: "2026-08-01T05:00:00.000Z",
     ends_at: "2026-12-31T05:59:00.000Z",
   },
@@ -352,7 +424,7 @@ export const activePromotion: PromotionSummary = promotionInStatus("ACTIVE");
 export const activePromotionWithoutPrize: PromotionSummary = {
   ...BASE,
   id: "prm_0000000000000006",
-  slug: "road-trip-2026-no-prize",
+  slug: "gmc-2025-no-prize",
   prize_value: null,
 };
 
@@ -397,7 +469,7 @@ export const publicPromotions: readonly PromotionSummary[] = promotionsByStatus.
 export const promotionWithMultiplier: PromotionSummary = {
   ...BASE,
   id: "prm_0000000000000005",
-  slug: "road-trip-2026-multiplier",
+  slug: "gmc-2025-multiplier",
 };
 
 /**
@@ -410,7 +482,7 @@ export const promotionWithMultiplier: PromotionSummary = {
 export const promotionWithoutRules: PromotionSummary = {
   ...BASE,
   id: "prm_0000000000000004",
-  slug: "road-trip-2026-no-rules",
+  slug: "gmc-2025-no-rules",
   status: "SCHEDULED",
   rules_version_id: null,
   prize_value: null,
@@ -458,6 +530,17 @@ export function detailFor(
      */
     administrator_name: "Sample Administrator LLC",
     entry_offer: entryOffer,
+    /*
+     * IMAGENES Y UNIVERSO SOLO PARA LA EDICION QUE LOS DECLARA (DEC-042).
+     *
+     * Los dos campos son nulables en el contrato y aqui llegan `null` en ocho
+     * de las nueve ediciones. No es economia de fixture: es el caso NORMAL. Una
+     * promocion puede no tener fotografia y puede no tener tope, y si todas las
+     * trajeran, la unica rama que se veria al mirar la aplicacion seria la de
+     * "si hay", que es justo la que no puede fallar sola.
+     */
+    media: summary.status === "ACTIVE" ? GMC_MEDIA : null,
+    entry_pool: summary.status === "ACTIVE" ? GMC_ENTRY_POOL : null,
   };
 }
 

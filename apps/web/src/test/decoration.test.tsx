@@ -33,6 +33,8 @@ import { elapsedFraction, PromotionProgress } from "@/components/promotion-progr
 import { WinnersShowcase } from "@/components/winners-showcase";
 import type { Locale } from "@/i18n/locales";
 import { eligibleProduct, summaryOf } from "@/mocks/fixtures/catalog";
+import { resolvePrizePhoto } from "@/mocks/fixtures/prize-photo";
+import { activePromotionDetail } from "@/mocks/fixtures/promotions";
 import { publishedWinners } from "@/mocks/fixtures/winners";
 
 import enMessages from "../../messages/en-US.json";
@@ -251,5 +253,65 @@ describe("FooterDisclosure", () => {
 
     expect(controlled).not.toBeNull();
     expect(container.querySelector(`#${CSS.escape(controlled ?? "")}`)).not.toBeNull();
+  });
+});
+
+/**
+ * LA IMAGEN DEL PREMIO (DEC-042).
+ *
+ * Dos propiedades que no se ven mirando la pantalla:
+ *
+ *   1. NINGUNA imagen sale a un host externo. Es requisito del encargo y es lo
+ *      unico de la direccion de arte que una maquina puede comprobar: todo va
+ *      como `data:` URI generado aqui o como fichero de `public/`.
+ *   2. La costura para la fotografia real esta viva. El fixture PREFIERE la
+ *      foto de `public/prizes/` y cae en la ilustracion solo si no esta; si esa
+ *      preferencia se perdiera, dejar la foto en la carpeta no haria nada y
+ *      nadie se enteraria hasta abrir la portada.
+ */
+describe("media del premio", () => {
+  it("no apunta a ningun host externo", () => {
+    const media = activePromotionDetail.media;
+    expect(media, "la promocion protagonista declara imagenes").not.toBeNull();
+    if (media === null) return;
+
+    for (const url of [media.hero_url, media.square_url]) {
+      expect(url).not.toBeNull();
+      if (url === null) continue;
+
+      // O ilustracion embebida, o fichero servido por la propia aplicacion.
+      expect(url.startsWith("data:image/svg+xml") || url.startsWith("/prizes/")).toBe(true);
+      expect(url).not.toMatch(/^https?:/);
+    }
+  });
+
+  it("los dos recortes son distintos, no el mismo escalado", () => {
+    // El hero pinta a sangre y apaisado; una tarjeta pinta cuadrado. Servir el
+    // mismo recorte para los dos deja el vehiculo a medias en la tarjeta, que
+    // es exactamente el motivo de que `PromotionMedia` publique dos campos.
+    const media = activePromotionDetail.media;
+    if (media === null) return;
+
+    expect(media.hero_url).not.toBe(media.square_url);
+  });
+
+  it("la fotografia real gana a la ilustracion cuando existe", () => {
+    // No se comprueba el fixture -hoy no hay foto en el repositorio- sino la
+    // funcion que decide, que es donde vive la preferencia.
+    expect(resolvePrizePhoto(["README.md"])).toBe("/prizes/README.md");
+    expect(resolvePrizePhoto(["no-existe-este-fichero.jpg"])).toBeNull();
+    // Y el orden importa: gana el primero que exista.
+    expect(resolvePrizePhoto(["no-existe.jpg", "README.md"])).toBe("/prizes/README.md");
+  });
+
+  it("el universo de participaciones llega como dato, no como texto", () => {
+    // El tope lo fija la configuracion de la promocion (DEC-042, CLAUDE.md
+    // #14). Si alguna vez apareciera escrito en el diccionario, cambiarlo
+    // exigiria un despliegue y dejaria de ser configuracion.
+    expect(activePromotionDetail.entry_pool?.cap).toBe(10000);
+
+    const dictionaries = JSON.stringify(enMessages) + JSON.stringify(esMessages);
+    expect(dictionaries).not.toContain("10,000");
+    expect(dictionaries).not.toContain("10000");
   });
 });

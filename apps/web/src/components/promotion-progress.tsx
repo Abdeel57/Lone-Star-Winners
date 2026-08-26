@@ -14,9 +14,16 @@ import type { Locale } from "@/i18n/locales";
  *
  * NO es un recurso de urgencia. No acelera, no cambia de color al acercarse al
  * final, no lleva ningun texto del tipo "ultima semana" y no aparece sobre una
- * promocion que no admite participaciones. La referencia visual pinta la suya en
- * ROJO por ese motivo exacto; aqui va en oro, que es el color con el que este
- * sistema dice "esto es de la marca", no "corre".
+ * promocion que no admite participaciones.
+ *
+ * DESDE DEC-042 VA EN ROJO, y conviene ser preciso sobre que cambio y que no.
+ * La version anterior de esta nota decia que iba en oro *porque* la referencia
+ * la pinta en rojo y el rojo seria urgencia. Era confundir el color con la
+ * afirmacion: lo que hace urgente a una barra es que acelere, que cambie de
+ * color al acercarse al final o que lleve al lado un "ultima semana". Nada de
+ * eso existe aqui ni puede existir, y las tres prohibiciones siguen escritas
+ * arriba. Lo unico que cambia es el pigmento, que ahora es el color de atencion
+ * del sistema (`accent`) en vez del de marca.
  *
  * NO DECIDE NADA. Que la barra llegue al final no cierra la promocion, igual
  * que no lo hace la cuenta atras: el estado lo manda el backend (DEC-011,
@@ -54,7 +61,9 @@ export function PromotionProgress({
       // El equivalente hablado es una frase completa, no un numero suelto: un
       // "47" sin contexto no dice de que.
       aria-valuetext={t("value", { percent: formatPercent(fraction, locale) })}
-      className="h-2 w-full max-w-lg overflow-hidden rounded-sm border border-brand/30 bg-surface-sunken"
+      // El carril lleva contorno rojo tenue y no dorado: un filete de marca
+      // alrededor de un relleno rojo pone dos colores en dos pixeles de alto.
+      className="h-2 w-full max-w-lg overflow-hidden rounded-sm border border-accent/40 bg-surface-sunken"
     >
       {/* El relleno es decoracion: el valor lo declara el contenedor. */}
       <div

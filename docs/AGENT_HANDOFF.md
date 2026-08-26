@@ -802,3 +802,56 @@ Affected files: `packages/database`, `packages/sweepstakes`, `apps/api`,
 `docs/LEGAL_PENDING.md`
 
 Blocking: NO para construir, YES para lanzar una promoción.
+
+---
+
+## HO-021
+
+Status: OPEN
+
+## Handoff
+
+Date: 2026-08-26
+From: frontend
+To: backend
+
+Context:
+DEC-042 (promoción GMC 2025 con universo de 10,000 participaciones y hero con
+foto del premio) necesita dos campos que el contrato no publica. `frontend`
+los añadió como `[PROVISIONAL]` en su capa (`apps/web/src/lib/api/contract.ts`,
+sobre `PromotionDetail`), y los lee con `?? null` para no reventar contra una
+API que aún no los sirve.
+
+What I need from you:
+Publicar en `docs/API_CONTRACT.md` y servir desde `apps/api`:
+
+1. **`media: PromotionMedia | null`** — `hero_url`, `square_url`, `alt`
+   (localizado por locale, nulable). Dos recortes y no uno: el mismo encuadre
+   no sirve para un hero a sangre y para una tarjeta cuadrada. `alt: null`
+   significa imagen decorativa (el titular ya nombra el premio).
+2. **`entry_pool: EntryPool | null`** — `cap` e `issued`. **Sin campo
+   `remaining` a propósito**: restarlo en el cliente sería una cifra de
+   "quedan X" inventada a partir de dos números que pueden llegar
+   desincronizados. Si algún día se muestra "restantes", lo calcula y lo
+   sirve el backend. Un test de `frontend` comprueba que `cap - issued` no
+   aparece en el DOM.
+
+El tope de 10,000 depende de las Official Rules (ver `docs/LEGAL_PENDING.md`,
+"Entry pool cap"): modelarlo en `PromotionRulesVersion.config` como
+`caps.per_promotion_total` o equivalente, con el validador de activación de
+DEC-012 bloqueando mientras siga TBD.
+
+Hallazgo de paso, para que no se repita en otros consumidores: leer
+`entry_pool !== null` reventaba con 500 en todas las páginas contra una API
+que no publica el campo, porque `undefined` pasa esa comprobación. Mientras
+un campo sea provisional, se lee con `?? null`.
+
+Affected files:
+`docs/API_CONTRACT.md`, `apps/api/src/routes/storefront.ts`,
+`packages/sweepstakes` (config de caps), `apps/web/src/lib/api/contract.ts`
+
+Affected APIs:
+`GET /api/v1/promotions/active`, `GET /api/v1/promotions/:slug`
+
+Blocking:
+NO hoy (todo va contra fixtures), YES para conectar el hero a la API real.

@@ -28,10 +28,13 @@ export const COLOR_TOKENS = [
   "brand-active",
   "brand-subtle",
   "on-brand",
+  // DEC-042: `accent` es ROJO, no un tercer escalon del oro. Ver `tokens.css`.
   "accent",
   "accent-hover",
+  "accent-active",
   "accent-subtle",
   "on-accent",
+  "accent-text",
   "success",
   "success-subtle",
   "on-success",
@@ -58,6 +61,8 @@ export const COLOR_TOKENS = [
   "light-text",
   "light-text-muted",
   "light-gold",
+  // DEC-042: el rojo de tinta de la banda clara, contrapartida de `light-gold`.
+  "light-accent",
 ] as const;
 
 export type ColorToken = (typeof COLOR_TOKENS)[number];

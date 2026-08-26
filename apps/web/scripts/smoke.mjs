@@ -50,6 +50,24 @@ const BASE = `http://127.0.0.1:${PORT}`;
 const READY_TIMEOUT_MS = 180_000;
 
 /**
+ * Puerto propio TAMBIEN para la API simulada.
+ *
+ * Tener un puerto propio para Next no bastaba. La API simulada la arranca
+ * `src/instrumentation.ts` en el puerto que declare `API_BASE_URL`, y por
+ * defecto es el 4000: si alguien tiene un `next dev` abierto, ese puerto ya
+ * esta ocupado por SU proceso, el del humo no arranca el suyo, y las dos
+ * aplicaciones acaban hablando con la misma API.
+ *
+ * Eso no es un choque de puertos cualquiera: la API simulada carga los fixtures
+ * UNA vez, al arrancar, y el recargado en caliente de Next no vuelve a
+ * ejecutar la instrumentacion. Es decir, el humo se medía contra los fixtures
+ * que estaban en disco cuando alguien abrio su servidor, que pueden ser de hace
+ * horas. Con su propia API, el humo prueba SIEMPRE el arbol actual.
+ */
+const API_PORT = Number(process.env.SMOKE_API_PORT ?? 4210);
+const API_BASE_URL = `http://127.0.0.1:${API_PORT}/api/v1`;
+
+/**
  * Textos del estado de error de la capa de API, en los dos idiomas.
  *
  * Son los mismos de `messages/*.json` -> `states.loadFailed.title`. Se repiten
@@ -70,15 +88,27 @@ const CHECKS = [
   {
     path: "/es",
     expect: [
-      "Sorteo promocional Lone Star Road Trip",
-      "$45,000.00",
+      "Sorteo promocional GMC 2025",
+      // El nombre del premio: sale del DETALLE, no del resumen, asi que
+      // comprobarlo aqui prueba de paso que la portada consigue las dos
+      // peticiones y que el hero recibe la segunda (DEC-042).
+      "Camioneta GMC 2025",
+      "$65,000.00",
+      // El universo de participaciones, formateado con la convencion de es-US.
+      "10,000",
       // Mercancia destacada: la portada tambien depende del catalogo.
       "Camiseta de algodón grueso",
     ],
   },
   {
     path: "/en",
-    expect: ["The Lone Star Road Trip Sweepstakes", "$45,000.00", "Heavyweight Cotton Tee"],
+    expect: [
+      "The 2025 GMC Pickup Sweepstakes",
+      "2025 GMC pickup truck",
+      "$65,000.00",
+      "10,000",
+      "Heavyweight Cotton Tee",
+    ],
   },
   {
     path: "/es/shop",
@@ -97,13 +127,19 @@ const CHECKS = [
     // ultima y la activa, no solo que la pagina responda.
     path: "/es/promotions",
     expect: [
-      "Sorteo promocional Workshop Build-Out",
       "Sorteo promocional Lone Star Road Trip",
+      "Sorteo promocional GMC 2025",
       "Sorteo promocional Coastal Run",
     ],
   },
   {
-    path: "/es/promotions/road-trip-2026",
+    // La promocion protagonista (DEC-042). Su detalle tiene que servir el
+    // premio y el valor declarado, que es lo que el hero de la portada consume.
+    path: "/es/promotions/gmc-2025",
+    expect: ["Sorteo promocional GMC 2025", "Camioneta GMC 2025", "$65,000.00"],
+  },
+  {
+    path: "/es/promotions/road-trip-2027",
     expect: ["Sorteo promocional Lone Star Road Trip", "Camioneta doble cabina"],
   },
   {
@@ -187,7 +223,7 @@ function killTree(child) {
 async function main() {
   const nextBin = require.resolve("next/dist/bin/next");
 
-  log(`[smoke] arrancando next dev en ${BASE}`);
+  log(`[smoke] arrancando next dev en ${BASE} con API simulada en ${API_BASE_URL}`);
 
   const child = spawn(process.execPath, [nextBin, "dev", "--port", String(PORT)], {
     cwd: APP_DIR,
@@ -198,6 +234,11 @@ async function main() {
       // alguien apaga los mocks en su entorno, el humo tiene que seguir
       // probando lo mismo.
       WEB_ENABLE_API_MOCKS: "true",
+      // Y en SU puerto, no en el de quien tenga un servidor abierto. Ver la
+      // nota de `API_PORT`. Se pisan las dos variables que lee `apiBaseUrl()`,
+      // porque un `.env` local podria declarar cualquiera de ellas.
+      API_BASE_URL,
+      NEXT_PUBLIC_API_BASE_URL: API_BASE_URL,
     },
     stdio: ["ignore", "pipe", "pipe"],
     detached: process.platform !== "win32",

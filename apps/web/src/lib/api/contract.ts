@@ -255,6 +255,62 @@ export interface PromotionPrize {
 }
 
 /**
+ * [PROVISIONAL] Imagenes de una promocion (DEC-042).
+ *
+ * PETICION ABIERTA A `backend`, no un acuerdo. `docs/API_CONTRACT.md` no
+ * publica hoy ningun campo de media para una promocion, y sin el la unica forma
+ * de que el hero enseñe el premio es que el frontend elija la imagen, que es
+ * decir que el frontend decide como se ve un premio.
+ *
+ * DOS RECORTES Y NO UNO. La misma fotografia no sirve para las dos cosas: el
+ * hero la pinta a sangre y apaisada -el sujeto tiene que caber en una franja
+ * ancha- y una tarjeta la pinta cuadrada. Recortar una de la otra en el
+ * navegador deja el sujeto fuera de encuadre la mitad de las veces. Cuando solo
+ * haya una, `square_url` llega `null` y quien la necesite se queda sin ella, en
+ * vez de enseñar la apaisada deformada.
+ *
+ * `alt` es LOCALIZADO (DEC-030) y NULABLE. `null` significa "decorativa": la
+ * imagen acompana a un titular que ya dice lo mismo, y en ese caso el texto
+ * alternativo correcto es la cadena vacia, no una descripcion que un lector de
+ * pantalla leeria justo despues del titular. Que sea nulable obliga a decidirlo
+ * en el dato, que es donde se sabe.
+ */
+export interface PromotionMedia {
+  /** Recorte apaisado, para el hero. `null` si no hay imagen. */
+  readonly hero_url: string | null;
+  /** Recorte cuadrado, para tarjetas. `null` si no existe. */
+  readonly square_url: string | null;
+  /** Texto alternativo, o `null` si la imagen es decorativa. */
+  readonly alt: LocalizedText | null;
+}
+
+/**
+ * [PROVISIONAL] Universo de participaciones de una promocion (DEC-042).
+ *
+ * PETICION ABIERTA A `backend`. El cliente ha fijado para la promocion de la
+ * GMC 2025 un universo total de 10,000 participaciones, y eso es CONFIGURACION
+ * de la promocion -derivada de las Official Rules- y no un texto que la
+ * interfaz pueda escribir (CLAUDE.md #3 y #14). Como el tope y su tratamiento
+ * legal siguen en `docs/LEGAL_PENDING.md`, la interfaz lo presenta como dato de
+ * las Reglas y nada mas.
+ *
+ * EL FRONTEND NO RESTA. `issued` viaja como cifra SERVIDA; no existe aqui un
+ * campo `remaining` a proposito, y no se calcula: una cifra de "quedan X" es
+ * exactamente el reclamo de urgencia que DEC-042 excluye, y ademas la produciria
+ * el cliente a partir de dos numeros que pueden llegar desincronizados. Si algun
+ * dia hay que enseñar restantes, lo publica el backend con su propio campo.
+ *
+ * `null` en `issued` mientras el backend no publique la cifra. La interfaz se
+ * calla ese dato, no lo estima.
+ */
+export interface EntryPool {
+  /** Tope total configurado de participaciones. Entero (DEC-010). */
+  readonly cap: number;
+  /** Participaciones emitidas hasta ahora, servidas por el backend. */
+  readonly issued: number | null;
+}
+
+/**
  * [PROVISIONAL] Promocion completa.
  *
  * `docs/API_CONTRACT.md` nombra `PromotionDetail` como respuesta de
@@ -273,6 +329,16 @@ export interface PromotionDetail extends PromotionSummary {
   readonly administrator_name: string | null;
   /** Oferta vigente, o `null` si la promocion no declara ninguna. */
   readonly entry_offer: EntryOffer | null;
+  /**
+   * Imagenes del premio (DEC-042). `null` si la promocion no declara ninguna,
+   * que es el caso por defecto y el que la interfaz tiene que saber pintar.
+   */
+  readonly media: PromotionMedia | null;
+  /**
+   * Universo de participaciones (DEC-042). `null` si la promocion no declara
+   * tope: no todas lo tienen, y un `0` significaria "ninguna participacion".
+   */
+  readonly entry_pool: EntryPool | null;
 }
 
 /** [CONTRATO] `GET /promotions` devuelve una pagina por cursor. */

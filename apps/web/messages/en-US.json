@@ -173,6 +173,14 @@
     "closesLabel": "Closes",
     "entriesDisclaimer": "Promotional entries are awarded and governed by the Official Rules of each promotion.",
     "eyebrow": "Current promotion",
+    "hero": {
+      "win": "Win",
+      "shopNow": "Shop now",
+      "poolNote": "+ limited to an entry pool of {entries} entries",
+      "issuedLabel": "Entries issued so far",
+      "legalAmoe": "No purchase necessary — void where prohibited",
+      "legalRules": "Subject to the Official Rules"
+    },
     "featured": {
       "title": "Featured merchandise",
       "body": "A few items from the shop. Whether each one is part of the current promotion is shown on its card.",
@@ -396,6 +404,8 @@
   },
   "announcement": {
     "withDeadline": "{status} — {when}",
+    "withDeadlineAndPool": "{status} — {when} — entry pool of {entries} entries",
+    "withPool": "{status} — entry pool of {entries} entries",
     "opensOn": "opens {date}",
     "closesOn": "closes {date}",
     "officialRules": "The Official Rules govern every promotion"

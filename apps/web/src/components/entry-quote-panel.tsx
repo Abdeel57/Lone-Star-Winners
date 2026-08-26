@@ -134,7 +134,9 @@ export function EntryQuotePanel({
                 {/* Se imprimen los dos numeros de la fraccion. Dividirlos para
                     enseñar "1.5X" seria redondear una cifra que el motor aplica
                     exacta (DEC-010). */}
-                <Badge tone="accent" size="sm">
+                {/* ORO (DEC-042): una cifra de participaciones, no una accion.
+                    Ver la nota equivalente en `EntryOfferPanel`. */}
+                <Badge tone="brand" size="sm">
                   {multiplier.denominator === 1
                     ? `${formatInteger(multiplier.numerator, locale)}×`
                     : `${formatInteger(multiplier.numerator, locale)}/${formatInteger(multiplier.denominator, locale)}×`}

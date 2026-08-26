@@ -265,12 +265,63 @@
   --lsw-color-brand-subtle: 36 29 8;
   --lsw-color-on-brand: 10 10 11;
 
-  /* Oro intenso, para lo que tiene que destacar POR ENCIMA del oro base: la
-     cifra de participaciones del carrito, el badge del periodo activo. */
-  --lsw-color-accent: 227 197 102;
-  --lsw-color-accent-hover: 244 223 158;
-  --lsw-color-accent-subtle: 44 35 12;
-  --lsw-color-on-accent: 10 10 11;
+  /* --- Color: ROJO DE ACENTO (DEC-042) ------------------------------------
+   *
+   * El segundo color del sistema, y el unico que no es oro. Antes de DEC-042
+   * `accent` era "oro intenso": un tercer escalon de la misma rampa dorada que
+   * solo se distinguia de `brand` mirandolos juntos. Lo que hacia -destacar el
+   * badge del periodo de multiplicador- lo hace igual de bien `brand`, y ahi ha
+   * vuelto. Este nombre queda libre para lo que el sistema no tenia: un color
+   * de ACCION.
+   *
+   * REPARTO, Y NO ES NEGOCIABLE:
+   *   oro  = MARCA. Titulares, filetes, chips de elegibilidad, cifras de
+   *          participaciones, patron topografico, anillo de foco.
+   *   rojo = COMPRA Y ATENCION. El CTA que lleva a la mercancia, el boton de
+   *          anadir al carrito, el fragmento destacado del titular, la barra de
+   *          progreso, la barra de anuncio.
+   *
+   * NO ES `danger`, aunque se parezcan. Un error sigue pintandose con `danger`
+   * (#f07a7a, un rojo palido calibrado como TEXTO sobre negro) y este nunca
+   * aparece en un `Alert` ni en un mensaje de validacion. Son dos preguntas
+   * distintas -"esto ha fallado" y "esto es la accion principal"- y colapsarlas
+   * en un token haria imposible cambiar una sin cambiar la otra.
+   *
+   * CONTRASTES MEDIDOS (DEC-042)
+   * ----------------------------
+   * El rojo de la referencia (#e8232a) da 4,46:1 con texto blanco encima: se
+   * queda a cuatro centesimas del minimo AA de 4,5:1. Se oscurece hasta
+   * #cf1a22, que es el mismo rojo un escalon mas abajo:
+   *
+   *   accent        #cf1a22  blanco encima 5,49:1   contra la pagina 3,64:1
+   *   accent-hover  #e5222a  blanco encima 4,57:1   contra la pagina 4,38:1
+   *   accent-active #b3121a  blanco encima 6,96:1
+   *   accent-text   #ff4d47  sobre `bg` 6,10:1  sobre `surface-raised` 5,40:1
+   *   light-accent  #bf1620  sobre la banda clara 5,91:1  sobre blanco 6,27:1
+   *
+   * Los tres primeros son RELLENO (llevan `on-accent` encima); los dos ultimos
+   * son TINTA (son ellos los que se leen). Ese es el motivo de que existan
+   * cinco tonos y no dos: un rojo legible como texto sobre negro es demasiado
+   * claro para llevar texto blanco encima, y al reves.
+   *
+   * `accent-hover` ACLARA, como `brand-hover`: sobre fondo oscuro, oscurecer al
+   * pasar el raton se lee como desactivar. `accent-active` es la EXCEPCION y
+   * oscurece, porque el techo de luminosidad de este relleno lo fija el texto
+   * blanco que lleva encima: un pulsado mas claro que #e5222a bajaria de 4,5:1.
+   * El pulsado tambien es momentaneo, asi que no compite con el hover. */
+  --lsw-color-accent: 207 26 34;
+  --lsw-color-accent-hover: 229 34 42;
+  --lsw-color-accent-active: 179 18 26;
+  /* Lavado rojo casi negro, para la insignia `accent` discreta. Con
+     `accent-text` encima mide 5,51:1. */
+  --lsw-color-accent-subtle: 42 13 15;
+  /* Blanco PURO y no el blanco calido del texto: sobre un rojo saturado, el
+     blanco calido tira a rosa. Es la unica superficie del sistema donde el
+     texto va en blanco puro. */
+  --lsw-color-on-accent: 255 255 255;
+  /* Rojo de TEXTO sobre las superficies oscuras. Es el que lleva el fragmento
+     destacado del titular y el antetitulo de seccion. */
+  --lsw-color-accent-text: 255 77 71;
 
   /* --- Color: BANDA CLARA (DEC-039) ---------------------------------------
    *
@@ -323,11 +374,28 @@
   --lsw-color-light-text: 13 12 10;
   --lsw-color-light-text-muted: 90 85 76;
   --lsw-color-light-gold: 122 97 22;
+  /* Rojo de TINTA (DEC-042). La contrapartida exacta de `light-gold`: sobre
+     negro el rojo que se lee es `accent-text` (#ff4d47), y sobre la banda clara
+     ese mismo #ff4d47 da 2,5:1, asi que ahi manda este. Mide 5,91:1 sobre el
+     fondo de la banda y 6,27:1 sobre el blanco de la tarjeta. Vive en la
+     familia `light-*` y no como `accent-text-light` porque lo que decide que
+     rojo se usa no es el componente sino LA SUPERFICIE, igual que con el oro. */
+  --lsw-color-light-accent: 191 22 32;
 
   /* --- Color: estados -----------------------------------------------------
    *
-   * El rojo es SOLO para errores (DEC-038). Nada de rojo decorativo, nada de
-   * rojo de urgencia. */
+   * NOTA SUPERSEDED (DEC-042). Aqui decia: "el rojo es SOLO para errores
+   * (DEC-038); nada de rojo decorativo, nada de rojo de urgencia". DEC-042
+   * levanta la primera mitad y CONSERVA la segunda, que es la que importaba:
+   *
+   *   - hay un rojo que no es de error, y es `accent` (ver mas arriba): color
+   *     de accion de compra y de atencion;
+   *   - sigue sin haber rojo DE URGENCIA. Ni cuentas atras que cambien de color
+   *     al acercarse al cierre, ni "solo quedan X", ni parpadeos. Que la barra
+   *     de progreso sea roja no la convierte en un reclamo: sigue midiendo el
+   *     tramo real entre apertura y cierre y sigue sin decidir nada.
+   *
+   * `danger` no se toca y sigue siendo el unico rojo de los errores. */
   --lsw-color-success: 122 200 150;
   --lsw-color-success-subtle: 14 32 22;
   --lsw-color-on-success: 6 20 12;
@@ -424,13 +492,17 @@
    * `<img>` ni como elemento con contenido, y por tanto no entra en el arbol de
    * accesibilidad. */
 
-  /* Rayas diagonales de la barra de progreso. Dos oros contiguos: el relleno se
-     ve como una cinta rayada y no como una barra plana, sin introducir un
-     segundo color en el sistema. */
+  /* Rayas diagonales de la barra de progreso. Dos tonos contiguos del MISMO
+     color: el relleno se ve como una cinta rayada y no como una barra plana.
+     DEC-042 las pasa de oro a rojo, que es como las pinta la referencia; el
+     unico consumidor es `PromotionProgress`, y lo que la barra representa -el
+     tramo transcurrido del periodo- no cambia. El relleno mide 3,64:1 contra la
+     pagina y 3,49:1 contra el carril (`surface-sunken`), por encima del 3:1 que
+     WCAG 1.4.11 pide a una parte grafica portadora de informacion. */
   --lsw-pattern-stripes: repeating-linear-gradient(
     135deg,
-    rgb(var(--lsw-color-brand)) 0 7px,
-    rgb(var(--lsw-color-brand-active)) 7px 14px
+    rgb(var(--lsw-color-accent)) 0 7px,
+    rgb(var(--lsw-color-accent-hover)) 7px 14px
   );
 
   /* --- Movimiento decorativo ----------------------------------------------

@@ -166,10 +166,16 @@ const preset = {
           subtle: color("--lsw-color-brand-subtle"),
         },
         "on-brand": color("--lsw-color-on-brand"),
+        // DEC-042: `accent` es el ROJO de accion, no un tercer oro. `text` es
+        // el escalon que se lee COMO TEXTO sobre las superficies oscuras; los
+        // demas son rellenos y llevan `on-accent` encima. Su contrapartida
+        // sobre superficies claras es `light-accent`, mas abajo.
         accent: {
           DEFAULT: color("--lsw-color-accent"),
           hover: color("--lsw-color-accent-hover"),
+          active: color("--lsw-color-accent-active"),
           subtle: color("--lsw-color-accent-subtle"),
+          text: color("--lsw-color-accent-text"),
         },
         "on-accent": color("--lsw-color-on-accent"),
         success: {
@@ -209,6 +215,10 @@ const preset = {
           // Oro de tinta: el acento de marca llevado a la sombra para que
           // pueda llevar texto sobre blanco (5,6:1). Ver `tokens.css`.
           gold: color("--lsw-color-light-gold"),
+          // Rojo de tinta (DEC-042). Misma operacion que `gold` sobre el rojo
+          // de accion: `accent-text` (#ff4d47) da 2,5:1 sobre la banda clara y
+          // este mide 5,91:1. Que rojo se usa lo decide la superficie.
+          accent: color("--lsw-color-light-accent"),
         },
         focus: color("--lsw-color-focus"),
         overlay: color("--lsw-color-overlay"),

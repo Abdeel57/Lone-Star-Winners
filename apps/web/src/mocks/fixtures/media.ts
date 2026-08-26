@@ -275,3 +275,318 @@ export const throwImage = studioSvg(THROW);
  * distinguibles sin parecer un error de duplicado.
  */
 export const teeImageAlt = studioSvg({ body: TEE.body, lightX: 520, baseY: TEE.baseY });
+
+/* ===========================================================================
+ * EL PREMIO (DEC-042)
+ * ===========================================================================
+ *
+ * Todo lo de arriba es MERCANCIA: piezas pequenas, sobre estudio claro, porque
+ * viven dentro de tarjetas blancas. Lo de aqui abajo es otra cosa y por eso no
+ * reutiliza `studioSvg`: es EL PREMIO, va a sangre dentro del hero -que es
+ * negro- y tiene que aguantar 1600 pixeles de ancho detras de un titular.
+ *
+ * Un estudio claro ahi seria un rectangulo blanco a media pagina; el hero
+ * necesita lo contrario, un plato oscuro con una sola fuente de luz calida
+ * detras del sujeto, que es como se fotografia un vehiculo.
+ *
+ * QUE ES Y QUE NO ES
+ * ------------------
+ * Es una ILUSTRACION de estudio, no una fotografia y no un modelo concreto:
+ * silueta de pickup de doble cabina en grafito, con biseles dorados, faro
+ * encendido, sombra de contacto y reflejo en el suelo. No lleva marca, ni
+ * emblema, ni parrilla reconocible, y no debe llevarlos: cual es el premio lo
+ * dice el dato (`PromotionPrize`) y lo aprueban las Official Rules, no este
+ * dibujo.
+ *
+ * ES EL RESPALDO, NO EL DESTINO. En cuanto exista una fotografia real del
+ * premio, el fixture la sirve y esto deja de verse: ver `prize-photo.ts` y
+ * `apps/web/public/prizes/README.md`. Ningun componente cambia, porque ninguno
+ * sabe de donde sale su imagen.
+ *
+ * DOS RECORTES, NO UNO ESCALADO
+ * -----------------------------
+ * `PromotionMedia` publica `hero_url` y `square_url` porque el mismo encuadre
+ * no sirve para las dos cosas. Aqui se generan los dos con la MISMA geometria
+ * de vehiculo y distinto lienzo: cambia el aire alrededor del sujeto, no el
+ * sujeto. Recortar uno del otro en el navegador es lo que deja el vehiculo a
+ * medias dentro de la tarjeta.
+ */
+
+/**
+ * Paleta del plato oscuro.
+ *
+ * Mismo criterio que `STUDIO`: cada literal declara el token que representa, y
+ * los colores de ilustracion -grafito, cristal, neumatico- se declaran como lo
+ * que son, colores que no corresponden a ningun token y no deben corresponder.
+ */
+const PRIZE_STUDIO = {
+  /** Centro del fondo. Un escalon por encima de `--lsw-color-surface-raised`. */
+  backdropNear: "#1b1b22",
+  /** Esquinas del fondo. `--lsw-color-surface-sunken`. */
+  backdropFar: "#040405",
+  /** Oro del filete. `--lsw-color-brand`. */
+  goldMid: "#c9a227",
+  /** `--lsw-color-focus`, el mas claro de los oros del sistema. */
+  goldLight: "#f2d680",
+  /** `--lsw-color-brand-active`. */
+  goldWarm: "#f0d98a",
+  /** Carroceria: grafito con luz cenital. Color de ilustracion. */
+  bodyTop: "#5b5b68",
+  bodyBottom: "#101016",
+  /** Cristales. Mas frios que la carroceria, que es lo que los delata. */
+  glassTop: "#39414f",
+  glassBottom: "#12151c",
+  /** Neumatico. Casi negro y no negro: el negro puro se come el contorno. */
+  tyre: "#0b0b0e",
+  /** Negro de sombras y vineta. `--lsw-color-overlay`. */
+  ink: "#000000",
+} as const;
+
+/**
+ * Geometria del vehiculo, en un lienzo propio de 1000 x 380.
+ *
+ * Se declara UNA vez y cada recorte la coloca con su escala. El frente mira a
+ * la DERECHA. `groundY` es la linea de apoyo -donde tocan los neumaticos- y es
+ * un dato y no un numero repetido, porque lo usan a la vez la sombra de
+ * contacto, el eje del reflejo y el desvanecido de su mascara.
+ */
+const TRUCK = {
+  groundY: 345,
+  /** Centro de cada rueda. */
+  wheels: [
+    { cx: 200, cy: 273 },
+    { cx: 810, cy: 273 },
+  ],
+  wheelRadius: 72,
+  /**
+   * Contorno de la carroceria.
+   *
+   * LAS PROPORCIONES SON LO QUE LA HACE MODERNA. La primera version tenia el
+   * capo largo y bajo y el costado del cajon corto, y salia un coche de los
+   * anos sesenta con caja detras. Un pickup actual es lo contrario: capo ALTO y
+   * corto, cintura alta, costado de cajon profundo y cristales poco altos. Los
+   * numeros que lo fijan son estos tres: la cintura a y=146, el bajo a y=288 y
+   * el techo a y=48, es decir, 142 de chapa por 98 de cristal.
+   *
+   * Los dos arcos son los pasos de rueda y llevan `sweep-flag` 0 -curvan hacia
+   * ARRIBA-: con 1 el arco pasaria por debajo y el paso de rueda seria una
+   * joroba. El radio (95) es exactamente la mitad de la cuerda, es decir, una
+   * semicircunferencia: es el arco mas alto que un radio puede dar entre esos
+   * dos puntos, y hace falta que sea el mas alto para que el neumatico quepa
+   * dentro de la aleta en vez de asomar por encima.
+   */
+  body:
+    "M 30 288 L 28 244 L 24 148 L 392 144 L 398 58 L 412 50 L 655 48 " +
+    "Q 672 48 680 58 L 722 136 L 760 133 L 900 122 " +
+    "Q 936 120 940 142 L 950 240 L 962 248 L 958 292 L 905 288 " +
+    "A 95 95 0 0 0 715 288 L 295 288 A 95 95 0 0 0 105 288 Z",
+  /** Cabina acristalada, en una pieza. Los montantes van como filete. */
+  glass: "M 414 66 L 414 136 L 712 136 L 678 62 Z",
+  /**
+   * Filetes: montante central, juntas de puerta, tiradores, nervio del costado,
+   * canto del cajon y estribo. Trazo fino en oro, que es lo que convierte una
+   * silueta plana en una carroceria con paneles.
+   */
+  trim:
+    "M 545 64 L 545 136 " +
+    "M 398 144 L 398 282 M 545 142 L 545 282 " +
+    "M 448 174 L 492 174 M 596 172 L 640 172 " +
+    "M 34 166 L 390 162 M 340 216 L 690 210 " +
+    "M 330 284 L 560 282 M 912 200 L 946 203 M 912 222 L 948 225",
+  /** Espejo retrovisor. Poca cosa, y lo que mas dice que es una camioneta. */
+  mirror: "M 700 116 L 734 110 L 738 128 L 704 133 Z",
+  /** Faro. Relleno de luz y no de grafito: es la unica pieza encendida. */
+  headlight: "M 902 138 L 944 144 L 946 178 L 906 172 Z",
+  /** Piloto trasero: vertical y alto, como el de un pickup actual. */
+  taillight: "M 26 156 L 46 156 L 46 214 L 26 214 Z",
+} as const;
+
+/** Angulos de los radios de la llanta, en grados. Cinco, a 72. */
+const SPOKE_ANGLES = [0, 72, 144, 216, 288] as const;
+
+/**
+ * Compone la escena del premio.
+ *
+ * La escala y el desplazamiento los pasa cada recorte: el vehiculo es el mismo
+ * y lo que cambia es el aire a su alrededor.
+ *
+ * Igual que en `studioSvg`, los identificadores de los degradados se repiten
+ * entre imagenes sin riesgo: cada `data:` URI es un documento independiente
+ * cuando se carga desde un `<img>`.
+ */
+function prizeSvg({
+  width,
+  height,
+  scale,
+  offsetX,
+  offsetY,
+}: {
+  readonly width: number;
+  readonly height: number;
+  readonly scale: number;
+  readonly offsetX: number;
+  readonly offsetY: number;
+}): string {
+  const n = (value: number): string => String(Math.round(value * 100) / 100);
+  const ground = offsetY + TRUCK.groundY * scale;
+
+  /** El vehiculo entero, para poder pintarlo dos veces: pieza y reflejo. */
+  const vehicle = [
+    // Penumbra: el contorno desenfocado, por debajo de todo lo demas.
+    `<g filter="url(#soften)" fill="${PRIZE_STUDIO.ink}" fill-opacity="0.55">`,
+    `<path d="${TRUCK.body}"/>`,
+    `</g>`,
+
+    `<path d="${TRUCK.body}" fill="url(#panel)" stroke="url(#bevel)" stroke-width="5" stroke-linejoin="round"/>`,
+    `<path d="${TRUCK.glass}" fill="url(#glass)" stroke="${PRIZE_STUDIO.goldMid}" stroke-opacity="0.55" stroke-width="3" stroke-linejoin="round"/>`,
+    `<path d="${TRUCK.trim}" fill="none" stroke="${PRIZE_STUDIO.goldMid}" stroke-opacity="0.45" stroke-width="3" stroke-linecap="round"/>`,
+    `<path d="${TRUCK.mirror}" fill="url(#panel)" stroke="${PRIZE_STUDIO.goldMid}" stroke-opacity="0.7" stroke-width="3" stroke-linejoin="round"/>`,
+
+    // Reflejo especular de la arista superior: una linea de luz que recorre el
+    // techo y otra el capo. Es lo que hace que el grafito parezca chapa.
+    `<path d="M 412 52 L 655 50 Q 672 50 680 60" fill="none" stroke="${PRIZE_STUDIO.goldLight}" stroke-opacity="0.75" stroke-width="4" stroke-linecap="round"/>`,
+    `<path d="M 766 132 L 898 122" fill="none" stroke="${PRIZE_STUDIO.goldLight}" stroke-opacity="0.5" stroke-width="3" stroke-linecap="round"/>`,
+
+    `<path d="${TRUCK.taillight}" fill="${PRIZE_STUDIO.goldMid}" fill-opacity="0.35" stroke="${PRIZE_STUDIO.goldMid}" stroke-opacity="0.6" stroke-width="2"/>`,
+
+    // Faro encendido: primero el halo, despues el cristal.
+    `<ellipse cx="946" cy="162" rx="140" ry="92" fill="url(#beam)"/>`,
+    `<path d="${TRUCK.headlight}" fill="url(#lamp)" stroke="${PRIZE_STUDIO.goldLight}" stroke-opacity="0.85" stroke-width="2.5" stroke-linejoin="round"/>`,
+
+    // Ruedas al final, para que su contorno dorado quede por encima del paso.
+    ...TRUCK.wheels.flatMap((wheel) => [
+      `<circle cx="${String(wheel.cx)}" cy="${String(wheel.cy)}" r="${String(TRUCK.wheelRadius)}" fill="${PRIZE_STUDIO.tyre}" stroke="url(#bevel)" stroke-width="4"/>`,
+      `<circle cx="${String(wheel.cx)}" cy="${String(wheel.cy)}" r="42" fill="url(#panel)" stroke="${PRIZE_STUDIO.goldMid}" stroke-opacity="0.85" stroke-width="3"/>`,
+      `<g stroke="${PRIZE_STUDIO.goldMid}" stroke-opacity="0.5" stroke-width="3" stroke-linecap="round">`,
+      ...SPOKE_ANGLES.map((angle) => {
+        const radians = (angle * Math.PI) / 180;
+        return `<path d="M ${String(wheel.cx)} ${String(wheel.cy)} L ${n(wheel.cx + Math.cos(radians) * 36)} ${n(wheel.cy + Math.sin(radians) * 36)}"/>`;
+      }),
+      `</g>`,
+    ]),
+  ].join("");
+
+  const placed = `<g transform="translate(${n(offsetX)} ${n(offsetY)}) scale(${n(scale)})">${vehicle}</g>`;
+
+  const svg = [
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${String(width)} ${String(height)}" role="presentation">`,
+
+    `<defs>`,
+    `<radialGradient id="plate" cx="0.56" cy="0.42" r="0.82">`,
+    `<stop offset="0" stop-color="${PRIZE_STUDIO.backdropNear}"/>`,
+    `<stop offset="1" stop-color="${PRIZE_STUDIO.backdropFar}"/>`,
+    `</radialGradient>`,
+    // Charco de luz calida detras del sujeto. Sobre negro puede ser generoso:
+    // es lo que separa el vehiculo del fondo sin un contorno duro.
+    `<radialGradient id="pool" cx="0.5" cy="0.5" r="0.5">`,
+    `<stop offset="0" stop-color="${PRIZE_STUDIO.goldWarm}" stop-opacity="0.42"/>`,
+    `<stop offset="0.45" stop-color="${PRIZE_STUDIO.goldMid}" stop-opacity="0.16"/>`,
+    `<stop offset="1" stop-color="${PRIZE_STUDIO.goldMid}" stop-opacity="0"/>`,
+    `</radialGradient>`,
+    `<linearGradient id="panel" x1="0.2" y1="0" x2="0.55" y2="1">`,
+    `<stop offset="0" stop-color="${PRIZE_STUDIO.bodyTop}"/>`,
+    `<stop offset="1" stop-color="${PRIZE_STUDIO.bodyBottom}"/>`,
+    `</linearGradient>`,
+    `<linearGradient id="glass" x1="0" y1="0" x2="0.3" y2="1">`,
+    `<stop offset="0" stop-color="${PRIZE_STUDIO.glassTop}"/>`,
+    `<stop offset="1" stop-color="${PRIZE_STUDIO.glassBottom}"/>`,
+    `</linearGradient>`,
+    `<linearGradient id="bevel" x1="0" y1="0" x2="0.6" y2="1">`,
+    `<stop offset="0" stop-color="${PRIZE_STUDIO.goldLight}"/>`,
+    `<stop offset="0.5" stop-color="${PRIZE_STUDIO.goldMid}"/>`,
+    `<stop offset="1" stop-color="${PRIZE_STUDIO.bodyBottom}"/>`,
+    `</linearGradient>`,
+    `<radialGradient id="lamp" cx="0.3" cy="0.35" r="0.9">`,
+    `<stop offset="0" stop-color="#ffffff"/>`,
+    `<stop offset="0.55" stop-color="${PRIZE_STUDIO.goldWarm}"/>`,
+    `<stop offset="1" stop-color="${PRIZE_STUDIO.goldMid}"/>`,
+    `</radialGradient>`,
+    `<radialGradient id="beam" cx="0.5" cy="0.5" r="0.5">`,
+    `<stop offset="0" stop-color="${PRIZE_STUDIO.goldWarm}" stop-opacity="0.5"/>`,
+    `<stop offset="1" stop-color="${PRIZE_STUDIO.goldWarm}" stop-opacity="0"/>`,
+    `</radialGradient>`,
+    `<radialGradient id="contact" cx="0.5" cy="0.5" r="0.5">`,
+    `<stop offset="0" stop-color="${PRIZE_STUDIO.ink}" stop-opacity="0.85"/>`,
+    `<stop offset="1" stop-color="${PRIZE_STUDIO.ink}" stop-opacity="0"/>`,
+    `</radialGradient>`,
+    `<filter id="soften" x="-20%" y="-20%" width="140%" height="140%">`,
+    `<feGaussianBlur stdDeviation="14"/>`,
+    `</filter>`,
+    // Desvanecido del reflejo: opaco junto al suelo, nulo al llegar abajo.
+    `<linearGradient id="fadeGradient" x1="0" y1="${n(ground)}" x2="0" y2="${String(height)}" gradientUnits="userSpaceOnUse">`,
+    `<stop offset="0" stop-color="#ffffff" stop-opacity="0.55"/>`,
+    `<stop offset="1" stop-color="#ffffff" stop-opacity="0"/>`,
+    `</linearGradient>`,
+    `<mask id="fade"><rect width="${String(width)}" height="${String(height)}" fill="url(#fadeGradient)"/></mask>`,
+    // Vineta: cierra las esquinas para que la luz del centro parezca luz.
+    `<radialGradient id="vignette" cx="0.5" cy="0.44" r="0.78">`,
+    `<stop offset="0.42" stop-color="${PRIZE_STUDIO.ink}" stop-opacity="0"/>`,
+    `<stop offset="1" stop-color="${PRIZE_STUDIO.ink}" stop-opacity="0.72"/>`,
+    `</radialGradient>`,
+    `</defs>`,
+
+    `<rect width="${String(width)}" height="${String(height)}" fill="url(#plate)"/>`,
+    `<ellipse cx="${n(width * 0.52)}" cy="${n(ground - height * 0.2)}" rx="${n(width * 0.42)}" ry="${n(height * 0.36)}" fill="url(#pool)"/>`,
+
+    // Reflejo en el suelo: el vehiculo volteado sobre la linea de apoyo y
+    // desvanecido. Es el recurso que separa una ilustracion plana de una pieza
+    // fotografiada sobre una superficie.
+    `<g mask="url(#fade)" opacity="0.24">`,
+    `<g transform="translate(0 ${n(ground * 2)}) scale(1 -1)">${placed}</g>`,
+    `</g>`,
+
+    // Sombra de contacto, entre el reflejo y la pieza.
+    `<ellipse cx="${n(offsetX + 500 * scale)}" cy="${n(ground)}" rx="${n(430 * scale)}" ry="${n(34 * scale)}" fill="url(#contact)"/>`,
+
+    placed,
+
+    `<rect width="${String(width)}" height="${String(height)}" fill="url(#vignette)"/>`,
+    `</svg>`,
+  ].join("");
+
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+}
+
+/**
+ * Recorte del premio para el HERO.
+ *
+ * NO ES 16:9, y la primera version si lo era. El error estaba en pensar en la
+ * imagen y no en el HUECO: el hero no la pinta como una banda apaisada sino
+ * dentro de una columna que ocupa el 56% del ancho y TODA la altura en
+ * escritorio, y una franja a todo el ancho en telefono. Los dos huecos son casi
+ * cuadrados -entre 0,9 y 1,1 de proporcion en las pantallas habituales- y
+ * `object-cover` sobre un 16:9 ahi recorta cerca del 40% del ancho: el morro
+ * del vehiculo, con el faro, se quedaba fuera en escritorio.
+ *
+ * Asi que el lienzo es 1300 x 1150 (1,13) y el vehiculo ocupa la franja central
+ * en horizontal, entre x=262 y x=1129. Con eso sobrevive entero al recorte de
+ * un hueco de hasta 0,88 de proporcion, que cubre todos los telefonos y los
+ * escritorios de 16:9 y 16:10. Es tambien el encuadre que el README de
+ * `public/prizes/` pide a quien traiga la fotografia real: sujeto centrado y
+ * aire por los cuatro lados.
+ */
+export const prizeTruckWideImage = prizeSvg({
+  width: 1300,
+  height: 1150,
+  scale: 0.92,
+  offsetX: 240,
+  offsetY: 442,
+});
+
+/**
+ * Recorte CUADRADO del premio, para tarjetas y listados.
+ *
+ * El vehiculo va a escala 1 y ocupa el ancho entero -su contorno vive entre
+ * x=24 y x=962 del lienzo propio, asi que quedan margenes justos y ninguna
+ * defensa cortada- y la linea de apoyo cae en el 65% de la altura. No esta
+ * centrado: un lateral de vehiculo en un lienzo cuadrado deja aire por fuerza,
+ * y ponerlo un poco por encima del centro es lo que convierte ese aire en el
+ * fondo del plato y el hueco de abajo en el reflejo.
+ */
+export const prizeTruckSquareImage = prizeSvg({
+  width: 1000,
+  height: 1000,
+  scale: 1,
+  offsetX: 0,
+  offsetY: 310,
+});

@@ -169,10 +169,15 @@ export default async function CartPage({
                 {t("cart.checkoutUnavailable")}
               </Alert>
 
+              {/* ROJO (DEC-042). Mientras el checkout no exista, esta es la
+                  accion de compra que la tarjeta si puede ofrecer, y ocupa el
+                  sitio donde ira el boton de pago. El oro de esta columna se
+                  queda donde importa: en la cifra de participaciones que pinta
+                  `EntryQuotePanel` justo debajo. */}
               <div className="mt-s4">
                 <Link
                   href="/shop"
-                  className={buttonVariants({ variant: "secondary", fullWidth: true })}
+                  className={buttonVariants({ variant: "accent", fullWidth: true })}
                 >
                   {t("cart.continueShopping")}
                 </Link>

@@ -111,7 +111,10 @@ export function AddToCartForm({
         />
       </FormField>
 
-      <Button type="submit" size="lg" fullWidth loading={pending}>
+      {/* ROJO (DEC-042): es la accion de COMPRA de la pantalla. El oro se
+          reserva para la marca y para las cifras de participaciones; aqui lo
+          que hay es un carrito. */}
+      <Button type="submit" variant="accent" size="lg" fullWidth loading={pending}>
         {t("addToCart")}
       </Button>
 

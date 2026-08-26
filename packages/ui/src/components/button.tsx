@@ -38,6 +38,45 @@ export const buttonVariants = cva(
          */
         secondary:
           "border border-brand/45 bg-transparent text-brand hover:border-brand hover:bg-brand/12 active:bg-brand/20",
+        /**
+         * ACCION DE COMPRA (DEC-042): relleno ROJO con texto blanco.
+         *
+         * No sustituye a `primary`, convive con ella y el reparto es
+         * semantico, no de gusto:
+         *
+         *   `primary` (oro) .. la accion de MARCA. Ver las Reglas Oficiales,
+         *                      ver el detalle de una promocion, volver.
+         *   `accent`  (rojo) . la accion de COMPRA. Ir a la mercancia, anadir
+         *                      al carrito, continuar en el carrito.
+         *
+         * Que el CTA de compra sea rojo no cambia lo que dice: sigue siendo
+         * "comprar mercancia" y nunca "participar" (DEC-042, CLAUDE.md #1).
+         *
+         * CONTRASTES MEDIDOS
+         * ------------------
+         * Relleno #cf1a22 con `on-accent` (blanco puro) encima: 5,49:1, por
+         * encima del 4,5:1 de AA. En hover aclara a #e5222a y sigue en 4,57:1
+         * -ese es el techo, y el motivo de que el rojo no sea el de la
+         * referencia (#e8232a da 4,46:1)-. El pulsado oscurece a #b3121a
+         * (6,96:1), al reves que `primary`, porque por arriba ya no queda
+         * margen sin romper el texto.
+         *
+         * EL ANILLO DE FOCO ES EL DEL SISTEMA, Y NO SE REASIGNA.
+         * `ink` e `inkGhost` tuvieron que cambiarlo porque su relleno es blanco
+         * y el oro de foco sobre la banda clara da 1,35:1. Aqui no hace falta y
+         * seria peor: el indicador es el oro de foco (#f2d680) separado del
+         * boton por el offset, que se pinta en el negro de pagina. Ese borde
+         * INTERIOR mide 14:1 y no depende de sobre que superficie se apoye el
+         * boton, asi que el foco sigue cumpliendo WCAG 1.4.11 tanto sobre negro
+         * como sobre la banda clara. El oro sobre el propio rojo mide ademas
+         * 3,85:1.
+         *
+         * (Y no se reasigna el offset porque no se puede reasignar sin riesgo:
+         * `buttonVariants()` se usa a pelo en varios enlaces, sin pasar por
+         * `cn`, y ahi dos clases `ring-offset-*` a la vez las resolveria el
+         * orden de emision del CSS, que no es un contrato.)
+         */
+        accent: "bg-accent text-on-accent hover:bg-accent-hover active:bg-accent-active",
         /** Accion terciaria: superficie elevada, sin oro. */
         subtle:
           "border border-border bg-surface-raised text-text hover:border-border-strong hover:bg-surface",

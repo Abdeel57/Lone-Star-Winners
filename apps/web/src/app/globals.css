@@ -167,6 +167,40 @@
     }
   }
 
+  /* -------------------------------------------------------------------------
+   * Rojo con brillo (DEC-042)
+   *
+   * La misma receta que `.lsw-gold-sheen` sobre el rojo de accion: es el
+   * fragmento destacado del titular del hero, que la referencia pinta en rojo
+   * degradado con luz. Y por el mismo motivo, el `color` de respaldo se declara
+   * ANTES y sin condicion: si el navegador no soporta `background-clip: text`,
+   * el texto queda en rojo plano y legible (6,10:1 sobre la pagina), nunca
+   * transparente.
+   *
+   * Los tres escalones del degradado son los tres rojos claros del sistema, y
+   * el mas oscuro de ellos -`accent-hover`, #e5222a- mide 4,38:1 sobre la
+   * pagina: por encima del 3:1 que WCAG pide a un texto de este tamano y por
+   * encima incluso del minimo de texto normal.
+   * ---------------------------------------------------------------------- */
+  .lsw-accent-sheen {
+    color: rgb(var(--lsw-color-accent-text));
+  }
+
+  @supports (background-clip: text) or (-webkit-background-clip: text) {
+    .lsw-accent-sheen {
+      background-image: linear-gradient(
+        100deg,
+        rgb(var(--lsw-color-accent-hover)) 0%,
+        rgb(var(--lsw-color-accent-text)) 38%,
+        rgb(var(--lsw-color-accent-text)) 58%,
+        rgb(var(--lsw-color-accent-hover)) 100%
+      );
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+  }
+
   /* Filete dorado que se apaga hacia los extremos. Separa secciones sin meter
      una linea dura de lado a lado. */
   .lsw-gold-rule {

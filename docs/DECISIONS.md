@@ -1826,3 +1826,11 @@ anuncio, ficha de producto).
 
 Proposed by: usuario
 Agreed by: Team Lead; el tope de 10,000 queda anotado en LEGAL_PENDING
+
+Nota de implementación (2026-08-26): el token `accent` ya existía con
+semántica de "oro intenso"; ese papel vuelve a `brand` y `accent` pasa a ser
+el rojo. El rojo de LGND (#e8232a) da 4.46:1 con blanco encima, a cuatro
+centésimas de AA, así que el valor final es #cf1a22 (5.49:1). Ratios de los
+siete tokens medidos por test (`accent-tokens.test.ts`). La edición
+"Workshop Build-Out" se retira del fixture para conservar la invariante de
+una promoción por estado: Road Trip pasa a SCHEDULED.

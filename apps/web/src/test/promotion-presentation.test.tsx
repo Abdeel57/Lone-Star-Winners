@@ -34,6 +34,8 @@ import type { Locale } from "@/i18n/locales";
 import { PROMOTION_LIFECYCLE } from "@/lib/api";
 import { presentPromotion } from "@/lib/promotion-state";
 import {
+  activePromotion,
+  activePromotionDetail,
   activePromotionWithoutPrize,
   baseEntryOffer,
   fractionalEntryOffer,
@@ -136,7 +138,13 @@ describe("PromotionHero en los nueve estados", () => {
       for (const locale of ["en", "es"] as const) {
         const view = renderIn(
           locale,
-          <PromotionHero promotion={promotion} locale={locale} nowIso={NOW} />,
+          <PromotionHero
+            promotion={promotion}
+            detail={null}
+            locale={locale}
+            nowIso={NOW}
+            amoeEnabled={false}
+          />,
         );
 
         expect(
@@ -159,7 +167,16 @@ describe("PromotionHero en los nueve estados", () => {
 
   it("la cuenta atras solo aparece antes de abrir y mientras esta abierta", () => {
     for (const promotion of promotionsByStatus) {
-      const view = renderIn("en", <PromotionHero promotion={promotion} locale="en" nowIso={NOW} />);
+      const view = renderIn(
+        "en",
+        <PromotionHero
+          promotion={promotion}
+          detail={null}
+          locale="en"
+          nowIso={NOW}
+          amoeEnabled={false}
+        />,
+      );
 
       const shows = presentPromotion(promotion.status).countdownTarget !== null;
       const label = screen.queryByText(
@@ -176,7 +193,16 @@ describe("PromotionHero en los nueve estados", () => {
   it("no enlaza a unas Reglas Oficiales que no existen", () => {
     // DEC-012: sin version de reglas publicada, la interfaz lo dice en vez de
     // enlazar a un documento que devolveria un 404.
-    renderIn("en", <PromotionHero promotion={promotionWithoutRules} locale="en" nowIso={NOW} />);
+    renderIn(
+      "en",
+      <PromotionHero
+        promotion={promotionWithoutRules}
+        detail={null}
+        locale="en"
+        nowIso={NOW}
+        amoeEnabled={false}
+      />,
+    );
 
     expect(
       screen.queryByRole("link", { name: enMessages.home.viewOfficialRules }),
@@ -190,7 +216,13 @@ describe("PromotionHero en los nueve estados", () => {
     // saber callarse, no pintar "Stated prize value" seguido de nada.
     renderIn(
       "en",
-      <PromotionHero promotion={activePromotionWithoutPrize} locale="en" nowIso={NOW} />,
+      <PromotionHero
+        promotion={activePromotionWithoutPrize}
+        detail={null}
+        locale="en"
+        nowIso={NOW}
+        amoeEnabled={false}
+      />,
     );
 
     expect(screen.queryByText(enMessages.home.prizeValueLabel)).not.toBeInTheDocument();
@@ -198,12 +230,207 @@ describe("PromotionHero en los nueve estados", () => {
 
   it("enlaza a las Reglas Oficiales de ESA promocion cuando existen", () => {
     const promotion = promotionInStatus("ACTIVE");
-    renderIn("es", <PromotionHero promotion={promotion} locale="es" nowIso={NOW} />);
+    renderIn(
+      "es",
+      <PromotionHero
+        promotion={promotion}
+        detail={null}
+        locale="es"
+        nowIso={NOW}
+        amoeEnabled={false}
+      />,
+    );
 
     expect(screen.getByRole("link", { name: esMessages.home.viewOfficialRules })).toHaveAttribute(
       "href",
       `/official-rules?promotion=${promotion.slug}`,
     );
+  });
+});
+
+/**
+ * EL HERO DE DEC-042.
+ *
+ * Tres cosas que la composicion nueva puede romper y que mirar la pantalla no
+ * detecta:
+ *
+ *   1. LA LINEA LEGAL. "No se requiere compra" es una afirmacion sobre las
+ *      condiciones de participacion y solo puede escribirse cuando la promocion
+ *      declara via gratuita. Copiar la linea de la referencia sin mirar el flag
+ *      es el error mas facil de cometer aqui y el mas caro.
+ *   2. EL VERBO DEL BOTON ROJO. Lleva a la MERCANCIA, asi que no puede decir
+ *      "participar" ni "enter": comprar mercancia no es participar
+ *      (`CLAUDE.md` seccion 1, DEC-042).
+ *   3. EL UNIVERSO DE PARTICIPACIONES. Se pinta el tope que sirve el backend y
+ *      no se deriva ninguna cifra de "quedan X".
+ */
+describe("PromotionHero, composicion de DEC-042", () => {
+  it("sin via gratuita declarada NO dice que no se requiere compra", () => {
+    for (const locale of ["en", "es"] as const) {
+      const messages = locale === "en" ? enMessages : esMessages;
+      const view = renderIn(
+        locale,
+        <PromotionHero
+          promotion={activePromotion}
+          detail={activePromotionDetail}
+          locale={locale}
+          nowIso={NOW}
+          amoeEnabled={false}
+        />,
+      );
+
+      expect(screen.getByText(messages.home.hero.legalRules, { exact: false })).toBeInTheDocument();
+      expect(screen.queryByText(messages.home.hero.legalAmoe, { exact: false })).toBeNull();
+
+      // Y la red por el otro lado: ni el fragmento suelto. Si alguien
+      // reescribiera la frase, esto seguiria detectando la afirmacion.
+      const claim = locale === "en" ? "No purchase necessary" : "No se requiere compra";
+      expect(document.body.textContent).not.toContain(claim);
+
+      view.unmount();
+    }
+  });
+
+  it("con via gratuita declarada si la dice, en los dos idiomas", () => {
+    for (const locale of ["en", "es"] as const) {
+      const messages = locale === "en" ? enMessages : esMessages;
+      const view = renderIn(
+        locale,
+        <PromotionHero
+          promotion={activePromotion}
+          detail={activePromotionDetail}
+          locale={locale}
+          nowIso={NOW}
+          amoeEnabled
+        />,
+      );
+
+      expect(screen.getByText(messages.home.hero.legalAmoe, { exact: false })).toBeInTheDocument();
+      expect(screen.queryByText(messages.home.hero.legalRules, { exact: false })).toBeNull();
+
+      view.unmount();
+    }
+  });
+
+  it("la linea legal enlaza a las Reglas Oficiales de esa promocion", () => {
+    renderIn(
+      "es",
+      <PromotionHero
+        promotion={activePromotion}
+        detail={activePromotionDetail}
+        locale="es"
+        nowIso={NOW}
+        amoeEnabled={false}
+      />,
+    );
+
+    expect(screen.getByRole("link", { name: esMessages.home.viewOfficialRules })).toHaveAttribute(
+      "href",
+      `/official-rules?promotion=${activePromotion.slug}`,
+    );
+  });
+
+  it("el CTA rojo lleva a la tienda y no dice participar", () => {
+    for (const locale of ["en", "es"] as const) {
+      const messages = locale === "en" ? enMessages : esMessages;
+      const view = renderIn(
+        locale,
+        <PromotionHero
+          promotion={activePromotion}
+          detail={activePromotionDetail}
+          locale={locale}
+          nowIso={NOW}
+          amoeEnabled={false}
+        />,
+      );
+
+      const cta = screen.getByRole("link", { name: messages.home.hero.shopNow });
+      expect(cta).toHaveAttribute("href", "/shop");
+      // Es el rojo del sistema y no el oro de marca: el reparto de DEC-042 es
+      // que rojo = accion de compra.
+      expect(cta.className).toContain("bg-accent");
+
+      const label = messages.home.hero.shopNow.toLowerCase();
+      for (const forbidden of ["participar", "participa", "enter", "entries", "boleto"]) {
+        expect(label, `${locale}: el CTA a la tienda no puede decir "${forbidden}"`).not.toContain(
+          forbidden,
+        );
+      }
+
+      view.unmount();
+    }
+  });
+
+  it("pinta el universo de participaciones que sirve el backend, y solo ese", () => {
+    const view = renderIn(
+      "es",
+      <PromotionHero
+        promotion={activePromotion}
+        detail={activePromotionDetail}
+        locale="es"
+        nowIso={NOW}
+        amoeEnabled={false}
+      />,
+    );
+
+    const pool = activePromotionDetail.entry_pool;
+    expect(pool, "el fixture protagonista declara universo").not.toBeNull();
+    if (pool === null) return;
+
+    expect(screen.getByText(/10,000/)).toBeInTheDocument();
+    expect(screen.getByText(String(pool.issued?.toLocaleString("en-US")))).toBeInTheDocument();
+
+    // NINGUNA cifra derivada. `cap - issued` es la resta que el frontend no
+    // hace: seria una cifra de "quedan X" calculada en el cliente a partir de
+    // dos numeros que pueden llegar desincronizados (DEC-042).
+    const remaining = (pool.cap - (pool.issued ?? 0)).toLocaleString("en-US");
+    expect(document.body.textContent).not.toContain(remaining);
+
+    view.unmount();
+  });
+
+  it("la fotografia del premio es decorativa cuando el dato lo dice", () => {
+    const { container } = renderIn(
+      "es",
+      <PromotionHero
+        promotion={activePromotion}
+        detail={activePromotionDetail}
+        locale="es"
+        nowIso={NOW}
+        amoeEnabled={false}
+      />,
+    );
+
+    const image = container.querySelector("img");
+    expect(image, "el hero pinta la imagen del premio que sirve el backend").not.toBeNull();
+    // `alt=""` y no ausencia de atributo: sin `alt` un lector de pantalla
+    // anuncia el nombre del fichero. El titular de al lado ya nombra el premio.
+    expect(image).toHaveAttribute("alt", "");
+    expect(image).toHaveAttribute("src", activePromotionDetail.media?.hero_url ?? "");
+  });
+
+  it("sin detalle se compone igual, sin imagen y sin inventar premio", () => {
+    // El detalle es una SEGUNDA peticion y puede fallar sola. Que la portada se
+    // caiga por eso convertiria un fallo de informacion adicional en una
+    // pantalla rota.
+    const { container } = renderIn(
+      "en",
+      <PromotionHero
+        promotion={activePromotion}
+        detail={null}
+        locale="en"
+        nowIso={NOW}
+        amoeEnabled={false}
+      />,
+    );
+
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
+      activePromotion.title["en-US"],
+    );
+    expect(container.querySelector("img")).toBeNull();
+    // Ni verbo de titular sin premio al que acompanar, ni linea de universo.
+    expect(screen.queryByText(enMessages.home.hero.win)).toBeNull();
+    expect(screen.queryByText(/entry pool of/i)).toBeNull();
   });
 });
 

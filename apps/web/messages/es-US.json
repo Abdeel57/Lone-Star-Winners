@@ -173,6 +173,14 @@
     "closesLabel": "Cierra",
     "entriesDisclaimer": "Las participaciones promocionales se otorgan conforme a las Reglas Oficiales de cada promoción.",
     "eyebrow": "Promoción vigente",
+    "hero": {
+      "win": "Gana",
+      "shopNow": "Comprar ahora",
+      "poolNote": "+ universo limitado a {entries} participaciones",
+      "issuedLabel": "Participaciones emitidas hasta ahora",
+      "legalAmoe": "No se requiere compra — nulo donde esté prohibido",
+      "legalRules": "Sujeto a las Reglas Oficiales"
+    },
     "featured": {
       "title": "Mercancía destacada",
       "body": "Algunos artículos de la tienda. En cada tarjeta se indica si forma parte de la promoción vigente.",
@@ -396,6 +404,8 @@
   },
   "announcement": {
     "withDeadline": "{status} — {when}",
+    "withDeadlineAndPool": "{status} — {when} — universo de {entries} participaciones",
+    "withPool": "{status} — universo de {entries} participaciones",
     "opensOn": "abre el {date}",
     "closesOn": "cierra el {date}",
     "officialRules": "Las Reglas Oficiales rigen cada promoción"

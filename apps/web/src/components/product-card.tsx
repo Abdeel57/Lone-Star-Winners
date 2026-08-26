@@ -204,10 +204,11 @@ export function ProductCard({
             "sm:bottom-s3 sm:right-s3 sm:h-11 sm:w-11",
             "rounded-pill border border-light-gold/40 bg-light-surface/90 text-light-gold shadow-light-sm",
             "transition-colors duration-base ease-standard",
-            // Al pasar el raton se rellena con el ORO DE MARCA, no con el de
-            // tinta: aqui ya no hay texto que leer, asi que manda el color de
-            // la marca y no el contraste tipografico.
-            "group-hover:border-brand group-hover:bg-brand group-hover:text-on-brand",
+            // Al pasar el raton se rellena de ROJO (DEC-042): esta afordancia
+            // anuncia la accion de compra, y el rojo es el color de esa accion.
+            // En reposo sigue siendo el oro de tinta, que es lo que la mantiene
+            // discreta en una rejilla de veinticuatro tarjetas.
+            "group-hover:border-accent group-hover:bg-accent group-hover:text-on-accent",
           )}
         >
           <svg viewBox="0 0 20 20" fill="none" focusable="false" className="h-5 w-5">

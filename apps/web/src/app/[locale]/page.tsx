@@ -203,7 +203,27 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
           </div>
         </div>
       ) : (
-        <PromotionHero promotion={promotion} locale={locale} nowIso={nowIso} />
+        /*
+         * El DETALLE baja al hero (DEC-042).
+         *
+         * De ahi salen la fotografia del premio, su nombre y el universo de
+         * participaciones. Va como prop y no lo pide el hero por su cuenta
+         * porque esta pagina ya lo tiene pedido -y sabe si fallo-: dos
+         * peticiones del mismo recurso en el mismo render serian dos viajes
+         * para el mismo dato.
+         *
+         * `amoeEnabled` tambien: gobierna que linea legal se pinta debajo del
+         * boton, y esa decision se toma con el flag leido en SERVIDOR en la
+         * misma peticion que el render (DEC-013), no con un valor por defecto
+         * dentro del componente.
+         */
+        <PromotionHero
+          promotion={promotion}
+          detail={detail}
+          locale={locale}
+          nowIso={nowIso}
+          amoeEnabled={amoeEnabled}
+        />
       )}
 
       {/* Oferta vigente y via gratuita. Las dos son informacion de la promocion

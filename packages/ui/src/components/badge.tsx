@@ -63,10 +63,12 @@ const badgeVariants = cva(
        * `null` en todos los articulos, asi que lo llevaban todas las tarjetas
        * del catalogo a la vez.
        *
-       * Solo existen `neutral` y `brand` en claro, y el tipo lo IMPIDE para el
-       * resto: los tonos de estado (success, warning, danger, info) no tienen
-       * paleta clara, y ofrecerlos aqui seria ofrecer un fallo de contraste con
-       * apariencia de opcion legitima.
+       * Solo existen `neutral`, `brand` y `accent` en claro, y el tipo lo
+       * IMPIDE para el resto: los tonos de estado (success, warning, danger,
+       * info) no tienen paleta clara, y ofrecerlos aqui seria ofrecer un fallo
+       * de contraste con apariencia de opcion legitima. `accent` entra con
+       * DEC-042, y entra porque tiene su tinta medida (`light-accent`), no por
+       * completar la tabla.
        */
       surface: {
         dark: "",
@@ -91,11 +93,15 @@ const badgeVariants = cva(
         surface: "dark",
         class: "border-brand/50 bg-brand/12 text-brand",
       },
+      // DEC-042: `accent` es rojo. El TEXTO va en `accent-text` (#ff4d47,
+      // 6,10:1 sobre la pagina) y no en `accent` (#cf1a22, 3,64:1): el relleno
+      // y la tinta son dos escalones distintos del mismo color por la misma
+      // razon por la que lo son en el oro.
       {
         tone: "accent",
         emphasis: "subtle",
         surface: "dark",
-        class: "border-accent/50 bg-accent/12 text-accent",
+        class: "border-accent-text/45 bg-accent-subtle text-accent-text",
       },
       {
         tone: "success",
@@ -196,6 +202,18 @@ const badgeVariants = cva(
         surface: "light",
         class: "border-light-gold/50 bg-light-gold/10 text-light-gold",
       },
+      // DEC-042. El par rojo de la banda clara, medido igual que los otros:
+      //   accent subtle  texto #bf1620 sobre lavado    5,9:1
+      //   accent solid   texto #ffffff sobre #cf1a22   5,5:1
+      // La tinta es `light-accent` y no `accent-text`: ese ultimo esta
+      // calibrado sobre negro y aqui daria 2,5:1. Es la misma sustitucion que
+      // hace `light-gold` con el oro de marca.
+      {
+        tone: "accent",
+        emphasis: "subtle",
+        surface: "light",
+        class: "border-light-accent/50 bg-light-accent/10 text-light-accent",
+      },
       // El contorno es oro de TINTA y no oro de marca: sobre un fondo de estudio
       // claro, un borde dorado alrededor de un relleno dorado no recorta nada y
       // el chip queda flotando sobre la foto.
@@ -204,6 +222,16 @@ const badgeVariants = cva(
         emphasis: "solid",
         surface: "light",
         class: "border-light-gold bg-brand text-on-brand",
+      },
+      // El relleno rojo es el MISMO sobre las dos bandas (#cf1a22 recorta
+      // igual sobre blanco que sobre negro) y por eso aqui no cambia; lo que
+      // cambia es el contorno, que pasa al rojo de tinta para que el chip no
+      // quede flotando sobre una fotografia de estudio claro.
+      {
+        tone: "accent",
+        emphasis: "solid",
+        surface: "light",
+        class: "border-light-accent bg-accent text-on-accent",
       },
     ],
     defaultVariants: {
@@ -223,7 +251,7 @@ export type BadgeShape = NonNullable<VariantProps<typeof badgeVariants>["shape"]
 export type BadgeSurface = NonNullable<VariantProps<typeof badgeVariants>["surface"]>;
 
 /** Tonos que existen en la paleta clara. Ver la nota de `surface`. */
-export type BadgeLightTone = Extract<BadgeTone, "neutral" | "brand">;
+export type BadgeLightTone = Extract<BadgeTone, "neutral" | "brand" | "accent">;
 
 interface BadgeBaseProps {
   readonly size?: BadgeSize;
