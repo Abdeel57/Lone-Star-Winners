@@ -37,6 +37,7 @@ import { ENTRY_CALCULATION_ENGINE_VERSION } from "../engine-version.js";
 import {
   parseCalculationConfig,
   type CalculationConfig,
+  type AmountTierConfig,
   type MultiplierPeriodConfig,
   type RationalConfig,
 } from "./config.js";
@@ -118,7 +119,17 @@ export interface CalculationTrace {
   readonly evaluated_at: string;
   readonly formula_mode: CalculationConfig["purchase_entry_formula"]["mode"];
   readonly eligibility_mode: CalculationConfig["product_eligibility"]["mode"];
+  /** La de la FORMULA aplicada, no la de la devolucion parcial. */
   readonly rounding_policy: RoundingPolicy;
+  /**
+   * Solo en `TIERED_BY_AMOUNT`. Se anota aunque hoy tenga un unico valor
+   * posible: un auditor que lea la traza dentro de dos anos no deberia tener
+   * que abrir el codigo de esta version del motor para saber si los escalones
+   * se acumulaban.
+   */
+  readonly tier_selection: "HIGHEST_MATCHING" | null;
+  /** Escalon que gano, o `null` si ninguno alcanzo el umbral. */
+  readonly applied_tier_id: string | null;
   readonly multiplier_strategy: string | null;
   readonly eligible_subtotal_minor: string;
   readonly exact_numerator: string;
@@ -258,6 +269,37 @@ function firstByPriority(
 }
 
 // ---------------------------------------------------------------------------
+// Escalones por importe
+// ---------------------------------------------------------------------------
+
+/**
+ * El escalon mas alto cuyo umbral no supera el subtotal elegible, o `null`.
+ *
+ * No recorre el array en el orden en que llega: elige por COMPARACION de
+ * umbrales. Dos configuraciones con los mismos escalones en distinto orden
+ * tienen que dar el mismo resultado, o la traza dejaria de ser reproducible
+ * ante un simple reordenado del JSON.
+ *
+ * Los umbrales son distintos entre si por contrato (`superRefine` en
+ * `config.ts`), asi que aqui no hay ningun desempate que inventar.
+ */
+function selectHighestMatchingTier(
+  tiers: readonly AmountTierConfig[],
+  eligibleSubtotalMinor: bigint,
+): AmountTierConfig | null {
+  let winner: AmountTierConfig | null = null;
+  for (const tier of tiers) {
+    if (tier.min_eligible_amount_minor > eligibleSubtotalMinor) {
+      continue;
+    }
+    if (winner === null || tier.min_eligible_amount_minor > winner.min_eligible_amount_minor) {
+      winner = tier;
+    }
+  }
+  return winner;
+}
+
+// ---------------------------------------------------------------------------
 // Elegibilidad
 // ---------------------------------------------------------------------------
 
@@ -357,7 +399,9 @@ const MAX_ENTRIES_PER_CALCULATION = 100_000_000;
 export function calculateEntries(input: CalculationInput, rawConfig: unknown): CalculationResult {
   const config = parseCalculationConfig(rawConfig);
   const evaluatedAt = input.evaluatedAt.getTime();
-  const roundingPolicy = config.partial_refund_rounding_policy;
+  // La politica de la FORMULA. `partial_refund_rounding_policy` responde a otra
+  // pregunta -como se prorratea una devolucion parcial- y ya no se usa aqui.
+  const roundingPolicy = config.purchase_entry_formula.rounding_policy;
 
   // ---- 1. Validacion de la entrada ----------------------------------------
 
@@ -448,12 +492,31 @@ export function calculateEntries(input: CalculationInput, rawConfig: unknown): C
     return result;
   }
 
-  if (formula.mode === "FIXED_PER_ORDER") {
-    // Una cantidad fija por pedido no se reparte entre lineas, asi que solo la
-    // afectan los periodos SIN ambito de SKU: un multiplicador que solo cubre
-    // una camiseta no puede multiplicar un importe que no es de la camiseta.
+  let appliedTierId: string | null = null;
+
+  if (formula.mode === "FIXED_PER_ORDER" || formula.mode === "TIERED_BY_AMOUNT") {
+    // Las dos formulas de ambito de PEDIDO. Ninguna se reparte entre lineas,
+    // asi que solo las afectan los periodos SIN ambito de SKU: un multiplicador
+    // que solo cubre una camiseta no puede multiplicar un importe que no es de
+    // la camiseta.
+    //
+    // `eligible.length > 0` como condicion, y no el subtotal: una promocion
+    // puede regalar mercancia elegible a coste cero, y "no hay nada elegible en
+    // este pedido" no es lo mismo que "lo elegible vale cero".
     if (eligible.length > 0) {
-      const base: Fraction = { numerator: BigInt(formula.entries), denominator: 1n };
+      let entriesForOrder = 0;
+
+      if (formula.mode === "FIXED_PER_ORDER") {
+        entriesForOrder = formula.entries;
+      } else {
+        const winning = selectHighestMatchingTier(formula.tiers, eligibleSubtotalMinor);
+        if (winning !== null) {
+          appliedTierId = winning.id;
+          entriesForOrder = winning.entries;
+        }
+      }
+
+      const base: Fraction = { numerator: BigInt(entriesForOrder), denominator: 1n };
       exact = input.flags.entryMultipliersEnabled
         ? applyOrderLevelMultipliers(base, config, evaluatedAt, multiplierUsage)
         : base;
@@ -475,7 +538,7 @@ export function calculateEntries(input: CalculationInput, rawConfig: unknown): C
       const lineSubtotal = item.unitAmountMinor * BigInt(item.quantity);
 
       const base: Fraction =
-        formula.mode === "PER_ELIGIBLE_UNIT"
+        formula.mode === "FIXED_PER_PRODUCT"
           ? {
               numerator: BigInt(formula.entries_per_unit) * BigInt(item.quantity),
               denominator: 1n,
@@ -570,6 +633,8 @@ export function calculateEntries(input: CalculationInput, rawConfig: unknown): C
     formula_mode: formula.mode,
     eligibility_mode: config.product_eligibility.mode,
     rounding_policy: roundingPolicy,
+    tier_selection: formula.mode === "TIERED_BY_AMOUNT" ? "HIGHEST_MATCHING" : null,
+    applied_tier_id: appliedTierId,
     multiplier_strategy: input.flags.entryMultipliersEnabled
       ? (config.multipliers?.conflict_strategy ?? null)
       : null,

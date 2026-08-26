@@ -52,11 +52,11 @@ export default async function PromotionsPage({ params }: { params: Promise<{ loc
       <div className="mt-s8">
         {!result.ok ? (
           <ApiErrorState failure={result.error} headingLevel="h2" />
-        ) : result.data.promotions.length === 0 ? (
+        ) : result.data.items.length === 0 ? (
           <EmptyState headingLevel="h2" title={t("promotion.notListed")} />
         ) : (
           <ul className="grid list-none gap-4 sm:grid-cols-2">
-            {result.data.promotions.map((promotion) => {
+            {result.data.items.map((promotion) => {
               const closesAt = formatZonedDate(promotion.ends_at, locale, {
                 timeZone: promotion.legal_timezone,
               });

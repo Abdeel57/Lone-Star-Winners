@@ -20,15 +20,21 @@ import { shouldShowMultiplier, type PromotionPresentation } from "@/lib/promotio
  * 2. **No fija ningun ratio.** `base_entries_per_unit` y `unit_amount` llegan
  *    del contrato. Aqui no hay ni un numero (CLAUDE.md #3 y #14).
  * 3. **No promete nada.** El texto dice que las cantidades las calculan los
- *    sistemas y las rigen las Reglas Oficiales, y no describe la compra como la
- *    adquisicion de participaciones.
+ *    sistemas y las rigen las Reglas Oficiales.
  *
  * EL MULTIPLICADOR TIENE TRES CERROJOS
  * ------------------------------------
- * El flag `entry_multipliers_enabled`, la existencia del dato, y que la
- * promocion admita participaciones ahora mismo. El tercero es el que se olvida:
- * anunciar "2X" sobre una promocion cerrada no es una decoracion caducada, es
- * una afirmacion falsa.
+ * El flag `entry_multipliers_enabled`, que el dato exista y amplifique de
+ * verdad, y que la promocion admita participaciones ahora mismo. El tercero es
+ * el que se olvida: anunciar "2X" sobre una promocion cerrada no es una
+ * decoracion caducada, es una afirmacion falsa.
+ *
+ * EL MULTIPLICADOR ES UNA FRACCION, NO UN NUMERO
+ * ----------------------------------------------
+ * DEC-010 lo hace viajar como `{ numerator, denominator }`. Aqui NO se divide
+ * para convertirlo en "1.5": se imprimen los dos numeros. Un multiplicador
+ * fraccionario redondeado a decimal es una cifra distinta de la que aplico el
+ * motor, y en esta pantalla eso seria decir algo falso sobre la promocion.
  */
 export function EntryOfferPanel({
   offer,
@@ -58,6 +64,8 @@ export function EntryOfferPanel({
         })
       : null;
 
+  const unitAmount = formatMoney(offer.unit_amount, locale);
+
   return (
     <Card as="section" elevation="flat" padding="md">
       <CardTitle as="h2" size="sm">
@@ -65,16 +73,28 @@ export function EntryOfferPanel({
       </CardTitle>
 
       <p className="mt-s3 text-body-md text-text">
-        {t("ratio", {
-          entries: formatInteger(offer.base_entries_per_unit, locale),
-          amount: formatMoney(offer.unit_amount, locale),
-        })}
+        {/* Un importe que no respeta DEC-010 se trata como oferta ausente: mas
+            vale decir que no hay oferta declarada que pintar un importe roto
+            junto a una cifra de participaciones. */}
+        {unitAmount === null
+          ? t("ratioUnavailable")
+          : t("ratio", {
+              entries: formatInteger(offer.base_entries_per_unit, locale),
+              amount: unitAmount,
+            })}
       </p>
 
       {showMultiplier && offer.multiplier !== null ? (
         <div className="mt-s4 flex flex-col items-start gap-2">
           <Badge tone="accent">
-            {t("multiplierBadge", { multiplier: formatInteger(offer.multiplier, locale) })}
+            {offer.multiplier.denominator === 1
+              ? t("multiplierBadge", {
+                  numerator: formatInteger(offer.multiplier.numerator, locale),
+                })
+              : t("multiplierFractionBadge", {
+                  numerator: formatInteger(offer.multiplier.numerator, locale),
+                  denominator: formatInteger(offer.multiplier.denominator, locale),
+                })}
           </Badge>
 
           {multiplierUntil === null ? null : (

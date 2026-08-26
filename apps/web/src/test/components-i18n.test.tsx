@@ -62,19 +62,23 @@ function renderIn(locale: "en" | "es", ui: ReactNode) {
 
 describe("PromotionStatusBadge", () => {
   it("muestra el estado en ingles", () => {
-    renderIn("en", <PromotionStatusBadge status="winner_verification" />);
-    expect(screen.getByText(enMessages.promotionStatus.winner_verification)).toBeInTheDocument();
+    renderIn("en", <PromotionStatusBadge status="POTENTIAL_WINNER_REVIEW" />);
+    expect(
+      screen.getByText(enMessages.promotionStatus.POTENTIAL_WINNER_REVIEW),
+    ).toBeInTheDocument();
   });
 
   it("muestra el mismo estado en espanol", () => {
-    renderIn("es", <PromotionStatusBadge status="winner_verification" />);
-    expect(screen.getByText(esMessages.promotionStatus.winner_verification)).toBeInTheDocument();
+    renderIn("es", <PromotionStatusBadge status="POTENTIAL_WINNER_REVIEW" />);
+    expect(
+      screen.getByText(esMessages.promotionStatus.POTENTIAL_WINNER_REVIEW),
+    ).toBeInTheDocument();
   });
 
   it("el estado no se transmite solo con el color", () => {
     // Quien no distinga los colores tiene que poder leer el estado.
-    renderIn("en", <PromotionStatusBadge status="ended" />);
-    expect(screen.getByText(enMessages.promotionStatus.ended)).toBeInTheDocument();
+    renderIn("en", <PromotionStatusBadge status="CLOSED" />);
+    expect(screen.getByText(enMessages.promotionStatus.CLOSED)).toBeInTheDocument();
   });
 });
 

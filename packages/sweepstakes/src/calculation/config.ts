@@ -72,34 +72,111 @@ export const productEligibilitySchema = z
 
 export type ProductEligibilityConfig = z.infer<typeof productEligibilitySchema>;
 
+/** Politica de redondeo declarada explicitamente. Sin valor por defecto. */
+const roundingPolicySchema = z.enum(ROUNDING_POLICIES);
+
+/**
+ * Un escalon de `TIERED_BY_AMOUNT`.
+ *
+ * `min_eligible_amount_minor` es INCLUSIVO. Se declara como umbral inferior y
+ * no como intervalo `[desde, hasta]` a proposito: con dos extremos por escalon
+ * hay que validar ademas que no se solapen ni dejen huecos, y un hueco no
+ * detectado significa "esta compra no cae en ningun escalon", que es la clase
+ * de silencio que en este dominio acaba en una discrepancia de entries.
+ */
+export const amountTierSchema = z
+  .object({
+    id: z.string().min(1).max(64),
+    min_eligible_amount_minor: bigintFromDigits,
+    entries: nonNegativeInt,
+  })
+  .readonly();
+
+export type AmountTierConfig = z.infer<typeof amountTierSchema>;
+
 /**
  * Como se convierte una compra elegible en entries.
  *
- * Las tres formas cubren lo que el cliente ha descrito sin comprometerse con
- * ninguna: "X entries por cada dolar", "N entries por unidad de producto" y
- * "N entries por pedido". Cual aplica lo dira el abogado.
+ * Las cuatro formas cubren lo que el cliente ha descrito sin comprometerse con
+ * ninguna: "X entries por cada dolar", "N entries por unidad de producto",
+ * "N entries por pedido" y "N entries a partir de tal importe". Cual aplica lo
+ * dira el abogado; el motor no elige.
  *
- * `PER_ELIGIBLE_AMOUNT` NO se expresa como "entries por dolar" sino como
+ * `ENTRIES_PER_CURRENCY_UNIT` NO se expresa como "entries por dolar" sino como
  * `entries_per_amount_unit` sobre `amount_unit_minor`. La diferencia importa:
  * "por dolar" presupone dos decimales, y hay monedas que no los tienen.
+ *
+ * CADA FORMA DECLARA SU PROPIA `rounding_policy`, Y ES OBLIGATORIA
+ *
+ *   Hasta esta version el motor redondeaba con
+ *   `partial_refund_rounding_policy`, que es la politica de OTRA operacion: como
+ *   se prorratea una devolucion parcial. Eran dos preguntas distintas
+ *   compartiendo una sola respuesta, de modo que no habia forma de configurar
+ *   una sin mover la otra.
+ *
+ *   Es obligatoria incluso en `FIXED_PER_ORDER` y `FIXED_PER_PRODUCT`, donde la
+ *   formula por si sola no produce fracciones: un multiplicador de `3/2` si las
+ *   produce, y entonces la pregunta "que se hace con la mitad" vuelve a existir.
+ *   Un motor que la respondiera por su cuenta estaria inventando un requisito
+ *   legal (principio 2).
  */
 export const purchaseEntryFormulaSchema = z
   .discriminatedUnion("mode", [
     z.object({
       mode: z.literal("FIXED_PER_ORDER"),
       entries: nonNegativeInt,
+      rounding_policy: roundingPolicySchema,
     }),
     z.object({
-      mode: z.literal("PER_ELIGIBLE_UNIT"),
+      mode: z.literal("FIXED_PER_PRODUCT"),
       entries_per_unit: nonNegativeInt,
+      rounding_policy: roundingPolicySchema,
     }),
     z.object({
-      mode: z.literal("PER_ELIGIBLE_AMOUNT"),
+      mode: z.literal("ENTRIES_PER_CURRENCY_UNIT"),
       /** Tamano de la unidad de importe, en unidad menor. 100 = un dolar. */
       amount_unit_minor: positiveBigint,
       entries_per_amount_unit: rationalSchema,
+      rounding_policy: roundingPolicySchema,
+    }),
+    z.object({
+      mode: z.literal("TIERED_BY_AMOUNT"),
+      /**
+       * SEMANTICA FIJA: gana el escalon MAS ALTO cuyo umbral no supere el
+       * subtotal elegible, y los escalones NO se acumulan. Si ninguno alcanza,
+       * la compra no genera entries por esta via.
+       *
+       * Es mecanica, no un valor legal: los umbrales y las cantidades salen
+       * enteros de la configuracion. Se deja escrita aqui y ademas se registra
+       * en la traza (`tier_selection`, `applied_tier_id`) para que un auditor
+       * vea que regla se aplico sin tener que leer este archivo. Si el abogado
+       * pidiera escalones acumulativos, eso es un MODO NUEVO, no un matiz de
+       * este.
+       */
+      tiers: z.array(amountTierSchema).min(1),
+      rounding_policy: roundingPolicySchema,
     }),
   ])
+  .superRefine((formula, ctx) => {
+    if (formula.mode !== "TIERED_BY_AMOUNT") {
+      return;
+    }
+
+    // Umbrales distintos entre si. Dos escalones con el mismo umbral serian un
+    // empate, y un empate se resolveria por el orden del array, que es justo lo
+    // que un motor determinista no puede permitirse.
+    const thresholds = new Set(
+      formula.tiers.map((tier) => tier.min_eligible_amount_minor.toString(10)),
+    );
+    if (thresholds.size !== formula.tiers.length) {
+      ctx.addIssue({ code: "custom", error: "tier_thresholds_must_be_distinct" });
+    }
+
+    const ids = new Set(formula.tiers.map((tier) => tier.id));
+    if (ids.size !== formula.tiers.length) {
+      ctx.addIssue({ code: "custom", error: "tier_ids_must_be_unique" });
+    }
+  })
   .readonly();
 
 export type PurchaseEntryFormulaConfig = z.infer<typeof purchaseEntryFormulaSchema>;
@@ -165,8 +242,19 @@ export const calculationConfigSchema = z.object({
   product_eligibility: productEligibilitySchema,
   purchase_entry_formula: purchaseEntryFormulaSchema,
   entry_limits: entryLimitsSchema,
-  /** Politica de redondeo. Sin valor por defecto, a proposito. */
-  partial_refund_rounding_policy: z.enum(ROUNDING_POLICIES),
+  /**
+   * Politica de redondeo de la DEVOLUCION PARCIAL, no la del calculo base.
+   *
+   * Es la respuesta a "cuantas entries se revierten cuando se devuelve parte
+   * de un pedido". La del calculo base la declara cada formula en su propia
+   * `rounding_policy`, porque son dos preguntas distintas: si compartieran una
+   * respuesta, cambiar el criterio de un refund cambiaria de paso cuantas
+   * entries genera una compra.
+   *
+   * Sigue siendo clave requerida de DEC-012, asi que se exige aqui aunque el
+   * motor de calculo no la use: sin ella la promocion no puede activarse.
+   */
+  partial_refund_rounding_policy: roundingPolicySchema,
   multipliers: multiplierConfigSchema.optional(),
 });
 

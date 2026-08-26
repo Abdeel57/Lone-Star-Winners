@@ -1,218 +1,354 @@
 {
+  "a11y": {
+    "currentLanguage": "Current language",
+    "footerNavigation": "Legal and help",
+    "languageSwitcher": "Language",
+    "mainLandmark": "Main content",
+    "primaryNavigation": "Primary",
+    "promotionCountdown": "Time remaining",
+    "promotionTimeline": "Promotion progress",
+    "skipToContent": "Skip to main content"
+  },
+  "amoe": {
+    "CODE": "A free code-based method of entry is available for this promotion. The Official Rules state how to obtain and submit a code.",
+    "EXTERNAL_INSTRUCTIONS": "A free method of entry is available for this promotion. The Official Rules describe how to use it.",
+    "MAIL_IN_REVIEW": "A free mail-in method of entry is available for this promotion. The Official Rules state the mailing address, the required format and the limits that apply.",
+    "ONLINE_FORM": "A free online entry form is available for this promotion. The Official Rules state the requirements and the limits that apply.",
+    "heading": "Free method of entry",
+    "modeNotPublished": "A free method of entry is available for this promotion. The details have not been published yet."
+  },
+  "apiErrors": {
+    "CALCULATION_CONFIG_INVALID": "We could not calculate an entry figure for this cart. Our team has been notified.",
+    "CART_ITEM_NOT_FOUND": "That line is no longer in your cart.",
+    "FORBIDDEN": "You do not have access to that.",
+    "INSUFFICIENT_STOCK": "There is not enough stock for the quantity you asked for.",
+    "INTERNAL_ERROR": "Something went wrong on our side. Please try again in a moment.",
+    "MALFORMED_RESPONSE": "We received an unexpected response. Our team has been notified.",
+    "NETWORK_UNAVAILABLE": "We could not reach the service. Check your connection and try again.",
+    "NO_ACTIVE_PROMOTION": "No promotion is open right now.",
+    "PRODUCT_NOT_FOUND": "That item is no longer available.",
+    "PROMOTION_NOT_FOUND": "That promotion is no longer available.",
+    "RATE_LIMITED": "Too many requests. Please wait a moment and try again.",
+    "RULES_VERSION_NOT_FOUND": "The Official Rules for this promotion have not been published yet.",
+    "SERVICE_UNAVAILABLE": "The service is temporarily unavailable. Please try again shortly.",
+    "UNAUTHENTICATED": "You need to sign in to do that.",
+    "VALIDATION_FAILED": "Something in that request was not valid. Please check it and try again.",
+    "VARIANT_NOT_PURCHASABLE": "That option cannot be ordered right now.",
+    "fallback": "Something went wrong on our side. Please try again in a moment."
+  },
+  "availability": {
+    "IN_STOCK": "In stock",
+    "LOW_STOCK": "Low stock",
+    "OUT_OF_STOCK": "Out of stock",
+    "UNAVAILABLE": "Not available"
+  },
   "brand": {
     "name": "Lone Star Winners",
     "tagline": "Eligible merchandise and promotional entries, governed by the Official Rules."
   },
-  "localeName": {
-    "en": "English",
-    "es": "Español"
-  },
-  "a11y": {
-    "skipToContent": "Skip to main content",
-    "mainLandmark": "Main content",
-    "primaryNavigation": "Primary",
-    "footerNavigation": "Legal and help",
-    "languageSwitcher": "Language",
-    "currentLanguage": "Current language",
-    "promotionTimeline": "Promotion progress",
-    "promotionCountdown": "Time remaining"
-  },
-  "metadata": {
-    "title": "Lone Star Winners",
-    "description": "Eligible merchandise and promotional sweepstakes entries, governed by the Official Rules."
-  },
-  "nav": {
-    "promotions": "Promotions",
-    "faq": "FAQ",
-    "officialRules": "Official Rules"
-  },
-  "home": {
-    "eyebrow": "Current promotion",
-    "prizeValueLabel": "Stated prize value",
-    "opensLabel": "Opens",
-    "closesLabel": "Closes",
-    "timeZoneNote": "Times are shown in the official time zone of the promotion.",
-    "entriesDisclaimer": "Promotional entries are awarded and governed by the Official Rules of each promotion.",
-    "rulesNotPublished": "The Official Rules for this promotion have not been published yet.",
-    "viewOfficialRules": "View Official Rules",
-    "viewPromotion": "See promotion details",
-    "howItWorks": {
-      "title": "How it works",
-      "step1": {
-        "title": "Browse eligible merchandise",
-        "body": "Every product page shows whether it is part of the current promotion."
-      },
-      "step2": {
-        "title": "Place your order",
-        "body": "You are buying merchandise. Any entries are promotional and follow the Official Rules."
-      },
-      "step3": {
-        "title": "Follow your entries",
-        "body": "Your account shows where each entry came from and its current status."
+  "cart": {
+    "checkout": "Checkout",
+    "checkoutUnavailable": "Checkout is not available yet.",
+    "continueShopping": "Continue browsing merchandise",
+    "empty": {
+      "body": "Browse the eligible merchandise to add something to it.",
+      "title": "Your cart is empty"
+    },
+    "itemsHeading": "Merchandise",
+    "lineTotal": "Line total",
+    "quantityLabel": "Quantity",
+    "quantityUnavailable": "This item is no longer available in the quantity you asked for.",
+    "quote": {
+      "beforeCaps": "Before limits: {entries} entries",
+      "capRow": "{kind}: {limit} entries. This cart went from {before} to {after}.",
+      "capsHeading": "Applied limits",
+      "disclaimer": "This figure is calculated by our systems from the merchandise in your cart. It is informational until an order reaches the status the Official Rules define as qualifying, and the Official Rules govern it in full.",
+      "eligibleSubtotal": "Eligible merchandise subtotal: {amount}",
+      "engineNote": "Rules version {rulesVersion}, engine {engineVersion}.",
+      "entries": "{entries} entries",
+      "evaluatedAt": "Quoted at {when}.",
+      "heading": "Promotional entries quoted for this cart",
+      "ineligibleHeading": "Items that do not count toward entries",
+      "multipliersHeading": "Applied entry multipliers",
+      "refresh": "Refresh the figure",
+      "stale": "Your cart changed after this figure was quoted. Reload the page to get the current figure.",
+      "unavailable": {
+        "body": "No promotion is open right now, so there is nothing to quote this cart against. Your merchandise is unaffected.",
+        "title": "No entry figure is available"
       }
     },
-    "trust": {
-      "title": "Before you take part",
-      "body": "The Official Rules are the document that governs each promotion: who may take part, how entries are awarded, and how a winner is selected. Read them before you order.",
-      "faqLink": "Read the frequently asked questions"
-    }
+    "remove": "Remove",
+    "removeLabel": "Remove {name}",
+    "signInRequired": {
+      "body": "A cart belongs to an account. Once you sign in, whatever you add stays with you across devices.",
+      "title": "Sign in to see your cart"
+    },
+    "subtotal": "Subtotal",
+    "subtotalNote": "Shipping and tax are calculated at checkout.",
+    "title": "Your cart",
+    "unitPrice": "Unit price",
+    "update": "Update"
   },
-  "promotion": {
-    "detailsHeading": "Promotion details",
-    "prizeHeading": "Prize",
-    "prizeValueLabel": "Stated prize value",
-    "administratorHeading": "Independent administrator",
-    "administratorBody": "This promotion states that the drawing is conducted by an independent administrator.",
-    "timelineHeading": "What happens and when",
-    "backToPromotions": "All promotions",
-    "notListed": "No promotions to show right now.",
-    "listHeading": "Promotions",
-    "listIntro": "Every promotion is governed by its own Official Rules.",
-    "winnerPendingPublication": "Winner information for this promotion has not been published yet."
-  },
-  "promotionStatus": {
-    "upcoming": "Opens soon",
-    "active": "Open",
-    "ended": "Closed",
-    "administrator_processing": "With the independent administrator",
-    "winner_verification": "Winner verification in progress",
-    "completed": "Completed"
-  },
-  "promotionState": {
-    "upcoming": {
-      "title": "This promotion has not opened yet",
-      "body": "It opens on the date shown above. Nothing you do before then counts toward it."
-    },
-    "active": {
-      "title": "This promotion is open",
-      "body": "Entries are awarded and governed by the Official Rules."
-    },
-    "ended": {
-      "title": "This promotion is closed",
-      "body": "No further entries are accepted. The next steps are described in the Official Rules."
-    },
-    "administratorProcessing": {
-      "title": "The drawing is with the independent administrator",
-      "body": "The promotion is closed and the independent administrator is carrying out the drawing described in the Official Rules. This page is updated when that step finishes."
-    },
-    "winnerVerification": {
-      "title": "A potential winner is being verified",
-      "body": "A potential winner has been selected and is going through the verification described in the Official Rules. A potential winner is not a confirmed winner until that verification is complete."
-    },
-    "completed": {
-      "title": "This promotion is complete",
-      "body": "The promotion has finished. What was published about it is governed by the Official Rules."
-    }
+  "category": {
+    "ACCESSORIES": "Accessories",
+    "APPAREL": "Apparel",
+    "DRINKWARE": "Drinkware",
+    "HOME": "Home"
   },
   "countdown": {
+    "clockNote": "The countdown is a convenience. The status of a promotion is the one shown on this page.",
+    "closesIn": "Closes in",
     "days": "days",
+    "elapsed": "The time shown has passed. This page reflects the status reported by our systems.",
     "hours": "hrs",
     "minutes": "min",
-    "seconds": "sec",
     "opensIn": "Opens in",
-    "closesIn": "Closes in",
-    "elapsed": "The time shown has passed. This page reflects the status reported by our systems.",
-    "clockNote": "The countdown is a convenience. The status of a promotion is the one shown on this page."
+    "seconds": "sec"
+  },
+  "entryCap": {
+    "PER_ORDER": "Limit per order",
+    "PER_PARTICIPANT": "Limit per participant",
+    "PER_PROMOTION": "Limit for this promotion",
+    "fallback": "Limit applied"
   },
   "entryOffer": {
+    "governedNote": "Entry amounts are calculated by our systems and governed by the Official Rules. The figures shown here are informational.",
     "heading": "Entries in this promotion",
-    "ratio": "This promotion awards {entries} entries per {amount} of eligible merchandise.",
-    "ratioUnavailable": "This promotion does not state an entry offer.",
-    "multiplierBadge": "{multiplier}× entry period active",
+    "multiplierBadge": "{numerator}× entry period active",
+    "multiplierFractionBadge": "{numerator}/{denominator}× entry period active",
     "multiplierUntil": "Active until {until}.",
-    "governedNote": "Entry amounts are calculated by our systems and governed by the Official Rules. The figures shown here are informational."
-  },
-  "amoe": {
-    "heading": "Free method of entry",
-    "ONLINE_FORM": "A free online entry form is available for this promotion. The Official Rules state the requirements and the limits that apply.",
-    "MAIL_IN_REVIEW": "A free mail-in method of entry is available for this promotion. The Official Rules state the mailing address, the required format and the limits that apply.",
-    "CODE": "A free code-based method of entry is available for this promotion. The Official Rules state how to obtain and submit a code.",
-    "EXTERNAL_INSTRUCTIONS": "A free method of entry is available for this promotion. The Official Rules describe how to use it.",
-    "modeNotPublished": "A free method of entry is available for this promotion. The details have not been published yet."
-  },
-  "officialRules": {
-    "title": "Official Rules",
-    "intro": "This document governs the promotion. It is published by Lone Star Winners and reproduced here exactly as issued.",
-    "promotionLabel": "Promotion",
-    "versionLabel": "Version",
-    "effectiveLabel": "Effective",
-    "timeZoneNote": "The effective date is shown in the official time zone of the promotion.",
-    "print": "Print this document",
-    "notPublished": {
-      "title": "The Official Rules are not published yet",
-      "body": "When the Official Rules for this promotion are published, they appear here in full."
-    },
-    "noPromotion": {
-      "title": "No promotion is open right now",
-      "body": "Official Rules belong to a specific promotion. When the next promotion opens, its Official Rules appear here."
-    },
-    "controlling": "This {language} version is the legally controlling text.",
-    "informational": "This {language} version is an informational translation. The {controllingLanguage} version is the legally controlling text.",
-    "allControlling": "Every published version of this document is legally controlling.",
-    "noControllingDeclared": "This document does not identify which language version is legally controlling.",
-    "localeNotPublished": "This document is not published in {language}. It is shown below in the language in which it was issued."
-  },
-  "faq": {
-    "title": "Frequently asked questions",
-    "intro": "These answers describe how the site works. What governs a promotion is its Official Rules.",
-    "q1": {
-      "question": "What is Lone Star Winners?",
-      "answer": "Lone Star Winners is an online store. Buying eligible merchandise may earn promotional entries into the promotion described in the Official Rules."
-    },
-    "q2": {
-      "question": "Am I buying entries?",
-      "answer": "No. What you buy is merchandise. Entries are a promotional benefit awarded under the Official Rules, and they are not the product you pay for."
-    },
-    "q3": {
-      "question": "Is there a free way to take part?",
-      "answer": "Whether a promotion offers a free method of entry, and how it works, is stated in the Official Rules of that promotion."
-    },
-    "q4": {
-      "question": "Who may take part?",
-      "answer": "Eligibility is defined in the Official Rules of each promotion, and nowhere else on this site."
-    },
-    "q5": {
-      "question": "How is a winner selected?",
-      "answer": "Winner selection is described in the Official Rules of each promotion. When the drawing is carried out by an independent administrator, the promotion page says so."
-    },
-    "q6": {
-      "question": "What happens after a promotion closes?",
-      "answer": "The promotion page keeps reporting where the process stands: with the administrator, in winner verification, or complete."
-    }
-  },
-  "states": {
-    "loading": "Loading",
-    "noActivePromotion": {
-      "title": "No promotion is open right now",
-      "body": "When the next promotion opens, it will appear here."
-    },
-    "loadFailed": {
-      "title": "We could not load this section",
-      "retry": "Try again",
-      "requestIdLabel": "Reference"
-    }
-  },
-  "apiErrors": {
-    "fallback": "Something went wrong on our side. Please try again in a moment.",
-    "NETWORK_UNAVAILABLE": "We could not reach the service. Check your connection and try again.",
-    "MALFORMED_RESPONSE": "We received an unexpected response. Our team has been notified.",
-    "INTERNAL_ERROR": "Something went wrong on our side. Please try again in a moment.",
-    "PROMOTION_NOT_FOUND": "That promotion is no longer available.",
-    "RULES_VERSION_NOT_PUBLISHED": "The Official Rules for this promotion have not been published yet."
-  },
-  "notFound": {
-    "title": "We could not find that page",
-    "body": "The link may be out of date, or the page may have moved.",
-    "backHome": "Go to the home page"
+    "ratio": "This promotion awards {entries} entries per {amount} of eligible merchandise.",
+    "ratioUnavailable": "This promotion does not state an entry offer."
   },
   "error": {
-    "title": "Something went wrong",
     "body": "The page could not be displayed. You can try loading it again.",
-    "retry": "Try again"
+    "retry": "Try again",
+    "title": "Something went wrong"
+  },
+  "faq": {
+    "intro": "These answers describe how the site works. What governs a promotion is its Official Rules.",
+    "q1": {
+      "answer": "Lone Star Winners is an online store. Buying eligible merchandise may earn promotional entries into the promotion described in the Official Rules.",
+      "question": "What is Lone Star Winners?"
+    },
+    "q2": {
+      "answer": "No. What you buy is merchandise. Entries are a promotional benefit awarded under the Official Rules, and they are not the product you pay for.",
+      "question": "Am I buying entries?"
+    },
+    "q3": {
+      "answer": "Whether a promotion offers a free method of entry, and how it works, is stated in the Official Rules of that promotion.",
+      "question": "Is there a free way to take part?"
+    },
+    "q4": {
+      "answer": "Eligibility is defined in the Official Rules of each promotion, and nowhere else on this site.",
+      "question": "Who may take part?"
+    },
+    "q5": {
+      "answer": "Winner selection is described in the Official Rules of each promotion. When the drawing is carried out by an independent administrator, the promotion page says so.",
+      "question": "How is a winner selected?"
+    },
+    "q6": {
+      "answer": "The promotion page keeps reporting where the process stands: with the administrator, in winner verification, or complete.",
+      "question": "What happens after a promotion closes?"
+    },
+    "title": "Frequently asked questions"
   },
   "footer": {
     "copyright": "© {year} Lone Star Winners",
     "legalNote": "Each promotion is governed by its own Official Rules.",
     "mockDataNotice": "Development build. The data on this page comes from a simulated API and is not real."
+  },
+  "home": {
+    "closesLabel": "Closes",
+    "entriesDisclaimer": "Promotional entries are awarded and governed by the Official Rules of each promotion.",
+    "eyebrow": "Current promotion",
+    "howItWorks": {
+      "step1": {
+        "body": "Every product page shows whether it is part of the current promotion.",
+        "title": "Browse eligible merchandise"
+      },
+      "step2": {
+        "body": "You are buying merchandise. Any entries are promotional and follow the Official Rules.",
+        "title": "Place your order"
+      },
+      "step3": {
+        "body": "Your account shows where each entry came from and its current status.",
+        "title": "Follow your entries"
+      },
+      "title": "How it works"
+    },
+    "opensLabel": "Opens",
+    "prizeValueLabel": "Stated prize value",
+    "rulesNotPublished": "The Official Rules for this promotion have not been published yet.",
+    "shopCta": "Shop eligible merchandise",
+    "timeZoneNote": "Times are shown in the official time zone of the promotion.",
+    "trust": {
+      "body": "The Official Rules are the document that governs each promotion: who may take part, how entries are awarded, and how a winner is selected. Read them before you order.",
+      "faqLink": "Read the frequently asked questions",
+      "title": "Before you take part"
+    },
+    "viewOfficialRules": "View Official Rules",
+    "viewPromotion": "See promotion details"
+  },
+  "ineligibility": {
+    "PRODUCT_NOT_ELIGIBLE": "This item is not part of the current promotion, so it does not count toward promotional entries.",
+    "fallback": "This item does not count toward promotional entries in the current promotion. The Official Rules describe which merchandise does."
+  },
+  "localeName": {
+    "en": "English",
+    "es": "Español"
+  },
+  "metadata": {
+    "description": "Eligible merchandise and promotional sweepstakes entries, governed by the Official Rules.",
+    "title": "Lone Star Winners"
+  },
+  "nav": {
+    "cart": "Cart",
+    "faq": "FAQ",
+    "officialRules": "Official Rules",
+    "promotions": "Promotions",
+    "shop": "Shop"
+  },
+  "notFound": {
+    "backHome": "Go to the home page",
+    "body": "The link may be out of date, or the page may have moved.",
+    "title": "We could not find that page"
+  },
+  "officialRules": {
+    "allControlling": "Every published version of this document is legally controlling.",
+    "controlling": "This {language} version is the legally controlling text.",
+    "effectiveLabel": "Effective",
+    "informational": "This {language} version is an informational translation. The {controllingLanguage} version is the legally controlling text.",
+    "intro": "This document governs the promotion. It is published by Lone Star Winners and reproduced here exactly as issued.",
+    "localeNotPublished": "This document is not published in {language}. It is shown below in the language in which it was issued.",
+    "noControllingDeclared": "This document does not identify which language version is legally controlling.",
+    "noPromotion": {
+      "body": "Official Rules belong to a specific promotion. When the next promotion opens, its Official Rules appear here.",
+      "title": "No promotion is open right now"
+    },
+    "notPublished": {
+      "body": "When the Official Rules for this promotion are published, they appear here in full.",
+      "title": "The Official Rules are not published yet"
+    },
+    "print": "Print this document",
+    "promotionLabel": "Promotion",
+    "timeZoneNote": "The effective date is shown in the official time zone of the promotion.",
+    "title": "Official Rules",
+    "versionLabel": "Version"
+  },
+  "product": {
+    "addToCart": "Add to cart",
+    "added": "Added to your cart.",
+    "backToShop": "Back to merchandise",
+    "descriptionHeading": "Description",
+    "eligible": "This item is part of the current promotion. The exact number of promotional entries is calculated by our systems from your cart, and is governed by the Official Rules.",
+    "entryHeading": "This item and the current promotion",
+    "imageAlt": "{name}, image {index} of {total}",
+    "noImage": "No image available",
+    "noVariants": "This item has no options available to order.",
+    "priceLabel": "Price",
+    "quantityLabel": "Quantity",
+    "quoteNote": "Add the item to your cart to see the entry figure our systems calculate for it.",
+    "shippingHeading": "Shipping",
+    "unavailable": "This item cannot be ordered right now.",
+    "variantLabel": "Option"
+  },
+  "promotion": {
+    "administratorBody": "This promotion states that the drawing is conducted by an independent administrator.",
+    "administratorHeading": "Independent administrator",
+    "backToPromotions": "All promotions",
+    "detailsHeading": "Promotion details",
+    "listHeading": "Promotions",
+    "listIntro": "Every promotion is governed by its own Official Rules.",
+    "notListed": "No promotions to show right now.",
+    "prizeHeading": "Prize",
+    "prizeValueLabel": "Stated prize value",
+    "timelineHeading": "What happens and when",
+    "winnerPendingPublication": "Winner information for this promotion has not been published yet."
+  },
+  "promotionState": {
+    "active": {
+      "body": "Entries are awarded and governed by the Official Rules.",
+      "title": "This promotion is open"
+    },
+    "cancelled": {
+      "body": "It did not run to completion. What that means for anything already recorded is governed by the Official Rules.",
+      "title": "This promotion was cancelled"
+    },
+    "closed": {
+      "body": "No further entries are accepted. The next steps are described in the Official Rules.",
+      "title": "This promotion is closed"
+    },
+    "completed": {
+      "body": "The promotion has finished. What was published about it is governed by the Official Rules.",
+      "title": "This promotion is complete"
+    },
+    "draft": {
+      "body": "It is still being prepared and is not open to anyone.",
+      "title": "This promotion is not published"
+    },
+    "drawPending": {
+      "body": "The promotion is closed and the independent administrator is carrying out the drawing described in the Official Rules. This page is updated when that step finishes.",
+      "title": "The drawing is with the independent administrator"
+    },
+    "exportPreparation": {
+      "body": "The promotion is closed and the full entry list is being assembled for the independent administrator. This page is updated when that step finishes.",
+      "title": "The entry list is being prepared"
+    },
+    "potentialWinnerReview": {
+      "body": "A potential winner has been selected and is going through the verification described in the Official Rules. A potential winner is not a confirmed winner until that verification is complete.",
+      "title": "A potential winner is being verified"
+    },
+    "scheduled": {
+      "body": "It opens on the date shown above. Nothing you do before then counts toward it.",
+      "title": "This promotion has not opened yet"
+    }
+  },
+  "promotionStatus": {
+    "ACTIVE": "Open",
+    "CANCELLED": "Cancelled",
+    "CLOSED": "Closed",
+    "COMPLETED": "Completed",
+    "DRAFT": "Draft",
+    "DRAW_PENDING": "With the independent administrator",
+    "EXPORT_PREPARATION": "Preparing the entry export",
+    "POTENTIAL_WINNER_REVIEW": "Potential winner verification in progress",
+    "SCHEDULED": "Opens soon"
+  },
+  "shop": {
+    "allCategories": "All categories",
+    "apply": "Apply",
+    "catalogEmpty": {
+      "body": "When merchandise is published, it appears here.",
+      "title": "The catalog is empty right now"
+    },
+    "categoryLabel": "Category",
+    "clear": "Clear filters",
+    "eligibilityUnknown": "No promotion is open right now",
+    "eligibleBadge": "Part of the current promotion",
+    "empty": {
+      "body": "Try a different category, or clear the filter to see everything available.",
+      "title": "No merchandise matches this filter"
+    },
+    "filtersHeading": "Filter",
+    "intro": "Everything on this page is merchandise you can order. Whether an item is part of the current promotion is shown on its card and confirmed in your cart.",
+    "loadMore": "Show more",
+    "noPromotionNotice": "No promotion is open right now, so nothing ordered today is associated with one. The store stays open.",
+    "notEligibleBadge": "Not part of the current promotion",
+    "priceFrom": "From {price}",
+    "title": "Eligible merchandise",
+    "view": "View item"
+  },
+  "states": {
+    "loadFailed": {
+      "requestIdLabel": "Reference",
+      "retry": "Try again",
+      "title": "We could not load this section"
+    },
+    "loading": "Loading",
+    "noActivePromotion": {
+      "body": "When the next promotion opens, it will appear here.",
+      "title": "No promotion is open right now"
+    }
   }
 }

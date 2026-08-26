@@ -42,7 +42,10 @@ function renderIn(locale: Locale, ui: ReactNode) {
 
 describe("idioma legalmente controlante", () => {
   it("dice que el ingles controla cuando se lee en ingles", () => {
-    renderIn("en", <OfficialRulesDocumentView document={officialRules} locale="en" />);
+    renderIn(
+      "en",
+      <OfficialRulesDocumentView document={officialRules} locale="en" timeZone="America/Chicago" />,
+    );
 
     expect(
       screen.getByText(
@@ -54,7 +57,10 @@ describe("idioma legalmente controlante", () => {
   it("avisa de que la version en espanol es informativa y cual controla", () => {
     // Este es el aviso que evita que alguien tome decisiones sobre un texto que
     // no es el vinculante.
-    renderIn("es", <OfficialRulesDocumentView document={officialRules} locale="es" />);
+    renderIn(
+      "es",
+      <OfficialRulesDocumentView document={officialRules} locale="es" timeZone="America/Chicago" />,
+    );
 
     const expected = esMessages.officialRules.informational
       .replace("{language}", esMessages.localeName.es)
@@ -67,7 +73,11 @@ describe("idioma legalmente controlante", () => {
     // Si algun componente cablease "el ingles manda", este fixture lo destapa.
     renderIn(
       "en",
-      <OfficialRulesDocumentView document={officialRulesSpanishControlling} locale="en" />,
+      <OfficialRulesDocumentView
+        document={officialRulesSpanishControlling}
+        locale="en"
+        timeZone="America/Chicago"
+      />,
     );
 
     const expected = enMessages.officialRules.informational
@@ -80,7 +90,11 @@ describe("idioma legalmente controlante", () => {
   it("reconoce que ambas versiones puedan controlar", () => {
     renderIn(
       "es",
-      <OfficialRulesDocumentView document={officialRulesBothControlling} locale="es" />,
+      <OfficialRulesDocumentView
+        document={officialRulesBothControlling}
+        locale="es"
+        timeZone="America/Chicago"
+      />,
     );
 
     expect(screen.getByText(esMessages.officialRules.allControlling)).toBeInTheDocument();
@@ -91,7 +105,11 @@ describe("idioma legalmente controlante", () => {
     // legal que nadie ha aprobado (CLAUDE.md #2).
     renderIn(
       "en",
-      <OfficialRulesDocumentView document={officialRulesWithoutControlling} locale="en" />,
+      <OfficialRulesDocumentView
+        document={officialRulesWithoutControlling}
+        locale="en"
+        timeZone="America/Chicago"
+      />,
     );
 
     expect(screen.getByText(enMessages.officialRules.noControllingDeclared)).toBeInTheDocument();
@@ -100,7 +118,14 @@ describe("idioma legalmente controlante", () => {
 
 describe("documento no publicado en el idioma de la interfaz", () => {
   it("avisa antes de mostrar el texto en otro idioma", () => {
-    renderIn("es", <OfficialRulesDocumentView document={officialRulesEnglishOnly} locale="es" />);
+    renderIn(
+      "es",
+      <OfficialRulesDocumentView
+        document={officialRulesEnglishOnly}
+        locale="es"
+        timeZone="America/Chicago"
+      />,
+    );
 
     expect(
       screen.getByText(
@@ -112,7 +137,11 @@ describe("documento no publicado en el idioma de la interfaz", () => {
   it("marca el idioma real del texto para que el lector de pantalla cambie de voz", () => {
     const { container } = renderIn(
       "es",
-      <OfficialRulesDocumentView document={officialRulesEnglishOnly} locale="es" />,
+      <OfficialRulesDocumentView
+        document={officialRulesEnglishOnly}
+        locale="es"
+        timeZone="America/Chicago"
+      />,
     );
 
     // Sin `lang`, un lector de pantalla leeria el ingles con pronunciacion
@@ -122,21 +151,51 @@ describe("documento no publicado en el idioma de la interfaz", () => {
 });
 
 describe("el frontend no toca el texto legal", () => {
-  it("renderiza titulo, encabezados y parrafos tal como llegan", () => {
-    renderIn("en", <OfficialRulesDocumentView document={officialRules} locale="en" />);
+  it("renderiza titulo y parrafos tal como llegan", () => {
+    renderIn(
+      "en",
+      <OfficialRulesDocumentView document={officialRules} locale="en" timeZone="America/Chicago" />,
+    );
 
-    const content = officialRules.contents[0];
+    const content = officialRules.documents[0];
     expect(content).toBeDefined();
     if (content === undefined) return;
 
     expect(screen.getByRole("heading", { name: content.title })).toBeInTheDocument();
 
-    for (const section of content.sections) {
-      expect(screen.getByRole("heading", { name: section.heading })).toBeInTheDocument();
-      for (const paragraph of section.paragraphs) {
-        expect(screen.getByText(paragraph)).toBeInTheDocument();
-      }
+    // El cuerpo llega como UNA cadena y se parte por lineas en blanco. Cada
+    // parrafo tiene que aparecer entero: si el corte se comiera texto, un
+    // documento legal saldria mutilado.
+    for (const paragraph of content.body.split("\n\n")) {
+      expect(screen.getByText(paragraph.trim())).toBeInTheDocument();
     }
+  });
+
+  it("no interpreta el cuerpo como marcado", () => {
+    // Un documento legal renderizado como HTML seria una via de inyeccion. Se
+    // comprueba con un cuerpo que contiene etiquetas: tienen que verse como
+    // texto, no ejecutarse como marcado.
+    const injected = {
+      ...officialRules,
+      documents: [
+        {
+          ...officialRules.documents[0],
+          locale: "en-US",
+          title: "Injected",
+          body: "<img src=x onerror=alert(1)> plain text",
+          is_legally_controlling: true,
+          is_informational_translation: false,
+        },
+      ],
+    };
+
+    const { container } = renderIn(
+      "en",
+      <OfficialRulesDocumentView document={injected} locale="en" timeZone="America/Chicago" />,
+    );
+
+    expect(container.querySelector("img")).toBeNull();
+    expect(screen.getByText(/<img src=x onerror=alert\(1\)> plain text/)).toBeInTheDocument();
   });
 
   it("el texto legal no existe en ningun diccionario del frontend", () => {
@@ -144,19 +203,43 @@ describe("el frontend no toca el texto legal", () => {
     // seria copy de producto (DEC-022) y el abogado no podria controlarlo.
     const dictionaries = JSON.stringify(enMessages) + JSON.stringify(esMessages);
 
-    for (const content of officialRules.contents) {
+    for (const content of officialRules.documents) {
       expect(dictionaries).not.toContain(content.title);
-      for (const section of content.sections) {
-        expect(dictionaries).not.toContain(section.heading);
-      }
+      expect(dictionaries).not.toContain(content.body);
     }
   });
 
   it("muestra la version y la fecha de entrada en vigor", () => {
     // DEC-012: un documento legal sin version ni fecha no es citable.
-    renderIn("en", <OfficialRulesDocumentView document={officialRules} locale="en" />);
+    renderIn(
+      "en",
+      <OfficialRulesDocumentView document={officialRules} locale="en" timeZone="America/Chicago" />,
+    );
 
-    expect(screen.getByText(officialRules.version_label)).toBeInTheDocument();
+    expect(screen.getByText(String(officialRules.version))).toBeInTheDocument();
     expect(screen.getByText(enMessages.officialRules.effectiveLabel)).toBeInTheDocument();
+  });
+
+  it("formatea la fecha en la zona legal recibida, no en la del navegador", () => {
+    // `effective_at` es 2026-08-01T05:00:00Z. En UTC es el 1 de agosto; en la
+    // costa oeste todavia es 31 de julio. Un documento legal que entra en vigor
+    // un dia distinto segun quien lo mire no es un detalle de formato.
+    const view = renderIn(
+      "en",
+      <OfficialRulesDocumentView document={officialRules} locale="en" timeZone="UTC" />,
+    );
+    expect(screen.getByText(/August 1, 2026/)).toBeInTheDocument();
+    view.unmount();
+
+    renderIn(
+      "en",
+      <OfficialRulesDocumentView
+        document={officialRules}
+        locale="en"
+        timeZone="America/Los_Angeles"
+      />,
+    );
+
+    expect(screen.getByText(/July 31, 2026/)).toBeInTheDocument();
   });
 });

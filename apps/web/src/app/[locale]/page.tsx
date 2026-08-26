@@ -9,7 +9,7 @@ import { EntryOfferPanel } from "@/components/entry-offer-panel";
 import { PromotionHero } from "@/components/promotion-hero";
 import { Link } from "@/i18n/navigation";
 import { routing } from "@/i18n/routing";
-import { fetchActivePromotion } from "@/lib/api";
+import { fetchActivePromotion, fetchPromotion, type PromotionDetail } from "@/lib/api";
 import { isFeatureEnabled } from "@/lib/flags";
 import { loadServerUiConfig } from "@/lib/flags-server";
 import { presentPromotion } from "@/lib/promotion-state";
@@ -22,10 +22,10 @@ import { presentPromotion } from "@/lib/promotion-state";
  * CONGELADOS en el HTML: apagar la via gratuita de participacion o publicar una
  * version nueva de reglas no tendria efecto hasta el siguiente despliegue.
  *
- * Hoy las llamadas usan `cache: "no-store"`, lo que ya saca a la ruta
- * del prerender. Se declara ademas de forma EXPLICITA porque esa propiedad es
- * emergente: bastaria con que alguien anadiera un `revalidate` a una de
- * las llamadas para que la pagina volviera a ser estatica sin que nada fallara.
+ * Hoy las llamadas usan `cache: "no-store"`, lo que ya saca a la ruta del
+ * prerender. Se declara ademas de forma EXPLICITA porque esa propiedad es
+ * emergente: bastaria con que alguien anadiera un `revalidate` a una de las
+ * llamadas para que la pagina volviera a ser estatica sin que nada fallara.
  */
 export const dynamic = "force-dynamic";
 
@@ -39,6 +39,18 @@ export const dynamic = "force-dynamic";
  * `nowIso` se genera aqui, una sola vez, y baja hasta la cuenta atras. Si cada
  * componente mirase el reloj por su cuenta, el HTML del servidor y el del
  * cliente diferirian y React lanzaria un error de hidratacion.
+ *
+ * POR QUE HAY DOS PETICIONES DE PROMOCION
+ * ---------------------------------------
+ * `GET /promotions/active` devuelve un `PromotionSummary`, y la forma que
+ * publica `docs/API_CONTRACT.md` para ese objeto NO incluye la oferta de
+ * participaciones. La oferta -ratio vigente y periodo de multiplicador- solo
+ * esta en el detalle.
+ *
+ * Asi que la portada pide el resumen y, si hay promocion, su detalle. Es un
+ * viaje de mas y esta pedido a `backend`: o la oferta entra en el resumen, o
+ * existe una ruta que la publique. Lo que NO se hace es anadir el campo por
+ * nuestra cuenta a un objeto cuya forma el contrato define de forma cerrada.
  */
 export default async function HomePage({ params }: { params: Promise<{ locale: string }> }) {
   const { locale } = await params;
@@ -58,6 +70,15 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
   const promotion = promotionResult.ok ? promotionResult.data : null;
   const presentation = promotion === null ? null : presentPromotion(promotion.status);
 
+  // El detalle solo se pide si hay promocion. Un fallo aqui NO tumba la
+  // portada: la oferta es informacion adicional, y quedarse sin ella es peor
+  // que quedarse sin portada solo si se decide que lo es.
+  let detail: PromotionDetail | null = null;
+  if (promotion !== null) {
+    const detailResult = await fetchPromotion(promotion.slug, locale);
+    detail = detailResult.ok ? detailResult.data : null;
+  }
+
   return (
     <>
       {!promotionResult.ok ? (
@@ -71,8 +92,8 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
             title={t("states.noActivePromotion.title")}
             description={t("states.noActivePromotion.body")}
             action={
-              <Link href="/promotions" className={buttonVariants({ variant: "secondary" })}>
-                {t("promotion.backToPromotions")}
+              <Link href="/shop" className={buttonVariants({ variant: "primary" })}>
+                {t("home.shopCta")}
               </Link>
             }
           />
@@ -82,23 +103,35 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
       )}
 
       {promotion === null || presentation === null ? null : (
-        <div className="lsw-container grid gap-4 pb-s10 lg:grid-cols-2">
-          <EntryOfferPanel
-            offer={promotion.entry_offer}
-            presentation={presentation}
-            multipliersEnabled={isFeatureEnabled(uiConfig.flags, "entry_multipliers_enabled")}
-            locale={locale}
-            timeZone={promotion.legal_timezone}
-          />
+        <div className="lsw-container flex flex-col gap-4 pb-s10">
+          {/* La llamada a la tienda va antes que la oferta: lo primero que
+              tiene que quedar claro es que aqui se adquiere MERCANCIA. */}
+          {presentation.showsShopCta ? (
+            <div>
+              <Link href="/shop" className={buttonVariants({ variant: "primary", size: "lg" })}>
+                {t("home.shopCta")}
+              </Link>
+            </div>
+          ) : null}
 
-          {/* Con `amoe_enabled` apagado no se renderiza nada: ocultar es aqui el
-              estado deliberado. Anunciar una via gratuita que no esta
-              configurada seria afirmar algo sobre las condiciones de
-              participacion (CLAUDE.md #1). */}
-          <AmoeCallout
-            enabled={isFeatureEnabled(uiConfig.flags, "amoe_enabled")}
-            mode={uiConfig.amoeMode}
-          />
+          <div className="grid gap-4 lg:grid-cols-2">
+            <EntryOfferPanel
+              offer={detail?.entry_offer ?? null}
+              presentation={presentation}
+              multipliersEnabled={isFeatureEnabled(uiConfig.flags, "entry_multipliers_enabled")}
+              locale={locale}
+              timeZone={promotion.legal_timezone}
+            />
+
+            {/* Con `amoe_enabled` apagado no se renderiza nada: ocultar es aqui
+                el estado deliberado. Anunciar una via gratuita que no esta
+                configurada seria afirmar algo sobre las condiciones de
+                participacion (CLAUDE.md #1). */}
+            <AmoeCallout
+              enabled={isFeatureEnabled(uiConfig.flags, "amoe_enabled")}
+              mode={uiConfig.amoeMode}
+            />
+          </div>
         </div>
       )}
 

@@ -30,6 +30,11 @@ export async function SiteFooter({ showMockNotice }: { readonly showMockNotice: 
               </Link>
             </li>
             <li>
+              <Link href="/shop" className={FOOTER_LINK}>
+                {t("nav.shop")}
+              </Link>
+            </li>
+            <li>
               <Link href="/promotions" className={FOOTER_LINK}>
                 {t("nav.promotions")}
               </Link>

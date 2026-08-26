@@ -69,6 +69,11 @@ export function PromotionHero({
 
   const hasRules = promotion.rules_version_id !== null;
 
+  // `formatMoney` devuelve `null` si el importe no respeta DEC-010. Se resuelve
+  // aqui, una vez, para que el JSX no tenga que decidir dos veces lo mismo.
+  const prizeValue =
+    promotion.prize_value === null ? null : formatMoney(promotion.prize_value, locale);
+
   return (
     <section aria-labelledby="promotion-title" className="lsw-container py-s10 sm:py-s16">
       <p className="text-overline uppercase text-text-subtle">{t("eyebrow")}</p>
@@ -103,12 +108,10 @@ export function PromotionHero({
       )}
 
       <dl className="mt-s8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {promotion.prize_value === null ? null : (
+        {prizeValue === null ? null : (
           <Card padding="sm" elevation="flat">
             <dt className="text-label font-medium text-text-muted">{t("prizeValueLabel")}</dt>
-            <dd className="mt-1 text-heading-md font-semibold text-text">
-              {formatMoney(promotion.prize_value, locale)}
-            </dd>
+            <dd className="mt-1 text-heading-md font-semibold text-text">{prizeValue}</dd>
           </Card>
         )}
 

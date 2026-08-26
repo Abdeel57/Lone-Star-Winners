@@ -647,3 +647,158 @@ contra el documento sin editar código ajeno (DEC-015).
 Affected files: `docs/API_CONTRACT.md`
 
 Blocking: YES para el siguiente hito de ambos.
+
+---
+
+## HO-017
+
+Status: OPEN
+
+## Handoff
+
+Date: 2026-08-25
+From: frontend
+To: backend
+
+Context:
+**`apps/api` y `docs/API_CONTRACT.md` ya divergen de lo implementado**, y
+`frontend` no cambió su capa porque la regla 1 del contrato dice que no se
+consume lo que no está documentado.
+
+Diferencias de campo, para decidir cuál gana y documentarlo:
+
+|          | capa de `frontend`                                                                                          | `apps/api` hoy                                              |
+| -------- | ----------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| Carrito  | `{cart: {…}, entry_quote}`                                                                                  | plano: `{id, currency, lines, subtotal, entry_quote}`       |
+| Línea    | `line_id`, `product_name`+`variant_name`, `line_total`, `image_url`, `availability`                         | `id`, `name`, `line_subtotal`, sin imagen ni disponibilidad |
+| Carrito  | `updated_at`, `item_count`                                                                                  | no existen                                                  |
+| Producto | `summary`, `category_key`, `image_url`, `price_from`, `availability`, `entry_eligibility`, `is_purchasable` | ninguno; expone `stock_quantity` en crudo                   |
+
+What I need from you:
+Dos peticiones que `frontend` defiende con argumento:
+
+1. **`updated_at` en el carrito es necesario**, no cosmético: es lo que permite
+   detectar una cotización caducada comparándolo con `quote.evaluated_at`. Sin
+   él, la interfaz no puede saber que la cifra que muestra ya no vale.
+2. **`is_purchasable` separado de `availability`**, porque existe stock retirado
+   de la venta y deducir uno del otro es un error esperando a ocurrir. Y **no
+   publicar `stock_quantity` exacto**: la ficha no lo necesita y es información
+   de negocio.
+
+Affected files: `apps/api/src/routes/{cart,storefront}.ts`,
+`docs/API_CONTRACT.md`, `apps/web/src/lib/api/contract.ts`
+
+Blocking: NO hoy (todo va contra MSW), YES para conectar frontend con la API real.
+
+---
+
+## HO-018
+
+Status: OPEN
+
+## Handoff
+
+Date: 2026-08-25
+From: frontend
+To: backend
+
+Context:
+**`starts_at` y `ends_at` son nulables en la implementación y obligatorios en
+el contrato.**
+
+`apps/api/src/routes/storefront.ts:54-55` los devuelve nulables. El contrato los
+declara obligatorios.
+
+`frontend` encontró por qué eso es peligroso y no solo inconsistente:
+**`new Date(null)` no es `NaN`, es el 1 de enero de 1970**, y `Number.isNaN` no
+lo detecta. Sin la red que añadió, la portada habría anunciado que la promoción
+cierra en 1970.
+
+What I need from you:
+Decidir en qué dirección se alinean: o el contrato los hace nulables, o la
+implementación deja de serlo. `frontend` ya añadió un `toDate()` que exige
+cadena no vacía, con test, y su comentario resume la lección: **el tipo describe
+lo acordado, no lo que llega por el cable.**
+
+Affected files: `apps/api/src/routes/storefront.ts`, `docs/API_CONTRACT.md`
+
+Blocking: YES para conectar con la API real.
+
+---
+
+## HO-019
+
+Status: OPEN
+
+## Handoff
+
+Date: 2026-08-25
+From: frontend
+To: backend
+
+Context:
+**`PromotionSummary` no publica la oferta de participaciones.** El contrato
+define su forma de manera cerrada (10 campos) y no incluye `entry_offer`.
+
+Consecuencia medible: la portada hace **dos peticiones**
+(`/promotions/active` → `/promotions/{slug}`) solo para poder decir cuál es el
+ratio vigente.
+
+Además, cuatro tipos se **nombran** en el contrato pero no se publican:
+`PromotionDetail`, `ProductSummary`, `ProductDetail`, `CartWithQuote`.
+`frontend` los diseñó como petición explícita, marcados `[PROVISIONAL]`.
+
+What I need from you:
+O la oferta entra en el resumen, o hace falta una ruta pública que la publique.
+Y publicar la forma de los cuatro tipos.
+
+Otros tres contratos que `frontend` necesita y no existen:
+
+- **Facetas / categorías del catálogo.** Hoy el filtro solo ofrece las
+  categorías de la página actual; con paginación por cursor, una categoría que
+  solo aparezca en la página tres no es seleccionable desde la primera. Degrada
+  de forma visible pero no rompe, y no lo cableó porque sería dato de negocio
+  viviendo en el frontend.
+- **Nombre, duración y atributos de la cookie de sesión de carrito.** El
+  contrato dice "cookie de carrito" sin publicar ninguno. `frontend` reenvía la
+  cabecera `Cookie` completa y propaga `Set-Cookie` tal cual: **no inventa un
+  nombre de cookie**, y no rellena `SameSite`/`Secure` por defecto, porque
+  hacerlo sería que el frontend decidiera la política de sesión (DEC-006) y
+  taparía el defecto si el backend los olvidara.
+- **Enumerar `reason_key`, `kind` de tope y `category_key`.** El contrato los
+  llama enums estables y solo nombra dos valores. `frontend` usa lista explícita
+  más genérico, de modo que un valor nuevo produce una frase genérica y **nunca
+  una clave técnica en pantalla**.
+
+Affected files: `docs/API_CONTRACT.md`, `apps/api/src/routes/**`
+
+Blocking: A es el más bloqueante; el resto degrada sin romper.
+
+---
+
+## HO-020
+
+Status: OPEN
+
+## Handoff
+
+Date: 2026-08-25
+From: backend
+To: Team Lead
+
+Context:
+**No existe modelo de premio.** `prize_value` de `PromotionSummary` es `null`
+siempre: no hay tabla de premios ni clave en `PromotionRulesVersion`.
+
+El valor de un premio es **dato legalmente material**, así que modelarlo
+requiere decisión previa y probablemente entrada en `docs/LEGAL_PENDING.md`.
+
+What I need from you:
+Decidir cómo se modela el premio antes de que alguien lo improvise. `frontend`
+ya soporta `null` sin romperse y tiene un test de que no queda una etiqueta
+"valor del premio" con el hueco vacío.
+
+Affected files: `packages/database`, `packages/sweepstakes`, `apps/api`,
+`docs/LEGAL_PENDING.md`
+
+Blocking: NO para construir, YES para lanzar una promoción.

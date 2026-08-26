@@ -8,11 +8,8 @@
  * elija, se implementa un adaptador; no se reescribe el dominio.
  */
 
-import type {
-  ExportDeliveryMethod,
-  ExportSnapshotManifest,
-  ReconciliationReport,
-} from "./snapshot.js";
+import type { ExportDeliveryMethod, ExportSnapshotManifest } from "./snapshot.js";
+import type { ReconciliationReport } from "./reconciliation.js";
 
 /** Esquema de export acordado con el administrador. Minimizacion de PII. */
 export interface ExportSchemaDescriptor {

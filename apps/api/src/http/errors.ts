@@ -120,4 +120,61 @@ export const ApiErrors = {
       statusCode: 503,
       code: "SERVICE_UNAVAILABLE",
     }),
+
+  // -------------------------------------------------------------------------
+  // Codigos de dominio (hito B3)
+  //
+  // Cada uno es una CLAVE DE TRADUCCION (DEC-031), y por eso son especificos:
+  // un `NOT_FOUND` generico obligaria al frontend a mirar la url para saber si
+  // ensenar "esa promocion no existe" o "ese producto no existe".
+  //
+  // `details` lleva SOLO lo que el frontend necesita para componer el mensaje.
+  // El `slug` que el propio cliente acaba de pedir no revela nada; el
+  // identificador interno de otro participante si, y por eso no aparece
+  // ninguno.
+  // -------------------------------------------------------------------------
+
+  promotionNotFound: (slug: string): ApiError =>
+    new ApiError({ statusCode: 404, code: "PROMOTION_NOT_FOUND", details: { slug } }),
+
+  rulesVersionNotFound: (slug: string): ApiError =>
+    new ApiError({ statusCode: 404, code: "RULES_VERSION_NOT_FOUND", details: { slug } }),
+
+  productNotFound: (slug: string): ApiError =>
+    new ApiError({ statusCode: 404, code: "PRODUCT_NOT_FOUND", details: { slug } }),
+
+  cartItemNotFound: (): ApiError => new ApiError({ statusCode: 404, code: "CART_ITEM_NOT_FOUND" }),
+
+  variantNotPurchasable: (): ApiError =>
+    new ApiError({ statusCode: 409, code: "VARIANT_NOT_PURCHASABLE" }),
+
+  insufficientStock: (available: number): ApiError =>
+    new ApiError({ statusCode: 409, code: "INSUFFICIENT_STOCK", details: { available } }),
+
+  /**
+   * No hay promocion activa.
+   *
+   * Es 409 y no 404 en la cotizacion porque el recurso -el carrito- si existe:
+   * lo que no se puede es cotizarlo. El 404 de `/promotions/active` es otra
+   * cosa, y `frontend` lo renderiza como estado vacio, no como fallo.
+   */
+  noActivePromotion: (): ApiError => new ApiError({ statusCode: 409, code: "NO_ACTIVE_PROMOTION" }),
+
+  /**
+   * La version de reglas activa no permite calcular.
+   *
+   * Nunca deberia ocurrir -un trigger impide activar una promocion con claves
+   * legales sin resolver (DEC-012)-, y precisamente por eso tiene codigo
+   * propio: si aparece, es que ese control se ha saltado, y confundirlo con un
+   * 500 generico haria que nadie lo investigara.
+   */
+  calculationConfigInvalid: (): ApiError =>
+    new ApiError({ statusCode: 409, code: "CALCULATION_CONFIG_INVALID" }),
+
+  /** El motor rechazo el calculo. `code` viene de `CalculationError`. */
+  calculationRejected: (code: string): ApiError =>
+    new ApiError({ statusCode: 409, code, details: {} }),
+
+  cartCurrencyMismatch: (): ApiError =>
+    new ApiError({ statusCode: 409, code: "CART_CURRENCY_MISMATCH" }),
 } as const;

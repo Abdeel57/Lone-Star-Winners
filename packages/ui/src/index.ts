@@ -73,7 +73,14 @@ export {
   type FormFieldContextValue,
   type FormFieldProps,
 } from "./components/form-field";
+export {
+  IconButton,
+  type IconButtonProps,
+  type IconButtonSize,
+  type IconButtonVariant,
+} from "./components/icon-button";
 export { Input, type InputProps, type InputSize } from "./components/input";
+export { MediaFrame, type MediaFrameProps, type MediaRatio } from "./components/media-frame";
 export { Modal, type ModalProps } from "./components/modal";
 export {
   Pagination,

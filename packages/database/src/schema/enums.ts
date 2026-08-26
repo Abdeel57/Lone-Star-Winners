@@ -129,3 +129,14 @@ export const entryTransactionStatusEnum = pgEnum("entry_transaction_status", [
 ]);
 
 export const entryActorTypeEnum = pgEnum("entry_actor_type", ["PARTICIPANT", "ADMIN", "SYSTEM"]);
+
+// ---------------------------------------------------------------------------
+// Carrito de servidor (DEC-023) - migracion 0009
+// ---------------------------------------------------------------------------
+
+/**
+ * `OPEN` es el unico estado editable. Un trigger rechaza tocar las lineas de un
+ * carrito que ya no lo esta: un carrito convertido describe lo que se compro, y
+ * editarlo despues cambiaria el pasado.
+ */
+export const cartStatusEnum = pgEnum("cart_status", ["OPEN", "CONVERTED", "ABANDONED"]);

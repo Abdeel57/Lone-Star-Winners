@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { API_PATHS, fetchActivePromotion, fetchSiteConfig } from "@/lib/api";
+import {
+  API_PATHS,
+  fetchActivePromotion,
+  fetchCart,
+  fetchProducts,
+  fetchPromotions,
+  fetchSiteConfig,
+} from "@/lib/api";
 import { scenarios } from "@/mocks/handlers";
 import { mockApiServer } from "@/mocks/node";
 
@@ -20,9 +27,12 @@ describe("fetchActivePromotion", () => {
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.data?.status).toBe("active");
-    // DEC-010: el importe viaja como entero en unidad menor, nunca como decimal.
-    expect(Number.isInteger(result.data?.prize_value?.amount_minor)).toBe(true);
+    expect(result.data?.status).toBe("ACTIVE");
+    // DEC-010: el importe viaja como CADENA de digitos en unidad menor, nunca
+    // como numero. Es lo que impide que un importe grande pierda precision al
+    // pasar por `JSON.parse`.
+    expect(typeof result.data?.prize_value?.amount_minor).toBe("string");
+    expect(result.data?.prize_value?.amount_minor).toMatch(/^-?[0-9]+$/);
     // DEC-011: la promocion declara su zona horaria legal.
     expect(result.data?.legal_timezone).toBe("America/Chicago");
   });
@@ -100,5 +110,71 @@ describe("fetchSiteConfig", () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.data.supported_locales).toEqual(["en-US", "es-US"]);
+  });
+});
+
+describe("catalogo y paginacion por cursor", () => {
+  it("el listado de promociones llega como pagina, no como lista suelta", async () => {
+    // El contrato pagina por cursor: `{ items, next_cursor }`. Si esto volviera
+    // a ser `{ promotions: [...] }`, la interfaz dejaria de compilar en un solo
+    // sitio en vez de romperse en la pantalla.
+    const result = await fetchPromotions("en", { limit: 10 });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(Array.isArray(result.data.items)).toBe(true);
+    expect(result.data).toHaveProperty("next_cursor");
+  });
+
+  it("el catalogo NO declara cuantas participaciones da un producto", async () => {
+    // Seccion 4 del contrato: la formula pertenece a la version de reglas
+    // (DEC-012). Si el numero viviera en el producto, editar el catalogo
+    // cambiaria retroactivamente lo que significo una compra pasada.
+    const result = await fetchProducts("en");
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    for (const product of result.data.items) {
+      expect(product).not.toHaveProperty("entries");
+      expect(product).not.toHaveProperty("entries_per_unit");
+
+      // Lo que SI trae es elegibilidad ya evaluada, y con procedencia.
+      if (product.entry_eligibility !== null) {
+        expect(product.entry_eligibility.evaluated_against_rules_version_id.length).toBeGreaterThan(
+          0,
+        );
+      }
+    }
+  });
+});
+
+describe("carrito sin sesion", () => {
+  it("un 401 llega como estado de dominio, no como excepcion", async () => {
+    // Es el comportamiento REAL del backend hoy: las cinco rutas de carrito son
+    // `PARTICIPANT_SELF` y la identidad la resuelve `packages/security`
+    // (DEC-006). La capa de API no puede tratarlo como un fallo de infra: la
+    // pantalla necesita distinguirlo para decir "inicia sesion".
+    mockApiServer.use(scenarios.cartUnauthenticated());
+
+    const result = await fetchCart("en", { cookie: null });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+
+    expect(result.error.kind).toBe("http");
+    expect(result.error.status).toBe(401);
+    expect(result.error.code).toBe("UNAUTHENTICATED");
+  });
+
+  it("con sesion devuelve carrito y cotizacion en la misma respuesta", async () => {
+    const result = await fetchCart("en", { cookie: "lsw_session=example" });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(result.data).toHaveProperty("cart");
+    expect(result.data).toHaveProperty("entry_quote");
   });
 });

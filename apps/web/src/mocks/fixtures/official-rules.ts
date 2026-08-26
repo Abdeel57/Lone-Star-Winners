@@ -1,4 +1,4 @@
-import type { OfficialRulesContent, OfficialRulesDocument } from "@/lib/api";
+import type { OfficialRulesDocumentContent, OfficialRulesResponse } from "@/lib/api";
 
 /**
  * Fixtures de Reglas Oficiales.
@@ -18,38 +18,31 @@ import type { OfficialRulesContent, OfficialRulesDocument } from "@/lib/api";
  * frontend renderiza el texto tal como llega, que dice que idioma es el
  * legalmente controlante y cual es traduccion informativa, y que sabe
  * comportarse cuando esa informacion falta.
+ *
+ * El cuerpo va en una sola cadena con lineas en blanco entre parrafos, que es
+ * la forma que publica `docs/API_CONTRACT.md`.
  */
 
-const ENGLISH_CONTENT: OfficialRulesContent = {
+const ENGLISH_CONTENT: OfficialRulesDocumentContent = {
   locale: "en-US",
   is_legally_controlling: true,
   is_informational_translation: false,
   title: "Official Rules (placeholder document)",
-  sections: [
-    {
-      heading: "Placeholder section",
-      paragraphs: [
-        "This document is a placeholder served by the simulated API. It is not a set of Official Rules and it states no eligibility, no dates and no method of participation.",
-        "The approved text is drafted by the client attorney and delivered through the backend.",
-      ],
-    },
-  ],
+  body: [
+    "This document is a placeholder served by the simulated API. It is not a set of Official Rules and it states no eligibility, no dates and no method of participation.",
+    "The approved text is drafted by the client attorney and delivered through the backend.",
+  ].join("\n\n"),
 };
 
-const SPANISH_CONTENT: OfficialRulesContent = {
+const SPANISH_CONTENT: OfficialRulesDocumentContent = {
   locale: "es-US",
   is_legally_controlling: false,
   is_informational_translation: true,
   title: "Reglas Oficiales (documento de relleno)",
-  sections: [
-    {
-      heading: "Seccion de relleno",
-      paragraphs: [
-        "Este documento es relleno servido por la API simulada. No son Reglas Oficiales y no establece elegibilidad, ni fechas, ni metodo de participacion.",
-        "El texto aprobado lo redacta el abogado del cliente y llega desde el backend.",
-      ],
-    },
-  ],
+  body: [
+    "Este documento es relleno servido por la API simulada. No son Reglas Oficiales y no establece elegibilidad, ni fechas, ni metodo de participacion.",
+    "El texto aprobado lo redacta el abogado del cliente y llega desde el backend.",
+  ].join("\n\n"),
 };
 
 /**
@@ -58,14 +51,11 @@ const SPANISH_CONTENT: OfficialRulesContent = {
  * Es el reparto mas probable en un producto estadounidense, pero NO se da por
  * supuesto en ningun sitio del codigo: la interfaz lo lee de las banderas.
  */
-export const officialRules: OfficialRulesDocument = {
-  promotion_id: "prm_0000000000000001",
-  promotion_slug: "sample-promotion",
+export const officialRules: OfficialRulesResponse = {
   rules_version_id: "prv_0000000000000001",
-  version_label: "placeholder-1",
+  version: 1,
   effective_at: "2026-08-01T05:00:00.000Z",
-  legal_timezone: "America/Chicago",
-  contents: [ENGLISH_CONTENT, SPANISH_CONTENT],
+  documents: [ENGLISH_CONTENT, SPANISH_CONTENT],
 };
 
 /**
@@ -75,18 +65,18 @@ export const officialRules: OfficialRulesDocument = {
  * controlante. Si alguien lo asumiera en algun componente, este fixture lo
  * destapa.
  */
-export const officialRulesSpanishControlling: OfficialRulesDocument = {
+export const officialRulesSpanishControlling: OfficialRulesResponse = {
   ...officialRules,
-  contents: [
+  documents: [
     { ...ENGLISH_CONTENT, is_legally_controlling: false, is_informational_translation: true },
     { ...SPANISH_CONTENT, is_legally_controlling: true, is_informational_translation: false },
   ],
 };
 
 /** Caso en el que ambas versiones estan aprobadas como controlantes. */
-export const officialRulesBothControlling: OfficialRulesDocument = {
+export const officialRulesBothControlling: OfficialRulesResponse = {
   ...officialRules,
-  contents: [
+  documents: [
     ENGLISH_CONTENT,
     { ...SPANISH_CONTENT, is_legally_controlling: true, is_informational_translation: false },
   ],
@@ -95,20 +85,21 @@ export const officialRulesBothControlling: OfficialRulesDocument = {
 /**
  * Caso DEFECTUOSO: ninguna version se declara controlante.
  *
- * No es un caso hipotetico: es lo que llega si el backend publica una version
- * sin marcar la bandera. La interfaz tiene que decirlo en vez de elegir una por
- * su cuenta, porque elegir seria afirmar algo legal que nadie ha aprobado.
+ * No es un caso hipotetico: es lo que llega hoy, porque el idioma legalmente
+ * controlante sigue en `TBD` (`docs/LEGAL_PENDING.md`). La interfaz tiene que
+ * decirlo en vez de elegir una por su cuenta, porque elegir seria afirmar algo
+ * legal que nadie ha aprobado.
  */
-export const officialRulesWithoutControlling: OfficialRulesDocument = {
+export const officialRulesWithoutControlling: OfficialRulesResponse = {
   ...officialRules,
-  contents: [
+  documents: [
     { ...ENGLISH_CONTENT, is_legally_controlling: false, is_informational_translation: true },
     SPANISH_CONTENT,
   ],
 };
 
 /** Caso en el que solo existe una version publicada. */
-export const officialRulesEnglishOnly: OfficialRulesDocument = {
+export const officialRulesEnglishOnly: OfficialRulesResponse = {
   ...officialRules,
-  contents: [ENGLISH_CONTENT],
+  documents: [ENGLISH_CONTENT],
 };

@@ -4,6 +4,60 @@
   "routes": [
     {
       "method": "GET",
+      "path": "/api/v1/cart",
+      "operation_id": "getCart",
+      "authorization": "PARTICIPANT_SELF",
+      "requires_step_up": false,
+      "tags": ["cart"],
+      "summary": "Carrito vigente de la sesion, con su cotizacion de entries."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/cart/entry-quote",
+      "operation_id": "getCartEntryQuote",
+      "authorization": "PARTICIPANT_SELF",
+      "requires_step_up": false,
+      "tags": ["cart"],
+      "summary": "Cotizacion de entries del carrito de servidor, con desglose auditable."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/cart/items",
+      "operation_id": "addCartItem",
+      "authorization": "PARTICIPANT_SELF",
+      "requires_step_up": false,
+      "tags": ["cart"],
+      "summary": "Anadir una variante al carrito."
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/cart/items/:item_id",
+      "operation_id": "removeCartItem",
+      "authorization": "PARTICIPANT_SELF",
+      "requires_step_up": false,
+      "tags": ["cart"],
+      "summary": "Quitar una linea del carrito."
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/cart/items/:item_id",
+      "operation_id": "updateCartItem",
+      "authorization": "PARTICIPANT_SELF",
+      "requires_step_up": false,
+      "tags": ["cart"],
+      "summary": "Cambiar la cantidad de una linea."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/config",
+      "operation_id": "getPublicConfig",
+      "authorization": "PUBLIC",
+      "requires_step_up": false,
+      "tags": ["config"],
+      "summary": "Feature flags legalmente materiales y modalidad AMOE vigente."
+    },
+    {
+      "method": "GET",
       "path": "/api/v1/health",
       "operation_id": "getHealth",
       "authorization": "PUBLIC",
@@ -28,6 +82,60 @@
       "requires_step_up": false,
       "tags": ["meta"],
       "summary": "Documento OpenAPI 3.1 generado desde los esquemas Zod."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/products",
+      "operation_id": "listProducts",
+      "authorization": "PUBLIC",
+      "requires_step_up": false,
+      "tags": ["products"],
+      "summary": "Catalogo de mercancia."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/products/:slug",
+      "operation_id": "getProductBySlug",
+      "authorization": "PUBLIC",
+      "requires_step_up": false,
+      "tags": ["products"],
+      "summary": "Ficha de producto con sus variantes."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/promotions",
+      "operation_id": "listPromotions",
+      "authorization": "PUBLIC",
+      "requires_step_up": false,
+      "tags": ["promotions"],
+      "summary": "Promociones visibles al publico."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/promotions/:slug",
+      "operation_id": "getPromotionBySlug",
+      "authorization": "PUBLIC",
+      "requires_step_up": false,
+      "tags": ["promotions"],
+      "summary": "Detalle de una promocion."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/promotions/:slug/official-rules",
+      "operation_id": "getPromotionOfficialRules",
+      "authorization": "PUBLIC",
+      "requires_step_up": false,
+      "tags": ["promotions"],
+      "summary": "Texto legalmente controlante de la version de reglas vigente."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/promotions/active",
+      "operation_id": "getActivePromotion",
+      "authorization": "PUBLIC",
+      "requires_step_up": false,
+      "tags": ["promotions"],
+      "summary": "La promocion activa, para la portada."
     }
   ]
 }

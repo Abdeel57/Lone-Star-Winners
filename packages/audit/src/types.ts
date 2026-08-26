@@ -1,16 +1,15 @@
 /**
  * Tipos del subsistema de auditoria.
  *
- * ESTADO: ANDAMIAJE. Aqui hay tipos y catalogos, no implementacion.
+ * La hash chain de DEC-008 ya NO es andamiaje: vive en `chain.ts`, su forma
+ * canonica en `canonical.ts` y su verificador en `verifier.ts`. Se escribio
+ * cuando `0006_entry_ledger` quedo commiteada, y no antes, porque fijar la
+ * canonicalizacion sobre un esquema que aun se movia habria invalidado todos
+ * los hashes al primer cambio.
  *
- * La hash chain de DEC-008 y el escritor de `AuditEvent` NO se implementan
- * todavia a proposito: dependen del esquema del ledger, que pertenece a
- * `backend` (`packages/database`) y aun no existe. Escribir ahora la
- * canonicalizacion significaria fijar el orden y el tipo de unos campos que
- * todavia no estan definidos, y una canonicalizacion que cambia despues
- * invalida todos los hashes anteriores.
- *
- * Ver handoff HO-009.
+ * Lo que sigue sin implementarse es el ESCRITOR, y es de `apps/api`: escribir
+ * un `AuditEvent` exige la misma transaccion que el hecho auditado, y esa
+ * transaccion la abre quien atiende la peticion.
  */
 
 /** Quien actua. La distincion humano/sistema es la primera pregunta de un auditor. */
@@ -62,13 +61,12 @@ export interface AuditEvent {
   readonly canonicalizationVersion: number;
 }
 
-/**
- * Versiones de canonicalizacion soportadas.
- *
- * Cambiar la canonicalizacion cambia todos los hashes futuros: por eso la
- * version viaja en cada registro y las antiguas siguen siendo verificables.
- */
-export const SUPPORTED_CANONICALIZATION_VERSIONS: readonly number[] = Object.freeze([1]);
+// `SUPPORTED_CANONICALIZATION_VERSIONS` vivia aqui como constante suelta.
+// Ahora vive en `canonicalization.ts` junto al DESCRIPTOR de cada version -sus
+// campos, su serializacion y la semantica de bordes del saldo-, porque una
+// lista de numeros sin lo que cada numero significa no permite verificar nada.
+// Cambiar la canonicalizacion cambia todos los hashes futuros: por eso la
+// version viaja en cada registro y las antiguas siguen siendo verificables.
 
 /** Destino de escritura. Lo implementara `apps/api` sobre la misma transaccion. */
 export interface AuditSink {

@@ -1,15 +1,15 @@
 import { Alert } from "@lsw/ui";
 import { useTranslations } from "next-intl";
 
-import { formatZonedDate } from "@/i18n/formatters";
+import { formatInteger, formatZonedDate } from "@/i18n/formatters";
 import { localeTag, LOCALE_TAGS, type Locale } from "@/i18n/locales";
-import type { OfficialRulesContent, OfficialRulesDocument } from "@/lib/api";
+import type { OfficialRulesDocumentContent, OfficialRulesResponse } from "@/lib/api";
 
 /**
  * Reglas Oficiales.
  *
- * ESTE ES EL COMPONENTE MAS DELICADO DE FE-M2
- * -------------------------------------------
+ * ESTE ES EL COMPONENTE MAS DELICADO DE LA PARTE PUBLICA
+ * ------------------------------------------------------
  * DEC-022 establece una excepcion a la regla general de que el copy es del
  * frontend: el texto legalmente controlante viaja desde el backend POR LOCALE
  * y el frontend lo renderiza tal cual. Aqui eso se traduce en cuatro
@@ -25,34 +25,46 @@ import type { OfficialRulesContent, OfficialRulesDocument } from "@/lib/api";
  * 3. **No se supone que el ingles controla.** Cual controla lo dicen las
  *    banderas `is_legally_controlling` / `is_informational_translation`. Hay
  *    fixture con el espanol controlando precisamente para que nadie pueda
- *    cablear la suposicion contraria.
- * 4. **No se renderiza HTML.** El cuerpo llega como secciones y parrafos de
- *    texto plano. Aceptar HTML obligaria a `dangerouslySetInnerHTML` y
- *    convertiria el documento legal en una via de inyeccion.
+ *    cablear la suposicion contraria. Hoy el idioma controlante sigue en `TBD`
+ *    (`docs/LEGAL_PENDING.md`), asi que el caso "ninguno declarado" es el real.
+ * 4. **No se renderiza HTML.** `docs/API_CONTRACT.md` publica el cuerpo como
+ *    una sola cadena, `body`. Se parte en parrafos por lineas en blanco y se
+ *    pinta como TEXTO. No hay `dangerouslySetInnerHTML` en ninguna parte: un
+ *    documento legal renderizado como marcado seria una via de inyeccion.
  *
  * EL CASO DEFECTUOSO SE ENSEÑA, NO SE TAPA
  * ----------------------------------------
  * Si ninguna version se declara controlante, se dice. Elegir una por nuestra
  * cuenta seria afirmar algo legal que nadie ha aprobado, y es exactamente el
  * tipo de decision que `CLAUDE.md` #2 prohibe tomar aqui.
+ *
+ * LA ZONA HORARIA LLEGA POR PROP
+ * ------------------------------
+ * La respuesta de `GET /promotions/{slug}/official-rules` NO trae
+ * `legal_timezone`. La pantalla la toma de la promocion, que ya ha pedido. Sin
+ * ella, la fecha de entrada en vigor se formatearia contra el reloj del
+ * navegador, que es justo lo que DEC-011 prohibe.
  */
 export function OfficialRulesDocumentView({
   document,
   locale,
+  timeZone,
 }: {
-  readonly document: OfficialRulesDocument;
+  readonly document: OfficialRulesResponse;
   readonly locale: Locale;
+  /** Zona legal declarada por la promocion (DEC-011). */
+  readonly timeZone: string;
 }) {
   const t = useTranslations("officialRules");
   const tLocale = useTranslations("localeName");
 
   const currentTag = localeTag(locale);
-  const controlling = document.contents.filter((content) => content.is_legally_controlling);
+  const controlling = document.documents.filter((content) => content.is_legally_controlling);
 
   // El documento en el idioma de la interfaz, si existe. Si no, el controlante;
   // y si tampoco, el primero publicado. En los dos ultimos casos se avisa.
-  const inCurrentLocale = document.contents.find((content) => content.locale === currentTag);
-  const shown = inCurrentLocale ?? controlling[0] ?? document.contents[0];
+  const inCurrentLocale = document.documents.find((content) => content.locale === currentTag);
+  const shown = inCurrentLocale ?? controlling[0] ?? document.documents[0];
 
   if (shown === undefined) {
     return (
@@ -62,9 +74,7 @@ export function OfficialRulesDocumentView({
     );
   }
 
-  const effective = formatZonedDate(document.effective_at, locale, {
-    timeZone: document.legal_timezone,
-  });
+  const effective = formatZonedDate(document.effective_at, locale, { timeZone });
 
   return (
     <article className="flex flex-col gap-s6">
@@ -74,7 +84,9 @@ export function OfficialRulesDocumentView({
         <dl className="grid gap-3 sm:grid-cols-3">
           <div>
             <dt className="text-label font-medium text-text-muted">{t("versionLabel")}</dt>
-            <dd className="mt-1 font-mono text-body-sm text-text">{document.version_label}</dd>
+            <dd className="mt-1 font-mono text-body-sm text-text">
+              {formatInteger(document.version, locale)}
+            </dd>
           </div>
 
           {effective === null ? null : (
@@ -101,28 +113,35 @@ export function OfficialRulesDocumentView({
       {/* `lang` explicito: si el documento se muestra en un idioma distinto al
           de la interfaz, un lector de pantalla debe cambiar de voz. Sin esto,
           leeria ingles con pronunciacion espanola o al reves. */}
-      <div lang={shown.locale} className="flex flex-col gap-s5">
+      <div lang={shown.locale} className="flex flex-col gap-s4">
         <h2 className="font-display text-heading-lg font-semibold text-text">{shown.title}</h2>
 
-        {shown.sections.map((section, sectionIndex) => (
-          <section
-            key={`${section.heading}-${String(sectionIndex)}`}
-            className="flex flex-col gap-2"
-          >
-            <h3 className="font-display text-heading-sm font-semibold text-text">
-              {section.heading}
-            </h3>
-
-            {section.paragraphs.map((paragraph, paragraphIndex) => (
-              <p key={paragraphIndex} className="text-body-md text-text-muted">
-                {paragraph}
-              </p>
-            ))}
-          </section>
+        {toParagraphs(shown.body).map((paragraph, index) => (
+          <p key={index} className="whitespace-pre-line text-body-md text-text-muted">
+            {paragraph}
+          </p>
         ))}
       </div>
     </article>
   );
+}
+
+/**
+ * Parte el cuerpo en parrafos.
+ *
+ * Corta por LINEA EN BLANCO y conserva los saltos simples dentro de cada
+ * parrafo (de ahi `whitespace-pre-line` arriba). En un texto legal la sangria y
+ * el corte de linea de una lista numerada son parte del documento, y colapsar
+ * todo el espacio en blanco los perderia.
+ *
+ * No interpreta nada mas: ni encabezados, ni negritas, ni marcado. Lo que llega
+ * es texto y se pinta como texto.
+ */
+function toParagraphs(body: string): readonly string[] {
+  return body
+    .split(/\r?\n\s*\r?\n/)
+    .map((block) => block.trim())
+    .filter((block) => block.length > 0);
 }
 
 /**
@@ -138,15 +157,15 @@ function ControllingNotice({
   requestedTag,
   labelFor,
 }: {
-  readonly document: OfficialRulesDocument;
-  readonly shown: OfficialRulesContent;
+  readonly document: OfficialRulesResponse;
+  readonly shown: OfficialRulesDocumentContent;
   readonly showsRequestedLocale: boolean;
   readonly requestedTag: string;
   readonly labelFor: (tag: string) => string;
 }) {
   const t = useTranslations("officialRules");
 
-  const controlling = document.contents.filter((content) => content.is_legally_controlling);
+  const controlling = document.documents.filter((content) => content.is_legally_controlling);
   const notices: {
     readonly key: string;
     readonly tone: "info" | "warning";
@@ -162,7 +181,8 @@ function ControllingNotice({
   }
 
   if (controlling.length === 0) {
-    // Defecto del backend: hay documento pero nadie declaro cual manda.
+    // Defecto del backend, o -hoy- la consecuencia de que el idioma controlante
+    // siga sin decidirse. En ambos casos se dice, no se elige.
     notices.push({ key: "none", tone: "warning", text: t("noControllingDeclared") });
   } else if (controlling.length >= LOCALE_TAGS.length) {
     notices.push({ key: "all", tone: "info", text: t("allControlling") });

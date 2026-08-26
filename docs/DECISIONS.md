@@ -1406,3 +1406,164 @@ reconciliación debe sacar "entries excluidas por caducidad a este corte" como
 línea propia. Y la semántica de bordes (`effective_at <=` inclusivo,
 `expires_at >` exclusivo, intervalo semiabierto) pertenece a
 `canonicalization_version`.
+
+---
+
+## DEC-035
+
+Status: Accepted
+
+Date: 2026-08-25
+
+Decision:
+**Construcción del preimage de la hash chain (DEC-008), versión 1.**
+
+```
+"LSW/CHAIN/v1\n"
+  || u8len(domain)  || domain
+  || u8len(promoId) || promoId
+  || u32be(version)
+  || u32be(len)     || canonical
+  || prevHash
+```
+
+Tres puntos que van más allá de la letra de DEC-008:
+
+1. **Longitudes explícitas y versión dentro del preimage.** DEC-008 decía
+   `canonical(payload) || prev_hash`, que describe la idea pero no una
+   construcción verificable. Sin la versión dentro, quien controle la fila
+   puede reetiquetarla como "v2" y presentar después una canonicalización más
+   permisiva que produzca el mismo hash.
+2. **El génesis no es cero.** Se deriva de `(dominio, promoción)`. Con 32
+   ceros, una fila de la promoción A serviría como primera fila de la B con su
+   hash intacto.
+3. **`sequence_no` queda fuera del payload**, por imposibilidad y no por
+   gusto: es `GENERATED ALWAYS AS IDENTITY`, la base de datos lo asigna
+   _durante_ el INSERT, y el hash debe existir _antes_ porque la tabla es
+   append-only (DEC-007). Queda protegido por la **topología** de la cadena —el
+   verificador recorre en ese orden y exige el encadenamiento— no por el
+   contenido.
+
+La forma canónica es **RFC 8785 (JCS)** más tres restricciones: `undefined`,
+`bigint`, `Date`, `Map` y `Buffer` producen error en vez de omisión silenciosa;
+solo enteros seguros, coma flotante rechazada (DEC-010), enteros grandes como
+cadena de dígitos; y **NFC sobre cadenas y claves**, única desviación de RFC
+8785 y necesaria porque el mismo nombre tecleado en macOS (NFD) y en Windows
+(NFC) daría dos hashes distintos.
+
+**Requisito sobre el camino de escritura:** `recorded_at` entra en el payload y
+tiene `DEFAULT now()`. Quien inserte **debe pasarlo explícitamente** y usar ese
+mismo valor al calcular el hash. Dejar actuar al `DEFAULT` hace que el hash
+cubra un instante y la fila guarde otro: **la cadena nace rota**.
+
+Context:
+Al implementar DEC-008, `security` encontró que la fórmula era insuficiente
+como especificación verificable por un tercero.
+
+Alternatives:
+Concatenación simple sin longitudes (descartado: permite ambigüedad de
+frontera entre campos). Génesis de ceros (descartado por el motivo 2).
+
+Reason:
+Que un tercero pueda verificar la cadena con una librería estándar y sin
+nuestro código es el objetivo entero de DEC-008. Una fórmula que no fija la
+construcción byte a byte no lo permite.
+
+Nota sobre el orden de columnas: la pregunta que planteó `HO-009` —si el orden
+del DDL era definitivo— **resultó ser la equivocada**. La forma canónica ordena
+las claves alfabéticamente, así que el orden físico es invisible al hash. Lo
+que se fija es el **conjunto** de campos: 21 incluidos y 4 excluidos, con un
+test de paridad que lee el DDL y exige que la suma cubra la tabla. Una columna
+nueva rompe ese gate el mismo día, forzando una decisión explícita sobre si el
+hash debe protegerla.
+
+Affected areas: `packages/audit`, `packages/database`, `packages/tpa`.
+
+Proposed by: security
+Agreed by: Team Lead
+
+---
+
+## DEC-036
+
+Status: Accepted
+
+Date: 2026-08-25
+
+Decision:
+**El paquete de exportación separa manifiesto de contenido y procedencia.**
+
+- **Manifiesto de contenido** — sin marcas de generación. Es lo que se hashea y
+  se firma, y produce el `contentDigest`.
+- **Procedencia** — quién generó el export, cuándo, con qué clave y con qué
+  versión del generador. Queda **fuera** del digest.
+
+Context:
+DEC-016 exigía dos cosas a la vez que no caben juntas: (a) que `generated_at`
+viviera solo en el manifiesto y no en las filas de datos, y (b) que regenerar
+el snapshot produjera **bytes idénticos**. Si el manifiesto se hashea, cualquier
+marca temporal dentro rompe (b).
+
+`security` lo detectó al implementar DEC-016 y no eligió una de las dos por su
+cuenta.
+
+Alternatives:
+Sacar `generated_at` del manifiesto (descartado: la procedencia es parte del
+expediente de auditoría y debe conservarse). Renunciar a la reproducibilidad
+byte a byte (descartado: es el fundamento del principio #10).
+
+Reason:
+La contradicción era real y sin resolverla DEC-016 no era implementable. La
+separación conserva las dos propiedades: el contenido es reproducible y
+verificable por un tercero, y la procedencia queda registrada sin contaminar
+el digest.
+
+Affected areas: `packages/tpa`, `packages/audit`.
+
+Proposed by: security
+Agreed by: Team Lead
+
+---
+
+## DEC-037
+
+Status: Accepted
+
+Date: 2026-08-25
+
+Decision:
+**Sin sello externo, el veredicto de integridad nunca es `INTACT`.** Es
+`UNSEALED`, un estado propio.
+
+El informe de reconciliación emite **siempre** la línea "entries excluidas por
+caducidad a este corte", con código propio: `INFO` cuando vale cero, `WARNING`
+en cuanto aparta algo. **No bloquea** finalizar el snapshot.
+
+Context:
+La hash chain detecta alteración de filas, borrado, reordenación e injerto
+desde otra promoción. **No detecta una reescritura completa y coherente**: un
+atacante con acceso total a la base de datos puede recalcular la cadena entera
+y `verifyChain` la aprueba. El test lo afirma explícitamente en vez de
+disimularlo. Solo el sello externo lo detecta, como `HISTORY_REWRITTEN`.
+
+Por otro lado, la caducidad de DEC-034 es un cambio de saldo **sin fila**, y
+por tanto invisible a la cadena: un tercero la verá íntegra y no encontrará
+nada que explique la caída del saldo.
+
+Alternatives:
+Devolver `INTACT` sin sello (**descartado**: un verde ahí invita a no montar
+nunca el almacén write-once, y entonces la única defensa contra la reescritura
+completa deja de existir). Emitir la línea de caducidad solo cuando aparte algo
+(descartado: su ausencia sería indistinguible de que no se comprobó).
+Bloquear la finalización cuando hay caducadas (descartado: excluirlas es el
+comportamiento correcto, y un gate que se dispara al hacer lo correcto acaba
+desactivado).
+
+Reason:
+El sistema debe declarar sus propios límites. Un estado `UNSEALED` explícito
+dice la verdad: la cadena es consistente consigo misma, y eso no basta.
+
+Affected areas: `packages/audit`, `packages/tpa`, infraestructura.
+
+Proposed by: security
+Agreed by: Team Lead

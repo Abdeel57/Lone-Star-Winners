@@ -33,13 +33,24 @@ import {
   runWithRequestContext,
   sanitizeIncomingCorrelationId,
 } from "./observability/request-context.js";
+import { buildCartRoutes } from "./routes/cart.js";
 import { buildHealthRoutes } from "./routes/health.js";
 import { buildMetaRoutes } from "./routes/meta.js";
+import { buildStorefrontRoutes } from "./routes/storefront.js";
+import { installPrincipalResolver, noPrincipalResolver } from "./http/principal.js";
+import { createRepositories } from "./services/drizzle-repositories.js";
+import type { Repositories } from "./services/ports.js";
 
 export interface AppDependencies {
   readonly config: ApiConfig;
   readonly database: DatabaseHandle;
   readonly paymentProvider: PaymentProvider;
+  /**
+   * Acceso a datos detras de puertos. Ver `services/ports.ts` para el motivo:
+   * permite probar sin Docker lo que NO vive en el motor, sin simular lo que
+   * si vive en el (DEC-018).
+   */
+  readonly repositories: Repositories;
 }
 
 export function createDependencies(config: ApiConfig): AppDependencies {
@@ -59,6 +70,7 @@ export function createDependencies(config: ApiConfig): AppDependencies {
   return {
     config,
     database,
+    repositories: createRepositories(database.db),
     // `CLAUDE.md` seccion 7: el procesador de pagos no esta decidido. Hasta que
     // lo este, el puerto falla ruidosamente en vez de simular exito.
     paymentProvider: new UnconfiguredPaymentProvider(),
@@ -67,7 +79,11 @@ export function createDependencies(config: ApiConfig): AppDependencies {
 
 /** Devuelve todas las definiciones de ruta del proceso. Es la fuente de DEC-014 y DEC-015. */
 export function collectRouteDefinitions(dependencies: AppDependencies): RouteDefinition[] {
-  const routes: RouteDefinition[] = [...buildHealthRoutes(dependencies)];
+  const routes: RouteDefinition[] = [
+    ...buildHealthRoutes(dependencies),
+    ...buildStorefrontRoutes(dependencies),
+    ...buildCartRoutes(dependencies),
+  ];
 
   const metaRoutes = buildMetaRoutes({
     serverUrl: dependencies.config.http.publicUrl,
@@ -87,7 +103,11 @@ export function collectRouteDefinitions(dependencies: AppDependencies): RouteDef
  * publicado sea el mismo en todos los entornos.
  */
 export function collectContractRouteDefinitions(dependencies: AppDependencies): RouteDefinition[] {
-  const routes: RouteDefinition[] = [...buildHealthRoutes(dependencies)];
+  const routes: RouteDefinition[] = [
+    ...buildHealthRoutes(dependencies),
+    ...buildStorefrontRoutes(dependencies),
+    ...buildCartRoutes(dependencies),
+  ];
   routes.push(
     ...buildMetaRoutes({ serverUrl: dependencies.config.http.publicUrl, allRoutes: () => routes }),
   );
@@ -113,8 +133,14 @@ export async function createApp(dependencies: AppDependencies): Promise<FastifyI
   // ---- 1. Guardia deny-by-default, antes de cualquier ruta (DEC-015) ----
   installRouteGuard(app);
 
-  // ---- 2. Autorizador que falla cerrado ----
+  // ---- 2. Autorizador y resolutor de identidad, ambos fallando cerrados ----
+  //
+  //        Dos puertos y no uno: el primero responde "puede pasar?" antes del
+  //        handler; el segundo, "quien es?", y solo lo necesitan las rutas que
+  //        leen datos de alguien. Los dos los sustituira `packages/security`
+  //        (DEC-006); hasta entonces uno deniega y el otro no conoce a nadie.
   app.decorate("lswAuthorizer", denyAllAuthorizer);
+  installPrincipalResolver(app, noPrincipalResolver);
 
   // ---- 3. Zod como unico lenguaje de esquemas (DEC-014) ----
   app.setValidatorCompiler(zodValidatorCompiler);

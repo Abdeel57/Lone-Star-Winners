@@ -168,9 +168,62 @@ no lo interpreta.
 Poblada por `backend` resolviendo `HO-016` y reconciliando las listas P0 de
 `frontend` y `backend` (`HO-005`).
 
-**Hoy solo hay tres rutas `IMPLEMENTED`, y las tres son infraestructura.** Todo
-lo demás es `PROPOSED`: acordado en papel, para que `frontend` diseñe contra
-ello, y **no asumible como existente**.
+**Hay 15 rutas `IMPLEMENTED`** tras el hito B3: las tres de infraestructura,
+la configuración pública, las cuatro de storefront (promociones y catálogo) y
+las cinco del carrito de servidor con su cotización de entries. Todo lo demás
+sigue en `PROPOSED`: acordado en papel, para que `frontend` diseñe contra ello,
+y **no asumible como existente**.
+
+`IMPLEMENTED` **no es** `TESTED`: significa que existe en el backend y respeta
+este contrato, con pruebas propias de `backend`. La revisión de
+`security-integration` es lo que las mueve a `TESTED`.
+
+### Aviso sobre las rutas del carrito
+
+Las cinco rutas de carrito están implementadas y probadas, y **hoy devuelven
+`401 UNAUTHENTICATED`**. No es un fallo: un carrito pertenece a alguien, y quien
+resuelve esa identidad —participante o sesión anónima— es `packages/security`
+(DEC-006). `apps/api` declara el puerto (`lswPrincipalResolver`) y su valor por
+defecto no conoce a nadie.
+
+Inventar una cookie de carrito propia en `apps/api` las habría hecho funcionar
+antes creando un segundo sistema de sesión, que es lo que prohíbe `CLAUDE.md`
+sección 4. En cuanto `packages/security` sustituya ese puerto, las rutas
+funcionan sin tocar una línea de este contrato.
+
+### Índice de rutas implementadas
+
+Con el **camino tal y como lo declara el código** (`:slug`, no `{slug}`). Las
+entradas detalladas de más abajo usan la notación OpenAPI `{slug}`, que es la
+misma ruta escrita de otra forma; esta tabla es la que permite comparar el
+documento contra `apps/api/openapi/route-manifest.json` sin interpretar el
+markdown, y es lo que verifica el test de contrato de DEC-015.
+
+| Método | Camino                                  | Authorization      |
+| ------ | --------------------------------------- | ------------------ |
+| GET    | /api/v1/config                          | `PUBLIC`           |
+| GET    | /api/v1/promotions                      | `PUBLIC`           |
+| GET    | /api/v1/promotions/active               | `PUBLIC`           |
+| GET    | /api/v1/promotions/:slug                | `PUBLIC`           |
+| GET    | /api/v1/promotions/:slug/official-rules | `PUBLIC`           |
+| GET    | /api/v1/products                        | `PUBLIC`           |
+| GET    | /api/v1/products/:slug                  | `PUBLIC`           |
+| GET    | /api/v1/cart                            | `PARTICIPANT_SELF` |
+| POST   | /api/v1/cart/items                      | `PARTICIPANT_SELF` |
+| PATCH  | /api/v1/cart/items/:item_id             | `PARTICIPANT_SELF` |
+| DELETE | /api/v1/cart/items/:item_id             | `PARTICIPANT_SELF` |
+| GET    | /api/v1/cart/entry-quote                | `PARTICIPANT_SELF` |
+
+Las tres de infraestructura (`/api/v1/health`, `/api/v1/health/ready`,
+`/api/v1/openapi.json`) están documentadas más abajo y exentas de ese gate por
+etiqueta `meta`: no las consume `frontend`.
+
+### Aviso sobre `amount_minor`
+
+Es **cadena de dígitos**, no número, en todas las rutas ya implementadas
+(DEC-010). El contrato provisional de `apps/web` (`src/lib/api/contract.ts`)
+lo declara como `number`; esa divergencia hay que resolverla en el frontend, no
+aquí, y desaparece cuando se consuman los tipos generados del OpenAPI (DEC-014).
 
 ---
 
@@ -303,7 +356,7 @@ Authorization: PUBLIC
 
 Owner: backend
 
-Status: PROPOSED
+Status: IMPLEMENTED
 ```
 
 ---
@@ -329,7 +382,7 @@ Authorization: PUBLIC
 
 Owner: backend
 
-Status: PROPOSED
+Status: IMPLEMENTED
 ```
 
 ```text
@@ -356,7 +409,7 @@ Authorization: PUBLIC
 
 Owner: backend
 
-Status: PROPOSED
+Status: IMPLEMENTED
 ```
 
 ```text
@@ -380,7 +433,7 @@ Authorization: PUBLIC
 
 Owner: backend
 
-Status: PROPOSED
+Status: IMPLEMENTED
 ```
 
 ```text
@@ -422,7 +475,7 @@ Authorization: PUBLIC
 
 Owner: backend
 
-Status: PROPOSED
+Status: IMPLEMENTED
 ```
 
 ### Forma de `PromotionSummary`
@@ -449,6 +502,39 @@ Status: PROPOSED
 `rules_version_id` y `prize_value` pueden ser `null` mientras no haya versión
 de reglas activa o premio configurado. La interfaz debe poder representar ese
 caso sin inventarse nada.
+
+**`prize_value` es `null` SIEMPRE hoy.** No existe todavía ninguna tabla de
+premios ni ninguna clave de premio en `PromotionRulesVersion`, y el valor de un
+premio es un dato legalmente material que nadie ha aprobado (principio 2). El
+campo se sirve para que `frontend` no tenga que cambiar de forma cuando exista.
+Modelar el premio requiere una decisión previa: es un handoff abierto, no un
+olvido de implementación.
+
+`DRAFT` **no sale nunca** al público: `GET /promotions` la omite y
+`GET /promotions/{slug}` devuelve `PROMOTION_NOT_FOUND`. El resto de estados sí,
+`CANCELLED` incluido: una promoción que estuvo publicada y se canceló tiene que
+poder explicarse, y hacerla desaparecer dejaría un enlace roto sin motivo.
+
+El cursor de `GET /promotions` ordena por `slug`. Es opaco: no se interpreta.
+
+### Forma de `PromotionDetail`
+
+`PromotionSummary` más un objeto `rules_version`, que puede ser `null`:
+
+```json
+{
+  "rules_version": {
+    "id": "uuid",
+    "version": 1,
+    "effective_at": "2026-09-01T05:00:00.000Z",
+    "has_controlling_document": false
+  }
+}
+```
+
+`has_controlling_document` puede ser `false` con documentos publicados: el
+idioma controlante sigue en `TBD` (`docs/LEGAL_PENDING.md`) y el sistema no lo
+adivina.
 
 ---
 
@@ -481,7 +567,7 @@ Authorization: PUBLIC
 
 Owner: backend
 
-Status: PROPOSED
+Status: IMPLEMENTED
 ```
 
 ```text
@@ -503,8 +589,42 @@ Authorization: PUBLIC
 
 Owner: backend
 
-Status: PROPOSED
+Status: IMPLEMENTED
 ```
+
+### Forma de `ProductSummary` y `ProductDetail`
+
+Son **la misma forma**. La ficha no devuelve nada que el listado no devuelva, y
+mantener dos formas casi iguales sólo produce que una se quede atrás:
+
+```json
+{
+  "id": "uuid",
+  "sku": "LSW-TEE",
+  "slug": "example-tee",
+  "name": { "en-US": "...", "es-US": "..." },
+  "description": { "en-US": "...", "es-US": "..." },
+  "currency": "USD",
+  "variants": [
+    {
+      "id": "uuid",
+      "sku": "LSW-TEE-M",
+      "price": { "amount_minor": "2500", "currency": "USD" },
+      "stock_quantity": 10
+    }
+  ]
+}
+```
+
+`description` puede ser `null`. `stock_quantity` puede ser `null`, y **`null` no
+es cero**: significa "existencias no gestionadas", y esa variante se puede añadir
+al carrito en cualquier cantidad admitida.
+
+Sólo salen productos y variantes en `ACTIVE`. El parámetro `promotion_slug` que
+figuraba en la propuesta **no está implementado**: la elegibilidad no vive en el
+catálogo (DEC-012), así que filtrar por promoción exigiría que el listado
+aplicase reglas legales, que es justo lo que este endpoint no debe hacer. El
+cursor ordena por `slug`.
 
 ---
 
@@ -514,6 +634,47 @@ Status: PROPOSED
 el carrito del servidor, nunca sobre una lista de ítems enviada por el cliente:
 en un producto donde una cifra de entries mal calculada es un problema legal,
 la traza de qué se cotizó y cuándo vale más que la simplicidad.
+
+Todas las rutas de esta sección devuelven **`CartWithQuote`**:
+
+```json
+{
+  "id": "uuid",
+  "currency": "USD",
+  "lines": [
+    {
+      "id": "uuid",
+      "variant_id": "uuid",
+      "product_slug": "example-tee",
+      "sku": "LSW-TEE-M",
+      "name": { "en-US": "...", "es-US": "..." },
+      "quantity": 2,
+      "unit_price": { "amount_minor": "2500", "currency": "USD" },
+      "line_subtotal": { "amount_minor": "5000", "currency": "USD" }
+    }
+  ],
+  "subtotal": { "amount_minor": "5000", "currency": "USD" },
+  "entry_quote": null
+}
+```
+
+- `subtotal` es **dinero**; `entry_quote` son **entries**. No son lo mismo y no
+  se derivan uno del otro.
+- `entry_quote` es `null` cuando no hay promoción activa. Un carrito sigue
+  siendo válido en el periodo entre promociones: se puede comprar mercancía sin
+  que haya nada que cotizar, y hacer fallar `GET /cart` impediría hasta vaciarlo.
+- `currency` y `subtotal` son `null` en un carrito vacío: sin líneas no hay
+  moneda que declarar.
+- `id` es `00000000-0000-0000-0000-000000000000` cuando el solicitante no tiene
+  carrito. **Leer no crea nada**: un `GET` que insertara una fila haría que cada
+  rastreador dejara un carrito vacío en la base de datos.
+- Una variante aparece **como máximo una vez** por carrito. Añadir la misma
+  variante dos veces **suma cantidad**; no duplica la línea.
+- Un carrito tiene **una sola moneda**. Mezclarlas devuelve
+  `409 CART_CURRENCY_MISMATCH`; lo impone además un trigger.
+- `quantity` está acotada a `1..10000` por línea. No es un límite legal —los
+  topes de entries son otra cosa y viven en la `PromotionRulesVersion`—: es un
+  límite operativo.
 
 ```text
 Method: GET
@@ -534,7 +695,7 @@ Authorization: PARTICIPANT_SELF
 
 Owner: backend
 
-Status: PROPOSED
+Status: IMPLEMENTED
 ```
 
 ```text
@@ -558,7 +719,7 @@ Authorization: PARTICIPANT_SELF
 
 Owner: backend
 
-Status: PROPOSED
+Status: IMPLEMENTED
 ```
 
 ```text
@@ -580,7 +741,7 @@ Authorization: PARTICIPANT_SELF
 
 Owner: backend
 
-Status: PROPOSED
+Status: IMPLEMENTED
 ```
 
 ```text
@@ -602,7 +763,7 @@ Authorization: PARTICIPANT_SELF
 
 Owner: backend
 
-Status: PROPOSED
+Status: IMPLEMENTED
 ```
 
 ```text
@@ -649,14 +810,69 @@ Esta cifra es ORIENTATIVA hasta que la orden alcance el estado que las Official
 Rules definan como cualificante. Las entries las genera el backend al recibir
 la confirmación de pago, NUNCA cuando el frontend llega a la página de éxito.
 
-Errors: 409 NO_ACTIVE_PROMOTION, 409 CALCULATION_CONFIG_INVALID
+PRECISIONES DE LA IMPLEMENTACIÓN
+
+- `eligible_subtotal` es `null` cuando el carrito está vacío: sin líneas no hay
+  moneda que declarar. `entries_before_caps` y `final_entries` valen `0`.
+- `line_id` es el identificador de la línea del carrito de servidor
+  (`cart_items.id`), el mismo que devuelve `CartWithQuote`. Permite casar la
+  cotización con la línea sin que el cliente aporte nada.
+- Sin carrito, la respuesta es la cotización de un carrito vacío, no un 404: la
+  respuesta correcta a "cuántas entries genera mi carrito" cuando no hay carrito
+  es "cero", y así el frontend recibe igualmente la promoción y la versión de
+  reglas vigentes.
+- `applied_multipliers` sólo aparece con `entry_multipliers_enabled` encendido;
+  `applied_caps`, con `entry_caps_enabled` (DEC-032). Con los flags apagados
+  ambas listas van vacías.
+- `engine_version` es la versión del motor de cálculo, no la del paquete. Junto
+  con `rules_version_id` es lo que hace reproducible la cifra (DEC-007).
+
+**NO HAY FORMA DE ENVIAR ÍTEMS.** Es un `GET` sin cuerpo, y los parámetros de
+query se ignoran. Está cubierto por un test que lo intenta.
+
+Errors:
+409 NO_ACTIVE_PROMOTION, 409 CALCULATION_CONFIG_INVALID,
+409 MULTIPLIER_CONFLICT_UNRESOLVED, 409 CURRENCY_MISMATCH,
+409 RESULT_EXCEEDS_SAFE_RANGE
+
+Los tres últimos los emite el motor de cálculo y viajan con su propio `code`
+(DEC-031). `MULTIPLIER_CONFLICT_UNRESOLVED` significa que la configuración
+declara `EXCLUSIVE` y dos periodos se solapan: el motor **falla en vez de
+desempatar por su cuenta**, y eso se corrige en la configuración legal, no en el
+cliente.
 
 Authorization: PARTICIPANT_SELF
 
 Owner: backend
 
-Status: PROPOSED
+Status: IMPLEMENTED
 ```
+
+### Fórmulas de cálculo admitidas (motor `engine_version: 1`)
+
+La fórmula la fija `PromotionRulesVersion.purchase_entry_formula` (DEC-012). El
+motor admite cuatro modos y **cada uno declara su propia `rounding_policy`**
+(`FLOOR` | `CEIL` | `HALF_UP` | `HALF_DOWN` | `HALF_EVEN`), obligatoria y sin
+valor por defecto:
+
+| Modo                        | Campos                                               |
+| --------------------------- | ---------------------------------------------------- |
+| `FIXED_PER_ORDER`           | `entries`                                            |
+| `FIXED_PER_PRODUCT`         | `entries_per_unit`                                   |
+| `ENTRIES_PER_CURRENCY_UNIT` | `amount_unit_minor`, `entries_per_amount_unit`       |
+| `TIERED_BY_AMOUNT`          | `tiers[] { id, min_eligible_amount_minor, entries }` |
+
+`partial_refund_rounding_policy` es la política de **otra** operación —cómo se
+prorratea una devolución parcial— y ya no gobierna el cálculo base.
+
+`entries_per_amount_unit` es un par de enteros `{ numerator, denominator }`
+(DEC-010), nunca un decimal. `TIERED_BY_AMOUNT` aplica el escalón **más alto**
+cuyo umbral no supere el subtotal elegible, y los escalones **no se acumulan**;
+la traza lo registra en `tier_selection` y `applied_tier_id`.
+
+Esta tabla describe lo que el motor **puede** expresar. Cuál se usa lo decide el
+abogado del cliente: hoy `purchase_entry_formula` sigue en `TBD`
+(`docs/LEGAL_PENDING.md`) y ninguna promoción puede activarse sin resolverla.
 
 ---
 

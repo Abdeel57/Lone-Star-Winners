@@ -85,6 +85,11 @@ export default async function PromotionDetailPage({
     showTimeZoneName: true,
   });
 
+  // `formatMoney` devuelve `null` cuando el importe no respeta DEC-010. Se
+  // resuelve una sola vez para que el JSX no decida dos veces lo mismo.
+  const declaredValue = promotion.prize?.declared_value ?? null;
+  const prizeValue = declaredValue === null ? null : formatMoney(declaredValue, locale);
+
   return (
     <div className="lsw-container py-s10">
       <Link
@@ -139,12 +144,9 @@ export default async function PromotionDetailPage({
               {pickLocalized(promotion.prize.description, locale)}
             </p>
 
-            {promotion.prize.declared_value === null ? null : (
+            {prizeValue === null ? null : (
               <div className="mt-s5 max-w-xs">
-                <StatCard
-                  label={t("promotion.prizeValueLabel")}
-                  value={formatMoney(promotion.prize.declared_value, locale)}
-                />
+                <StatCard label={t("promotion.prizeValueLabel")} value={prizeValue} />
               </div>
             )}
           </Card>
@@ -210,22 +212,36 @@ export default async function PromotionDetailPage({
       {/* `winner_publication_enabled` gobierna si esta seccion EXISTE. Con el
           flag apagado no se renderiza nada: no hay hueco ni promesa. Con el
           encendido y sin ganador publicado, se dice exactamente eso. */}
-      {promotion.status === "completed" &&
+      {promotion.status === "COMPLETED" &&
       isFeatureEnabled(uiConfig.flags, "winner_publication_enabled") ? (
         <Alert tone="info" className="mt-s4">
           {t("promotion.winnerPendingPublication")}
         </Alert>
       ) : null}
 
-      <section aria-labelledby="timeline" className="mt-s10">
-        <h2 id="timeline" className="text-heading-lg font-semibold text-text">
-          {t("promotion.timelineHeading")}
-        </h2>
-
-        <div className="mt-s5 max-w-narrow">
-          <PromotionTimeline status={promotion.status} />
+      {/* La llamada a la tienda solo aparece cuando la maquina de estados dice
+          que procede. Invitar a pedir mercancia "para esta promocion" sobre una
+          promocion que ya cerro seria una afirmacion falsa, no un enlace de
+          mas. */}
+      {presentation.showsShopCta ? (
+        <div className="mt-s8">
+          <Link href="/shop" className={buttonVariants({ variant: "secondary", size: "lg" })}>
+            {t("home.shopCta")}
+          </Link>
         </div>
-      </section>
+      ) : null}
+
+      {presentation.showsTimeline ? (
+        <section aria-labelledby="timeline" className="mt-s10">
+          <h2 id="timeline" className="text-heading-lg font-semibold text-text">
+            {t("promotion.timelineHeading")}
+          </h2>
+
+          <div className="mt-s5 max-w-narrow">
+            <PromotionTimeline status={promotion.status} />
+          </div>
+        </section>
+      ) : null}
 
       {hasRules ? (
         <div className="mt-s10">

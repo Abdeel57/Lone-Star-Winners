@@ -97,7 +97,7 @@ describe("DEC-029: el segmento de ruta no es la etiqueta de formato", () => {
   });
 
   it("el importe tambien cambia de convencion", () => {
-    const money = { amount_minor: 123_456, currency: "USD" } as const;
+    const money = { amount_minor: "123456", currency: "USD" } as const;
 
     // Con la etiqueta correcta se lee al modo estadounidense. Si esto empezara
     // a contener "1.234,56" seria senal de que alguien paso `es` a secas.

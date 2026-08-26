@@ -39,6 +39,7 @@ function draft(overrides: Partial<LedgerEntryDraft> = {}): LedgerEntryDraft {
     reasonKey: "ORDER_QUALIFIED",
     reversesTransactionId: null,
     expiresAt: null,
+    recordedAt: new Date("2026-09-15T12:00:00.000Z"),
     ...overrides,
   };
 }
@@ -240,5 +241,48 @@ describe("numeros y rangos (DEC-009, DEC-010)", () => {
     // el extremo y la restriccion de exclusion los rechazaria con razon.
     expect(() => parseEntryNumberRange("[1,11]")).toThrow(RangeError);
     expect(() => parseEntryNumberRange("[11,1)")).toThrow(RangeError);
+  });
+});
+
+/**
+ * DEC-008: EL INSTANTE DE REGISTRO NO PUEDE QUEDAR AL DEFAULT DE LA BASE.
+ *
+ * `recorded_at` entra en el payload canonico del hash de la cadena Y tiene
+ * `DEFAULT now()` en el esquema. Si quien inserta no lo pasa, hashea un
+ * instante y la fila guarda otro: la cadena NACE ROTA, en la primera
+ * insercion, y el verificador marca como manipulada una fila que nadie ha
+ * tocado.
+ *
+ * Estos tests no comprueban el hash -eso es de `packages/audit`-: comprueban
+ * que el dominio no deja construir un movimiento sin ese dato, que es donde el
+ * descuido seria posible.
+ */
+describe("instante de registro (DEC-008)", () => {
+  it("un movimiento bien formado lo lleva, y pasa", () => {
+    expect(validateLedgerEntryDraft(draft(), { entryExpirationEnabled: false })).toEqual([]);
+  });
+
+  it("sin instante de registro el movimiento se rechaza", () => {
+    // Se fuerza el hueco que el tipo ya impide: es exactamente el descuido que
+    // la validacion tiene que atrapar si el dato llegara de un JSON sin
+    // comprobar o si alguien relajara el tipo.
+    const broken = { ...draft(), recordedAt: undefined } as unknown as LedgerEntryDraft;
+    expect(validateLedgerEntryDraft(broken, { entryExpirationEnabled: false })).toContain(
+      "ENTRY_RECORDED_AT_REQUIRED",
+    );
+  });
+
+  it("una fecha invalida tambien: serializaria a null sin avisar", () => {
+    const broken = draft({ recordedAt: new Date("no es una fecha") });
+    expect(validateLedgerEntryDraft(broken, { entryExpirationEnabled: false })).toContain(
+      "ENTRY_RECORDED_AT_REQUIRED",
+    );
+  });
+
+  it("es independiente de cuando OCURRIO el hecho (DEC-011)", () => {
+    // Un pago liquidado con retraso se registra hoy y ocurrio hace dias. Los
+    // dos instantes viven en columnas distintas y ninguno sustituye al otro.
+    const late = draft({ recordedAt: new Date("2026-09-20T00:00:00.000Z") });
+    expect(validateLedgerEntryDraft(late, { entryExpirationEnabled: false })).toEqual([]);
   });
 });

@@ -1,0 +1,312 @@
+/**
+ * Superficie publica: configuracion, promociones y catalogo (hito B3).
+ *
+ * TODAS ESTAS RUTAS SON `PUBLIC`, Y ESO ES UNA DECISION, NO UN DESCUIDO
+ *
+ *   El registro de DEC-015 obliga a justificar por escrito cada una. Lo que
+ *   sale por aqui es exactamente lo que una promocion publicada ya expone en su
+ *   pagina: nombres, fechas, precios y el texto de las Official Rules. Nada de
+ *   esto es dato de participante, y exigir sesion para leerlo dejaria fuera
+ *   precisamente a quien todavia no participa.
+ *
+ * LO QUE EL CATALOGO NO DICE
+ *
+ *   Cuantas entries da un producto. La elegibilidad y la formula pertenecen a
+ *   la `PromotionRulesVersion` (DEC-012). Si el numero de entries viviera en el
+ *   producto, editar el catalogo cambiaria retroactivamente lo que significo una
+ *   compra pasada.
+ */
+
+import { z } from "zod";
+
+import type { AppDependencies } from "../app.js";
+import { ApiErrors, errorEnvelopeSchema } from "../http/errors.js";
+import { buildPage, decodeCursor, pageSchema, paginationQuerySchema } from "../http/pagination.js";
+import type { RouteDefinition } from "../http/route-registry.js";
+import {
+  officialRulesSchema,
+  productSummarySchema,
+  promotionDetailSchema,
+  promotionSummarySchema,
+  publicConfigSchema,
+} from "../http/schemas.js";
+import type { ProductRecord, PromotionRecord } from "../services/ports.js";
+
+const slugParamsSchema = z.object({
+  slug: z
+    .string()
+    .min(1)
+    .max(128)
+    // Forma acotada a proposito: el slug entra en un `WHERE` y ademas vuelve al
+    // cliente dentro de `details` cuando hay 404. Restringir el alfabeto evita
+    // las dos cosas de golpe.
+    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/u, { error: "must_be_slug" }),
+});
+
+function toPromotionSummary(promotion: PromotionRecord): z.infer<typeof promotionSummarySchema> {
+  return {
+    id: promotion.id,
+    slug: promotion.slug,
+    status: promotion.status,
+    title: promotion.title,
+    summary: promotion.summary,
+    legal_timezone: promotion.legalTimezone,
+    starts_at: promotion.startsAt?.toISOString() ?? null,
+    ends_at: promotion.endsAt?.toISOString() ?? null,
+    rules_version_id: promotion.rulesVersionId,
+    // Ver la nota del esquema: no hay modelo de premio, y no se inventa uno.
+    prize_value: null,
+  };
+}
+
+function toProductSummary(product: ProductRecord): z.infer<typeof productSummarySchema> {
+  return {
+    id: product.id,
+    sku: product.sku,
+    slug: product.slug,
+    name: product.name,
+    description: product.description,
+    currency: product.currency,
+    variants: product.variants.map((variant) => ({
+      id: variant.id,
+      sku: variant.sku,
+      price: {
+        // DEC-010: cadena de digitos, nunca `number`.
+        amount_minor: variant.priceAmountMinor.toString(10),
+        currency: variant.currency,
+      },
+      stock_quantity: variant.stockQuantity,
+    })),
+  };
+}
+
+export function buildStorefrontRoutes(dependencies: AppDependencies): RouteDefinition[] {
+  const { repositories } = dependencies;
+
+  return [
+    {
+      method: "GET",
+      url: "/api/v1/config",
+      operationId: "getPublicConfig",
+      summary: "Feature flags legalmente materiales y modalidad AMOE vigente.",
+      description:
+        "DEC-013 y DEC-032. Es lo que decide QUE renderiza la interfaz. No se cachea: un flag legalmente material que se apaga en el admin tiene que apagarse en la siguiente peticion.",
+      tags: ["config"],
+      authorization: {
+        kind: "PUBLIC",
+        justification:
+          "La interfaz necesita saber si existe via AMOE o si hay puerta de edad ANTES de que haya sesion. Solo devuelve interruptores de producto, ningun dato de participante.",
+      },
+      schema: { response: { 200: publicConfigSchema } },
+      handler: async (_request, reply) => {
+        const config = await repositories.config.read();
+        void reply.header("cache-control", "no-store");
+        return {
+          feature_flags: config.featureFlags,
+          amoe_mode: config.amoeMode,
+          supported_locales: ["en-US", "es-US"] as const,
+        };
+      },
+    },
+
+    {
+      method: "GET",
+      url: "/api/v1/promotions",
+      operationId: "listPromotions",
+      summary: "Promociones visibles al publico.",
+      tags: ["promotions"],
+      authorization: {
+        kind: "PUBLIC",
+        justification:
+          "Listado de la portada. Solo incluye promociones ya publicadas; las que estan en DRAFT no salen de aqui.",
+      },
+      schema: {
+        querystring: paginationQuerySchema,
+        response: { 200: pageSchema(promotionSummarySchema), 422: errorEnvelopeSchema },
+      },
+      handler: async (request) => {
+        const query = request.query as z.infer<typeof paginationQuerySchema>;
+        const after = query.cursor === undefined ? null : decodeCursor(query.cursor).sortKey;
+
+        // Una fila de mas para saber si hay pagina siguiente sin contar la
+        // tabla entera.
+        const rows = await repositories.promotions.listPublic({
+          limit: query.limit + 1,
+          after,
+        });
+
+        const page = buildPage(rows, query.limit, (row) => ({ sortKey: row.slug, id: row.id }));
+        return { items: page.items.map(toPromotionSummary), next_cursor: page.next_cursor };
+      },
+    },
+
+    {
+      method: "GET",
+      url: "/api/v1/promotions/active",
+      operationId: "getActivePromotion",
+      summary: "La promocion activa, para la portada.",
+      description:
+        "El 404 NO es un error: el periodo entre promociones es un estado normal del negocio y se renderiza como estado vacio.",
+      tags: ["promotions"],
+      authorization: {
+        kind: "PUBLIC",
+        justification:
+          "Es el contenido de la portada. Sin sesion no hay nada que proteger: son los datos que la promocion publica de si misma.",
+      },
+      schema: { response: { 200: promotionSummarySchema, 404: errorEnvelopeSchema } },
+      handler: async () => {
+        const promotion = await repositories.promotions.findActive();
+        if (promotion === null) {
+          throw ApiErrors.notFound();
+        }
+        return toPromotionSummary(promotion);
+      },
+    },
+
+    {
+      method: "GET",
+      url: "/api/v1/promotions/:slug",
+      operationId: "getPromotionBySlug",
+      summary: "Detalle de una promocion.",
+      tags: ["promotions"],
+      authorization: {
+        kind: "PUBLIC",
+        justification:
+          "Pagina publica de la promocion. Devuelve lo mismo que el listado mas la version de reglas vigente, que es informacion que las Official Rules obligan a poder consultar.",
+      },
+      schema: {
+        params: slugParamsSchema,
+        response: { 200: promotionDetailSchema, 404: errorEnvelopeSchema },
+      },
+      handler: async (request) => {
+        const { slug } = request.params as z.infer<typeof slugParamsSchema>;
+        const promotion = await repositories.promotions.findBySlug(slug);
+        if (promotion === null) {
+          throw ApiErrors.promotionNotFound(slug);
+        }
+
+        const rulesVersion =
+          promotion.rulesVersionId === null
+            ? null
+            : await repositories.promotions.findRulesVersion(promotion.rulesVersionId);
+
+        return {
+          ...toPromotionSummary(promotion),
+          rules_version:
+            rulesVersion === null
+              ? null
+              : {
+                  id: rulesVersion.id,
+                  version: rulesVersion.version,
+                  effective_at: rulesVersion.effectiveAt?.toISOString() ?? null,
+                  has_controlling_document: rulesVersion.documents.some(
+                    (document) => document.isLegallyControlling,
+                  ),
+                },
+        };
+      },
+    },
+
+    {
+      method: "GET",
+      url: "/api/v1/promotions/:slug/official-rules",
+      operationId: "getPromotionOfficialRules",
+      summary: "Texto legalmente controlante de la version de reglas vigente.",
+      description:
+        "DEC-012, excepcion de DEC-022: `frontend` renderiza este texto TAL CUAL. No lo traduce, no lo autotraduce y no hace fallback de un idioma al otro.",
+      tags: ["promotions"],
+      authorization: {
+        kind: "PUBLIC",
+        justification:
+          "Las Official Rules tienen que poder consultarse sin comprar y sin registrarse. Exigir sesion para leerlas seria incompatible con el proposito del documento.",
+      },
+      schema: {
+        params: slugParamsSchema,
+        response: { 200: officialRulesSchema, 404: errorEnvelopeSchema },
+      },
+      handler: async (request) => {
+        const { slug } = request.params as z.infer<typeof slugParamsSchema>;
+        const promotion = await repositories.promotions.findBySlug(slug);
+        if (promotion === null) {
+          throw ApiErrors.promotionNotFound(slug);
+        }
+        if (promotion.rulesVersionId === null) {
+          throw ApiErrors.rulesVersionNotFound(slug);
+        }
+
+        const rulesVersion = await repositories.promotions.findRulesVersion(
+          promotion.rulesVersionId,
+        );
+        if (rulesVersion === null) {
+          throw ApiErrors.rulesVersionNotFound(slug);
+        }
+
+        return {
+          rules_version_id: rulesVersion.id,
+          version: rulesVersion.version,
+          effective_at: rulesVersion.effectiveAt?.toISOString() ?? null,
+          documents: rulesVersion.documents.map((document) => ({
+            locale: document.locale,
+            title: document.title,
+            body: document.body,
+            is_legally_controlling: document.isLegallyControlling,
+            is_informational_translation: document.isInformationalTranslation,
+          })),
+        };
+      },
+    },
+
+    {
+      method: "GET",
+      url: "/api/v1/products",
+      operationId: "listProducts",
+      summary: "Catalogo de mercancia.",
+      description:
+        "El catalogo NO declara cuantas entries da un producto: eso pertenece a la PromotionRulesVersion (DEC-012).",
+      tags: ["products"],
+      authorization: {
+        kind: "PUBLIC",
+        justification:
+          "Es la tienda. Nombres, descripciones y precios son publicos por definicion, y no se puede comprar lo que no se puede ver antes de registrarse.",
+      },
+      schema: {
+        querystring: paginationQuerySchema,
+        response: { 200: pageSchema(productSummarySchema), 422: errorEnvelopeSchema },
+      },
+      handler: async (request) => {
+        const query = request.query as z.infer<typeof paginationQuerySchema>;
+        const after = query.cursor === undefined ? null : decodeCursor(query.cursor).sortKey;
+
+        const rows = await repositories.catalog.listPublic({ limit: query.limit + 1, after });
+        const page = buildPage(rows, query.limit, (row) => ({ sortKey: row.slug, id: row.id }));
+
+        return { items: page.items.map(toProductSummary), next_cursor: page.next_cursor };
+      },
+    },
+
+    {
+      method: "GET",
+      url: "/api/v1/products/:slug",
+      operationId: "getProductBySlug",
+      summary: "Ficha de producto con sus variantes.",
+      tags: ["products"],
+      authorization: {
+        kind: "PUBLIC",
+        justification:
+          "Ficha publica de la tienda. Devuelve lo mismo que el listado para un solo producto.",
+      },
+      schema: {
+        params: slugParamsSchema,
+        response: { 200: productSummarySchema, 404: errorEnvelopeSchema },
+      },
+      handler: async (request) => {
+        const { slug } = request.params as z.infer<typeof slugParamsSchema>;
+        const product = await repositories.catalog.findBySlug(slug);
+        if (product === null) {
+          throw ApiErrors.productNotFound(slug);
+        }
+        return toProductSummary(product);
+      },
+    },
+  ];
+}

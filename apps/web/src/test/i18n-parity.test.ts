@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import { loadMessages } from "@/i18n/messages";
+import { PROMOTION_STATUSES } from "@/lib/api";
+import { presentPromotion } from "@/lib/promotion-state";
 import { LOCALES, localeTag, type Locale } from "@/i18n/locales";
 
 import enMessages from "../../messages/en-US.json";
@@ -157,14 +159,11 @@ describe("cobertura de estados de promocion", () => {
   it("cada estado del contrato tiene etiqueta en los dos idiomas", () => {
     // Si `backend` anade un estado al contrato, este test lo detecta antes de
     // que la insignia de estado aparezca en blanco en produccion.
-    const statuses = [
-      "upcoming",
-      "active",
-      "ended",
-      "administrator_processing",
-      "winner_verification",
-      "completed",
-    ];
+    // Se derivan de PROMOTION_STATUSES en vez de listarse: si el contrato
+    // anade un estado, este test lo exige traducido sin que nadie se acuerde de
+    // venir aqui a escribirlo.
+    const statuses = PROMOTION_STATUSES;
+    expect(statuses).toHaveLength(9);
 
     for (const status of statuses) {
       expect(en.has(`promotionStatus.${status}`), `falta en en-US: ${status}`).toBe(true);
@@ -179,14 +178,7 @@ describe("cobertura de la maquina de estados", () => {
     // Sin la segunda mitad, los dos estados intermedios volverian a ser
     // indistinguibles de "cerrado", que es lo que la maquina de estados existe
     // para evitar.
-    const noticeKeys = [
-      "upcoming",
-      "active",
-      "ended",
-      "administratorProcessing",
-      "winnerVerification",
-      "completed",
-    ];
+    const noticeKeys = PROMOTION_STATUSES.map((status) => presentPromotion(status).noticeKey);
 
     for (const key of noticeKeys) {
       for (const field of ["title", "body"]) {

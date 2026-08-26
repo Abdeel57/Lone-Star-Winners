@@ -63,6 +63,11 @@ const RANDOMNESS_CRITICAL = [
   "packages/security/**/*.{ts,tsx,mts,cts,js,mjs,cjs}",
   "packages/tpa/**/*.{ts,tsx,mts,cts,js,mjs,cjs}",
   "packages/sweepstakes/**/*.{ts,tsx,mts,cts,js,mjs,cjs}",
+  // Peticion de `security` al cerrar S3/S4: `packages/audit` contiene la hash
+  // chain de DEC-008, el arbol de Merkle y el generador de exports
+  // reproducibles. Es material de auditoria, que es justo lo que esta lista
+  // protege, y faltaba.
+  "packages/audit/**/*.{ts,tsx,mts,cts,js,mjs,cjs}",
 ];
 
 /**

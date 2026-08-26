@@ -89,6 +89,15 @@ async function createParticipant(label: string): Promise<string> {
  * Inserta un movimiento del ledger. Todos los parametros son explicitos: en
  * este dominio, un valor por defecto escondido en un helper de test es como se
  * escribe un test que pasa por el motivo equivocado.
+ *
+ * `recorded_at` VIAJA EXPLICITO (DEC-008)
+ *
+ *   La columna tiene `DEFAULT now()` en el esquema Y entra en el payload
+ *   canonico del hash de la cadena. Quien inserta debe fijar el valor y usar
+ *   EXACTAMENTE ese mismo al calcular el hash; si deja actuar al `DEFAULT`,
+ *   hashea un instante y la fila guarda otro, y la cadena nace rota en la
+ *   primera insercion. Este helper es hoy el unico camino de escritura del
+ *   ledger en todo el repositorio, asi que es donde ese habito se establece.
  */
 async function insertTransaction(options: {
   readonly db?: Database;
@@ -104,13 +113,17 @@ async function insertTransaction(options: {
   readonly status?: string;
   readonly engineVersion?: number;
   readonly rulesVersionId?: string;
+  readonly recordedAt?: string;
 }): Promise<string> {
   const db = options.db ?? app;
+  // Nunca `undefined`: si lo fuera, el `DEFAULT now()` decidiria el valor y
+  // el hash de DEC-008 cubriria un instante distinto del almacenado.
+  const recordedAt = options.recordedAt ?? new Date().toISOString();
   return singleValue<string>(
     db,
     sql`INSERT INTO entry_transactions (
           promotion_id, participant_id, type, source_type, source_ref,
-          quantity_delta, status, effective_at, expires_at,
+          quantity_delta, status, effective_at, expires_at, recorded_at,
           rules_version_id, engine_version, reverses_transaction_id,
           actor_type, reason_key
         ) VALUES (
@@ -123,6 +136,7 @@ async function insertTransaction(options: {
           ${options.status ?? "POSTED"}::entry_transaction_status,
           ${options.effectiveAt ?? "2026-09-10T12:00:00Z"}::timestamptz,
           ${options.expiresAt ?? null}::timestamptz,
+          ${recordedAt}::timestamptz,
           ${options.rulesVersionId ?? fixture.rulesVersionId},
           ${options.engineVersion ?? ENGINE_VERSION},
           ${options.reverses ?? null}::uuid,
@@ -1264,5 +1278,67 @@ describe("concurrencia", () => {
 
     expect(fulfilled).toHaveLength(1);
     expect(await balance(participantId)).toBe(25);
+  });
+});
+
+/**
+ * DEC-008: el camino de escritura fija `recorded_at`, no el `DEFAULT`.
+ *
+ * La columna entra en el payload canonico del hash de la cadena. Si el valor lo
+ * pusiera el `DEFAULT now()` del esquema, quien inserta hashearia un instante y
+ * la fila guardaria otro: la cadena naceria rota en la primera insercion, y el
+ * verificador de `packages/audit` marcaria como manipulada una fila que nadie
+ * ha tocado.
+ *
+ * No se comprueba aqui el hash -es de `packages/audit`-, sino la precondicion
+ * sin la cual ese hash no puede ser correcto: que el instante almacenado sea
+ * EXACTAMENTE el que decidio quien escribe.
+ */
+describe("DEC-008 - el instante de registro lo fija quien escribe", () => {
+  it("la fila guarda el `recorded_at` que se paso, no el del reloj del servidor", async () => {
+    const participantId = await createParticipant("recorded-at-explicit");
+    const chosen = "2026-09-11T03:04:05.678Z";
+
+    const id = await insertTransaction({
+      participantId,
+      type: "PURCHASE_EARNED",
+      sourceType: "PURCHASE",
+      sourceRef: "order:recorded-at-explicit",
+      delta: 3,
+      reasonKey: "ORDER_QUALIFIED",
+      recordedAt: chosen,
+    });
+
+    const stored = await singleValue<Date | string>(
+      app,
+      sql`SELECT recorded_at FROM entry_transactions WHERE id = ${id}`,
+    );
+
+    expect(new Date(stored).toISOString()).toBe(chosen);
+  });
+
+  it("es independiente de `effective_at`: un pago tardio se registra despues de ocurrir", async () => {
+    const participantId = await createParticipant("recorded-at-late-settlement");
+
+    const id = await insertTransaction({
+      participantId,
+      type: "PURCHASE_EARNED",
+      sourceType: "PURCHASE",
+      sourceRef: "order:recorded-at-late-settlement",
+      delta: 1,
+      reasonKey: "ORDER_QUALIFIED",
+      effectiveAt: "2026-09-01T00:00:00Z",
+      recordedAt: "2026-09-04T00:00:00Z",
+    });
+
+    const row = await app.execute<{ effective_at: Date; recorded_at: Date }>(
+      sql`SELECT effective_at, recorded_at FROM entry_transactions WHERE id = ${id}`,
+    );
+
+    const found = row.rows[0];
+    expect(found).toBeDefined();
+    expect(new Date(String(found?.recorded_at)).getTime()).toBeGreaterThan(
+      new Date(String(found?.effective_at)).getTime(),
+    );
   });
 });

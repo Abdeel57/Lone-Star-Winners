@@ -28,9 +28,10 @@ function baseConfig(overrides: Record<string, unknown> = {}): Record<string, unk
   return {
     product_eligibility: { mode: "ALL_PRODUCTS" },
     purchase_entry_formula: {
-      mode: "PER_ELIGIBLE_AMOUNT",
+      mode: "ENTRIES_PER_CURRENCY_UNIT",
       amount_unit_minor: "100",
       entries_per_amount_unit: { numerator: 1, denominator: 1 },
+      rounding_policy: "FLOOR",
     },
     entry_limits: { per_order_max: null, per_participant_max: null },
     partial_refund_rounding_policy: "FLOOR",
@@ -123,9 +124,10 @@ describe("configuracion (DEC-012: cero valores por defecto)", () => {
   it("rechaza un importe con decimales en la configuracion", () => {
     const bad = baseConfig({
       purchase_entry_formula: {
-        mode: "PER_ELIGIBLE_AMOUNT",
+        mode: "ENTRIES_PER_CURRENCY_UNIT",
         amount_unit_minor: "1.5",
         entries_per_amount_unit: { numerator: 1, denominator: 1 },
+        rounding_policy: "FLOOR",
       },
     });
     expect(() => calculateEntries(input([item("a", "SKU-1", 1, 100n)]), bad)).toThrow(
@@ -143,7 +145,11 @@ describe("entries base", () => {
 
   it("calcula por unidad de producto", () => {
     const config = baseConfig({
-      purchase_entry_formula: { mode: "PER_ELIGIBLE_UNIT", entries_per_unit: 5 },
+      purchase_entry_formula: {
+        mode: "FIXED_PER_PRODUCT",
+        entries_per_unit: 5,
+        rounding_policy: "FLOOR",
+      },
     });
     const result = calculateEntries(input([item("a", "SKU-1", 4, 999n)]), config);
     expect(result.finalEntries).toBe(20);
@@ -151,7 +157,7 @@ describe("entries base", () => {
 
   it("calcula una cantidad fija por pedido, sin importar cuantas lineas haya", () => {
     const config = baseConfig({
-      purchase_entry_formula: { mode: "FIXED_PER_ORDER", entries: 7 },
+      purchase_entry_formula: { mode: "FIXED_PER_ORDER", entries: 7, rounding_policy: "FLOOR" },
     });
     const one = calculateEntries(input([item("a", "SKU-1", 1, 100n)]), config);
     const many = calculateEntries(
@@ -191,9 +197,10 @@ describe("entries base", () => {
 describe("un solo redondeo (la propiedad que hace el resultado independiente del carrito)", () => {
   const config = baseConfig({
     purchase_entry_formula: {
-      mode: "PER_ELIGIBLE_AMOUNT",
+      mode: "ENTRIES_PER_CURRENCY_UNIT",
       amount_unit_minor: "100",
       entries_per_amount_unit: { numerator: 1, denominator: 1 },
+      rounding_policy: "FLOOR",
     },
   });
 
@@ -454,6 +461,277 @@ describe("determinismo", () => {
     expect(result.trace.engine_version).toBe(ENTRY_CALCULATION_ENGINE_VERSION);
     expect(result.trace.rules_version_id).toBe(input(items).rulesVersionId);
   });
+
+  /**
+   * LA PROPIEDAD ENTERA, SOBRE LAS CUATRO FORMULAS.
+   *
+   * Los tres tests anteriores comprueban el determinismo sobre UNA formula. La
+   * promesa de la cabecera del motor es mas fuerte: misma entrada + misma
+   * `rules_version` + misma `engine_version` => mismo resultado, sea cual sea la
+   * forma configurada. Un modo nuevo que introdujera una fuente de no
+   * determinismo -un `Object.keys`, un `sort` inestable, un `new Date()`- no lo
+   * detectaria ninguno de los otros tres.
+   *
+   * Se compara la traza SERIALIZADA, no el objeto: es lo que se persiste en
+   * `entry_calculation_snapshots` y lo que DEC-016 exige poder regenerar byte a
+   * byte. Dos objetos iguales que serializan distinto no valdrian.
+   */
+  it("misma entrada, mismas reglas y mismo motor dan la misma traza en las CUATRO formulas", () => {
+    const formulas: readonly Record<string, unknown>[] = [
+      { mode: "FIXED_PER_ORDER", entries: 7, rounding_policy: "HALF_EVEN" },
+      { mode: "FIXED_PER_PRODUCT", entries_per_unit: 5, rounding_policy: "CEIL" },
+      {
+        mode: "ENTRIES_PER_CURRENCY_UNIT",
+        amount_unit_minor: "100",
+        entries_per_amount_unit: { numerator: 3, denominator: 7 },
+        rounding_policy: "HALF_UP",
+      },
+      {
+        mode: "TIERED_BY_AMOUNT",
+        tiers: [
+          { id: "t3", min_eligible_amount_minor: "5000", entries: 100 },
+          { id: "t1", min_eligible_amount_minor: "500", entries: 5 },
+          { id: "t2", min_eligible_amount_minor: "1500", entries: 20 },
+        ],
+        rounding_policy: "FLOOR",
+      },
+    ];
+
+    for (const purchase_entry_formula of formulas) {
+      // Misma configuracion de multiplicadores y topes; solo cambia la formula.
+      const withFormula = { ...config, purchase_entry_formula };
+
+      const runs = [1, 2, 3].map(() =>
+        JSON.stringify(calculateEntries(input(items, { flags: FLAGS_ALL_ON }), withFormula).trace),
+      );
+
+      expect(runs[1]).toBe(runs[0]);
+      expect(runs[2]).toBe(runs[0]);
+
+      // Y el orden de llegada de las lineas tampoco puede alterarla.
+      const reversed = JSON.stringify(
+        calculateEntries(input([...items].reverse(), { flags: FLAGS_ALL_ON }), withFormula).trace,
+      );
+      expect(reversed).toBe(runs[0]);
+    }
+  });
+});
+
+/**
+ * CADA FORMULA CON SU POLITICA DE REDONDEO.
+ *
+ * Antes de este hito el motor redondeaba con `partial_refund_rounding_policy`,
+ * que responde a otra pregunta: como se prorratea una devolucion parcial. Estos
+ * tests fijan que ya no es asi, y lo hacen de la unica forma que lo demuestra:
+ * moviendo una y comprobando que la otra NO cambia el resultado.
+ */
+describe("politica de redondeo por formula", () => {
+  function withPolicy(policy: string, refundPolicy = "FLOOR"): Record<string, unknown> {
+    return baseConfig({
+      purchase_entry_formula: {
+        mode: "ENTRIES_PER_CURRENCY_UNIT",
+        amount_unit_minor: "100",
+        entries_per_amount_unit: { numerator: 1, denominator: 1 },
+        rounding_policy: policy,
+      },
+      partial_refund_rounding_policy: refundPolicy,
+    });
+  }
+
+  // 150 unidades menores sobre una unidad de 100 = exactamente 3/2 entries.
+  const cart = [item("a", "SKU-1", 1, 150n)];
+
+  it("la formula redondea con SU politica, no con la de la devolucion parcial", () => {
+    expect(calculateEntries(input(cart), withPolicy("FLOOR")).finalEntries).toBe(1);
+    expect(calculateEntries(input(cart), withPolicy("CEIL")).finalEntries).toBe(2);
+    expect(calculateEntries(input(cart), withPolicy("HALF_UP")).finalEntries).toBe(2);
+    expect(calculateEntries(input(cart), withPolicy("HALF_DOWN")).finalEntries).toBe(1);
+    expect(calculateEntries(input(cart), withPolicy("HALF_EVEN")).finalEntries).toBe(2);
+  });
+
+  it("cambiar la politica de la devolucion parcial NO cambia lo que genera una compra", () => {
+    const floorRefund = calculateEntries(input(cart), withPolicy("CEIL", "FLOOR"));
+    const ceilRefund = calculateEntries(input(cart), withPolicy("CEIL", "HALF_EVEN"));
+    expect(ceilRefund.finalEntries).toBe(floorRefund.finalEntries);
+    expect(ceilRefund.trace.rounding_policy).toBe("CEIL");
+  });
+
+  it("la traza anota que politica se aplico", () => {
+    expect(calculateEntries(input(cart), withPolicy("HALF_EVEN")).trace.rounding_policy).toBe(
+      "HALF_EVEN",
+    );
+  });
+
+  it("una formula sin politica de redondeo no calcula: no se elige una por ella", () => {
+    const missing = baseConfig({
+      purchase_entry_formula: { mode: "FIXED_PER_ORDER", entries: 7 },
+    });
+    expect(() => calculateEntries(input(cart), missing)).toThrow(CalculationConfigError);
+  });
+
+  it("una politica que no existe se rechaza en vez de caer en la mas parecida", () => {
+    const bogus = baseConfig({
+      purchase_entry_formula: {
+        mode: "FIXED_PER_ORDER",
+        entries: 7,
+        rounding_policy: "ROUND_HALF_TO_THE_HOUSE",
+      },
+    });
+    expect(() => calculateEntries(input(cart), bogus)).toThrow(CalculationConfigError);
+  });
+});
+
+describe("TIERED_BY_AMOUNT", () => {
+  function tiered(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+    return baseConfig({
+      purchase_entry_formula: {
+        mode: "TIERED_BY_AMOUNT",
+        tiers: [
+          { id: "bronze", min_eligible_amount_minor: "2500", entries: 5 },
+          { id: "gold", min_eligible_amount_minor: "10000", entries: 50 },
+          { id: "silver", min_eligible_amount_minor: "5000", entries: 20 },
+        ],
+        rounding_policy: "FLOOR",
+      },
+      ...overrides,
+    });
+  }
+
+  it("gana el escalon mas alto que se alcanza, no el primero declarado", () => {
+    const result = calculateEntries(input([item("a", "SKU-1", 1, 7500n)]), tiered());
+    expect(result.finalEntries).toBe(20);
+    expect(result.trace.applied_tier_id).toBe("silver");
+    expect(result.trace.tier_selection).toBe("HIGHEST_MATCHING");
+  });
+
+  it("los escalones NO se acumulan", () => {
+    // 5 + 20 + 50 seria 75 si se sumaran. Gana solo el mas alto.
+    const result = calculateEntries(input([item("a", "SKU-1", 1, 100_000n)]), tiered());
+    expect(result.finalEntries).toBe(50);
+    expect(result.trace.applied_tier_id).toBe("gold");
+  });
+
+  it("el umbral es INCLUSIVO: el importe exacto ya cuenta", () => {
+    expect(calculateEntries(input([item("a", "SKU-1", 1, 2500n)]), tiered()).finalEntries).toBe(5);
+    expect(calculateEntries(input([item("a", "SKU-1", 1, 2499n)]), tiered()).finalEntries).toBe(0);
+  });
+
+  it("por debajo del primer escalon no genera entries, y lo deja anotado", () => {
+    const result = calculateEntries(input([item("a", "SKU-1", 1, 100n)]), tiered());
+    expect(result.finalEntries).toBe(0);
+    expect(result.trace.applied_tier_id).toBeNull();
+  });
+
+  it("un pedido sin nada elegible no genera entries aunque un escalon empiece en cero", () => {
+    const fromZero = baseConfig({
+      product_eligibility: { mode: "ALLOW_LIST", skus: ["SKU-ELEGIBLE"] },
+      purchase_entry_formula: {
+        mode: "TIERED_BY_AMOUNT",
+        tiers: [{ id: "base", min_eligible_amount_minor: "0", entries: 9 }],
+        rounding_policy: "FLOOR",
+      },
+    });
+    const result = calculateEntries(input([item("a", "SKU-OTRO", 1, 9999n)]), fromZero);
+    expect(result.finalEntries).toBe(0);
+    expect(result.trace.applied_tier_id).toBeNull();
+  });
+
+  it("el subtotal que decide el escalon es el ELEGIBLE, no el del pedido entero", () => {
+    const restricted = tiered({ product_eligibility: { mode: "DENY_LIST", skus: ["SKU-CARO"] } });
+    const result = calculateEntries(
+      input([item("a", "SKU-CARO", 1, 90_000n), item("b", "SKU-1", 1, 3000n)]),
+      restricted,
+    );
+    expect(result.trace.eligible_subtotal_minor).toBe("3000");
+    expect(result.trace.applied_tier_id).toBe("bronze");
+    expect(result.finalEntries).toBe(5);
+  });
+
+  it("un multiplicador de ambito de pedido si multiplica el escalon", () => {
+    const withMultiplier = tiered({
+      multipliers: {
+        conflict_strategy: "STACK",
+        periods: [
+          {
+            id: "labor-day",
+            multiplier: { numerator: 2, denominator: 1 },
+            starts_at: "2026-09-01T00:00:00Z",
+            ends_at: "2026-10-01T00:00:00Z",
+            priority: 0,
+            sku_scope: null,
+          },
+        ],
+      },
+    });
+    const result = calculateEntries(
+      input([item("a", "SKU-1", 1, 7500n)], { flags: FLAGS_ALL_ON }),
+      withMultiplier,
+    );
+    expect(result.finalEntries).toBe(40);
+  });
+
+  it("el orden de los escalones en el JSON no cambia el resultado", () => {
+    const shuffled = baseConfig({
+      purchase_entry_formula: {
+        mode: "TIERED_BY_AMOUNT",
+        tiers: [
+          { id: "gold", min_eligible_amount_minor: "10000", entries: 50 },
+          { id: "silver", min_eligible_amount_minor: "5000", entries: 20 },
+          { id: "bronze", min_eligible_amount_minor: "2500", entries: 5 },
+        ],
+        rounding_policy: "FLOOR",
+      },
+    });
+    const cart = [item("a", "SKU-1", 1, 7500n)];
+    expect(JSON.stringify(calculateEntries(input(cart), shuffled).trace)).toBe(
+      JSON.stringify(calculateEntries(input(cart), tiered()).trace),
+    );
+  });
+
+  it("dos escalones con el mismo umbral se rechazan: un empate no es determinista", () => {
+    const ambiguous = baseConfig({
+      purchase_entry_formula: {
+        mode: "TIERED_BY_AMOUNT",
+        tiers: [
+          { id: "a", min_eligible_amount_minor: "2500", entries: 5 },
+          { id: "b", min_eligible_amount_minor: "2500", entries: 9 },
+        ],
+        rounding_policy: "FLOOR",
+      },
+    });
+    expect(() => calculateEntries(input([item("a", "SKU-1", 1, 3000n)]), ambiguous)).toThrow(
+      CalculationConfigError,
+    );
+  });
+
+  it("dos escalones con el mismo identificador se rechazan: la traza dejaria de ser legible", () => {
+    const duplicated = baseConfig({
+      purchase_entry_formula: {
+        mode: "TIERED_BY_AMOUNT",
+        tiers: [
+          { id: "tier", min_eligible_amount_minor: "2500", entries: 5 },
+          { id: "tier", min_eligible_amount_minor: "5000", entries: 9 },
+        ],
+        rounding_policy: "FLOOR",
+      },
+    });
+    expect(() => calculateEntries(input([item("a", "SKU-1", 1, 3000n)]), duplicated)).toThrow(
+      CalculationConfigError,
+    );
+  });
+
+  it("una lista de escalones vacia se rechaza en vez de significar cero entries", () => {
+    const empty = baseConfig({
+      purchase_entry_formula: {
+        mode: "TIERED_BY_AMOUNT",
+        tiers: [],
+        rounding_policy: "FLOOR",
+      },
+    });
+    expect(() => calculateEntries(input([item("a", "SKU-1", 1, 3000n)]), empty)).toThrow(
+      CalculationConfigError,
+    );
+  });
 });
 
 describe("entradas invalidas", () => {
@@ -485,7 +763,11 @@ describe("entradas invalidas", () => {
 
   it("rechaza un resultado absurdamente grande en vez de escribirlo en el ledger", () => {
     const config = baseConfig({
-      purchase_entry_formula: { mode: "PER_ELIGIBLE_UNIT", entries_per_unit: 1000000 },
+      purchase_entry_formula: {
+        mode: "FIXED_PER_PRODUCT",
+        entries_per_unit: 1000000,
+        rounding_policy: "FLOOR",
+      },
     });
     expect(() => calculateEntries(input([item("a", "SKU-1", 1000, 1n)]), config)).toThrow(
       CalculationError,

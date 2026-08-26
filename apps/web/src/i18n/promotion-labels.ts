@@ -23,18 +23,24 @@ export function usePromotionStatusLabel(): (status: PromotionStatus) => string {
 
   return (status: PromotionStatus): string => {
     switch (status) {
-      case "upcoming":
-        return t("upcoming");
-      case "active":
-        return t("active");
-      case "ended":
-        return t("ended");
-      case "administrator_processing":
-        return t("administrator_processing");
-      case "winner_verification":
-        return t("winner_verification");
-      case "completed":
-        return t("completed");
+      case "DRAFT":
+        return t("DRAFT");
+      case "SCHEDULED":
+        return t("SCHEDULED");
+      case "ACTIVE":
+        return t("ACTIVE");
+      case "CLOSED":
+        return t("CLOSED");
+      case "EXPORT_PREPARATION":
+        return t("EXPORT_PREPARATION");
+      case "DRAW_PENDING":
+        return t("DRAW_PENDING");
+      case "POTENTIAL_WINNER_REVIEW":
+        return t("POTENTIAL_WINNER_REVIEW");
+      case "COMPLETED":
+        return t("COMPLETED");
+      case "CANCELLED":
+        return t("CANCELLED");
     }
   };
 }
@@ -49,21 +55,27 @@ export function usePromotionNoticeText(): (key: PromotionNoticeKey) => Promotion
 
   return (key: PromotionNoticeKey): PromotionNoticeText => {
     switch (key) {
-      case "upcoming":
-        return { title: t("upcoming.title"), body: t("upcoming.body") };
+      case "draft":
+        return { title: t("draft.title"), body: t("draft.body") };
+      case "scheduled":
+        return { title: t("scheduled.title"), body: t("scheduled.body") };
       case "active":
         return { title: t("active.title"), body: t("active.body") };
-      case "ended":
-        return { title: t("ended.title"), body: t("ended.body") };
-      case "administratorProcessing":
+      case "closed":
+        return { title: t("closed.title"), body: t("closed.body") };
+      case "exportPreparation":
+        return { title: t("exportPreparation.title"), body: t("exportPreparation.body") };
+      case "drawPending":
+        return { title: t("drawPending.title"), body: t("drawPending.body") };
+      case "potentialWinnerReview":
         return {
-          title: t("administratorProcessing.title"),
-          body: t("administratorProcessing.body"),
+          title: t("potentialWinnerReview.title"),
+          body: t("potentialWinnerReview.body"),
         };
-      case "winnerVerification":
-        return { title: t("winnerVerification.title"), body: t("winnerVerification.body") };
       case "completed":
         return { title: t("completed.title"), body: t("completed.body") };
+      case "cancelled":
+        return { title: t("cancelled.title"), body: t("cancelled.body") };
     }
   };
 }

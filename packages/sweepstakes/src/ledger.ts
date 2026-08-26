@@ -113,6 +113,25 @@ export interface LedgerEntryDraft {
   readonly reversesTransactionId: string | null;
   /** DEC-033. `null` mientras `entry_expiration_enabled` este apagado. */
   readonly expiresAt: Date | null;
+  /**
+   * OBLIGATORIO, Y ESTA ES LA RAZON (DEC-008).
+   *
+   * `entry_transactions.recorded_at` tiene `DEFAULT now()` en el esquema, y
+   * ademas ENTRA EN EL PAYLOAD CANONICO del hash de la cadena. Las dos cosas
+   * juntas son una trampa: si quien inserta deja actuar al `DEFAULT`, calcula
+   * el hash con un instante y la base de datos guarda otro. La cadena no se
+   * rompe mas tarde; NACE ROTA, en la primera insercion, y el verificador de
+   * `packages/audit` marca como manipulada una fila que nadie ha tocado.
+   *
+   * Por eso el campo no es opcional en el tipo. Quien construya un movimiento
+   * tiene que decidir el instante, pasarlo al `INSERT` y usar EXACTAMENTE ese
+   * mismo valor al calcular el hash. Un campo opcional aqui seria un campo que
+   * algun dia alguien no rellena, y el sintoma aparece en una auditoria.
+   *
+   * `effectiveAt` responde a otra pregunta -cuando OCURRIO el hecho- y puede
+   * ser anterior. `recordedAt` es cuando quedo registrado (DEC-011).
+   */
+  readonly recordedAt: Date;
 }
 
 export type LedgerValidationCode =
@@ -121,7 +140,8 @@ export type LedgerValidationCode =
   | "ENTRY_ANCHOR_REQUIRED"
   | "ENTRY_ANCHOR_FORBIDDEN"
   | "ENTRY_REASON_KEY_INVALID"
-  | "ENTRY_EXPIRATION_NOT_ENABLED";
+  | "ENTRY_EXPIRATION_NOT_ENABLED"
+  | "ENTRY_RECORDED_AT_REQUIRED";
 
 /**
  * Comprueba lo que se puede comprobar sin tocar la base de datos.
@@ -156,6 +176,15 @@ export function validateLedgerEntryDraft(
 
   if (!isValidEntryReasonKey(draft.reasonKey)) {
     problems.push("ENTRY_REASON_KEY_INVALID");
+  }
+
+  // DEC-008: sin un `recorded_at` explicito y valido no se puede calcular el
+  // hash de la cadena, porque el valor que acabaria en la fila lo pondria el
+  // `DEFAULT now()` del esquema y no coincidiria con el que se hasheo. Se
+  // comprueba tambien que sea una fecha real: un `Invalid Date` serializa a
+  // `null` sin avisar, que es la peor forma de romper una cadena de hashes.
+  if (!(draft.recordedAt instanceof Date) || Number.isNaN(draft.recordedAt.getTime())) {
+    problems.push("ENTRY_RECORDED_AT_REQUIRED");
   }
 
   // DEC-033: la caducidad existe como configuracion y esta apagada. Mientras lo
