@@ -1,4 +1,5 @@
 import { Alert, Badge, buttonVariants, cn } from "@lsw/ui";
+import Image from "next/image";
 import { useTranslations } from "next-intl";
 
 import { formatInteger, formatZonedDateTime } from "@/i18n/formatters";
@@ -131,10 +132,13 @@ export function PromotionHero({
    * `alt` NULO SIGNIFICA DECORATIVA, y decorativa significa `alt=""`.
    *
    * No es lo mismo que no poner el atributo: sin `alt` un lector de pantalla
-   * anuncia el nombre del fichero. La fotografia va junto a un titular que ya
-   * nombra el premio, asi que describirla otra vez seria decir lo mismo dos
-   * veces seguidas. Quien decide cual de los dos casos es no es esta pantalla:
-   * es el dato (`PromotionMedia.alt`).
+   * anuncia el nombre del fichero. Una ilustracion junto a un titular que ya
+   * nombra el premio no aporta nada y se declara decorativa; una FOTOGRAFIA del
+   * vehiculo real si -el color, la carroceria, el angulo no estan en ningun
+   * texto- y entonces el dato trae su descripcion en los dos idiomas.
+   *
+   * Cual de los dos casos es NO lo decide esta pantalla: lo decide el dato
+   * (`PromotionMedia.alt`). Aqui solo se traduce `null` a `alt=""`.
    */
   const heroAltText = media?.alt ?? null;
   const heroAlt = heroAltText === null ? "" : pickLocalized(heroAltText, locale);
@@ -178,39 +182,99 @@ export function PromotionHero({
           <div
             className={cn(
               // En telefono: en el flujo, a todo el ancho, arriba del texto.
-              "relative w-full",
-              // En escritorio: capa pegada al borde derecho, a sangre.
-              "lg:pointer-events-none lg:absolute lg:inset-y-0 lg:right-0 lg:w-[56%]",
+              // La ALTURA vive aqui y no en la imagen porque `next/image` con
+              // `fill` se posiciona en absoluto: si el hueco no la declarara,
+              // el contenedor mediria cero y la fotografia no se veria.
+              // 46svh deja el hueco casi cuadrado.
+              "relative h-[46svh] min-h-[15rem] w-full",
+              // En escritorio: capa pegada al borde derecho, a sangre. `h-auto`
+              // devuelve el mando a `inset-y-0`, que es lo que la estira a la
+              // altura entera de la seccion.
+              "lg:pointer-events-none lg:absolute lg:inset-y-0 lg:right-0 lg:h-auto lg:w-[56%]",
             )}
           >
-            {/* La URL llega del backend -hoy, de la API simulada- y todavia no
-                hay dominios de imagen configurados en `next.config`. Cuando los
-                haya, esto pasa a `next/image` sin tocar el resto del hero.
-                `fetchPriority` alto: es la imagen mas grande de la primera
-                pantalla y es lo que decide cuando la portada parece cargada. */}
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
+            {/*
+             * `next/image`, y no `<img>`, desde DEC-042.
+             *
+             * La imagen llega como ruta LOCAL servida por la propia aplicacion
+             * (`/prizes/...`), asi que el optimizador de Next puede con ella sin
+             * configurar dominios: genera `srcset` y formatos modernos, y con
+             * `sizes` un telefono se descarga una variante estrecha en vez de la
+             * fotografia entera. Es la mitad del coste de esta pantalla.
+             *
+             * El respaldo -la ilustracion de estudio- viaja como `data:` URI, y
+             * eso Next lo detecta y lo sirve sin optimizar. Por eso aqui hay un
+             * solo componente y no una rama por tipo de origen.
+             *
+             * `priority`: es la imagen mas grande de la primera pantalla y es lo
+             * que decide cuando la portada parece cargada.
+             *
+             * NOTA DE DESPLIEGUE: el optimizador necesita `sharp` en el entorno
+             * de ejecucion. Hoy llega en el arbol a traves de Next; si el
+             * empaquetado de `output: standalone` lo dejara fuera, las imagenes
+             * fallarian solo en produccion.
+             */}
+            <Image
               src={heroImage}
               alt={heroAlt}
-              fetchPriority="high"
-              // 46svh en telefono deja el hueco casi cuadrado, que es la
-              // proporcion para la que esta encuadrada la imagen: mas alto
-              // recortaria el morro por los lados. En escritorio ocupa la
-              // altura entera de la columna.
-              className="h-[46svh] min-h-[15rem] w-full object-cover object-center lg:h-full"
+              fill
+              priority
+              sizes="(min-width: 1024px) 56vw, 100vw"
+              /*
+               * ENCUADRE DE ESTA FOTOGRAFIA (DEC-042).
+               *
+               * `38%` en horizontal: el hueco es mas estrecho que la imagen en
+               * todos los tamanos, asi que `cover` recorta A LO ANCHO y hay que
+               * decidir que parte de la camioneta se queda. Desplazado a la
+               * izquierda del centro conserva el frontal completo -parrilla,
+               * emblema, faro y rueda delantera-, que es lo que identifica al
+               * vehiculo, y sacrifica la caja, que no dice nada.
+               *
+               * `35%` en vertical: en las dos disposiciones el eje vertical no
+               * recorta nada -se ve la altura entera- y este valor da igual. Solo
+               * entra en juego en una ventana muy ancha y baja, y ahi tira hacia
+               * ARRIBA a proposito: lo que hay que salvar es el techo de la
+               * cabina, no el asfalto del pie, que ademas queda bajo el degradado.
+               *
+               * El rotulo del concesionario que aparecia sobre el techo NO se
+               * quita desde aqui: es imposible con `cover` en un hueco mas
+               * estrecho que la imagen. Se recorta en origen; ver
+               * `scripts/build-prize-assets.mjs`.
+               */
+              className="object-cover object-[38%_35%]"
             />
 
             {/* Degradado de fundido. Cambia de EJE con el tamano de pantalla
                 porque el texto tambien cambia de sitio: en telefono el titular
                 cae sobre la parte baja de la foto y el fundido va hacia arriba;
                 en escritorio el titular esta a la izquierda y el fundido va
-                hacia la derecha. Es decoracion pura y no entra en el arbol. */}
+                hacia la derecha. Es decoracion pura y no entra en el arbol.
+
+                Las paradas estan MEDIDAS, no elegidas a ojo: el peor pixel bajo
+                el titular queda en 13,9:1 de contraste en telefono y 12,8:1 en
+                escritorio contra el blanco del sistema, con la fotografia real
+                y el recorte real. La fotografia es de dia y el sitio es negro:
+                sin degradado, el titular blanco caeria sobre asfalto claro.
+
+                En escritorio ademas TAPA la camioneta negra que asoma por la
+                izquierda del encuadre, que en las ventanas mas anchas vuelve a
+                entrar en cuadro. */}
             <div
               aria-hidden="true"
               className={cn(
-                "absolute inset-0 bg-gradient-to-t from-bg via-bg/75 to-transparent",
-                "lg:bg-gradient-to-r lg:from-bg lg:via-bg/60 lg:to-transparent",
+                "absolute inset-0 bg-gradient-to-t from-bg via-bg/80 via-40% to-bg/0 to-70%",
+                "lg:bg-gradient-to-r lg:via-bg/70 lg:via-30% lg:to-60%",
               )}
+            />
+
+            {/* Pie: una segunda pasada, corta y solo hacia arriba. Sin ella la
+                fotografia termina en un corte recto de asfalto claro contra el
+                negro de la banda siguiente, y se ve como una lamina pegada
+                encima de la pagina en vez de como parte de ella. En telefono es
+                tambien lo que sostiene el titular. */}
+            <div
+              aria-hidden="true"
+              className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-bg to-bg/0"
             />
           </div>
         )}

@@ -87,6 +87,7 @@ export default tseslint.config(
       "**/build/**",
       "**/out/**",
       "**/.next/**",
+      "**/.next-smoke/**",
       "**/.turbo/**",
       "**/coverage/**",
       "**/playwright-report/**",

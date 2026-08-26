@@ -295,9 +295,34 @@ describe("media del premio", () => {
     expect(media.hero_url).not.toBe(media.square_url);
   });
 
+  it("prefiere los recortes derivados a la fotografia sin recortar", () => {
+    /*
+     * DEC-042: `scripts/build-prize-assets.mjs` deriva de la fotografia del
+     * cliente un recorte de hero -sin el rotulo del concesionario que aparece
+     * sobre el techo- y uno cuadrado. Los dos se versionan.
+     *
+     * Si esta preferencia se perdiera, el sitio volveria a servir la foto
+     * entera: no fallaria nada, simplemente reaparecerian el rotulo y el toldo
+     * en la pieza mas visible del sitio, y nadie se enteraria hasta abrirla.
+     *
+     * El respaldo -foto sin recortar, y despues ilustracion- sigue siendo
+     * legitimo, y por eso esto se comprueba solo cuando los recortes existen.
+     */
+    const media = activePromotionDetail.media;
+    if (media === null) return;
+
+    if (resolvePrizePhoto(["gmc-2025-hero.jpg"]) !== null) {
+      expect(media.hero_url).toBe("/prizes/gmc-2025-hero.jpg");
+    }
+
+    if (resolvePrizePhoto(["gmc-2025-square.jpg"]) !== null) {
+      expect(media.square_url).toBe("/prizes/gmc-2025-square.jpg");
+    }
+  });
+
   it("la fotografia real gana a la ilustracion cuando existe", () => {
-    // No se comprueba el fixture -hoy no hay foto en el repositorio- sino la
-    // funcion que decide, que es donde vive la preferencia.
+    // No se comprueba el fixture sino la funcion que decide, que es donde vive
+    // la preferencia. `README.md` hace de fichero que seguro esta.
     expect(resolvePrizePhoto(["README.md"])).toBe("/prizes/README.md");
     expect(resolvePrizePhoto(["no-existe-este-fichero.jpg"])).toBeNull();
     // Y el orden importa: gana el primero que exista.

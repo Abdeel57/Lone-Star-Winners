@@ -30,7 +30,10 @@ export default tseslint.config(
   ...rootConfig,
 
   {
-    ignores: ["next-env.d.ts", ".next/**"],
+    // `.next-smoke/**` es el directorio de build que usa el humo cuando corre
+    // su propio `next dev` (ver `next.config.mjs`): mismo caso que `.next`,
+    // generado y no fuente.
+    ignores: ["next-env.d.ts", ".next/**", ".next-smoke/**"],
   },
 
   // Capa type-aware con globs locales (ver caveat de la cabecera).

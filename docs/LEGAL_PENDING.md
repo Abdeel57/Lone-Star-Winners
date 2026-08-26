@@ -160,3 +160,16 @@ reflejado en las Official Rules: cómo se agota el cupo, qué ocurre con una
 compra elegible cuando ya no quedan participaciones, y si el cupo convive con
 el mecanismo AMOE. Mientras siga TBD, el tope vive como configuración de la
 promoción y la interfaz lo muestra como dato, sin urgencia fabricada.
+
+## Prize imagery disclaimer
+
+TBD
+
+La promoción GMC Denali 2025 (DEC-042) muestra una fotografía real del
+vehículo entregada por el cliente. El texto alternativo describe lo que se ve
+("plateada, vista frontal de tres cuartos") y **no promete nada**. Falta
+decidir si las Official Rules exigen un descargo del tipo "la imagen es
+ilustrativa y puede no corresponder al vehículo exacto entregado" (color,
+equipamiento, año-modelo). Mientras siga TBD, la interfaz no incluye ninguna
+afirmación al respecto: añadir un descargo es una afirmación legal y la
+redacta el abogado.

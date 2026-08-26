@@ -9,7 +9,11 @@ import type {
 import { PROMOTION_STATUSES } from "@/lib/api";
 
 import { prizeTruckSquareImage, prizeTruckWideImage } from "./media";
-import { GMC_PRIZE_PHOTO_CANDIDATES, resolvePrizePhoto } from "./prize-photo";
+import {
+  GMC_PRIZE_HERO_CANDIDATES,
+  GMC_PRIZE_SQUARE_CANDIDATES,
+  resolvePrizePhoto,
+} from "./prize-photo";
 
 /**
  * Fixtures de promocion.
@@ -61,14 +65,14 @@ const BASE: PromotionSummary = {
   slug: "gmc-2025",
   status: "ACTIVE",
   title: {
-    "en-US": "The 2025 GMC Pickup Sweepstakes",
-    "es-US": "Sorteo promocional GMC 2025",
+    "en-US": "The 2025 GMC Denali Sweepstakes",
+    "es-US": "Sorteo promocional GMC Denali 2025",
   },
   summary: {
     "en-US":
-      "A 2025 GMC pickup truck. This promotion has a limited entry pool, and how it works is set out in the Official Rules.",
+      "A 2025 GMC Denali pickup truck. This promotion has a limited entry pool, and how it works is set out in the Official Rules.",
     "es-US":
-      "Una camioneta GMC 2025. Esta promoción tiene un universo limitado de participaciones, y cómo funciona se explica en las Reglas Oficiales.",
+      "Una camioneta GMC Denali 2025. Esta promoción tiene un universo limitado de participaciones, y cómo funciona se explica en las Reglas Oficiales.",
   },
   legal_timezone: "America/Chicago",
   starts_at: "2026-08-01T05:00:00.000Z",
@@ -92,21 +96,37 @@ const BASE: PromotionSummary = {
  * [PROVISIONAL] Imagenes del premio de la promocion protagonista (DEC-042).
  *
  * DOS ORIGENES, UNO DE ELLOS PREFERENTE. Si el usuario ha dejado su fotografia
- * en `apps/web/public/prizes/` se sirve esa; si no, la ilustracion de estudio
- * de `media.ts`. La decision se toma AQUI, en el origen del dato, y no en el
- * hero: ver `prize-photo.ts`.
+ * en `apps/web/public/prizes/` se sirve esa -o, mejor, el recorte que
+ * `scripts/build-prize-assets.mjs` deriva de ella-; si no hay ninguna, la
+ * ilustracion de estudio de `media.ts`. La decision se toma AQUI, en el origen
+ * del dato, y no en el hero: ver `prize-photo.ts`.
  *
- * `alt` es `null`, es decir, DECORATIVA. No es un descuido ni un hueco por
- * rellenar: la imagen va justo al lado de un titular que ya nombra el premio y
- * de un resumen que lo describe, asi que un texto alternativo aqui haria que un
- * lector de pantalla dijera lo mismo dos veces seguidas. El campo existe
- * nulable precisamente para poder declararlo, en vez de que cada pantalla
- * improvise una cadena.
+ * DOS RECORTES DISTINTOS, NO EL MISMO ESCALADO. El hero pinta apaisado y a
+ * sangre; una tarjeta pinta cuadrado. Servir el mismo fichero a los dos deja el
+ * vehiculo a medias en la tarjeta, que es exactamente el motivo de que
+ * `PromotionMedia` publique dos campos.
+ *
+ * `alt` DEJA DE SER NULO, y el cambio es deliberado.
+ *
+ * Mientras la imagen fue una ILUSTRACION de estudio, era decorativa: no decia
+ * nada que el titular de al lado no dijera, y describirla habria hecho que un
+ * lector de pantalla repitiera el nombre del premio dos veces seguidas. Una
+ * FOTOGRAFIA del vehiculo real si aporta informacion que no esta en ningun
+ * texto de la pantalla -el color, la carroceria, el angulo-, y esa informacion
+ * no puede quedar solo para quien ve la imagen.
+ *
+ * El texto describe LA FOTOGRAFIA, no promete el premio: lo que se entrega lo
+ * gobiernan las Reglas Oficiales, y una nota del tipo "la imagen puede no
+ * corresponder al modelo exacto" es una afirmacion legal que no escribe el
+ * frontend (CLAUDE.md #1 y #2).
  */
 const GMC_MEDIA: PromotionMedia = {
-  hero_url: resolvePrizePhoto(GMC_PRIZE_PHOTO_CANDIDATES) ?? prizeTruckWideImage,
-  square_url: resolvePrizePhoto(GMC_PRIZE_PHOTO_CANDIDATES) ?? prizeTruckSquareImage,
-  alt: null,
+  hero_url: resolvePrizePhoto(GMC_PRIZE_HERO_CANDIDATES) ?? prizeTruckWideImage,
+  square_url: resolvePrizePhoto(GMC_PRIZE_SQUARE_CANDIDATES) ?? prizeTruckSquareImage,
+  alt: {
+    "en-US": "Silver GMC Denali 2025 pickup, front three-quarter view",
+    "es-US": "Camioneta GMC Denali 2025 plateada, vista frontal de tres cuartos",
+  },
 };
 
 /**
@@ -192,7 +212,7 @@ const EDITIONS: Readonly<Record<PromotionStatus, Edition>> = {
   /*
    * ROAD TRIP PASA DE ACTIVA A PROGRAMADA (DEC-042).
    *
-   * La protagonista es ahora la GMC 2025, y el contrato sirve UNA sola
+   * La protagonista es ahora la GMC Denali 2025, y el contrato sirve UNA sola
    * promocion en `/promotions/active`: la que aqui ocupe `ACTIVE`. Road Trip
    * conserva su copy entero y se traslada a `SCHEDULED` con fechas futuras
    * coherentes con ese estado.
@@ -227,11 +247,14 @@ const EDITIONS: Readonly<Record<PromotionStatus, Edition>> = {
   /*
    * LA PROMOCION PROTAGONISTA (DEC-042).
    *
-   * Camioneta GMC 2025 y universo de 10,000 participaciones. TODO en esta
+   * Camioneta GMC Denali 2025 y universo de 10,000 participaciones. TODO en esta
    * edicion es PROVISIONAL, empezando por lo que no dice:
    *
    *   - no se declara version, motorizacion ni potencia. El cliente dijo "GMC
-   *     2025" y eso es lo que hay; inventar un acabado seria inventar el premio;
+   *     Denali 2025" -acabado incluido, desde el 2026-08-26- y eso es lo que
+   *     hay. La fotografia que entrego permite leer mas cosas del vehiculo, y
+   *     ninguna de ellas se escribe aqui: describir la foto no es declarar el
+   *     premio, y lo que se entrega lo fijan las Reglas Oficiales;
    *   - el valor declarado ($65,000) existe solo para probar que la interfaz
    *     sabe pintar un importe, igual que el resto de este archivo;
    *   - el tope de 10,000 vive en `entry_pool`, no en el copy, porque es
@@ -241,20 +264,20 @@ const EDITIONS: Readonly<Record<PromotionStatus, Edition>> = {
   ACTIVE: {
     slug: "gmc-2025",
     en: {
-      title: "The 2025 GMC Pickup Sweepstakes",
+      title: "The 2025 GMC Denali Sweepstakes",
       summary:
-        "A 2025 GMC pickup truck. This promotion has a limited entry pool, and how it works is set out in the Official Rules.",
-      prize: "2025 GMC pickup truck",
+        "A 2025 GMC Denali pickup truck. This promotion has a limited entry pool, and how it works is set out in the Official Rules.",
+      prize: "2025 GMC Denali",
       prizeDescription:
-        "A 2025 GMC pickup truck, delivered ready to drive. Provisional: the prize, its stated value and the limited entry pool are approved with the Official Rules.",
+        "A 2025 GMC Denali pickup truck, delivered ready to drive. Provisional: the prize, its stated value and the limited entry pool are approved with the Official Rules.",
     },
     es: {
-      title: "Sorteo promocional GMC 2025",
+      title: "Sorteo promocional GMC Denali 2025",
       summary:
-        "Una camioneta GMC 2025. Esta promoción tiene un universo limitado de participaciones, y cómo funciona se explica en las Reglas Oficiales.",
-      prize: "Camioneta GMC 2025",
+        "Una camioneta GMC Denali 2025. Esta promoción tiene un universo limitado de participaciones, y cómo funciona se explica en las Reglas Oficiales.",
+      prize: "GMC Denali 2025",
       prizeDescription:
-        "Una camioneta GMC 2025, entregada lista para circular. Provisional: el premio, su valor declarado y el universo limitado de participaciones se aprueban junto con las Reglas Oficiales.",
+        "Una camioneta GMC Denali 2025, entregada lista para circular. Provisional: el premio, su valor declarado y el universo limitado de participaciones se aprueban junto con las Reglas Oficiales.",
     },
     prizeValueMinor: "6500000",
     starts_at: "2026-08-01T05:00:00.000Z",

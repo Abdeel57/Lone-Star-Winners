@@ -24,6 +24,7 @@ dist/
 build/
 out/
 .next/
+.next-smoke/
 .nuxt/
 .output/
 .svelte-kit/

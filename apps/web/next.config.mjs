@@ -28,9 +28,50 @@ const withNextIntl = createNextIntlPlugin("./src/i18n/request.ts");
  */
 const monorepoRoot = join(import.meta.dirname, "..", "..");
 
+/**
+ * Directorio de build, aislable por entorno (`LSW_NEXT_DIST_DIR`).
+ *
+ * POR QUE EXISTE ESTA VARIABLE
+ * ----------------------------
+ * `scripts/smoke.mjs` arranca SU PROPIO `next dev` para comprobar el HTML
+ * servido. Ya tenia puerto propio para Next y puerto propio para la API
+ * simulada, pero seguia escribiendo en el MISMO `.next` que el servidor de
+ * desarrollo que alguien tenga abierto. Dos `next dev` sobre el mismo
+ * directorio de build se pisan: uno reescribe manifiestos y `chunks` mientras
+ * el otro los esta leyendo, y el sintoma no se parece a su causa
+ * -`app-paths-manifest.json` que desaparece, `Cannot find module './963.js'`,
+ * un `vendor-chunks` ausente, 500 intermitentes en una ruta cualquiera-, de
+ * modo que se investiga en el sitio equivocado.
+ *
+ * `distDir` es opcion de este fichero, no una variable que Next lea por su
+ * cuenta, asi que la unica forma de que un proceso hijo pida otro directorio es
+ * que la configuracion la lea. El valor por defecto NO cambia: sin variable, el
+ * build normal escribe en `.next` y todo lo que asume ese nombre
+ * -`output: standalone`, el trazado de ficheros, los scripts de limpieza-
+ * sigue funcionando igual.
+ *
+ * SE VALIDA porque este valor se convierte en una RUTA de escritura: se admite
+ * un unico nombre relativo simple, sin separadores y sin `..`. Un valor con
+ * travesia de directorios haria que un build escribiera fuera del proyecto.
+ */
+function resolveDistDir(raw) {
+  if (raw === undefined || raw === "") return ".next";
+
+  const isSimpleName = /^[A-Za-z0-9._-]+$/.test(raw) && raw !== "." && raw !== "..";
+
+  if (!isSimpleName) {
+    throw new Error(
+      `LSW_NEXT_DIST_DIR debe ser un nombre de directorio simple (recibido: "${raw}").`,
+    );
+  }
+
+  return raw;
+}
+
 /** @type {import("next").NextConfig} */
 const nextConfig = {
   output: "standalone",
+  distDir: resolveDistDir(process.env.LSW_NEXT_DIST_DIR),
   outputFileTracingRoot: monorepoRoot,
   reactStrictMode: true,
   // Cabecera `X-Powered-By`: informacion gratuita para quien enumere el stack.

@@ -4,6 +4,7 @@ dist/
 build/
 out/
 .next/
+.next-smoke/
 .turbo/
 coverage/
 playwright-report/

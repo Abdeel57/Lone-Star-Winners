@@ -37,6 +37,7 @@
  */
 
 import { spawn } from "node:child_process";
+import { readFileSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -68,6 +69,21 @@ const API_PORT = Number(process.env.SMOKE_API_PORT ?? 4210);
 const API_BASE_URL = `http://127.0.0.1:${API_PORT}/api/v1`;
 
 /**
+ * Directorio de build PROPIO, y no el `.next` de todo el mundo.
+ *
+ * Tener puertos propios no bastaba, por la misma razon por la que no bastaba
+ * tener un puerto solo para Next: el proceso que arranca este script comparte
+ * disco con el `next dev` que alguien tenga abierto. Dos `next dev` sobre el
+ * mismo `.next` se pisan -uno reescribe manifiestos y `chunks` mientras el
+ * otro los lee- y el resultado son 500 intermitentes EN EL OTRO SERVIDOR, que
+ * es el peor sitio posible para dejar un fallo: aparece despues, en otra
+ * ventana, sin relacion aparente con haber ejecutado el humo.
+ *
+ * `next.config.mjs` lee esta variable y la valida; sin ella, `.next`.
+ */
+const DIST_DIR = process.env.SMOKE_DIST_DIR ?? ".next-smoke";
+
+/**
  * Textos del estado de error de la capa de API, en los dos idiomas.
  *
  * Son los mismos de `messages/*.json` -> `states.loadFailed.title`. Se repiten
@@ -88,11 +104,19 @@ const CHECKS = [
   {
     path: "/es",
     expect: [
-      "Sorteo promocional GMC 2025",
-      // El nombre del premio: sale del DETALLE, no del resumen, asi que
-      // comprobarlo aqui prueba de paso que la portada consigue las dos
-      // peticiones y que el hero recibe la segunda (DEC-042).
-      "Camioneta GMC 2025",
+      "Sorteo promocional GMC Denali 2025",
+      // La DESCRIPCION del premio: sale del DETALLE, no del resumen, asi que
+      // comprobarla aqui prueba de paso que la portada consigue las dos
+      // peticiones y que el hero recibe la segunda (DEC-042). Se comprueba la
+      // descripcion y no el nombre porque el nombre -"GMC Denali 2025"- esta
+      // contenido en el titulo de la promocion, y entonces bastaria el resumen
+      // para dar el check por bueno.
+      "entregada lista para circular",
+      // La FOTOGRAFIA real del cliente, servida por el optimizador de Next: la
+      // ruta viaja codificada dentro de la URL de la imagen optimizada.
+      "%2Fprizes%2Fgmc-2025-hero.jpg",
+      // Y su texto alternativo, en el idioma de la pagina.
+      "Camioneta GMC Denali 2025 plateada",
       "$65,000.00",
       // El universo de participaciones, formateado con la convencion de es-US.
       "10,000",
@@ -103,8 +127,10 @@ const CHECKS = [
   {
     path: "/en",
     expect: [
-      "The 2025 GMC Pickup Sweepstakes",
-      "2025 GMC pickup truck",
+      "The 2025 GMC Denali Sweepstakes",
+      "delivered ready to drive",
+      "%2Fprizes%2Fgmc-2025-hero.jpg",
+      "Silver GMC Denali 2025 pickup",
       "$65,000.00",
       "10,000",
       "Heavyweight Cotton Tee",
@@ -128,7 +154,7 @@ const CHECKS = [
     path: "/es/promotions",
     expect: [
       "Sorteo promocional Lone Star Road Trip",
-      "Sorteo promocional GMC 2025",
+      "Sorteo promocional GMC Denali 2025",
       "Sorteo promocional Coastal Run",
     ],
   },
@@ -136,7 +162,12 @@ const CHECKS = [
     // La promocion protagonista (DEC-042). Su detalle tiene que servir el
     // premio y el valor declarado, que es lo que el hero de la portada consume.
     path: "/es/promotions/gmc-2025",
-    expect: ["Sorteo promocional GMC 2025", "Camioneta GMC 2025", "$65,000.00"],
+    expect: [
+      "Sorteo promocional GMC Denali 2025",
+      "GMC Denali 2025",
+      "entregada lista para circular",
+      "$65,000.00",
+    ],
   },
   {
     path: "/es/promotions/road-trip-2027",
@@ -220,8 +251,50 @@ function killTree(child) {
   }
 }
 
+/**
+ * Ruta del `tsconfig.json` de la app. Ver `restoreTsConfig`.
+ */
+const TSCONFIG = join(APP_DIR, "tsconfig.json");
+
+/**
+ * Devuelve `tsconfig.json` a como estaba antes de arrancar el hijo.
+ *
+ * POR QUE HACE FALTA
+ * ------------------
+ * `next dev` REESCRIBE el `tsconfig.json` del proyecto al arrancar: se asegura
+ * de que `include` contenga los tipos generados bajo su `distDir` y, de paso,
+ * vuelve a serializar el fichero entero con su propio formato. Con el `distDir`
+ * propio del humo (`.next-smoke`), eso mete en el fichero VERSIONADO una ruta
+ * que apunta a un directorio generado que solo existe mientras corre el humo, y
+ * ademas rompe `format:check`.
+ *
+ * No es un fallo del aislamiento del `distDir`: es la otra mitad del mismo
+ * problema -un proceso auxiliar que escribe en el arbol de fuentes- y se cierra
+ * igual, dejando las cosas como estaban. Solo se escribe si el contenido
+ * cambio, para no tocar la fecha del fichero cuando no hay nada que deshacer.
+ */
+function restoreTsConfig(before) {
+  if (before === null) return;
+
+  try {
+    if (readFileSync(TSCONFIG, "utf8") === before) return;
+    writeFileSync(TSCONFIG, before);
+    log("[smoke] tsconfig.json restaurado (lo reescribio el next dev del humo).");
+  } catch (error) {
+    log(`[smoke] AVISO: no se pudo restaurar tsconfig.json: ${String(error)}`);
+  }
+}
+
 async function main() {
   const nextBin = require.resolve("next/dist/bin/next");
+
+  // Se guarda ANTES de arrancar: el hijo lo reescribe. Ver `restoreTsConfig`.
+  let tsConfigBefore = null;
+  try {
+    tsConfigBefore = readFileSync(TSCONFIG, "utf8");
+  } catch {
+    // Sin tsconfig no hay nada que restaurar.
+  }
 
   log(`[smoke] arrancando next dev en ${BASE} con API simulada en ${API_BASE_URL}`);
 
@@ -239,6 +312,8 @@ async function main() {
       // porque un `.env` local podria declarar cualquiera de ellas.
       API_BASE_URL,
       NEXT_PUBLIC_API_BASE_URL: API_BASE_URL,
+      // Y su propio DIRECTORIO DE BUILD. Ver `DIST_DIR` mas arriba.
+      LSW_NEXT_DIST_DIR: DIST_DIR,
     },
     stdio: ["ignore", "pipe", "pipe"],
     detached: process.platform !== "win32",
@@ -285,6 +360,7 @@ async function main() {
     }
   } finally {
     killTree(child);
+    restoreTsConfig(tsConfigBefore);
   }
 
   log("");

@@ -389,7 +389,7 @@ describe("PromotionHero, composicion de DEC-042", () => {
     view.unmount();
   });
 
-  it("la fotografia del premio es decorativa cuando el dato lo dice", () => {
+  it("la fotografia del premio se describe en el idioma de la pagina", () => {
     const { container } = renderIn(
       "es",
       <PromotionHero
@@ -403,10 +403,52 @@ describe("PromotionHero, composicion de DEC-042", () => {
 
     const image = container.querySelector("img");
     expect(image, "el hero pinta la imagen del premio que sirve el backend").not.toBeNull();
-    // `alt=""` y no ausencia de atributo: sin `alt` un lector de pantalla
-    // anuncia el nombre del fichero. El titular de al lado ya nombra el premio.
-    expect(image).toHaveAttribute("alt", "");
-    expect(image).toHaveAttribute("src", activePromotionDetail.media?.hero_url ?? "");
+
+    const alt = activePromotionDetail.media?.alt;
+    expect(alt, "la fotografia real declara texto alternativo").not.toBeNull();
+    expect(image).toHaveAttribute("alt", alt?.["es-US"] ?? "");
+    // Y en espanol, no en ingles: el `alt` es contenido dinamico localizado
+    // (DEC-030) y se elige con la etiqueta del locale, no se traduce.
+    expect(image?.getAttribute("alt")).not.toBe(alt?.["en-US"]);
+
+    /*
+     * La ruta que sirve el backend tiene que llegar a la imagen.
+     *
+     * No se compara con `===` porque el hero pinta con `next/image`: la `src`
+     * final es la del optimizador (`/_next/image?url=...`), que ENVUELVE la
+     * ruta original codificada. Lo que se comprueba es que la ruta servida es
+     * la que viaja dentro, que es la propiedad que importa; comparar la cadena
+     * entera solo ataria el test a como Next construye su URL.
+     */
+    const source = decodeURIComponent(image?.getAttribute("src") ?? "");
+    expect(source).toContain(activePromotionDetail.media?.hero_url ?? "no-hay-imagen");
+  });
+
+  it("la fotografia es decorativa cuando el dato no la describe", () => {
+    /*
+     * La otra mitad del par. `PromotionMedia.alt` es nulable y significa
+     * DECORATIVA -una ilustracion junto a un titular que ya nombra el premio no
+     * aporta nada-, y esa rama tiene que seguir viva aunque hoy la promocion
+     * protagonista traiga descripcion: el dia que una promocion no la traiga, un
+     * `alt` ausente haria que un lector de pantalla leyera el nombre del fichero.
+     */
+    const media = activePromotionDetail.media;
+    expect(media, "la promocion protagonista declara imagenes").not.toBeNull();
+    if (media === null) return;
+
+    const { container } = renderIn(
+      "en",
+      <PromotionHero
+        promotion={activePromotion}
+        detail={{ ...activePromotionDetail, media: { ...media, alt: null } }}
+        locale="en"
+        nowIso={NOW}
+        amoeEnabled={false}
+      />,
+    );
+
+    // `alt=""` y no ausencia de atributo.
+    expect(container.querySelector("img")).toHaveAttribute("alt", "");
   });
 
   it("sin detalle se compone igual, sin imagen y sin inventar premio", () => {
