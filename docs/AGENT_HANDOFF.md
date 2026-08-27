@@ -1062,7 +1062,13 @@ para las rutas de comercio en `apps/api`.
 
 ## HO-026
 
-Status: OPEN
+Status: RESUELTO (sesión paralela, 2026-08-26): draw.authorization.create ya
+lleva promotion.read como lectura emparejada y winner.status.update ya existe
+(permissions.ts:291-293). draw.approve se acepta como capacidad PROPIA — no
+reutilizar draw.initiate, porque dejaría la separación de funciones dentro del
+mismo rol — con read export.snapshot.read, step-up y SUPER_ADMIN excluido; se
+implementa con las rutas de sorteo y resiembra en 0010–0019. Sin capacidad de
+lectura del expediente de autorización hasta que exista una ruta que la use.
 
 ## Handoff
 
