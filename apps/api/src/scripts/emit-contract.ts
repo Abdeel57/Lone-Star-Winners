@@ -15,11 +15,32 @@
  * NO necesita base de datos ni variables de entorno reales: construye las
  * definiciones de ruta, que son datos puros. Un generador de contrato que
  * exigiera una base de datos viva no se podria ejecutar en CI.
+ *
+ * POR QUE EL MANIFIESTO PASA POR PRETTIER Y LA SPEC NO
+ *
+ *   `route-manifest.json` NO esta en `.prettierignore`: `format:check` lo
+ *   revisa y `format` lo reescribe. Si el emisor dejara el `JSON.stringify` en
+ *   crudo, cada ejecucion escribiria los arrays expandidos, Prettier los
+ *   volveria a compactar, y `contract:check` -que es `contract:emit` seguido de
+ *   `git diff --exit-code`- fallaria SIEMPRE, aunque el contrato no hubiera
+ *   cambiado. Un check que siempre falla no lo mira nadie, y el dia que
+ *   detecte una divergencia real no avisa.
+ *
+ *   Asi que el emisor escribe ya el formato que produce Prettier, y lo hace
+ *   leyendo la MISMA configuracion del repositorio en vez de imitarla: una
+ *   copia de `printWidth` aqui seria una segunda fuente de verdad de formato,
+ *   que es la misma clase de error que este comentario describe.
+ *
+ *   `openapi.json` si esta en `.prettierignore` (DEC-014) y este script es su
+ *   unico escritor, asi que conserva su serializador propio: claves ordenadas y
+ *   `LF` explicito, que es lo que lo hace comparable byte a byte.
  */
 
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+
+import { format, resolveConfig } from "prettier";
 
 import { collectContractRouteDefinitions, type AppDependencies } from "../app.js";
 import { buildOpenApiDocument, serializeOpenApiDocument } from "../http/openapi.js";
@@ -34,7 +55,35 @@ const OUTPUT_DIR = path.resolve(
   "openapi",
 );
 
-function main(): void {
+/** Un solo nombre: se escribe ahi y se resuelve la config de Prettier para ahi. */
+const MANIFEST_FILENAME = "route-manifest.json";
+
+/**
+ * El manifiesto, formateado como lo dejaria `prettier --write`.
+ *
+ * La configuracion se resuelve PARA LA RUTA del fichero, no en abstracto:
+ * `prettier.config.mjs` tiene un `override` para `*.json`, y resolverla contra
+ * otra ruta daria otro ancho de linea.
+ *
+ * `editorconfig: true` no es opcional: la CLI de Prettier lo activa por
+ * defecto, asi que sin el, este emisor y `format:check` podrian discrepar. En
+ * este repositorio `.editorconfig` fija `end_of_line = lf`, que es justo lo que
+ * no se puede perder en una maquina Windows (DEC-026).
+ *
+ * Sigue siendo determinista: la salida es funcion de unos datos ya ordenados
+ * mas la configuracion versionada del repositorio.
+ */
+async function formatManifest(manifest: unknown): Promise<string> {
+  const filepath = path.join(OUTPUT_DIR, MANIFEST_FILENAME);
+  const options = await resolveConfig(filepath, { editorconfig: true });
+  return format(`${JSON.stringify(manifest, null, 2)}\n`, {
+    ...(options ?? {}),
+    filepath,
+    parser: "json",
+  });
+}
+
+async function main(): Promise<void> {
   // Las definiciones de ruta no consultan la base de datos: solo la capturan
   // para que sus handlers puedan usarla en tiempo de ejecucion.
   const dependencies = {
@@ -62,13 +111,9 @@ function main(): void {
     contract_version: OPENAPI_DOCUMENT_VERSION,
     routes: buildRouteManifest(routes),
   };
-  writeFileSync(
-    path.join(OUTPUT_DIR, "route-manifest.json"),
-    `${JSON.stringify(manifest, null, 2)}\n`,
-    "utf8",
-  );
+  writeFileSync(path.join(OUTPUT_DIR, MANIFEST_FILENAME), await formatManifest(manifest), "utf8");
 
   console.error(`[contract] ${String(routes.length)} rutas escritas en ${OUTPUT_DIR}`);
 }
 
-main();
+await main();
