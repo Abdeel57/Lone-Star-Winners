@@ -955,5 +955,49 @@ What I need from you:
 Affected files: `turbo.json`, `package.json` (raíz), `apps/web/scripts/smoke.mjs`
 (referencia del guardián).
 
-Blocking: NO para el trabajo diario; SÍ para que la receta del build aislado
-sea fiable en CI.
+Blocking: NO. Aclaración de la sesión de Railway (2026-08-26): en Railway cada
+build corre en un contenedor limpio, sin dev server que envenenar y sin caché
+de turbo persistida; `LSW_NEXT_DIST_DIR` no se define y `next.config.mjs` cae a
+`.next`. HO-023 es **ergonomía local**, no un bloqueante del despliegue.
+
+---
+
+## HO-024
+
+Status: OPEN
+
+## Handoff
+
+Date: 2026-08-26
+From: security-integration (auditoría HO-022, hallazgo H5), vía Team Lead
+To: backend
+
+Context:
+El cerrojo de activación de DEC-012 —una promoción no pasa a `ACTIVE` mientras
+queden claves legales requeridas en `TBD`— cubre **doce claves**.
+`docs/LEGAL_PENDING.md` tiene **dieciocho epígrafes** abiertos. No están en el
+array: mecanismo AMOE, multiplicadores, requisitos del TPA, retención,
+verificación de email, el tope de participaciones de DEC-042 y el descargo
+sobre la imagen del premio.
+
+Consecuencia: **una promoción puede pasar a `ACTIVE` con AMOE sin decidir**,
+que es exactamente la configuración que produce el hero "GANA / Comprar ahora"
+sin línea de no-compra (hallazgo H4, tratado en DEC-044 desde el frontend
+como defensa en profundidad).
+
+What I need from you:
+
+- Que el conjunto de claves requeridas del validador de activación se derive
+  de una lista única alineada con los epígrafes de `docs/LEGAL_PENDING.md`, o
+  que exista un test que falle cuando `LEGAL_PENDING.md` tenga un epígrafe sin
+  clave correspondiente.
+- Añadir, como mínimo: `amoe.method`, `multipliers.*`, `export.*` (TPA),
+  `retention.*`, `eligibility.email_verification_required`,
+  `caps.per_promotion_total` (DEC-042) y `prize.imagery_disclaimer`.
+- Coordinar con el abogado qué claves son **requeridas** para activar y cuáles
+  pueden quedar opcionales.
+
+Affected files: `packages/sweepstakes/src/rules-keys.ts`,
+`packages/database` (validador de activación), `docs/LEGAL_PENDING.md`
+
+Blocking: YES para activar cualquier promoción real.

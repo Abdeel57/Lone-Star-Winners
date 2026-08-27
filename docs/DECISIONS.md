@@ -1908,3 +1908,66 @@ Oficiales y carrito. **No** hay identidad, checkout, pago, AMOE, sorteo ni
 export, y los dieciséis puntos de `docs/LEGAL_PENDING.md` siguen en TBD. Nada
 de lo que se publique puede presentarse como una promoción en curso hasta que
 existan Official Rules aprobadas.
+
+---
+
+## DEC-044
+
+Status: Accepted
+
+Date: 2026-08-26
+
+Decision:
+**Correcciones de compliance del copy y del hero, salidas de la auditoría de
+`security-integration` (HO-022, punto 3) sobre el despliegue de DEC-043.**
+
+1. **El hero completo de promoción ("GANA…", CTA rojo, cuenta atrás, chip
+   "Promoción vigente") solo se renderiza si la promoción trae una versión de
+   Reglas Oficiales publicada** (`rules_version_id` no nulo y documento
+   disponible). Si la API devuelve una promoción `ACTIVE` sin reglas, el
+   frontend muestra un estado contenido ("Reglas Oficiales pendientes de
+   publicación") sin invitación de compra ligada a la promoción. Es defensa en
+   profundidad sobre DEC-012: el cerrojo de activación es de `backend`, pero el
+   frontend no publica una invitación que las reglas no respaldan.
+2. **La cifra de participaciones emitidas (`entry_pool.issued`) no se
+   renderiza.** Mostrar `cap` e `issued` juntos publica un contador de
+   restantes por implicación, exista o no campo `remaining`. Se muestra solo
+   el universo total como dato de las Reglas.
+3. **`metadata.description` simétrica en ambos idiomas**: el inglés decía
+   "sweepstakes" y el español omitía la categoría. Deben coincidir.
+4. **`availability.LOW_STOCK`**: el español "Quedan pocas unidades" es una
+   afirmación de escasez que el inglés "Low stock" no hace. Pasa a etiqueta
+   neutra equivalente.
+5. **La banda de confianza no afirma garantías en presente** sobre un ledger
+   sin tráfico (no hay checkout, pago ni AMOE operando). Describe cómo está
+   construido el sistema, no lo que garantiza en producción, hasta que exista
+   tráfico real y revisión.
+
+Context:
+El auditor midió sobre condiciones de render en el código (no con `grep`) y
+confirmó: sin lenguaje de escasez, sin "enter now", claves simétricas (295 en
+cada idioma). Su corrección de fondo: **la seguridad del copy era dependiente
+de datos**, a un `INSERT` de invertirse. Y su veredicto sobre la clave
+"No se requiere compra" detrás de flag: **correcta como forma de guardar copy
+no autorizado**; la alternativa —escribirla cuando se apruebe AMOE— es peor.
+
+Alternatives:
+Añadir la línea "No se requiere compra" al hero (descartado: con AMOE en TBD
+sería inventar un requisito legal, principio #2). Dejar el hero como estaba
+confiando solo en el cerrojo de DEC-012 (descartado: ese cerrojo cubre doce
+claves y `LEGAL_PENDING.md` tiene dieciocho epígrafes; ver HO-024).
+
+Reason:
+El principio #2 prohíbe inventar requisitos legales; el #12 pone la seguridad
+por encima del atajo. Un hero que solo es correcto porque la base de datos
+está vacía no es correcto.
+
+Observación no accionada: "vigente" (`home.eyebrow` y ocho claves más) tiene
+registro jurídico que "current" no tiene. No es problema vivo; si se
+cuestiona, se cuestiona en nueve sitios a la vez. Queda anotado.
+
+Affected areas: `apps/web` (hero, diccionarios, banda de confianza).
+
+Proposed by: security-integration (auditoría en la sesión paralela), vía
+Team Lead
+Agreed by: Team Lead
