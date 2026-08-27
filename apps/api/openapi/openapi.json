@@ -16184,6 +16184,23 @@
                             "items": {
                               "additionalProperties": false,
                               "properties": {
+                                "availability": {
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "status": {
+                                      "enum": [
+                                        "IN_STOCK",
+                                        "LOW_STOCK",
+                                        "OUT_OF_STOCK"
+                                      ],
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "status"
+                                  ],
+                                  "type": "object"
+                                },
                                 "id": {
                                   "format": "uuid",
                                   "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
@@ -16209,25 +16226,13 @@
                                 },
                                 "sku": {
                                   "type": "string"
-                                },
-                                "stock_quantity": {
-                                  "anyOf": [
-                                    {
-                                      "maximum": 9007199254740991,
-                                      "minimum": -9007199254740991,
-                                      "type": "integer"
-                                    },
-                                    {
-                                      "type": "null"
-                                    }
-                                  ]
                                 }
                               },
                               "required": [
                                 "id",
                                 "sku",
                                 "price",
-                                "stock_quantity"
+                                "availability"
                               ],
                               "type": "object"
                             },
@@ -16401,6 +16406,23 @@
                       "items": {
                         "additionalProperties": false,
                         "properties": {
+                          "availability": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "status": {
+                                "enum": [
+                                  "IN_STOCK",
+                                  "LOW_STOCK",
+                                  "OUT_OF_STOCK"
+                                ],
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "status"
+                            ],
+                            "type": "object"
+                          },
                           "id": {
                             "format": "uuid",
                             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
@@ -16426,25 +16448,13 @@
                           },
                           "sku": {
                             "type": "string"
-                          },
-                          "stock_quantity": {
-                            "anyOf": [
-                              {
-                                "maximum": 9007199254740991,
-                                "minimum": -9007199254740991,
-                                "type": "integer"
-                              },
-                              {
-                                "type": "null"
-                              }
-                            ]
                           }
                         },
                         "required": [
                           "id",
                           "sku",
                           "price",
-                          "stock_quantity"
+                          "availability"
                         ],
                         "type": "object"
                       },

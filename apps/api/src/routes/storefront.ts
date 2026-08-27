@@ -15,6 +15,13 @@
  *   la `PromotionRulesVersion` (DEC-012). Si el numero de entries viviera en el
  *   producto, editar el catalogo cambiaria retroactivamente lo que significo una
  *   compra pasada.
+ *
+ *   Y, desde HO-017, tampoco cuantas unidades quedan. Estas rutas son ANONIMAS
+ *   y publicaban `stock_quantity` en crudo mientras el carrito, que exige
+ *   sesion, deliberadamente no lo publicaba. Una de las dos superficies estaba
+ *   mal; se resuelve hacia la que no filtra inventario. Lo que sale ahora es el
+ *   mismo `availability` del carrito, evaluado para una unidad
+ *   (`services/availability.ts`).
  */
 
 import { z } from "zod";
@@ -30,6 +37,12 @@ import {
   promotionSummarySchema,
   publicConfigSchema,
 } from "../http/schemas.js";
+/**
+ * El MISMO predicado que decide el `409 INSUFFICIENT_STOCK` en el carrito. No
+ * hay una segunda definicion de "hay existencias" para el catalogo: ver el
+ * encabezado de `services/availability.ts`.
+ */
+import { availabilityFor, CATALOG_PROBE_QUANTITY } from "../services/availability.js";
 import type { ProductRecord, PromotionRecord } from "../services/ports.js";
 
 const slugParamsSchema = z.object({
@@ -75,7 +88,11 @@ function toProductSummary(product: ProductRecord): z.infer<typeof productSummary
         amount_minor: variant.priceAmountMinor.toString(10),
         currency: variant.currency,
       },
-      stock_quantity: variant.stockQuantity,
+      // "Se puede comprar UNA unidad?", con el MISMO predicado que decide el
+      // `409 INSUFFICIENT_STOCK` del carrito. La ficha no tiene cantidad
+      // pedida, asi que pregunta por la primera unidad; ver
+      // `CATALOG_PROBE_QUANTITY`.
+      availability: availabilityFor(variant.stockQuantity, CATALOG_PROBE_QUANTITY),
     })),
   };
 }

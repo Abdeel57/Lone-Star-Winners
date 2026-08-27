@@ -40,6 +40,12 @@ import { ApiErrors, errorEnvelopeSchema } from "../http/errors.js";
 import { cartOwnerOf, type RequestPrincipal } from "../http/principal.js";
 import type { RouteDefinition } from "../http/route-registry.js";
 import { cartWithQuoteSchema } from "../http/schemas.js";
+/**
+ * La disponibilidad y el predicado que decide el 409 viven en UN solo sitio,
+ * compartido con el catalogo (`routes/storefront.ts`). Ver el encabezado de
+ * `services/availability.ts`.
+ */
+import { availabilityFor, fitsStock } from "../services/availability.js";
 import { quoteServerCart, type EntryQuoteResponse } from "../services/entry-quote.js";
 import type { CartRecord } from "../services/ports.js";
 import type { FastifyRequest } from "fastify";
@@ -73,58 +79,6 @@ async function requirePrincipal(request: FastifyRequest): Promise<RequestPrincip
     throw ApiErrors.unauthenticated();
   }
   return principal;
-}
-
-/**
- * UNA sola pregunta sobre existencias, para los dos usos.
- *
- * `POST /cart/items` la usa para decidir el `409 INSUFFICIENT_STOCK` y
- * `availabilityOf` la usa para decidir el estado que se publica. Estan
- * escritas contra la misma funcion a proposito: si cada una leyera el stock a
- * su manera, un carrito podria decir "disponible" en la linea y responder 409
- * al pulsar, y ese sintoma es dificil de atribuir.
- *
- * `null` es "existencias no gestionadas", que NO es cero: no se comprueba nada
- * y se deja pasar.
- */
-function fitsStock(stockQuantity: number | null, quantity: number): boolean {
-  return stockQuantity === null || stockQuantity >= quantity;
-}
-
-/**
- * Disponibilidad de una LINEA, derivada del stock y de la cantidad pedida.
- *
- * | stock                | estado         | significado                        |
- * | -------------------- | -------------- | ---------------------------------- |
- * | no gestionado (null) | IN_STOCK       | nada limita esta linea             |
- * | menor que `quantity` | OUT_OF_STOCK   | la linea YA no cabe: pedir esta    |
- * |                      |                | cantidad devolveria 409            |
- * | igual a `quantity`   | LOW_STOCK      | se lleva exactamente lo que queda; |
- * |                      |                | no cabe ni una unidad mas          |
- * | mayor que `quantity` | IN_STOCK       | queda margen                       |
- *
- * POR QUE EL UMBRAL ES LA PROPIA LINEA Y NO UN NUMERO
- *
- *   Lo habitual seria "LOW_STOCK si quedan menos de N". Ese N es una constante
- *   de negocio que nadie ha aprobado, y el principio 2 de `CLAUDE.md` prohibe
- *   inventarla. La definicion de arriba no inventa nada: sale entera de la
- *   misma comparacion que ya decide el 409.
- *
- *   El copy es de `frontend` (DEC-022). `OUT_OF_STOCK` significa "esta
- *   cantidad no se puede servir hoy", que puede querer decir "quedan 3 y pediste
- *   5"; la etiqueta que se muestre es decision suya, no de la API.
- */
-function availabilityOf(line: {
-  readonly stockQuantity: number | null;
-  readonly quantity: number;
-}): { status: "IN_STOCK" | "LOW_STOCK" | "OUT_OF_STOCK" } {
-  if (!fitsStock(line.stockQuantity, line.quantity)) {
-    return { status: "OUT_OF_STOCK" };
-  }
-  if (line.stockQuantity === line.quantity) {
-    return { status: "LOW_STOCK" };
-  }
-  return { status: "IN_STOCK" };
 }
 
 /** Suma de cantidades, no numero de lineas. */
@@ -199,7 +153,9 @@ export function buildCartRoutes(dependencies: AppDependencies): RouteDefinition[
         // Sin tabla de medios en el esquema no hay imagen que servir, y
         // `backend` no crea una para rellenar el campo. Ver `schemas.ts`.
         image_url: null,
-        availability: availabilityOf(line),
+        // La cantidad preguntada es la de ESTA linea. El catalogo hace la
+        // misma pregunta por una unidad (`CATALOG_PROBE_QUANTITY`).
+        availability: availabilityFor(line.stockQuantity, line.quantity),
       })),
       subtotal: subtotalOf(cart),
       entry_quote: quote,

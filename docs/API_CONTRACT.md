@@ -614,15 +614,52 @@ mantener dos formas casi iguales sólo produce que una se quede atrás:
       "id": "uuid",
       "sku": "LSW-TEE-M",
       "price": { "amount_minor": "2500", "currency": "USD" },
-      "stock_quantity": 10
+      "availability": { "status": "IN_STOCK" }
     }
   ]
 }
 ```
 
-`description` puede ser `null`. `stock_quantity` puede ser `null`, y **`null` no
-es cero**: significa "existencias no gestionadas", y esa variante se puede añadir
-al carrito en cualquier cantidad admitida.
+`description` puede ser `null`.
+
+**`availability` sustituye a `stock_quantity` (HO-017).** El catálogo ya **no
+publica el inventario exacto**. Estas dos rutas son **anónimas** y publicaban
+`stock_quantity` en crudo mientras el carrito —que va con sesión— deliberadamente
+no lo publicaba: una de las dos superficies estaba mal, y se resuelve hacia la
+que **no filtra** información de negocio, que es además lo que HO-017 pedía.
+
+Es **el mismo objeto** que la línea del carrito (sección 5): mismo enum estable
+de tres valores, misma columna `product_variants.stock_quantity` y **el mismo
+predicado**, el que decide el `409 INSUFFICIENT_STOCK` —`fitsStock`, hoy en
+`apps/api/src/services/availability.ts`, importado por el catálogo y por las dos
+mutaciones del carrito, para que no existan dos definiciones de "hay
+existencias"—. La única diferencia es **la cantidad por la que se pregunta**: en
+el carrito es la de la línea; aquí es **una unidad**, porque en la ficha nadie ha
+elegido todavía cuántas quiere. La pregunta del catálogo es, literalmente, "¿se
+puede comprar una unidad?":
+
+| stock de la variante   | `status`       | significado                                  |
+| ---------------------- | -------------- | -------------------------------------------- |
+| no gestionado (`null`) | `IN_STOCK`     | nada limita la compra; **`null` no es cero** |
+| `0` o menos            | `OUT_OF_STOCK` | añadir la primera unidad devolvería `409`    |
+| exactamente `1`        | `LOW_STOCK`    | queda justo la unidad por la que se pregunta |
+| mayor que `1`          | `IN_STOCK`     | queda margen                                 |
+
+`null` sigue significando "existencias no gestionadas": esa variante da
+`IN_STOCK` y se puede añadir al carrito en cualquier cantidad admitida. El
+umbral de `LOW_STOCK` **no es un número de negocio** —nadie ha aprobado ninguno
+y el principio 2 de `CLAUDE.md` prohíbe inventarlo—: es la cantidad preguntada,
+igual que en la sección 5.
+
+`availability` es un **objeto** y no una cadena, por el mismo motivo que allí:
+el día que se decida publicar la cantidad, el campo cabe dentro sin cambiar el
+tipo de lo ya publicado. Hoy **sólo** lleva `status`; `quantity_available` no se
+publica en ninguna de las dos superficies.
+
+`is_purchasable` —"¿está a la venta?", que no es la misma pregunta que "¿hay
+existencias?"— **sigue pendiente** (HO-017) y **no** se deduce de `availability`:
+una variante retirada o no publicada puede tener existencias de sobra. Cuando se
+decida, se documenta aquí antes de implementarse.
 
 Sólo salen productos y variantes en `ACTIVE`. El parámetro `promotion_slug` que
 figuraba en la propuesta **no está implementado**: la elegibilidad no vive en el

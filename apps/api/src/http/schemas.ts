@@ -89,26 +89,8 @@ export const officialRulesSchema = z.object({
   ),
 });
 
-export const variantSchema = z.object({
-  id: z.uuid(),
-  sku: z.string(),
-  price: moneySchema,
-  /** `null` es "existencias no gestionadas", que no es lo mismo que cero. */
-  stock_quantity: z.number().int().nullable(),
-});
-
-export const productSummarySchema = z.object({
-  id: z.uuid(),
-  sku: z.string(),
-  slug: z.string(),
-  name: localizedTextSchema,
-  description: localizedTextSchema.nullable(),
-  currency: z.string().length(3),
-  variants: z.array(variantSchema),
-});
-
 /**
- * Disponibilidad de una LINEA del carrito (HO-017).
+ * Disponibilidad publicada, en el carrito y en el catalogo (HO-017).
  *
  * ES UN OBJETO Y NO UNA CADENA porque el dia que se decida publicar la
  * cantidad, el campo cabe dentro sin cambiar el tipo de lo ya publicado.
@@ -119,11 +101,41 @@ export const productSummarySchema = z.object({
  * acaso" seria una decision de negocio tomada por el backend.
  *
  * LOS TRES ESTADOS SE DERIVAN DE `product_variants.stock_quantity`, la misma
- * columna que decide el `409 INSUFFICIENT_STOCK`, y de la cantidad de ESTA
- * linea. Ver `availabilityOf` en `routes/cart.ts` para la tabla exacta.
+ * columna que decide el `409 INSUFFICIENT_STOCK`, y de la cantidad por la que
+ * pregunta cada superficie: la de la linea en el carrito, una unidad en el
+ * catalogo. Ver `services/availability.ts` para la tabla exacta.
  */
-export const cartLineAvailabilitySchema = z.object({
+export const availabilitySchema = z.object({
   status: z.enum(["IN_STOCK", "LOW_STOCK", "OUT_OF_STOCK"]),
+});
+
+export const variantSchema = z.object({
+  id: z.uuid(),
+  sku: z.string(),
+  price: moneySchema,
+  /**
+   * `stock_quantity` EN CRUDO YA NO SE PUBLICA.
+   *
+   * El catalogo es anonimo y publicaba el inventario exacto mientras el
+   * carrito, que va con sesion, deliberadamente no lo publicaba (HO-017). Una
+   * de las dos rutas estaba mal, y se resuelve hacia la que no filtra
+   * informacion de negocio: aqui sale el MISMO objeto `availability` de la
+   * linea del carrito, evaluado para una unidad.
+   *
+   * `is_purchasable` -"esta a la venta?", que no es lo mismo que "hay
+   * existencias?"- sigue pendiente y NO se deduce de este campo.
+   */
+  availability: availabilitySchema,
+});
+
+export const productSummarySchema = z.object({
+  id: z.uuid(),
+  sku: z.string(),
+  slug: z.string(),
+  name: localizedTextSchema,
+  description: localizedTextSchema.nullable(),
+  currency: z.string().length(3),
+  variants: z.array(variantSchema),
 });
 
 export const cartLineSchema = z.object({
@@ -148,7 +160,8 @@ export const cartLineSchema = z.object({
    * produccion el dia que se sirviera una ruta relativa.
    */
   image_url: z.string().nullable(),
-  availability: cartLineAvailabilitySchema,
+  /** La cantidad por la que se pregunta es la de ESTA linea. */
+  availability: availabilitySchema,
 });
 
 export const entryQuoteSchema = z.object({

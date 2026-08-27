@@ -11,6 +11,7 @@ import { describe, expect, it } from "vitest";
 
 import { createApp, type AppDependencies } from "../src/app.js";
 import { CONTRACT_GENERATION_CONFIG } from "../src/config/contract-config.js";
+import type { ProductRecord } from "../src/services/ports.js";
 import {
   createFakeRepositories,
   FIXTURE_DRAFT_PRODUCT,
@@ -218,16 +219,149 @@ describe("catalogo", () => {
     expect(detail.json<{ error: { code: string } }>().error.code).toBe("PRODUCT_NOT_FOUND");
     await app.close();
   });
+});
 
-  it("`stock_quantity` null significa existencias no gestionadas, y no se convierte en cero", async () => {
-    const app = await createApp(buildDependencies());
-    const body = (await app.inject({ method: "GET", url: "/api/v1/products/fixture-tee" })).json<{
-      variants: { sku: string; stock_quantity: number | null }[];
+/**
+ * Producto de PRUEBA con una variante por cada lectura posible del stock.
+ *
+ * Las cantidades no son datos de negocio: son los cuatro casos del predicado
+ * `fitsStock` evaluado para UNA unidad, mas el caso `2` que existe solo para
+ * demostrar que no hay ningun umbral inventado del tipo "quedan menos de N"
+ * (principio 2 de `CLAUDE.md`).
+ */
+const AVAILABILITY_PRODUCT: ProductRecord = {
+  ...FIXTURE_PRODUCT,
+  id: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
+  sku: "FIXTURE-STOCK",
+  slug: "fixture-stock",
+  variants: [
+    {
+      id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      sku: "FIXTURE-STOCK-UNMANAGED",
+      status: "ACTIVE",
+      priceAmountMinor: 2500n,
+      currency: "USD",
+      // Existencias no gestionadas: `null` NO es cero.
+      stockQuantity: null,
+      position: 0,
+    },
+    {
+      id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      sku: "FIXTURE-STOCK-ZERO",
+      status: "ACTIVE",
+      priceAmountMinor: 2500n,
+      currency: "USD",
+      stockQuantity: 0,
+      position: 1,
+    },
+    {
+      id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+      sku: "FIXTURE-STOCK-ONE",
+      status: "ACTIVE",
+      priceAmountMinor: 2500n,
+      currency: "USD",
+      stockQuantity: 1,
+      position: 2,
+    },
+    {
+      id: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+      sku: "FIXTURE-STOCK-TWO",
+      status: "ACTIVE",
+      priceAmountMinor: 2500n,
+      currency: "USD",
+      stockQuantity: 2,
+      position: 3,
+    },
+    {
+      id: "ffffffff-ffff-4fff-8fff-ffffffffffff",
+      sku: "FIXTURE-STOCK-MANY",
+      status: "ACTIVE",
+      priceAmountMinor: 2500n,
+      currency: "USD",
+      stockQuantity: 7,
+      position: 4,
+    },
+  ],
+};
+
+function statusBySku(payload: {
+  variants: { sku: string; availability: { status: string } }[];
+}): Record<string, string> {
+  return Object.fromEntries(
+    payload.variants.map((variant) => [variant.sku, variant.availability.status]),
+  );
+}
+
+describe("disponibilidad del catalogo (HO-017)", () => {
+  it("los cuatro estados salen del MISMO predicado del carrito, preguntando por UNA unidad", async () => {
+    const app = await createApp(buildDependencies({ products: [AVAILABILITY_PRODUCT] }));
+    const response = await app.inject({ method: "GET", url: "/api/v1/products/fixture-stock" });
+
+    expect(response.statusCode).toBe(200);
+    expect(
+      statusBySku(
+        response.json<{ variants: { sku: string; availability: { status: string } }[] }>(),
+      ),
+    ).toEqual({
+      // `null` es "existencias no gestionadas": nada limita la compra.
+      "FIXTURE-STOCK-UNMANAGED": "IN_STOCK",
+      // 0 < 1: anadir la primera unidad devolveria 409 INSUFFICIENT_STOCK.
+      "FIXTURE-STOCK-ZERO": "OUT_OF_STOCK",
+      // Queda exactamente la unidad por la que se pregunta.
+      "FIXTURE-STOCK-ONE": "LOW_STOCK",
+      // 2 NO es "poco": el umbral es la cantidad preguntada, no un N inventado.
+      "FIXTURE-STOCK-TWO": "IN_STOCK",
+      "FIXTURE-STOCK-MANY": "IN_STOCK",
+    });
+    await app.close();
+  });
+
+  it("el listado da los mismos estados que la ficha: es la misma forma", async () => {
+    const app = await createApp(buildDependencies({ products: [AVAILABILITY_PRODUCT] }));
+    const list = (await app.inject({ method: "GET", url: "/api/v1/products" })).json<{
+      items: { variants: { sku: string; availability: { status: string } }[] }[];
     }>();
 
-    expect(
-      body.variants.find((variant) => variant.sku === "FIXTURE-TEE-L")?.stock_quantity,
-    ).toBeNull();
+    expect(list.items.map((item) => statusBySku(item))).toEqual([
+      {
+        "FIXTURE-STOCK-UNMANAGED": "IN_STOCK",
+        "FIXTURE-STOCK-ZERO": "OUT_OF_STOCK",
+        "FIXTURE-STOCK-ONE": "LOW_STOCK",
+        "FIXTURE-STOCK-TWO": "IN_STOCK",
+        "FIXTURE-STOCK-MANY": "IN_STOCK",
+      },
+    ]);
+    await app.close();
+  });
+
+  it("`availability` es un OBJETO y no una cadena, como en el carrito", async () => {
+    const app = await createApp(buildDependencies({ products: [AVAILABILITY_PRODUCT] }));
+    const response = await app.inject({ method: "GET", url: "/api/v1/products/fixture-stock" });
+
+    // Se mira el JSON CRUDO: la forma es lo que se contrata, y
+    // `"availability":"IN_STOCK"` seria otro tipo para `frontend`.
+    expect(response.body).toContain('"availability":{"status":"IN_STOCK"}');
+    await app.close();
+  });
+
+  it("NO publica `stock_quantity`: el catalogo es anonimo y el carrito ya no lo publicaba", async () => {
+    const app = await createApp(buildDependencies({ products: [AVAILABILITY_PRODUCT] }));
+
+    // Afirmacion NEGATIVA sobre el cuerpo crudo, en las dos rutas: el
+    // serializador de DEC-014 no deja salir un campo no declarado, pero lo que
+    // aqui se protege es la DECISION de no publicar inventario exacto, y esa
+    // se rompe volviendo a declararlo en el esquema.
+    const list = await app.inject({ method: "GET", url: "/api/v1/products" });
+    expect(list.statusCode).toBe(200);
+    expect(list.body).not.toContain("stock_quantity");
+
+    const detail = await app.inject({ method: "GET", url: "/api/v1/products/fixture-stock" });
+    expect(detail.statusCode).toBe(200);
+    expect(detail.body).not.toContain("stock_quantity");
+
+    // Y tampoco la cantidad por otro nombre: `quantity_available` sigue sin
+    // estar decidido (HO-017) y no aparece "por si acaso".
+    expect(detail.body).not.toContain("quantity_available");
     await app.close();
   });
 });
