@@ -72,6 +72,12 @@ export * from "./tpa-ports.js";
 // encadenado de `@lsw/audit`, y quien lo monta es `apps/api`, que es donde se
 // decide con que implementacion concreta corre el sistema.
 export * from "./audit-event-repository.js";
+// HO-034 punto 5: lecturas del panel (dashboard, pedidos, participantes,
+// auditoria). Tampoco entra en `createSweepstakesRepositories`, y por un motivo
+// distinto: ninguna de ellas escribe una fila, asi que no comparte unidad de
+// trabajo, reloj ni generador con los adaptadores del dominio. Ver la cabecera
+// del modulo.
+export * from "./admin-read-repository.js";
 
 export interface SweepstakesRepositories {
   readonly unitOfWork: DrizzleUnitOfWork;

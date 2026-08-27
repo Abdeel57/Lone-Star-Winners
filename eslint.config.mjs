@@ -99,6 +99,52 @@ export default tseslint.config(
       "**/generated/**",
       // Generado por Next en cada arranque; no lo escribe nadie.
       "**/next-env.d.ts",
+
+      // ---------------------------------------------------------------------
+      // HO-034 punto 7: workspaces CON `eslint.config.mjs` PROPIO.
+      //
+      // POR QUE SE IGNORAN AQUI, Y POR QUE NO ES UN AGUJERO
+      //
+      //   `pnpm run lint:root` (`eslint .` desde la raiz) recorria estos tres
+      //   paquetes con ESTA configuracion, que no registra los plugins de
+      //   React, Next ni accesibilidad: los registran ellos, en su propia
+      //   configuracion. El resultado eran seis ERRORES de
+      //   "Definition for rule '@next/next/...' was not found" y
+      //   "'jsx-a11y/...' was not found" -un `eslint-disable` de un fichero
+      //   solo puede referirse a una regla que exista en la configuracion que
+      //   lo lee-, mas directivas que aqui parecen inutiles y en su paquete no
+      //   lo son. El gate `lint` de CI ejecuta `lint:root`, asi que estaba rojo
+      //   en `main`.
+      //
+      //   Estos tres paquetes YA SE LINTEAN, con la configuracion correcta, en
+      //   `pnpm run lint` (`turbo run lint`), que entra en cada workspace y
+      //   ejecuta su `eslint .` con base path local. El mismo job de CI ejecuta
+      //   los dos comandos, uno detras de otro. Ignorarlos aqui no deja de
+      //   mirar ni un fichero: evita mirarlos DOS VECES y la segunda con la
+      //   configuracion equivocada.
+      //
+      //   La alternativa -registrar React/Next/jsx-a11y tambien en la raiz-
+      //   duplicaria la capa que los paquetes ya tienen y crearia dos sitios
+      //   donde ajustar las mismas reglas. Es justo lo que CLAUDE.md seccion 4
+      //   llama dos fuentes de verdad.
+      //
+      // POR QUE NO ROMPE A QUIEN IMPORTA ESTE FICHERO
+      //
+      //   `apps/web`, `packages/ui` y `tests/security` hacen `...rootConfig`.
+      //   Al ejecutarse desde su directorio, el base path es ESE directorio y
+      //   estos globs pasan a significar `apps/web/apps/web/**`, que no existe:
+      //   no ignoran nada. Es la misma propiedad de flat config que explica la
+      //   nota de mas abajo sobre los globs sin prefijo, usada aqui a favor.
+      //
+      // MANTENIMIENTO: esta lista es exactamente "los workspaces con
+      // `eslint.config.mjs` propio". Quien anada uno tiene que anadirlo aqui, y
+      // quien quite uno tiene que quitarlo de aqui, o su paquete se quedara sin
+      // lint en los dos comandos. `tests/e2e` NO esta en la lista a proposito:
+      // no tiene configuracion propia, sube hasta esta y debe seguir haciendolo.
+      // ---------------------------------------------------------------------
+      "apps/web/**",
+      "packages/ui/**",
+      "tests/security/**",
     ],
   },
 

@@ -1133,7 +1133,7 @@ Superficie aislada y protegida. Toda ruta exige sesión administrativa con MFA
 
 | Method | Endpoint                                       | Authorization            | Status      |
 | ------ | ---------------------------------------------- | ------------------------ | ----------- |
-| GET    | `/api/v1/admin/dashboard`                      | `dashboard.read`         | PROPOSED    |
+| GET    | `/api/v1/admin/dashboard`                      | `dashboard.read`         | IMPLEMENTED |
 | GET    | `/api/v1/admin/promotions`                     | `promotion.read`         | PROPOSED    |
 | POST   | `/api/v1/admin/promotions`                     | `promotion.create`       | PROPOSED    |
 | PATCH  | `/api/v1/admin/promotions/{id}`                | `promotion.update`       | PROPOSED    |
@@ -1145,10 +1145,10 @@ Superficie aislada y protegida. Toda ruta exige sesión administrativa con MFA
 | GET    | `/api/v1/admin/products`                       | `product.read`           | PROPOSED    |
 | POST   | `/api/v1/admin/products`                       | `product.write`          | PROPOSED    |
 | POST   | `/api/v1/admin/products/{id}/publish`          | `product.publish`        | PROPOSED    |
-| GET    | `/api/v1/admin/participants`                   | `participant.list`       | PROPOSED    |
-| GET    | `/api/v1/admin/participants/{id}`              | `participant.read`       | PROPOSED    |
+| GET    | `/api/v1/admin/participants`                   | `participant.list`       | IMPLEMENTED |
+| GET    | `/api/v1/admin/participants/{id}`              | `participant.read`       | IMPLEMENTED |
 | POST   | `/api/v1/admin/participants/{id}/disqualify`   | `participant.disqualify` | PROPOSED    |
-| GET    | `/api/v1/admin/orders`                         | `order.read`             | PROPOSED    |
+| GET    | `/api/v1/admin/orders`                         | `order.read`             | IMPLEMENTED |
 | POST   | `/api/v1/admin/orders/{id}/refund`             | `order.refund.initiate`  | PROPOSED    |
 | GET    | `/api/v1/admin/entry-transactions`             | `entry.ledger.read`      | PROPOSED    |
 | POST   | `/api/v1/admin/entry-adjustments`              | `entry.adjust.create`    | PROPOSED    |
@@ -1407,6 +1407,13 @@ que compara el test de contrato contra `apps/api/openapi/route-manifest.json`.
 | GET    | /api/v1/admin/export-snapshots/:snapshot_id/download                                | `export.download`           |
 | POST   | /api/v1/admin/export-snapshots/:snapshot_id/deliver                                 | `export.deliver`            |
 | POST   | /api/v1/admin/export-snapshots/:snapshot_id/results                                 | `winner.status.update`      |
+| GET    | /api/v1/admin/dashboard                                                             | `dashboard.read`            |
+| GET    | /api/v1/admin/orders                                                                | `order.read`                |
+| GET    | /api/v1/admin/orders/:order_id                                                      | `order.read`                |
+| GET    | /api/v1/admin/participants                                                          | `participant.list`          |
+| GET    | /api/v1/admin/participants/:participant_id                                          | `participant.read`          |
+| GET    | /api/v1/admin/participants/:participant_id/pii                                      | `pii.view.full`             |
+| GET    | /api/v1/admin/audit-events                                                          | `audit.read`                |
 
 **Todas están `IMPLEMENTED`**, con dos matices que importan y que se detallan en
 cada bloque: las rutas de comercio dependen de un proveedor de pago que sigue sin
@@ -2087,3 +2094,213 @@ nosniff`, `Cache-Control: no-store` y `X-LSW-Artifact-Sha256`. El body de
   un snapshot en `DELIVERED`. El motivo del expediente lo fija `@lsw/tpa`
   (`winner.selected_by_external_administrator`, DEC-022); `external_reference`
   ata el expediente al envío del que salió.
+
+## 11.7 Lecturas del panel: dashboard, pedidos, participantes y auditoría (HO-034 punto 5)
+
+Siete rutas de **solo lectura**. Ninguna escribe, ninguna configura y ninguna
+toca el ledger: una corrección es siempre una fila nueva y eso vive en §11.4.
+Frontera con §12 (sesión paralela): la escritura de `entry_pool_cap` y de toda
+la configuración de promoción vive allí; aquí solo se lee.
+
+Todas exigen sesión de personal con MFA (DEC-006) además de su capacidad.
+Todas paginan con el cursor opaco de §Paginación (`?cursor=&limit=1..100`).
+
+### GET /api/v1/admin/dashboard
+
+    Authorization: dashboard.read
+
+Agregados de cabecera, todos referidos al **mismo instante** (`as_of`). Se
+calculan sobre la promoción `ACTIVE`; si no hay ninguna, `promotion_id` y
+`promotion_status` son `null` y los conteos no se acotan por promoción.
+
+`active_entries` y `participants` son **cifras del ledger**, y el catálogo dice
+que `dashboard.read` no las cubre ("la reconciliación vive detrás de
+`reconciliation.read`"). Se pueblan solo si el actor tiene **además**
+`entry.ledger.read`; en caso contrario llegan `null`, que significa _no
+publicado_ y no _cero_. Salen de `lsw_entry_balances_at` (DEC-007), nunca de una
+suma escrita en la aplicación.
+
+`participants` = participantes con **saldo activo distinto de cero** en la
+promoción. No es el censo de cuentas registradas.
+
+```json
+{
+  "promotion_id": "3f1c…",
+  "promotion_status": "ACTIVE",
+  "active_entries": 1234,
+  "participants": 56,
+  "orders_last_24h": 7,
+  "amoe_pending_review": 3,
+  "adjustments_pending_approval": 1,
+  "as_of": "2026-09-15T12:00:00.000Z"
+}
+```
+
+401 sin sesión · 403 sin la capacidad.
+
+### GET /api/v1/admin/orders
+
+    Authorization: order.read
+
+Pedidos de cualquier participante, más recientes primero. Filtro opcional
+`?promotion_id=`. El cursor va por `order_number`, que es único y monótono con
+la creación: con `created_at`, dos pedidos del mismo milisegundo se solaparían
+entre páginas.
+
+**El correo del comprador viaja siempre enmascarado** (`a***@dominio`).
+`order.read` es "ver pedidos", no una capacidad de PII. La fila no publica
+líneas ni dirección de envío: repartir PII a granel para pintar una tabla que no
+la usa no es aceptable, y DEC-014 lo impide por construcción — no está declarada
+en el esquema, así que no puede salir.
+
+```json
+{
+  "items": [
+    {
+      "id": "…",
+      "order_number": "LSW-00000042",
+      "status": "PAID",
+      "entry_state": "GRANTED",
+      "placed_at": "2026-09-10T10:00:00.000Z",
+      "total": { "amount_minor": "5000", "currency": "USD" },
+      "participant_email": "a***@example.test",
+      "participant_id": "…"
+    }
+  ],
+  "next_cursor": null
+}
+```
+
+401 · 403 · 422 (cursor inválido: falla, no devuelve la primera página).
+
+### GET /api/v1/admin/orders/:order_id
+
+    Authorization: order.read
+
+**Misma forma que `GET /api/v1/account/orders/:order_id`** y construida por el
+mismo presentador, para que soporte y participante lean lo mismo por teléfono.
+Incluye `entry_calculation` con `rules_version_id`, `engine_version`,
+`evaluated_at`, `final_entries` y la `trace` que se persistió en el
+`EntryCalculationSnapshot` — es lo que permite contestar meses después por qué
+esta compra generó 37 participaciones y no 36.
+
+No lleva correo: el pedido trae `participant_id`, y esa pregunta tiene su propia
+capacidad en la ficha del participante.
+
+401 · 403 · 404.
+
+### GET /api/v1/admin/participants
+
+    Authorization: participant.list
+
+Participantes, más recientes primero, cursor por `created_at`. **PII siempre
+enmascarada**, y la respuesta lo dice: `pii_masked` es un dato, no una deducción
+de la interfaz — un correo a medias sin él parece un dato corrupto.
+
+`email` es `""` cuando la cuenta está anonimizada y no tiene correo. `""` (no
+hay) y `a***@dominio` (hay y está oculto) son afirmaciones distintas.
+
+`disqualified` se resuelve con `EXISTS` sobre `disqualifications`, no con una
+columna: una columna sería una segunda fuente de verdad sobre un hecho que ya
+está registrado con su motivo, su actor y su instante.
+
+```json
+{
+  "items": [
+    {
+      "id": "…",
+      "email": "a***@example.test",
+      "display_name": "Ada",
+      "created_at": "2026-09-01T05:00:00.000Z",
+      "disqualified": false,
+      "pii_masked": true
+    }
+  ],
+  "next_cursor": null
+}
+```
+
+401 · 403 · 422.
+
+### GET /api/v1/admin/participants/:participant_id
+
+    Authorization: participant.read
+
+La misma fila más `phone` (enmascarado: `***34`), `preferred_locale`, `status` y
+`review_state`. `pii_masked` es `true`. No lleva pedidos ni cifras del ledger:
+para eso están `order.read` y `entry.ledger.read`, con sus propias rutas.
+
+401 · 403 · 404.
+
+### GET /api/v1/admin/participants/:participant_id/pii
+
+    Authorization: pii.view.full
+
+Misma ficha **sin enmascarar**, con `pii_masked: false`.
+
+**Es una ruta aparte y no un `?pii=full`, a propósito.** El registro de DEC-015
+declara la capacidad por (método, camino) y el autorizador corre antes del
+handler: un parámetro que cambiara la capacidad exigida dejaría al cliente elegir
+con qué permiso se le juzga. Tampoco se desenmascara "si el actor tiene la
+capacidad": `pii.view.full` exige segundo factor reciente y motivo (DEC-006,
+DEC-027), y comprobarla dentro del handler saltaría las dos condiciones.
+
+**LIMITACIÓN DECLARADA (HO-034.1).** Hoy esta ruta responde **403**:
+`session-authorizer.ts` pasa `reasonProvided: false`, así que toda capacidad con
+`requiresReason` se deniega. No se ha degradado a una capacidad más débil para
+"que funcione" — el 403 es la respuesta correcta mientras el motivo no viaje. Se
+levantará sola cuando se cierre ese punto. Las demás rutas de §11.7 no dependen
+de él.
+
+401 · 403 · 404.
+
+### GET /api/v1/admin/audit-events
+
+    Authorization: audit.read
+
+Traza de auditoría, la más reciente primero. Filtros opcionales
+`?promotion_id=`, `?actor_id=`, `?action=`.
+
+**Solo lectura, y no por convención**: no existe endpoint que edite o borre una
+fila, el rol de base de datos de la aplicación no tiene el privilegio y un
+trigger lanza excepción aunque lo tuviera (DEC-007, DEC-008). La verificación de
+la cadena de hashes **no** está aquí: es `audit.integrity.verify`, otra capacidad
+y otra ruta.
+
+**Qué no se publica.** `before`, `after`, `reason_text`, `source_ip` y
+`user_agent` ni siquiera se seleccionan en la consulta: los tres primeros son
+material interno y los dos últimos huella de conexión. `actor_email` viaja
+**siempre `null`** — la tabla guarda `actor_id`, un identificador interno, y su
+propia documentación dice "nunca un correo ni un nombre"; resolverlo en la
+lectura metería en la traza justo el dato que la escritura decidió no guardar.
+Publicar el nombre de la persona sería un DEC con su capacidad, no un `JOIN`
+añadido de paso.
+
+El orden y el cursor van por `sequence_no`, el orden **total** de escritura que
+asigna el motor. Con `occurred_at` habría empates y la paginación se saltaría uno
+de los dos hechos: en una traza de auditoría, un hecho que nadie llega a ver es
+exactamente el fallo que la traza existe para impedir.
+
+```json
+{
+  "items": [
+    {
+      "id": "…",
+      "occurred_at": "2026-09-14T09:00:00.000Z",
+      "actor_type": "HUMAN",
+      "actor_id": "…",
+      "actor_email": null,
+      "actor_roles": ["COMPLIANCE_OFFICER"],
+      "action": "entry.adjust.approve",
+      "entity_type": "adjustment",
+      "entity_id": "…",
+      "promotion_id": "…",
+      "reason_key": "SUPPORT_CORRECTION",
+      "request_id": "…"
+    }
+  ],
+  "next_cursor": null
+}
+```
+
+401 · 403 · 422 (`action` con forma inválida se rechaza antes de la consulta).

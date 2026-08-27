@@ -94,6 +94,24 @@
     },
     {
       "method": "GET",
+      "path": "/api/v1/admin/audit-events",
+      "operation_id": "listAdminAuditEvents",
+      "authorization": "audit.read",
+      "requires_step_up": false,
+      "tags": ["admin"],
+      "summary": "Traza de auditoria, la mas reciente primero."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/dashboard",
+      "operation_id": "getAdminDashboard",
+      "authorization": "dashboard.read",
+      "requires_step_up": false,
+      "tags": ["admin"],
+      "summary": "Agregados de cabecera del panel."
+    },
+    {
+      "method": "GET",
       "path": "/api/v1/admin/draws",
       "operation_id": "listDrawingEvents",
       "authorization": "draw.result.read",
@@ -210,6 +228,24 @@
       "summary": "Reconciliar un snapshot antes de finalizarlo."
     },
     {
+      "method": "GET",
+      "path": "/api/v1/admin/orders",
+      "operation_id": "listAdminOrders",
+      "authorization": "order.read",
+      "requires_step_up": false,
+      "tags": ["admin"],
+      "summary": "Pedidos de cualquier participante."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/orders/:order_id",
+      "operation_id": "getAdminOrder",
+      "authorization": "order.read",
+      "requires_step_up": false,
+      "tags": ["admin"],
+      "summary": "Ficha de un pedido, con su traza de calculo de participaciones."
+    },
+    {
       "method": "POST",
       "path": "/api/v1/admin/orders/:order_id/refund",
       "operation_id": "initiateOrderRefund",
@@ -219,6 +255,24 @@
       "summary": "Devolver un pedido desde administracion."
     },
     {
+      "method": "GET",
+      "path": "/api/v1/admin/participants",
+      "operation_id": "listAdminParticipants",
+      "authorization": "participant.list",
+      "requires_step_up": false,
+      "tags": ["admin"],
+      "summary": "Participantes, con el PII enmascarado."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/participants/:participant_id",
+      "operation_id": "getAdminParticipant",
+      "authorization": "participant.read",
+      "requires_step_up": false,
+      "tags": ["admin"],
+      "summary": "Ficha de un participante, con el PII enmascarado."
+    },
+    {
       "method": "POST",
       "path": "/api/v1/admin/participants/:participant_id/disqualify",
       "operation_id": "disqualifyParticipant",
@@ -226,6 +280,15 @@
       "requires_step_up": true,
       "tags": ["admin"],
       "summary": "Descalificar a un participante en una promocion."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/participants/:participant_id/pii",
+      "operation_id": "getAdminParticipantPii",
+      "authorization": "pii.view.full",
+      "requires_step_up": true,
+      "tags": ["admin"],
+      "summary": "Datos personales completos de un participante."
     },
     {
       "method": "GET",

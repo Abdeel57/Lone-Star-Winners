@@ -39,6 +39,12 @@ import { buildMetaRoutes } from "./routes/meta.js";
 import { buildStorefrontRoutes } from "./routes/storefront.js";
 // Hito B5 (DEC-046): comercio, portal, AMOE, ajustes, sorteo y exportacion.
 import { buildAdjustmentRoutes } from "./routes/adjustments.js";
+// HO-034 punto 5: los cuatro modulos de lectura que el panel llamaba y que no
+// existian (dashboard, pedidos, participantes y traza de auditoria).
+import { buildAdminAuditRoutes } from "./routes/admin-audit.js";
+import { buildAdminDashboardRoutes } from "./routes/admin-dashboard.js";
+import { buildAdminOrdersRoutes } from "./routes/admin-orders.js";
+import { buildAdminParticipantRoutes } from "./routes/admin-participants.js";
 import { buildAmoeRoutes } from "./routes/amoe.js";
 import { buildDrawRoutes } from "./routes/draw.js";
 import { buildExportRoutes } from "./routes/export.js";
@@ -103,6 +109,10 @@ export function collectRouteDefinitions(dependencies: AppDependencies): RouteDef
     ...buildAdjustmentRoutes(dependencies),
     ...buildDrawRoutes(dependencies),
     ...buildExportRoutes(dependencies),
+    ...buildAdminDashboardRoutes(dependencies),
+    ...buildAdminOrdersRoutes(dependencies),
+    ...buildAdminParticipantRoutes(dependencies),
+    ...buildAdminAuditRoutes(dependencies),
   ];
 
   const metaRoutes = buildMetaRoutes({
@@ -134,6 +144,10 @@ export function collectContractRouteDefinitions(dependencies: AppDependencies): 
     ...buildAdjustmentRoutes(dependencies),
     ...buildDrawRoutes(dependencies),
     ...buildExportRoutes(dependencies),
+    ...buildAdminDashboardRoutes(dependencies),
+    ...buildAdminOrdersRoutes(dependencies),
+    ...buildAdminParticipantRoutes(dependencies),
+    ...buildAdminAuditRoutes(dependencies),
   ];
   routes.push(
     ...buildMetaRoutes({ serverUrl: dependencies.config.http.publicUrl, allRoutes: () => routes }),
