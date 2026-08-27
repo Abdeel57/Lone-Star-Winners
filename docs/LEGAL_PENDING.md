@@ -173,3 +173,22 @@ ilustrativa y puede no corresponder al vehículo exacto entregado" (color,
 equipamiento, año-modelo). Mientras siga TBD, la interfaz no incluye ninguna
 afirmación al respecto: añadir un descargo es una afirmación legal y la
 redacta el abogado.
+
+## Drawing evidence and TPA delivery (DEC-016 / DEC-017)
+
+TBD
+
+Cinco decisiones que el dominio de sorteo deja preparadas pero **no toma**:
+
+1. **Commit–reveal**: si el sorteo interno debe publicar un compromiso de la
+   semilla antes del sorteo y revelarla después. Construido y `DISABLED` por
+   defecto. No impide elegir la semilla de mala fe antes de comprometerla;
+   evitarlo exige entropía que el operador no controle.
+2. **Identidad del third-party administrator** y su esquema de export
+   exacto. Hoy: esquema mínimo sin PII y entrega en modo dry-run.
+3. **Almacén write-once para el sellado** de la hash chain. Hoy todos los
+   informes se entregan declarando `UNSEALED` (DEC-037).
+4. **Si el sorteo interno llegará a autorizarse alguna vez.** Sin
+   `DrawAuthorization` con referencia documental, la puerta no se abre.
+5. **Retención del `DrawingEvent` y del expediente de ganador potencial**, y
+   requisitos documentales de verificación de ganador.

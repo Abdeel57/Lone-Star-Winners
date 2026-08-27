@@ -1057,3 +1057,46 @@ Affected files: ver tabla.
 Blocking:
 NO para arrancar el dominio puro y el frontend; SÍ para conectar auth real y
 para las rutas de comercio en `apps/api`.
+
+---
+
+## HO-026
+
+Status: OPEN
+
+## Handoff
+
+Date: 2026-08-26
+From: security-integration (esta sesión)
+To: sesión paralela (propietaria de `packages/security` durante la fase 1–2)
+
+Context:
+Al construir los controles de sorteo (DEC-017) y la entrega al TPA (DEC-016)
+como dominio puro, aparecieron **dos huecos en el catálogo canónico de
+capacidades** que `CAPABILITY_READ_COVERAGE` detectará en cuanto existan las
+rutas:
+
+1. **`draw.authorization.read`** no existe. `draw.authorization.create` sí, y
+   la regla de cobertura exige lectura para toda escritura. Sin ella,
+   `GET /admin/promotions/{id}/draw-authorizations` no puede declarar
+   permiso. Alternativa: reutilizar `draw.result.read`.
+2. **`draw.approve`** no existe. La segunda aprobación de un sorteo (actor
+   distinto, TTL) necesita capacidad propia o exigir `draw.initiate` también
+   al aprobador. El dominio ya rechaza que aprobador e iniciador coincidan.
+
+Y una decisión de capacidad para la ingesta de resultados del TPA
+(`POST /admin/export-snapshots/{id}/results`): crea expedientes de
+`PotentialWinner`, así que se propone `winner.status.update`.
+
+What I need from you:
+Añadir (o decidir la reutilización) de las dos capacidades en
+`packages/security/src/capabilities.ts` y asignarlas a roles
+(`COMPLIANCE_OFFICER` / `DRAW_OFFICER` según separación de funciones), con
+resiembra en `packages/database`. Hasta entonces las rutas de sorteo no se
+crean.
+
+Affected files: `packages/security/src/{capabilities,permissions}.ts`,
+`packages/database` (resiembra).
+
+Blocking: SÍ para las rutas admin de sorteo; NO para el dominio, ya
+construido y probado.
