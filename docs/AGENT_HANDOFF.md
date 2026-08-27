@@ -1312,9 +1312,11 @@ limit_period, max_per_participant_per_period, requires_review`. La vía
      frontend no puede calcularlo sin duplicar el motor (lo detectaría el
      escáner `no-client-entry-math`).
    - `AdminAmoeSubmission.entries_before` / `entries_after_if_approved`.
-3. **Paginación**: `docs/API_CONTRACT.md` dice `?cursor=`; la coordinación
-   entre sesiones dijo `?after=`. El frontend siguió el documento (`cursor`).
-   Confirmar una sola convención y corregir la que sobre.
+3. **Paginación — RESUELTO (2026-08-27)**: es `?cursor=`, la del documento y
+   la de `apps/api/src/http/pagination.ts`. El `after` era el nombre del
+   **puerto interno** de repositorio (`listPublic({ limit, after })`), no el
+   parámetro HTTP: dos capas distintas, y el puerto no es contrato. Nada que
+   corregir en frontend ni en las rutas.
 
 Affected files: `apps/api/src/routes/{amoe,adjustments,auth}.ts`,
 `docs/API_CONTRACT.md` §11.3/§11.4, `apps/web/src/lib/api/contract.ts`.
