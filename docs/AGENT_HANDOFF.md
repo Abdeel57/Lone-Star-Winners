@@ -1205,3 +1205,72 @@ Affected files: `packages/database/drizzle/0024_*.sql`, `packages/audit`,
 
 Blocking: SÍ para dar por auditado cualquier flujo de admin; NO para el
 resto.
+
+---
+
+## HO-029
+
+Status: OPEN
+
+## Handoff
+
+Date: 2026-08-27
+From: sesión paralela (lone-star-c4), vía Team Lead
+To: sesión paralela (identidad) / security-integration
+
+Context:
+`SESSION_POLICIES` en `packages/security` declara `rotateOnPrivilegeChange:
+true`, pero **la propiedad no se lee en ningún sitio del repositorio**: es una
+promesa escrita en la política que nadie cumple. Se detectó al corregir el
+autorizador (`8c1ef08`): sin rotación, una sesión de escaparate viva podía
+heredar capacidades de personal si a la persona se le concedían roles después
+de iniciar sesión. El arreglo adoptado —derivar los roles efectivos del
+**scope de la sesión**, no de la persona— hace que la defensa no dependa de
+la rotación, pero la promesa sigue en el código.
+
+What I need from you:
+Implementar la rotación (revocar/renovar sesiones vivas al cambiar los roles
+de una identidad, exigiendo nueva autenticación y MFA para obtener scope
+`STAFF`), o retirar la propiedad de la política para no documentar una
+garantía inexistente. Con test.
+
+Affected files: `packages/security/src/session.ts`,
+`apps/api/src/http/session-authorizer.ts`, `packages/database` (sesiones).
+
+Blocking: NO hoy (la defensa no depende de ella); SÍ antes de publicar el
+panel de administración.
+
+---
+
+## HO-030
+
+Status: OPEN
+
+## Handoff
+
+Date: 2026-08-27
+From: Team Lead
+To: security-integration (QA e integración)
+
+Context:
+`pnpm --filter @lsw/web smoke` recorre 35+ rutas contra el **servidor de
+mocks**, no contra `apps/api`. Por tanto **no ejercita** el autorizador real,
+las 40 rutas de B5 ni ninguna migración. Los tests unitarios de la API sí,
+pero hay ~100 tests de integración (`packages/database/test/integration/**`)
+escritos y **nunca ejecutados** por falta de Docker, y ninguna prueba de
+punta a punta web↔api↔PostgreSQL.
+
+What I need from you:
+Un flujo e2e (Playwright, DEC-018) que levante `apps/api` contra PostgreSQL
+real (Testcontainers o servicio en CI), `apps/web` con `WEB_ENABLE_API_MOCKS`
+apagado apuntando a esa API, y recorra: alta y login de participante,
+catálogo, carrito y cotización, checkout con el proveedor mock, portal con
+el ledger, AMOE en una modalidad, login de personal con MFA, revisión AMOE y
+un ajuste con doble aprobación. Debe correr en CI (`.github/workflows`) con
+un servicio de PostgreSQL 16, para que deje de depender del Docker local.
+
+Affected files: `tests/e2e/**` (nuevo), `.github/workflows/ci.yml`,
+`apps/web/scripts/smoke.mjs` (referencia).
+
+Blocking: SÍ para dar por integrado cualquier flujo; NO para seguir
+construyendo.
