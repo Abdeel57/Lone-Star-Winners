@@ -37,6 +37,8 @@ import {
   activePromotion,
   activePromotionDetail,
   activePromotionWithoutPrize,
+  activePromotionWithoutRules,
+  activePromotionWithoutRulesDetail,
   baseEntryOffer,
   fractionalEntryOffer,
   multipliedEntryOffer,
@@ -361,7 +363,7 @@ describe("PromotionHero, composicion de DEC-042", () => {
     }
   });
 
-  it("pinta el universo de participaciones que sirve el backend, y solo ese", () => {
+  it("pinta el TOPE del universo y ninguna otra cifra de participaciones", () => {
     const view = renderIn(
       "es",
       <PromotionHero
@@ -378,13 +380,23 @@ describe("PromotionHero, composicion de DEC-042", () => {
     if (pool === null) return;
 
     expect(screen.getByText(/10,000/)).toBeInTheDocument();
-    expect(screen.getByText(String(pool.issued?.toLocaleString("en-US")))).toBeInTheDocument();
 
-    // NINGUNA cifra derivada. `cap - issued` es la resta que el frontend no
-    // hace: seria una cifra de "quedan X" calculada en el cliente a partir de
-    // dos numeros que pueden llegar desincronizados (DEC-042).
+    /*
+     * NI LAS EMITIDAS NI LA RESTA (DEC-042 y DEC-044).
+     *
+     * El fixture SI sirve `issued`, y eso es lo que hace util esta
+     * comprobacion: no se mide que el dato falte, se mide que estando
+     * disponible no llegue al DOM. Pintarlo debajo del tope publicaria el
+     * contador de restantes por implicacion, que es la misma urgencia
+     * fabricada que DEC-042 excluye, hecha por el lector en vez de por el
+     * cliente.
+     */
+    expect(pool.issued, "el fixture adversarial sirve la cifra de emitidas").not.toBeNull();
+    const issued = (pool.issued ?? 0).toLocaleString("en-US");
+    expect(document.body.textContent, "las emitidas no se pintan").not.toContain(issued);
+
     const remaining = (pool.cap - (pool.issued ?? 0)).toLocaleString("en-US");
-    expect(document.body.textContent).not.toContain(remaining);
+    expect(document.body.textContent, "ni la resta").not.toContain(remaining);
 
     view.unmount();
   });
@@ -473,6 +485,182 @@ describe("PromotionHero, composicion de DEC-042", () => {
     // Ni verbo de titular sin premio al que acompanar, ni linea de universo.
     expect(screen.queryByText(enMessages.home.hero.win)).toBeNull();
     expect(screen.queryByText(/entry pool of/i)).toBeNull();
+  });
+});
+
+/**
+ * EL ESTADO CONTENIDO DE DEC-044.
+ *
+ * La auditoria de copy de `security-integration` leyo el hero completo -"GANA",
+ * premio gigante, boton rojo a la tienda, cuenta atras y chip de promocion
+ * vigente- como una invitacion a comprar para participar, aunque ninguna de sus
+ * frases lo diga. Anadir "no se requiere compra" no era la salida: con AMOE en
+ * TBD seria inventar un requisito legal (CLAUDE.md #2). La salida es no
+ * publicar la invitacion mientras no exista el documento que la respalda.
+ *
+ * Lo que estos tests protegen no es el aspecto de la pantalla: es que la
+ * seguridad del copy DEJE DE SER DEPENDIENTE DE LOS DATOS. Hoy el hero completo
+ * solo es correcto porque ninguna promocion real ha llegado a ACTIVE sin
+ * reglas; a un `INSERT` de distancia dejaba de serlo, y nada fallaba.
+ */
+describe("PromotionHero sin Reglas Oficiales publicadas (DEC-044)", () => {
+  it("una promocion ACTIVE sin reglas no publica la invitacion, en los dos idiomas", () => {
+    for (const locale of ["en", "es"] as const) {
+      const messages = locale === "en" ? enMessages : esMessages;
+      const view = renderIn(
+        locale,
+        <PromotionHero
+          promotion={activePromotionWithoutRules}
+          detail={activePromotionWithoutRulesDetail}
+          locale={locale}
+          nowIso={NOW}
+          amoeEnabled={false}
+        />,
+      );
+
+      // Ni el verbo del titular.
+      expect(screen.queryByText(messages.home.hero.win), `verbo en ${locale}`).toBeNull();
+
+      // Ni los chips: el de estado ("Abierta") ni el antetitulo ("Promocion
+      // vigente"). Los dos funcionan como llamada encabezando un hero.
+      expect(screen.queryByText(messages.home.eyebrow), `antetitulo en ${locale}`).toBeNull();
+      expect(
+        screen.queryByText(messages.promotionStatus.ACTIVE),
+        `chip de estado en ${locale}`,
+      ).toBeNull();
+
+      // Ni la cuenta atras, que es el elemento de urgencia de la composicion.
+      expect(
+        screen.queryByText(messages.countdown.closesIn),
+        `cuenta atras en ${locale}`,
+      ).toBeNull();
+
+      // Ni el universo de participaciones, que es una afirmacion sobre COMO
+      // funciona la promocion.
+      expect(screen.queryByText(/10,000/), `universo en ${locale}`).toBeNull();
+
+      // Ni el boton de compra.
+      expect(
+        screen.queryByRole("link", { name: messages.home.hero.shopNow }),
+        `CTA de compra en ${locale}`,
+      ).toBeNull();
+
+      view.unmount();
+    }
+  });
+
+  it("ningun enlace a la tienda lleva el rojo de compra", () => {
+    /*
+     * La red por el otro lado, y la que de verdad importa: la anterior mira la
+     * ETIQUETA del boton, y una etiqueta se reescribe. Esta mira el COLOR, que
+     * es lo que DEC-042 reparte -rojo = accion de compra- y lo que hace que el
+     * hero se lea como invitacion aunque el verbo cambie.
+     */
+    renderIn(
+      "es",
+      <PromotionHero
+        promotion={activePromotionWithoutRules}
+        detail={activePromotionWithoutRulesDetail}
+        locale="es"
+        nowIso={NOW}
+        amoeEnabled={false}
+      />,
+    );
+
+    const toShop = screen
+      .getAllByRole("link")
+      .filter((link) => link.getAttribute("href") === "/shop");
+    expect(toShop.length, "sigue habiendo camino a la tienda").toBeGreaterThan(0);
+
+    for (const link of toShop) {
+      expect(link.className, "el enlace a la tienda no puede ser el rojo de compra").not.toContain(
+        "bg-accent",
+      );
+    }
+  });
+
+  it("dice que faltan las Reglas Oficiales y deja como unica accion la tienda", () => {
+    for (const locale of ["en", "es"] as const) {
+      const messages = locale === "en" ? enMessages : esMessages;
+      const view = renderIn(
+        locale,
+        <PromotionHero
+          promotion={activePromotionWithoutRules}
+          detail={activePromotionWithoutRulesDetail}
+          locale={locale}
+          nowIso={NOW}
+          amoeEnabled={false}
+        />,
+      );
+
+      // `getByText` y no `queryAllByText`: ademas de estar, tiene que estar UNA
+      // vez. El aviso subio al hero desde la banda de avisos, y dejarlo en los
+      // dos sitios lo diria dos veces en la misma pantalla.
+      expect(screen.getByText(messages.home.rulesNotPublished)).toBeInTheDocument();
+
+      expect(screen.getByRole("link", { name: messages.home.hero.browseShop })).toHaveAttribute(
+        "href",
+        "/shop",
+      );
+
+      // Y sin enlace al documento, que devolveria un 404 (DEC-012).
+      expect(screen.queryByRole("link", { name: messages.home.viewOfficialRules })).toBeNull();
+
+      view.unmount();
+    }
+  });
+
+  it("el premio y el titulo se siguen viendo", () => {
+    // El estado contenido no es una pantalla vacia. Lo que se retira son las
+    // afirmaciones; el premio y el titulo son dato del backend y no dicen nada
+    // sobre las condiciones de participacion.
+    const prize = activePromotionWithoutRulesDetail.prize;
+    expect(prize, "el fixture adversarial declara premio").not.toBeNull();
+    if (prize === null) return;
+
+    const { container } = renderIn(
+      "en",
+      <PromotionHero
+        promotion={activePromotionWithoutRules}
+        detail={activePromotionWithoutRulesDetail}
+        locale="en"
+        nowIso={NOW}
+        amoeEnabled={false}
+      />,
+    );
+
+    const heading = screen.getByRole("heading", { level: 1 });
+    expect(heading).toHaveTextContent(prize.name["en-US"]);
+    expect(heading).toHaveTextContent(activePromotionWithoutRules.title["en-US"]);
+    expect(container.querySelector("img"), "la fotografia del premio se queda").not.toBeNull();
+  });
+
+  it("con la version de reglas declarada, el hero completo sigue intacto", () => {
+    /*
+     * La otra mitad del par. Sin esta comprobacion, un cambio que dejara el
+     * estado contenido SIEMPRE encendido pasaria en verde: la portada en dev
+     * -y en produccion- se quedaria sin hero y ningun test lo diria.
+     */
+    renderIn(
+      "es",
+      <PromotionHero
+        promotion={activePromotion}
+        detail={activePromotionDetail}
+        locale="es"
+        nowIso={NOW}
+        amoeEnabled={false}
+      />,
+    );
+
+    expect(screen.getByText(esMessages.home.hero.win)).toBeInTheDocument();
+    expect(screen.getByText(esMessages.home.eyebrow)).toBeInTheDocument();
+    expect(screen.getByText(esMessages.countdown.closesIn)).toBeInTheDocument();
+    expect(screen.getByText(/10,000/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: esMessages.home.hero.shopNow })).toHaveAttribute(
+      "href",
+      "/shop",
+    );
+    expect(screen.queryByText(esMessages.home.rulesNotPublished)).toBeNull();
   });
 });
 

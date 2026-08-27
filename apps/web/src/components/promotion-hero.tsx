@@ -44,6 +44,28 @@ import { PromotionStatusBadge } from "./promotion-status-badge";
  * (DEC-012), en cuyo caso se dice eso mismo en vez de enlazar a un documento
  * que no existe. Un enlace roto a las Reglas Oficiales es peor que no tenerlo.
  *
+ * SIN REGLAS PUBLICADAS NO HAY HERO PROMOCIONAL (DEC-044)
+ * -------------------------------------------------------
+ * Y eso es mas que no enlazar el documento. La auditoria de copy leyo el hero
+ * completo -"GANA", premio gigante, boton rojo a la tienda, cuenta atras y chip
+ * de promocion vigente- como una INVITACION A COMPRAR PARA PARTICIPAR, aunque
+ * ninguna de sus frases lo diga. La salida no puede ser anadir la linea "no se
+ * requiere compra": mientras AMOE siga en TBD, escribirla seria inventar un
+ * requisito legal (CLAUDE.md #2). La salida es no publicar la invitacion hasta
+ * que exista el documento que la respalda.
+ *
+ * Asi que sin reglas publicadas el hero pasa a un ESTADO CONTENIDO: el premio y
+ * el titulo siguen viendose -son dato del backend y no afirman condiciones- y
+ * desaparecen el verbo, el universo de participaciones, los chips, la cuenta
+ * atras y el boton de compra. En su sitio queda el aviso de que las Reglas
+ * Oficiales todavia no estan publicadas y, como unica accion, un enlace neutro
+ * a la tienda: mercancia sin promesa.
+ *
+ * Es DEFENSA EN PROFUNDIDAD sobre DEC-012, no un sustituto. El cerrojo que
+ * impide que una promocion llegue a ACTIVE con claves legales en TBD es de
+ * backend; esto es la mitad del frontend, y existe porque un hero que solo es
+ * correcto mientras la base de datos este vacia no es correcto.
+ *
  * ---------------------------------------------------------------------------
  * COMPOSICION (DEC-038, rehecha por DEC-042)
  * ---------------------------------------------------------------------------
@@ -124,7 +146,43 @@ export function PromotionHero({
     showTimeZoneName: true,
   });
 
+  /*
+   * LA SENAL ES `rules_version_id`, Y ES LA UNICA FIABLE HOY.
+   *
+   * DEC-044 pide dos condiciones: version de reglas declarada Y documento
+   * disponible. La segunda no se puede comprobar desde aqui sin una tercera
+   * peticion por render -`GET /promotions/{slug}/official-rules`- que ademas
+   * introduciria un fallo peor que el que evita: un corte transitorio de esa
+   * ruta haria que la portada afirmara que las Reglas Oficiales no estan
+   * publicadas cuando si lo estan.
+   *
+   * Y no hace falta: `rules_version_id` ES el identificador de la version
+   * ACTIVE de las reglas, y el contrato lo declara `null` precisamente
+   * mientras no haya ninguna (DEC-012). Un `rules_version_id` que apuntara a
+   * un documento que la API no sirve seria una incoherencia del backend, no un
+   * caso que esta pantalla deba adivinar.
+   */
   const hasRules = promotion.rules_version_id !== null;
+
+  /**
+   * Si se publica el hero promocional completo o el estado contenido (DEC-044).
+   *
+   * Hoy vale exactamente `hasRules`, y esta como constante propia -en vez de
+   * consultar `hasRules` en cada sitio- porque son dos preguntas distintas que
+   * hoy tienen la misma respuesta: una decide si se ENLAZA el documento y la
+   * otra si se PUBLICA la invitacion. El dia que la segunda dependa de algo
+   * mas, se cambia aqui y no en los seis sitios que la consultan.
+   */
+  const showsPromotionalHero = hasRules;
+
+  /*
+   * La cuenta atras es parte de la invitacion, no del dato.
+   *
+   * Un marcador a pantalla completa contando hacia el cierre es el elemento de
+   * urgencia de la composicion. El plazo ESCRITO se queda: es la misma
+   * informacion sin el reclamo, y quien viene a apuntarse la fecha la necesita.
+   */
+  const countdownTarget = showsPromotionalHero ? presentation.countdownTarget : null;
 
   const media = detail?.media ?? null;
   const heroImage = media?.hero_url ?? null;
@@ -148,10 +206,20 @@ export function PromotionHero({
 
   const title = pickLocalized(promotion.title, locale);
 
+  /*
+   * SOLO EL TOPE. `entry_pool.issued` NO SE PINTA (DEC-044).
+   *
+   * DEC-042 ya prohibia derivar "quedan X", y este hero no lo derivaba. La
+   * auditoria de copy encontro la version debil del mismo problema: pintar
+   * `cap` e `issued` juntos publica el contador de restantes POR IMPLICACION.
+   * Quien lee "universo de 10,000" y debajo "emitidas: 1,240" ya tiene la resta
+   * hecha, y da igual que la haya hecho el lector en vez del cliente.
+   *
+   * El campo sigue en el contrato -es dato del backend y hara falta en el panel
+   * de administracion- y esta pantalla simplemente no lo lee.
+   */
   const entryPool = detail?.entry_pool ?? null;
   const entryPoolCap = entryPool === null ? null : formatInteger(entryPool.cap, locale);
-  const issued = entryPool?.issued ?? null;
-  const entriesIssued = issued === null ? null : formatInteger(issued, locale);
 
   return (
     <>
@@ -290,29 +358,41 @@ export function PromotionHero({
               "lg:max-w-[52%]",
             )}
           >
-            <div className="flex flex-wrap items-center gap-3">
-              {/*
-               * CHIP DE ESTADO SOBRE EL TITULAR.
-               *
-               * Lo que lleva escrito es DATO: el estado que reporta el backend,
-               * traducido por la misma funcion que lo traduce en el resto del
-               * sitio. Su color sale del estado, no de una decision de esta
-               * pantalla.
-               */}
-              <PromotionStatusBadge
-                status={promotion.status}
-                size="md"
-                emphasis="solid"
-                shape="square"
-              />
+            {/*
+             * LOS CHIPS SON PARTE DE LA INVITACION (DEC-044).
+             *
+             * "Abierta" y "Promocion vigente" encabezando un hero sin Reglas
+             * Oficiales publicadas es la afirmacion que la auditoria pide
+             * retirar: no porque el estado sea falso -lo reporta el backend-
+             * sino porque ahi arriba funciona como llamada. El estado sigue
+             * dicho, entero y con su explicacion, en la banda de avisos de mas
+             * abajo, que es donde se lee de verdad.
+             */}
+            {!showsPromotionalHero ? null : (
+              <div className="flex flex-wrap items-center gap-3">
+                {/*
+                 * CHIP DE ESTADO SOBRE EL TITULAR.
+                 *
+                 * Lo que lleva escrito es DATO: el estado que reporta el backend,
+                 * traducido por la misma funcion que lo traduce en el resto del
+                 * sitio. Su color sale del estado, no de una decision de esta
+                 * pantalla.
+                 */}
+                <PromotionStatusBadge
+                  status={promotion.status}
+                  size="md"
+                  emphasis="solid"
+                  shape="square"
+                />
 
-              {/* Antetitulo en ROJO (DEC-042). Es copy de producto -no dice
-                  nada de la promocion que el chip de al lado no diga- y por eso
-                  puede llevar el color de atencion sin afirmar nada. */}
-              <Badge tone="accent" emphasis="subtle" shape="square" size="sm">
-                {t("eyebrow")}
-              </Badge>
-            </div>
+                {/* Antetitulo en ROJO (DEC-042). Es copy de producto -no dice
+                    nada de la promocion que el chip de al lado no diga- y por
+                    eso puede llevar el color de atencion sin afirmar nada. */}
+                <Badge tone="accent" emphasis="subtle" shape="square" size="sm">
+                  {t("eyebrow")}
+                </Badge>
+              </div>
+            )}
 
             {/*
              * EL TITULAR, EN TRES LINEAS.
@@ -339,9 +419,14 @@ export function PromotionHero({
                 </span>
               ) : (
                 <>
-                  <span className="lsw-display lsw-accent-sheen text-display-md">
-                    {t("hero.win")}
-                  </span>
+                  {/* El verbo cae con el estado contenido (DEC-044): "GANA"
+                      encabezando un premio es la invitacion misma. El premio y
+                      el titulo se quedan, que es lo que DEC-044 deja ver. */}
+                  {!showsPromotionalHero ? null : (
+                    <span className="lsw-display lsw-accent-sheen text-display-md">
+                      {t("hero.win")}
+                    </span>
+                  )}
                   <span className="lsw-display text-display-lg text-text sm:text-display-xl">
                     {prizeName}
                   </span>
@@ -356,8 +441,15 @@ export function PromotionHero({
                 que declara la promocion. Es DATO -`entry_pool.cap`, ver
                 DEC-042- y va en ORO, que es el color con el que este sistema
                 escribe las cifras de participaciones. No dice cuantas quedan,
-                porque el frontend no resta. */}
-            {entryPoolCap === null ? null : (
+                porque el frontend no resta. Y no dice cuantas se han emitido,
+                porque desde DEC-044 esa cifra no se pinta en ningun sitio.
+
+                Cae ademas con el estado contenido: "universo limitado a 10,000
+                participaciones" es una afirmacion sobre COMO funciona la
+                promocion, y de eso no se dice nada mientras no exista el
+                documento que lo gobierna. El dato no desaparece del contrato;
+                desaparece de la pantalla. */}
+            {!showsPromotionalHero || entryPoolCap === null ? null : (
               <p className="mt-s4 font-display text-body-lg italic text-brand">
                 {t("hero.poolNote", { entries: entryPoolCap })}
               </p>
@@ -385,38 +477,75 @@ export function PromotionHero({
              * mercancia no es participar, y encuadrarlo asi contradice
              * `CLAUDE.md` seccion 1. Se toma el color y el tamano; el verbo es
              * el que corresponde a lo que hay al otro lado del enlace.
+             *
+             * Y TODO ESO SOLO CON REGLAS PUBLICADAS (DEC-044). Sin ellas hay
+             * otra rama entera, que es la primera de las dos que siguen.
              */}
-            <div className="mt-s8 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
-              <Link
-                href={presentation.showsShopCta ? "/shop" : `/promotions/${promotion.slug}`}
-                // Ancho completo en telefono -es la unica accion de la
-                // pantalla, y la referencia la pinta de lado a lado- y ancho
-                // natural en cuanto caben dos botones en la misma linea. No se
-                // usa la variante `fullWidth`: `w-full` sin punto de corte
-                // dejaria los dos botones apilados tambien en escritorio.
-                className={cn(
-                  buttonVariants({
-                    variant: presentation.showsShopCta ? "accent" : "primary",
-                    size: "xl",
-                  }),
-                  "w-full sm:w-auto",
-                )}
-              >
-                {presentation.showsShopCta ? t("hero.shopNow") : t("viewPromotion")}
-              </Link>
+            {!showsPromotionalHero ? (
+              /*
+               * ESTADO CONTENIDO (DEC-044).
+               *
+               * Lo que ocupa el sitio del boton rojo no es otro boton: es el
+               * aviso de que las Reglas Oficiales todavia no estan publicadas.
+               * Va AQUI y no solo en la banda de avisos porque es la respuesta
+               * a lo que el hero acaba de ensenar, y porque el hueco que deja
+               * la invitacion retirada tiene que explicarse en el sitio donde
+               * estaba.
+               *
+               * Debajo, una sola accion y deliberadamente sosa: un enlace a la
+               * tienda, en la variante `subtle` -no `accent`, que es el rojo
+               * de compra de DEC-042- y con la etiqueta neutra "Ver la tienda".
+               * No dice "comprar" ni nombra la promocion: al otro lado hay
+               * mercancia, y mercancia se puede ensenar sin ninguna promesa.
+               */
+              <div className="mt-s8 flex flex-col items-start gap-s5">
+                <Alert tone="warning" className="w-full max-w-narrow">
+                  {t("rulesNotPublished")}
+                </Alert>
 
-              {presentation.showsShopCta ? (
                 <Link
-                  href={`/promotions/${promotion.slug}`}
+                  href="/shop"
                   className={cn(
-                    buttonVariants({ variant: "subtle", size: "xl" }),
+                    buttonVariants({ variant: "subtle", size: "lg" }),
                     "w-full sm:w-auto",
                   )}
                 >
-                  {t("viewPromotion")}
+                  {t("hero.browseShop")}
                 </Link>
-              ) : null}
-            </div>
+              </div>
+            ) : (
+              <div className="mt-s8 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+                <Link
+                  href={presentation.showsShopCta ? "/shop" : `/promotions/${promotion.slug}`}
+                  // Ancho completo en telefono -es la unica accion de la
+                  // pantalla, y la referencia la pinta de lado a lado- y ancho
+                  // natural en cuanto caben dos botones en la misma linea. No se
+                  // usa la variante `fullWidth`: `w-full` sin punto de corte
+                  // dejaria los dos botones apilados tambien en escritorio.
+                  className={cn(
+                    buttonVariants({
+                      variant: presentation.showsShopCta ? "accent" : "primary",
+                      size: "xl",
+                    }),
+                    "w-full sm:w-auto",
+                  )}
+                >
+                  {presentation.showsShopCta ? t("hero.shopNow") : t("viewPromotion")}
+                </Link>
+
+                {presentation.showsShopCta ? (
+                  <Link
+                    href={`/promotions/${promotion.slug}`}
+                    className={cn(
+                      buttonVariants({ variant: "subtle", size: "xl" }),
+                      "w-full sm:w-auto",
+                    )}
+                  >
+                    {t("viewPromotion")}
+                  </Link>
+                ) : null}
+              </div>
+            )}
 
             {/*
              * LA LINEA LEGAL, DEBAJO DEL BOTON.
@@ -462,20 +591,18 @@ export function PromotionHero({
        * dos precisiones distintas, y quien viene a apuntarse la fecha necesita
        * la escrita.
        */}
-      {presentation.countdownTarget === null && opensAt === null && closesAt === null ? null : (
+      {countdownTarget === null && opensAt === null && closesAt === null ? null : (
         <div className="lsw-band-sunken">
           <div className="lsw-container grid gap-s8 py-s10 lg:grid-cols-[minmax(0,1fr)_minmax(0,20rem)] lg:items-start lg:gap-s12">
-            {presentation.countdownTarget === null ? null : (
+            {countdownTarget === null ? null : (
               <PromotionCountdown
                 targetIso={
-                  presentation.countdownTarget === "starts_at"
-                    ? promotion.starts_at
-                    : promotion.ends_at
+                  countdownTarget === "starts_at" ? promotion.starts_at : promotion.ends_at
                 }
                 nowIso={nowIso}
                 locale={locale}
                 timeZone={promotion.legal_timezone}
-                variant={presentation.countdownTarget === "starts_at" ? "opens" : "closes"}
+                variant={countdownTarget === "starts_at" ? "opens" : "closes"}
                 size="scoreboard"
                 // El periodo completo, para la barra de progreso bajo el
                 // marcador. `PromotionCountdown` solo la dibuja cuando la
@@ -504,17 +631,10 @@ export function PromotionHero({
                   </div>
                 )}
 
-                {/* Participaciones ya emitidas del universo. Cifra SERVIDA por
-                    el backend, sin adorno y sin exclamacion: no se dice cuantas
-                    quedan -eso lo calcularia el cliente a partir de dos numeros
-                    que pueden llegar desincronizados, y ademas seria urgencia
-                    fabricada (DEC-042)- ni se pinta una barra de agotamiento. */}
-                {entriesIssued === null ? null : (
-                  <div className={META_ROW}>
-                    <dt className={META_LABEL}>{t("hero.issuedLabel")}</dt>
-                    <dd className={cn(META_VALUE, "tabular-nums text-brand")}>{entriesIssued}</dd>
-                  </div>
-                )}
+                {/* Aqui iba la cifra de participaciones EMITIDAS, y se retira
+                    con DEC-044: junto al tope publicaba el contador de
+                    restantes por implicacion. Solo quedan las fechas, que son
+                    plazo y no inventario. */}
               </dl>
 
               <p className="text-caption text-text-subtle">{t("timeZoneNote")}</p>
@@ -531,11 +651,10 @@ export function PromotionHero({
 
           <Alert tone="info">{t("entriesDisclaimer")}</Alert>
 
-          {hasRules ? null : (
-            // DEC-012: una promocion no llega a ACTIVE con claves legales en TBD.
-            // Aun asi la interfaz tiene que saber decirlo sin rellenar el hueco.
-            <Alert tone="warning">{t("rulesNotPublished")}</Alert>
-          )}
+          {/* El aviso de "Reglas Oficiales sin publicar" ya NO se pinta aqui.
+              Con DEC-044 sube al hueco que deja la invitacion retirada, dentro
+              del hero, y repetirlo en esta banda lo diria dos veces en la misma
+              pantalla. Sigue habiendo exactamente un sitio donde se dice. */}
         </div>
       </div>
     </>

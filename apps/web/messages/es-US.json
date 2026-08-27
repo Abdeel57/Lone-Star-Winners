@@ -42,7 +42,7 @@
   },
   "availability": {
     "IN_STOCK": "Disponible",
-    "LOW_STOCK": "Quedan pocas unidades",
+    "LOW_STOCK": "Pocas existencias",
     "OUT_OF_STOCK": "Agotado",
     "UNAVAILABLE": "No disponible"
   },
@@ -176,8 +176,8 @@
     "hero": {
       "win": "Gana",
       "shopNow": "Comprar ahora",
+      "browseShop": "Ver la tienda",
       "poolNote": "+ universo limitado a {entries} participaciones",
-      "issuedLabel": "Participaciones emitidas hasta ahora",
       "legalAmoe": "No se requiere compra — nulo donde esté prohibido",
       "legalRules": "Sujeto a las Reglas Oficiales"
     },
@@ -213,18 +213,18 @@
       "body": "Las Reglas Oficiales son el documento que rige cada promoción: quién puede participar, cómo se otorgan las participaciones y cómo se selecciona al ganador. Léelas antes de hacer un pedido.",
       "faqLink": "Leer las preguntas frecuentes",
       "title": "Antes de participar",
-      "eyebrow": "Lo que este sitio garantiza",
+      "eyebrow": "Cómo está construido este sitio",
       "pillar1": {
         "title": "Un documento que gobierna",
-        "body": "Cada promoción se rige por sus propias Reglas Oficiales, publicadas íntegras y enlazadas desde cada página de este sitio."
+        "body": "Cada promoción se rige por sus propias Reglas Oficiales. Mientras una promoción no tenga una versión publicada, este sitio lo dice en vez de rellenar el hueco."
       },
       "pillar2": {
-        "title": "Cada participación conserva su origen",
-        "body": "De dónde salió una participación, cuándo se registró y en qué estado está puede reconstruirse. Nada se borra en silencio: un reembolso o una reversión se registra como movimiento propio."
+        "title": "Diseñado para que cada participación conserve su procedencia",
+        "body": "El registro de participaciones está diseñado para que se pueda reconstruir de dónde salió una participación, cuándo se registró y en qué estado está, y para que ninguna se borre en silencio: un reembolso o una reversión se registra como movimiento propio, nunca como una edición."
       },
       "pillar3": {
-        "title": "Administrador independiente",
-        "body": "Cuando una promoción declara que su sorteo lo realiza un administrador independiente, su página lo dice e informa de cada paso del proceso."
+        "title": "Preparado para un administrador independiente",
+        "body": "La plataforma está construida para entregar el listado de participaciones de una promoción a un administrador independiente. Cuando una promoción declara que su sorteo lo realiza uno, su página lo dice e informa de cada paso del proceso."
       }
     },
     "viewOfficialRules": "Ver las Reglas Oficiales",
@@ -243,7 +243,7 @@
     "es": "Español"
   },
   "metadata": {
-    "description": "Mercancía elegible y participaciones promocionales, sujetas a las Reglas Oficiales.",
+    "description": "Mercancía elegible y participaciones en sorteos promocionales, sujetas a las Reglas Oficiales.",
     "title": "Lone Star Winners"
   },
   "nav": {

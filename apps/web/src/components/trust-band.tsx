@@ -6,7 +6,7 @@ import { Link } from "@/i18n/navigation";
 import { SectionHeading } from "./section-heading";
 
 /**
- * Cierre de la portada: lo que este sitio si puede garantizar.
+ * Cierre de la portada: como esta construido este sitio.
  *
  * POR QUE OCUPA EL SITIO DE LOS GANADORES
  * ---------------------------------------
@@ -17,21 +17,37 @@ import { SectionHeading } from "./section-heading";
  *
  * Dejar el hueco no era opcion: es la ultima pantalla antes del pie y la que
  * decide con que impresion se sale. Lo que ocupa su sitio tiene el mismo peso
- * visual -antetitulo dorado, titular grande, tres piezas- y dice tres cosas que
- * son CIERTAS del sistema tal como esta construido hoy:
+ * visual -antetitulo dorado, titular grande, tres piezas- y describe tres
+ * decisiones de diseno del sistema:
  *
- *   1. cada promocion se rige por sus Reglas Oficiales, publicadas integras
- *      (DEC-012, y la ruta `/official-rules` existe);
- *   2. cada participacion conserva su procedencia y nada se borra en silencio
- *      (CLAUDE.md #5, #6 y #7: el ledger es de movimientos, no de saldos
- *      editables);
- *   3. cuando una promocion declara administrador independiente, su pagina lo
- *      dice (principio #10, y el campo `administrator_name` del contrato).
+ *   1. cada promocion se rige por sus Reglas Oficiales, y cuando una no tiene
+ *      version publicada el sitio lo dice en vez de rellenar el hueco (DEC-012
+ *      y DEC-044, y la ruta `/official-rules` existe);
+ *   2. el ledger esta disenado para que cada participacion conserve su
+ *      procedencia y para que ninguna se borre en silencio (CLAUDE.md #5, #6 y
+ *      #7: es un registro de movimientos, no de saldos editables);
+ *   3. la plataforma esta preparada para entregar el listado a un
+ *      administrador independiente (principio #10, y el campo
+ *      `administrator_name` del contrato).
  *
- * Ninguna de las tres es una promesa comercial ni una afirmacion legal nueva:
- * las tres describen decisiones ya tomadas y ya implementadas. Cuando el flag
- * se encienda y existan ganadores publicados, la seccion de ganadores aparece
- * ENCIMA de esta; esta no se retira, porque lo que dice sigue siendo verdad.
+ * DESCRIPCION DE DISENO, NO GARANTIA OPERATIVA (DEC-044)
+ * ------------------------------------------------------
+ * Y ese es el cambio que trae DEC-044. Antes esta banda se titulaba "lo que
+ * este sitio garantiza" y afirmaba en presente que cada participacion conserva
+ * su origen y que nada se borra. Las dos cosas son ciertas DEL DISENO -el
+ * esquema del ledger es de movimientos- y ninguna de las dos se puede
+ * garantizar todavia EN OPERACION: no hay checkout, ni pago, ni AMOE, asi que
+ * el ledger no tiene trafico. Una representacion al consumidor que se publica
+ * con independencia de los datos no puede depender de que los datos esten
+ * vacios para ser cierta.
+ *
+ * Cuando exista trafico real y una revision que lo respalde, la banda puede
+ * volver al presente. Hasta entonces describe como esta construido el sistema,
+ * que es lo que si se puede sostener.
+ *
+ * Cuando el flag de ganadores se encienda y existan ganadores publicados, la
+ * seccion de ganadores aparece ENCIMA de esta; esta no se retira, porque lo que
+ * dice sigue siendo verdad.
  */
 export function TrustBand() {
   const t = useTranslations("home.trust");

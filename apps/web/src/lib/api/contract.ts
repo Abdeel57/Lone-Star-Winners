@@ -300,8 +300,14 @@ export interface PromotionMedia {
  * el cliente a partir de dos numeros que pueden llegar desincronizados. Si algun
  * dia hay que enseñar restantes, lo publica el backend con su propio campo.
  *
- * `null` en `issued` mientras el backend no publique la cifra. La interfaz se
- * calla ese dato, no lo estima.
+ * Y DESDE DEC-044, `issued` TAMPOCO SE PINTA. No basta con no restar: pintar
+ * `cap` e `issued` uno debajo del otro publica el contador de restantes POR
+ * IMPLICACION, porque la resta la hace el lector. El campo se conserva en el
+ * contrato -es dato del backend, y un panel de administracion lo necesitara-
+ * pero ninguna pantalla publica lo lee. Lo unico que se ensena del universo es
+ * el tope, como dato de las Reglas.
+ *
+ * `null` en `issued` mientras el backend no publique la cifra.
  */
 export interface EntryPool {
   /** Tope total configurado de participaciones. Entero (DEC-010). */

@@ -137,9 +137,12 @@ const GMC_MEDIA: PromotionMedia = {
  * que pasa con una compra elegible cuando ya no quedan, si convive con AMOE-
  * sigue en `docs/LEGAL_PENDING.md`.
  *
- * `issued` es una cifra SERVIDA, no calculada, y esta aqui para probar que la
- * interfaz sabe pintarla. No hay campo de "restantes" ni se deriva: ver la nota
- * de `EntryPool` en `src/lib/api/contract.ts`.
+ * `issued` es una cifra SERVIDA, no calculada, y sigue aqui AUNQUE DESDE
+ * DEC-044 NINGUNA PANTALLA LA PINTE. No es un resto olvidado: es la mitad
+ * activa de la red. Un fixture que dejara de traerla haria que el test de
+ * DEC-044 pasara por no tener nada que encontrar, que es la forma mas comun de
+ * que una comprobacion de compliance se vuelva decorativa. Mientras el backend
+ * pueda servir el campo, el fixture lo sirve y el test exige que no aparezca.
  */
 const GMC_ENTRY_POOL: EntryPool = { cap: 10000, issued: 1240 };
 
@@ -496,6 +499,31 @@ export const promotionWithMultiplier: PromotionSummary = {
 };
 
 /**
+ * Promocion ACTIVE SIN version de reglas publicada (DEC-044).
+ *
+ * DEC-012 dice que esto no deberia poder existir: el cerrojo de activacion de
+ * `backend` impide que una promocion llegue a ACTIVE con claves legales en TBD.
+ * Este fixture existe precisamente porque "no deberia poder existir" no es lo
+ * mismo que "no puede existir": un `INSERT` a mano, una migracion de datos o un
+ * backend futuro que relaje el cerrojo lo producen, y entonces la portada
+ * publicaria el hero entero -"GANA", boton rojo, cuenta atras- sobre una
+ * promocion sin documento que la gobierne.
+ *
+ * Es la mitad ADVERSARIAL del par: `activePromotion` prueba que el hero
+ * completo se ve, y esta prueba que no se ve cuando no debe.
+ *
+ * Su detalle trae premio, fotografia y universo, como cualquier otra ACTIVE.
+ * Tambien a proposito: lo que el estado contenido tiene que retirar solo se
+ * puede comprobar si el dato para pintarlo esta disponible.
+ */
+export const activePromotionWithoutRules: PromotionSummary = {
+  ...promotionInStatus("ACTIVE"),
+  id: "prm_0000000000000007",
+  slug: "gmc-2025-active-no-rules",
+  rules_version_id: null,
+};
+
+/**
  * Promocion sin `PromotionRulesVersion` activa (DEC-012).
  *
  * Caso importante: una promocion no puede pasar a ACTIVE mientras queden claves
@@ -596,3 +624,14 @@ export const promotionDetailWithMultiplier: PromotionDetail = detailFor(
 
 /** Detalle sin oferta declarada. */
 export const promotionDetailWithoutOffer: PromotionDetail = detailFor(promotionWithoutRules, null);
+
+/**
+ * Detalle de la promocion ACTIVE sin reglas publicadas (DEC-044).
+ *
+ * Con oferta de participaciones declarada, igual que la activa de verdad: si el
+ * fixture adversarial llegara empobrecido, el test comprobaria que no se pinta
+ * algo que de todos modos no habia.
+ */
+export const activePromotionWithoutRulesDetail: PromotionDetail = detailFor(
+  activePromotionWithoutRules,
+);
