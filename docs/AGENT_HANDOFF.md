@@ -1106,3 +1106,57 @@ Affected files: `packages/security/src/{capabilities,permissions}.ts`,
 
 Blocking: SÍ para las rutas admin de sorteo; NO para el dominio, ya
 construido y probado.
+
+---
+
+## HO-027
+
+Status: OPEN (regla permanente para todos los agentes)
+
+## Handoff
+
+Date: 2026-08-26
+From: sesión paralela (lone-star-c4), vía Team Lead
+To: los tres agentes y ambas sesiones
+
+Context:
+Al cerrar cinco errores de lint en `apps/api/src/routes/auth.ts` (`817f2a1`),
+la sesión paralela comprobó que **uno de los "autocorregibles" abría un
+agujero de autenticación silencioso**. El código era:
+
+```ts
+if (session === null || session.revokedAt !== null) {
+  throw unauthenticated();
+}
+```
+
+`prefer-optional-chain` propone `session?.revokedAt != null`. **No es
+equivalente**: con `session === null` evalúa `undefined != null` → `false`, y
+deja pasar exactamente el caso que hay que rechazar — un token que no
+corresponde a ninguna sesión habría autenticado.
+
+Reescritura correcta, en positivo, que satisface la regla sin cambiar la
+semántica:
+
+```ts
+const usable = session !== null && session.revokedAt === null;
+if (!usable) {
+  throw ApiErrors.unauthenticated();
+}
+```
+
+What I need from you (regla):
+
+1. **Nunca aplicar `eslint --fix` a ciegas** sobre código de autenticación,
+   autorización, ledger, reversals, sorteo o export. Cada corrección de
+   `prefer-optional-chain`, `no-unnecessary-condition` o similar sobre una
+   comprobación de `null` se revisa a mano y se prueba en negativo.
+2. `prefer-optional-chain` sobre la forma `x === null || x.y !== null` es un
+   **cambio de semántica disfrazado de estilo**. Se reescribe en positivo.
+3. Cuando una construcción se deje a propósito de forma que la regla no
+   sugiere, se anota en el propio código por qué, para que el siguiente que
+   pase con `--fix` no la revierta.
+
+Affected files: cualquier comprobación de sesión, permiso o saldo.
+
+Blocking: NO. Es prevención de una clase de fallo ya materializada una vez.
