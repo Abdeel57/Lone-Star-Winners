@@ -1438,6 +1438,16 @@ están en `test.fixme` con su motivo (`tests/e2e/lib/blockers.mjs`).
    desbloquea nada: el autorizador no lo lee. Afecta a `amoe.self.submit`,
    `amoe.review.approve/reject`, `entry.adjust.create/approve` → **403
    siempre**. Sin esto, AMOE y ajustes no funcionan contra la API real.
+   **Medición de la sesión paralela (2026-08-27) contra el catálogo compilado:
+   27 de 62 capacidades bloqueadas** — 7 por `featureFlagEnabled: null`, **26
+   por `reasonProvided: false`** (reembolsos, descalificación, activación y
+   cierre de promoción, versiones de reglas, cambios de flag, export
+   finalize/download/deliver, PII, roles, sesiones…) y 6 por
+   `secondApprovalGranted: false`. Prácticamente todo el panel devuelve 403 hoy.
+   La sesión paralela lo asume, antes de su fase 3, con dos salvaguardas:
+   `reasonProvided` exige motivo no vacío con longitud mínima **persistido en
+   la auditoría** (ya existe: `audit_events`, HO-028), y `secondApprovalGranted`
+   exige actor distinto y TTL vivo verificados, no un booleano de repositorio.
 2. **Carrito: web y API no coinciden.** `cart/page.tsx:128` lee
    `cartResult.data.cart.items`; `GET /cart` devuelve `{ id, currency, lines,
 subtotal, entry_quote }` (ya señalado en HO-017). La pantalla no puede
