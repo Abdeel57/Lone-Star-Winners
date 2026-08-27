@@ -114,9 +114,9 @@ export function buildAuthRoutes(dependencies: AppDependencies): RouteDefinition[
    * llevar las dos. Gana la de personal: si alguien tiene sesion administrativa
    * viva, es la que describe con mas precision quien esta preguntando.
    */
-  async function readSession(request: {
+  function readSession(request: {
     cookies: Record<string, string | undefined>;
-  }): Promise<{ token: string; audience: SessionAudience } | null> {
+  }): { token: string; audience: SessionAudience } | null {
     for (const audience of ["STAFF", "PARTICIPANT"] as const) {
       const raw = request.cookies[cookieNameFor(cookieConfig.name, audience)];
 
@@ -255,7 +255,7 @@ export function buildAuthRoutes(dependencies: AppDependencies): RouteDefinition[
       },
       handler: async (request) => {
         const body = request.body as z.infer<typeof mfaBodySchema>;
-        const presented = await readSession(request as never);
+        const presented = readSession(request);
 
         if (presented === null) {
           throw ApiErrors.unauthenticated();
@@ -263,7 +263,19 @@ export function buildAuthRoutes(dependencies: AppDependencies): RouteDefinition[
 
         const session = await identity.sessions.findByTokenHash(hashSessionToken(presented.token));
 
-        if (session === null || session.revokedAt !== null) {
+        // Sesion inexistente y sesion revocada se tratan igual y responden
+        // igual: distinguirlas le diria a quien presenta un token robado si
+        // alguna vez fue valido.
+        //
+        // Se escribe en positivo -"utilizable"- y no como
+        // `session === null || session.revokedAt !== null` porque esa forma
+        // dispara `prefer-optional-chain`, y la reescritura que propone la
+        // regla (`session?.revokedAt != null`) NO es equivalente: con la sesion
+        // a null daria `undefined != null`, es decir `false`, y dejaria pasar
+        // justo el caso que hay que rechazar.
+        const usable = session !== null && session.revokedAt === null;
+
+        if (!usable) {
           throw ApiErrors.unauthenticated();
         }
 
@@ -333,7 +345,7 @@ export function buildAuthRoutes(dependencies: AppDependencies): RouteDefinition[
       },
       schema: { response: { 200: sessionResponseSchema } },
       handler: async (request) => {
-        const presented = await readSession(request as never);
+        const presented = readSession(request);
 
         if (presented === null) {
           return ANONYMOUS;
@@ -401,7 +413,7 @@ export function buildAuthRoutes(dependencies: AppDependencies): RouteDefinition[
       },
       schema: { response: { 200: z.object({ ok: z.literal(true) }) } },
       handler: async (request, reply) => {
-        const presented = await readSession(request as never);
+        const presented = readSession(request);
 
         if (presented !== null) {
           const session = await identity.sessions.findByTokenHash(
