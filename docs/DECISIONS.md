@@ -2188,3 +2188,47 @@ Drizzle, ronda siguiente), `packages/audit`.
 
 Proposed by: backend-sweepstakes
 Agreed by: Team Lead
+
+---
+
+## DEC-048
+
+Status: Accepted
+
+Date: 2026-08-26
+
+Decision:
+**El panel de administración vive en `/admin/[locale]/...`, no en
+`/[locale]/admin/...`.** `/admin` queda excluido del matcher de i18n del
+escaparate (como `/healthz`) y monta su propia negociación de locale dentro.
+Sigue siendo bilingüe.
+
+Context:
+`SESSION_POLICIES.STAFF.cookie.path` es `/admin` (DEC-006: scope estrecho
+para que la cookie de personal **no viaje con cada petición del
+escaparate**, y con `SameSite=Strict` tampoco en navegaciones que vengan de
+fuera). El enrutado bilingüe del escaparate pone prefijo de locale a todo,
+así que una página de admin sería `/es/admin/...`, que **no empieza por
+`/admin`**: el navegador nunca enviaría la cookie y el panel quedaría
+permanentemente deslogueado, con el síntoma "inicio sesión y me devuelve al
+login". La cookie vive en el origen de `apps/web`, no en el de la API, así
+que el prefijo `/api/v1/admin/...` no interviene. Detectado por la sesión
+paralela antes de que existiera una sola página de admin.
+
+Alternatives:
+A — admin sin prefijo de locale en `/admin/...` (descartado: panel en un solo
+idioma, roza el principio #4). C — cambiar el `path` de la cookie a `/`
+(descartado: es la de una línea, pero rebaja deliberadamente DEC-006 y amplía
+la superficie de exposición del token más sensible del sistema a cambio de
+comodidad de enrutado).
+
+Reason:
+B conserva las dos propiedades que importan: el alcance estrecho de la cookie
+de personal y el bilingüismo del panel. El coste es un segundo punto de
+negociación de locale, acotado a `/admin`.
+
+Affected areas: `apps/web` (middleware, árbol de rutas de admin, i18n),
+`packages/security` (sin cambios: `SESSION_POLICIES` se queda como está).
+
+Proposed by: sesión paralela (lone-star-c4)
+Agreed by: Team Lead
