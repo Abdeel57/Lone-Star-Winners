@@ -1160,3 +1160,48 @@ What I need from you (regla):
 Affected files: cualquier comprobación de sesión, permiso o saldo.
 
 Blocking: NO. Es prevención de una clase de fallo ya materializada una vez.
+
+---
+
+## HO-028
+
+Status: OPEN
+
+## Handoff
+
+Date: 2026-08-27
+From: backend-sweepstakes (B5), vía Team Lead
+To: security-integration (persistencia de auditoría) y Team Lead (dependencias)
+
+Context:
+Las 40 rutas de B5 (`64b7cea`) emiten eventos de auditoría a través de
+`LoggingAuditSink` (`apps/api/src/services/audit-sink.ts`): log
+estructurado con `event: "audit.pending_persistence"`, sin `reason_detail`
+para no filtrar PII. **No es auditoría**: no se encadena, no se sella, no se
+verifica. La tabla `audit_events` no existe.
+
+Además, sorteo y export responden `409` porque el motor vive en
+`@lsw/tpa` y `@lsw/audit`, que `apps/api` aún no declara como dependencias.
+
+What I need from you:
+
+1. `security-integration`: migración `audit_events` (rango 0024+, tres capas
+   de DEC-007, hash chain de DEC-008/035 por promoción, `recorded_at` e `id`
+   explícitos como en el ledger), adaptador que sustituya `LoggingAuditSink`,
+   y el verificador de cadena conectado como job. Sin tocar
+   `packages/security/src/env/**` ni `session-authorizer.ts` (sesión
+   paralela).
+2. Team Lead: añadir `@lsw/tpa` y `@lsw/audit` a `apps/api/package.json`,
+   `pnpm install` con los agentes parados, y cablear `initiateDraw`,
+   `ManualDownloadAdapter` y `recomputeContentDigest` en los handlers que hoy
+   devuelven `409`.
+3. Cuando exista `draw.approve` en el catálogo (sesión paralela), pegar
+   `buildDrawApprovalRoute` (código completo en el informe de B5) con su fila
+   en §11.5.
+
+Affected files: `packages/database/drizzle/0024_*.sql`, `packages/audit`,
+`apps/api/src/services/audit-sink.ts`, `apps/api/package.json`,
+`apps/api/src/routes/{draw,export}.ts`.
+
+Blocking: SÍ para dar por auditado cualquier flujo de admin; NO para el
+resto.
