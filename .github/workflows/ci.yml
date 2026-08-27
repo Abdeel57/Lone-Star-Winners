@@ -164,6 +164,337 @@ jobs:
         run: pnpm run test
 
   # -------------------------------------------------------------------------
+  # Tests de INTEGRACION contra PostgreSQL 16 REAL (DEC-018, HO-015, HO-030).
+  #
+  # POR QUE ESTE JOB ES EL MAS IMPORTANTE DE ESTE FICHERO
+  #
+  #   `packages/database/test/integration/**` se escribio y NUNCA se ha
+  #   ejecutado. La maquina de desarrollo no tiene Docker, asi que
+  #   Testcontainers no arranca, y con el se quedaron sin correr las unicas
+  #   comprobaciones que pueden demostrar lo que DEC-007 promete: que el rol
+  #   `app` no puede hacer UPDATE ni DELETE sobre el ledger, que la columna
+  #   GENERATED calcula lo que dice, que el `EXCLUDE USING gist` rechaza rangos
+  #   solapados y que el bloque `DO $$` de `0004` hace lo que su autor cree.
+  #
+  #   Ninguna de esas cosas la puede probar un test estatico, y ninguna la
+  #   puede probar un mock. Un `GRANT` simulado concede siempre.
+  #
+  # POR QUE UN `services:` Y NO TESTCONTAINERS
+  #
+  #   Testcontainers necesita hablar con un demonio de Docker. En un runner de
+  #   GitHub lo hay, pero levantar contenedores desde dentro del job anade una
+  #   capa que puede fallar por si misma. `services:` da un PostgreSQL 16 de
+  #   VERDAD, gestionado por el runner, con healthcheck, y escuchando en
+  #   127.0.0.1. Es el mismo motor y una pieza movil menos.
+  #
+  #   `src/testing/postgres-container.ts` elige via segun `TEST_DATABASE_URL`:
+  #   declarada, usa esta instancia externa y crea una base de datos virgen por
+  #   fichero de test; sin declarar, sigue usando Testcontainers exactamente
+  #   como hasta ahora. El comportamiento local con Docker no cambia.
+  #
+  # SOBRE LA CONTRASENA DEL SERVICIO
+  #
+  #   `postgres:postgres` es el par de descarte universal, esta explicitamente
+  #   permitido en `.gitleaks.toml` y describe un servicio efimero que solo
+  #   existe durante este job y solo escucha en el bucle local del runner. No
+  #   es un secreto: es la ausencia de uno, declarada en voz alta.
+  # -------------------------------------------------------------------------
+  integration:
+    name: "Gate: integracion (PostgreSQL 16)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+          POSTGRES_DB: postgres
+          # DEC-011: el motor de los tests corre en UTC, igual que produccion.
+          TZ: UTC
+          PGTZ: UTC
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      - name: Instalar dependencias
+        run: |
+          set -euo pipefail
+          if [ -f pnpm-lock.yaml ]; then
+            pnpm install --frozen-lockfile
+          else
+            pnpm install --no-frozen-lockfile
+          fi
+
+      - name: Comprobar que el servicio responde
+        env:
+          PGPASSWORD: postgres
+        run: |
+          set -euo pipefail
+          for _ in $(seq 1 30); do
+            if pg_isready -h 127.0.0.1 -p 5432 -U postgres -d postgres; then
+              psql -h 127.0.0.1 -U postgres -d postgres -c "SELECT version();"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "::error title=PostgreSQL::El servicio no acepto conexiones."
+          exit 1
+
+      - name: turbo run test:integration
+        env:
+          # Presencia = via externa. Ver la cabecera de
+          # `packages/database/src/testing/postgres-container.ts`.
+          # El helper exige host local a proposito: hace CREATE DATABASE y
+          # DROP DATABASE, y no debe poder apuntar a nada que no sea efimero.
+          TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/postgres
+        run: |
+          set -euo pipefail
+          # Con turbo y no con `pnpm --filter` a secas: la tarea declara
+          # `dependsOn: ["^build"]`, y sin ese build los tests importarian el
+          # `dist` inexistente de @lsw/security y @lsw/sweepstakes.
+          # `TEST_DATABASE_URL` esta en la lista `env` de la tarea en
+          # turbo.json, asi que el modo estricto de Turborepo 2 la deja pasar.
+          if ! pnpm exec turbo run test:integration --filter=@lsw/database; then
+            echo "::error title=Integracion::Los tests contra PostgreSQL real han fallado. NO se relajan: si un GRANT o un trigger no se comporta como dice la migracion, la migracion esta mal."
+            exit 1
+          fi
+
+  # -------------------------------------------------------------------------
+  # e2e: navegador -> apps/web -> apps/api -> PostgreSQL 16 (HO-030).
+  #
+  # QUE ANADE SOBRE EL RESTO DE GATES
+  #
+  #   `pnpm --filter @lsw/web smoke` recorre 50+ rutas, pero contra el servidor
+  #   de MOCKS: no ejercita el autorizador real, ni una sola migracion, ni el
+  #   ledger. Los tests unitarios de la API si ejercitan sus handlers, pero con
+  #   los puertos sustituidos. Entre las dos redes queda un hueco exacto -el
+  #   viaje completo, con cookies de verdad, sesiones de verdad y filas de
+  #   verdad- y este job es lo unico que lo cubre.
+  #
+  # ESTADO: PRIMERA EJECUCION EN CI
+  #
+  #   Nada de esto se ha podido ejecutar en la maquina de desarrollo: no hay
+  #   Docker, no hay PostgreSQL y `@playwright/test` no esta instalado. El job
+  #   es BLOQUEANTE desde el primer dia a proposito (`continue-on-error` no
+  #   aparece aqui: un gate que se puede saltar es documentacion), pero conviene
+  #   saber que su primera ejecucion verde es tambien su primera ejecucion.
+  #
+  # DEPENDENCIA NUEVA
+  #
+  #   `tests/e2e` declara `@playwright/test`. Hasta que alguien ejecute
+  #   `pnpm install` una vez y actualice el lockfile, el paso de instalacion de
+  #   TODOS los jobs falla con ERR_PNPM_OUTDATED_LOCKFILE. Es deliberado que
+  #   falle: la alternativa -relajar `--frozen-lockfile`- convertiria un control
+  #   de cadena de suministro en un adorno.
+  # -------------------------------------------------------------------------
+  e2e:
+    name: "Gate: e2e (web + api + PostgreSQL 16)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+          POSTGRES_DB: postgres
+          TZ: UTC
+          PGTZ: UTC
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      # ---- Base de datos del e2e -------------------------------------------
+      # `lsw_e2e` la crea el paso de preparacion; las tres URLs de rol apuntan
+      # a ella. Las contrasenas de los tres roles de DEC-003 se generan en el
+      # propio job y NO se escriben en ningun fichero versionado.
+      E2E_ADMIN_URL: postgresql://postgres:postgres@127.0.0.1:5432/postgres
+      E2E_DATABASE_NAME: lsw_e2e
+      DATABASE_SSL_MODE: disable
+      DATABASE_NETWORK: private
+      DATABASE_POOL_MAX: "10"
+      DATABASE_STATEMENT_TIMEOUT_MS: "15000"
+
+      # ---- apps/api --------------------------------------------------------
+      API_HOST: 127.0.0.1
+      API_PORT: "4310"
+      API_PUBLIC_URL: http://127.0.0.1:4310
+      API_BODY_LIMIT_BYTES: "1048576"
+      API_CORS_ALLOWED_ORIGINS: http://127.0.0.1:3310
+      API_REQUEST_ID_HEADER: x-request-id
+      API_RATE_LIMIT_WINDOW_SECONDS: "60"
+      # Alto a proposito: el e2e hace muchas peticiones desde una sola IP y un
+      # 429 aqui probaria el rate limiter, no el flujo. El rate limiter tiene
+      # sus propios tests.
+      API_RATE_LIMIT_MAX_REQUESTS: "100000"
+      SESSION_COOKIE_NAME: lsw_session
+      # `localhost` es el UNICO valor que `cookieOptionsFor()` trata de forma
+      # especial: omite el atributo `Domain`. Es lo que hace falta aqui, porque
+      # los servidores escuchan en 127.0.0.1 y un navegador RECHAZA una cookie
+      # con `Domain` puesto a una direccion IP. Con `Domain` omitido la cookie
+      # queda ligada al host exacto, que es lo correcto y ademas mas estricto.
+      SESSION_COOKIE_DOMAIN: localhost
+      SESSION_COOKIE_SECURE: "false"
+      SESSION_TTL_MINUTES: "720"
+      ADMIN_SESSION_TTL_MINUTES: "60"
+      ADMIN_SESSION_IDLE_TIMEOUT_MINUTES: "15"
+      STEP_UP_MAX_AGE_SECONDS: "300"
+      PAYMENT_PROVIDER: none
+      DEFAULT_CURRENCY: USD
+
+      # ---- apps/web --------------------------------------------------------
+      WEB_PORT: "3310"
+      WEB_PUBLIC_URL: http://127.0.0.1:3310
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3310
+      API_BASE_URL: http://127.0.0.1:4310/api/v1
+      NEXT_PUBLIC_API_BASE_URL: http://127.0.0.1:4310/api/v1
+      # LO QUE DISTINGUE ESTE JOB DEL HUMO: los mocks APAGADOS.
+      WEB_ENABLE_API_MOCKS: "false"
+      E2E_BASE_URL: http://127.0.0.1:3310
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      - name: Instalar dependencias
+        run: |
+          set -euo pipefail
+          if [ -f pnpm-lock.yaml ]; then
+            pnpm install --frozen-lockfile
+          else
+            pnpm install --no-frozen-lockfile
+          fi
+
+      - name: Generar secretos efimeros del job
+        id: secrets
+        run: |
+          set -euo pipefail
+          # Nunca se versionan ni se imprimen: se generan aqui, viven lo que
+          # vive el job y mueren con el. `add-mask` evita que un `set -x` o un
+          # volcado de error los deje en el log.
+          session_secret="$(node -e 'process.stdout.write(require("node:crypto").randomBytes(48).toString("base64url"))')"
+          mfa_key="$(node -e 'process.stdout.write(require("node:crypto").randomBytes(32).toString("base64url"))')"
+          app_password="$(node -e 'process.stdout.write(require("node:crypto").randomBytes(24).toString("base64url"))')"
+          migrator_password="$(node -e 'process.stdout.write(require("node:crypto").randomBytes(24).toString("base64url"))')"
+          readonly_password="$(node -e 'process.stdout.write(require("node:crypto").randomBytes(24).toString("base64url"))')"
+
+          for value in "${session_secret}" "${mfa_key}" "${app_password}" "${migrator_password}" "${readonly_password}"; do
+            echo "::add-mask::${value}"
+          done
+
+          {
+            echo "SESSION_SECRET=${session_secret}"
+            echo "MFA_SECRET_ENCRYPTION_KEY=${mfa_key}"
+            echo "DATABASE_URL_APP=postgresql://lsw_app:${app_password}@127.0.0.1:5432/${E2E_DATABASE_NAME}"
+            echo "DATABASE_URL_MIGRATOR=postgresql://lsw_migrator:${migrator_password}@127.0.0.1:5432/${E2E_DATABASE_NAME}"
+            echo "DATABASE_URL_READONLY=postgresql://lsw_readonly_report:${readonly_password}@127.0.0.1:5432/${E2E_DATABASE_NAME}"
+            echo "LSW_E2E_APP_PASSWORD=${app_password}"
+            echo "LSW_E2E_MIGRATOR_PASSWORD=${migrator_password}"
+            echo "LSW_E2E_READONLY_PASSWORD=${readonly_password}"
+          } >> "${GITHUB_ENV}"
+
+      - name: Crear la base de datos del e2e
+        env:
+          PGPASSWORD: postgres
+        run: |
+          set -euo pipefail
+          for _ in $(seq 1 30); do
+            if pg_isready -h 127.0.0.1 -p 5432 -U postgres -d postgres; then break; fi
+            sleep 2
+          done
+          psql -h 127.0.0.1 -U postgres -d postgres \
+            -c "DROP DATABASE IF EXISTS ${E2E_DATABASE_NAME} WITH (FORCE);"
+          psql -h 127.0.0.1 -U postgres -d postgres \
+            -c "CREATE DATABASE ${E2E_DATABASE_NAME};"
+
+      # POR QUE ESTE PASO NO USA TURBO
+      #
+      #   Turborepo 2 filtra el entorno en modo estricto: una tarea solo ve las
+      #   variables declaradas en `globalEnv` / `env` de `turbo.json`. Las de
+      #   este job -`API_BASE_URL`, `WEB_ENABLE_API_MOCKS`, `NEXT_PUBLIC_*`- no
+      #   estan ahi, y `turbo.json` no es propiedad de este agente. Con
+      #   `pnpm --filter` el proceso hijo hereda el entorno entero, que es lo
+      #   que `next build` necesita para incrustar las variables `NEXT_PUBLIC_*`.
+      #
+      #   El sufijo `...` selecciona el paquete Y SUS DEPENDENCIAS, en orden
+      #   topologico. `@lsw/api...` arrastra database, security, sweepstakes,
+      #   commerce, audit y tpa, que es justo lo que la semilla tambien necesita
+      #   compilado.
+      - name: Compilar los paquetes y la API
+        run: pnpm --filter "@lsw/api..." run build
+
+      - name: Compilar el escaparate
+        # `next build` y `next start` tienen que coincidir en NODE_ENV, y el del
+        # resto del job es `test` porque `apps/api` rechaza arrancar en
+        # produccion sin HTTPS ni TLS verificado. Se separa en su propio paso
+        # para que cada proceso tenga el suyo.
+        env:
+          NODE_ENV: production
+        run: pnpm --filter "@lsw/web..." run build
+
+      - name: Migrar (rol migrator) y asignar contrasenas de rol
+        env:
+          PGPASSWORD: postgres
+          # El runner de migraciones exige el rol `migrator`, que
+          # `0000_baseline.sql` crea SIN contrasena a proposito. El arranque en
+          # frio lo hace el superusuario del servicio, exactamente como
+          # `db:bootstrap` en un proveedor gestionado (DEC-043).
+          DATABASE_URL_MIGRATOR: postgresql://postgres:postgres@127.0.0.1:5432/lsw_e2e
+        run: |
+          set -euo pipefail
+          pnpm --filter @lsw/database run db:migrate
+          psql -h 127.0.0.1 -U postgres -d "${E2E_DATABASE_NAME}" \
+            -c "ALTER ROLE lsw_migrator WITH PASSWORD '${LSW_E2E_MIGRATOR_PASSWORD}';" \
+            -c "ALTER ROLE lsw_app WITH PASSWORD '${LSW_E2E_APP_PASSWORD}';" \
+            -c "ALTER ROLE lsw_readonly_report WITH PASSWORD '${LSW_E2E_READONLY_PASSWORD}';"
+
+      - name: Sembrar el escenario del e2e
+        run: node tests/e2e/seed/seed-e2e.mjs
+
+      - name: Instalar el navegador de Playwright
+        run: pnpm --filter @lsw/tests-e2e exec playwright install --with-deps chromium
+
+      - name: playwright test
+        run: pnpm --filter @lsw/tests-e2e run test:e2e
+
+      - name: Publicar el informe de Playwright
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            tests/e2e/playwright-report
+            tests/e2e/test-results
+          if-no-files-found: ignore
+          retention-days: 14
+
+  # -------------------------------------------------------------------------
   # Puerta unica para la proteccion de rama: exigir SOLO este check en `main`
   # evita tener que reconfigurar la proteccion cada vez que se anade un gate.
   # -------------------------------------------------------------------------
@@ -171,7 +502,7 @@ jobs:
     name: "CI gates"
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    needs: [format, lint, typecheck, test]
+    needs: [format, lint, typecheck, test, integration, e2e]
     if: always()
     steps:
       - name: Verificar que ningun gate ha fallado

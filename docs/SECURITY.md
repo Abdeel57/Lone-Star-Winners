@@ -61,12 +61,26 @@ Por orden de dano si se pierde:
 `.github/workflows/ci.yml`
 
 ```text
-format     prettier --check sobre todo el repositorio
-lint       ESLint type-aware (raiz + por workspace)
-typecheck  tsc --noEmit en modo strict
-test       turbo run test (incluye tests/security)
-ci-gates   puerta unica para la proteccion de rama
+format       prettier --check sobre todo el repositorio
+lint         ESLint type-aware (raiz + por workspace)
+typecheck    tsc --noEmit en modo strict
+test         turbo run test (incluye tests/security)
+integration  PostgreSQL 16 REAL como `services:` del job. Ejecuta
+             `packages/database/test/integration/**`: GRANT por columna,
+             triggers, columnas GENERATED, EXCLUDE USING gist y el ledger
+             append-only, contra el motor y no contra un doble.
+e2e          navegador -> apps/web -> apps/api -> PostgreSQL 16. Migraciones,
+             escenario sembrado, `WEB_ENABLE_API_MOCKS=false`.
+ci-gates     puerta unica para la proteccion de rama
 ```
+
+Sobre `integration`: `packages/database/src/testing/postgres-container.ts` elige
+via segun `TEST_DATABASE_URL`. Sin declarar, sigue usando Testcontainers y
+Docker, igual que siempre; declarada, usa la instancia externa del servicio de
+CI y crea una base de datos virgen por fichero de test. Las migraciones, los
+tres roles de DEC-003 y las contrasenas efimeras son identicos por los dos
+caminos. **Es la via que permite ejecutar en CI lo que la maquina de desarrollo
+no puede: ahi no hay Docker (HO-015).**
 
 `.github/workflows/security.yml`
 
@@ -140,40 +154,84 @@ no detecta al que la ignora.
 De la lista de DEC-018, esto **todavia no esta** y este es el motivo. Ninguno
 se ha omitido en silencio.
 
+### 4.1 Gates que ACABAN DE EXISTIR (HO-030)
+
+Dejan esta lista y pasan a la seccion 3.1. Se anotan aqui para que quede el
+rastro de cuando y por que dejaron de faltar.
+
 ```text
-semgrep / CodeQL          falta codigo que analizar. Con el repositorio casi
-                          vacio, CodeQL falla por "no source code found". Se
-                          activa en cuanto apps/api tenga rutas reales.
+Testcontainers +          RESUELTO por otra via. No hacia falta Docker: hacia
+PostgreSQL real           falta un PostgreSQL real, y `services: postgres:16`
+                          de GitHub Actions lo da sin Docker-in-Docker. El
+                          helper elige via segun `TEST_DATABASE_URL` y el
+                          camino local con Docker no cambia.
 
-Testcontainers +          depende de packages/database, que aun no existe. Es
-PostgreSQL real           el gate mas importante que falta: sin el no se puede
-                          demostrar que el ledger es append-only ni que un
-                          webhook duplicado no concede entries dos veces.
+Invariantes de base de    idem: corren en el mismo job `integration`. Son las
+datos sobre migraciones   ~100 pruebas que llevaban meses escritas y sin
+                          ejecutar (HO-015). ATENCION: "existe el gate" no es
+                          "las pruebas pasan". Nunca se han ejecutado; su
+                          primera ejecucion verde sera tambien la primera.
 
-Invariantes de base de    idem. Incluye intentar activamente un UPDATE y un
-datos sobre migraciones   DELETE sobre ledger y auditoria y exigir que fallen,
-                          y revisar las migraciones en busca de GRANTs
-                          indebidos (DEC-005, DEC-007).
+Playwright                `tests/e2e`, job `e2e`. Recorre alta y acceso de
+                          participante, catalogo, carrito, cotizacion, el 503
+                          del checkout sin proveedor de pago, el portal,
+                          la configuracion AMOE, el segundo factor de personal
+                          y la cola de revision. Ver `tests/e2e/README.md`.
+```
+
+### 4.2 Gates que siguen faltando
+
+```text
+semgrep / CodeQL          ya hay codigo que analizar: el motivo original
+                          ("repositorio casi vacio") ha caducado. Queda como
+                          trabajo pendiente, no como imposibilidad.
 
 Matriz de autorizacion    la mitad estatica ya existe en tests/security. Falta
 rol x endpoint            la parte que recorre las rutas reales de apps/api y
                           las contrasta con docs/API_CONTRACT.md (DEC-015).
+                          El e2e cubre HOY un puñado de rutas, no la matriz.
 
-Cobertura minima          90 % en audit, ledger y export; 70 % global. Fijar
-                          umbrales ahora, con tres paquetes de andamiaje,
-                          mediria ruido.
+axe / accesibilidad       el e2e ya arranca un navegador, asi que el obstaculo
+                          desaparece en cuanto se anada `@axe-core/playwright`.
+                          Es otra dependencia nueva, y una dependencia nueva
+                          obliga a rehacer el lockfile: se deja para su propio
+                          cambio.
 
-Playwright + axe          depende de apps/web.
+Cobertura minima          90 % en audit, ledger y export; 70 % global. Sigue
+                          sin fijarse: con el `integration` recien encendido,
+                          el numero mediria cobertura de codigo NO EJECUTADO
+                          hasta hoy, y no seria comparable con nada.
 
-Reproducibilidad de       depende del generador de snapshots, que depende del
-snapshot (doble           esquema del ledger. Es el gate que hace verificable
-generacion, mismo hash)   DEC-016.
+Reproducibilidad de       depende del generador de snapshots. El job
+snapshot (doble           `integration` es su prerrequisito y ya existe; el
+generacion, mismo hash)   gate en si, no. Es el que hace verificable DEC-016.
+
+Cabeceras de seguridad    NO EXISTEN en `apps/web`: `next.config.mjs` no
+del escaparate            define `headers()` y `middleware.ts` solo redirige.
+                          Sin CSP, sin HSTS, sin `X-Content-Type-Options`, en
+                          ningun entorno. `apps/api` SI las emite (helmet).
+                          La prueba esta escrita en
+                          `tests/e2e/specs/01-security-headers.spec.mjs`,
+                          marcada `test.fixme` con su motivo: afirma lo
+                          correcto y se enciende sola cuando el escaparate las
+                          emita. Es un handoff a `frontend`.
 
 Renovate                  requiere configuracion a nivel de repositorio en
                           GitHub, no solo un fichero.
 
 Firma de commits          decision de organizacion, no de repositorio.
 ```
+
+### 4.3 Requisito de un solo comando antes de que estos gates corran
+
+`tests/e2e` es un workspace NUEVO y declara `@playwright/test`, que no esta en
+`pnpm-lock.yaml`. Hasta que alguien ejecute **una vez** `pnpm install` en la
+raiz, el paso de instalacion de **todos** los jobs falla con
+`ERR_PNPM_OUTDATED_LOCKFILE`.
+
+Es deliberado que falle asi. La alternativa -relajar `--frozen-lockfile`-
+convertiria un control de cadena de suministro en un adorno, y lo haria en el
+mismo fichero que declara que un gate saltable no es un gate.
 
 ---
 

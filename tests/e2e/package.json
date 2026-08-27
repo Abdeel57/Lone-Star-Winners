@@ -1,0 +1,23 @@
+{
+  "name": "@lsw/tests-e2e",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Pruebas de punta a punta: navegador -> apps/web -> apps/api -> PostgreSQL real (HO-030).",
+  "license": "UNLICENSED",
+  "type": "module",
+  "scripts": {
+    "test:e2e": "node scripts/require-playwright.mjs playwright test",
+    "test:e2e:mocks": "node scripts/require-playwright.mjs playwright test --project=mocks",
+    "seed": "node seed/seed-e2e.mjs",
+    "typecheck": "node scripts/syntax-check.mjs",
+    "lint": "eslint .",
+    "clean": "node -e \"for (const d of ['playwright-report','test-results']) require('node:fs').rmSync(d,{recursive:true,force:true})\""
+  },
+  "devDependencies": {
+    "@lsw/database": "workspace:*",
+    "@lsw/security": "workspace:*",
+    "@playwright/test": "^1.56.0",
+    "otpauth": "^9.5.1",
+    "pg": "^8.16.3"
+  }
+}
