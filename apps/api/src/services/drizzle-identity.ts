@@ -169,6 +169,16 @@ export function createIdentityRepositories(db: Database): IdentityRepositories {
         return rows.map((row) => row.roleKey);
       },
 
+      async findAdminUser(identityId: string): Promise<{ status: string } | null> {
+        const rows = await db
+          .select({ status: adminUsers.status })
+          .from(adminUsers)
+          .where(eq(adminUsers.identityId, identityId))
+          .limit(1);
+
+        return rows[0] ?? null;
+      },
+
       async recordLoginAttempt(input): Promise<void> {
         if (input.succeeded) {
           await db

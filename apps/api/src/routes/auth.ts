@@ -197,7 +197,36 @@ export function buildAuthRoutes(dependencies: AppDependencies): RouteDefinition[
           await identity.identities.updatePasswordHash(found.id, await hashPassword(body.password));
         }
 
+        // La identidad tiene que estar viva. SUSPENDED o CLOSED no entran,
+        // aunque la contrasena sea correcta.
+        if (found.status !== "ACTIVE") {
+          throw ApiErrors.unauthenticated();
+        }
+
         const roles = (await identity.identities.listAdminRoles(found.id)) as readonly RoleId[];
+
+        // Y si es personal, su cuenta administrativa tambien.
+        //
+        // Estado y roles son cosas distintas y se revocan en momentos
+        // distintos: desactivar la cuenta de quien se va no borra sus
+        // asignaciones. Sin esta comprobacion, una cuenta DEACTIVATED que
+        // conserve sus roles seguiria iniciando sesion con normalidad, y el
+        // panel de administracion la trataria como personal en activo.
+        if (roles.length > 0) {
+          const adminUser = await identity.identities.findAdminUser(found.id);
+
+          // Aqui SI se usa encadenamiento opcional, al contrario que en la
+          // comprobacion de sesion revocada de mas abajo. La diferencia esta en
+          // contra que se compara: `adminUser?.status !== "ACTIVE"` con la
+          // cuenta a null da `undefined !== "ACTIVE"`, es decir `true`, y
+          // rechaza -que es lo correcto-. Cuando la comparacion es contra
+          // `null`, el mismo patron se invierte y deja pasar. La regla es
+          // segura en un caso y peligrosa en el otro.
+          if (adminUser?.status !== "ACTIVE") {
+            throw ApiErrors.unauthenticated();
+          }
+        }
+
         const audience = audienceForRoles(roles);
         const policy = SESSION_POLICIES[audience];
 

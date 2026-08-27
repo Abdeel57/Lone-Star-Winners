@@ -75,6 +75,17 @@ export interface IdentityRepository {
   listAdminRoles(identityId: string): Promise<readonly string[]>;
 
   /**
+   * Cuenta administrativa de la identidad, si la tiene.
+   *
+   * Se consulta el ESTADO ademas de los roles porque son cosas distintas:
+   * revocar los roles de alguien que se va es un acto aparte de desactivar su
+   * cuenta, y en la practica se hacen en momentos distintos. Si el login solo
+   * mirara los roles, una cuenta DEACTIVATED que conserve sus asignaciones
+   * seguiria entrando.
+   */
+  findAdminUser(identityId: string): Promise<{ readonly status: string } | null>;
+
+  /**
    * Registra el resultado de un intento. El exito reinicia el contador; el
    * fallo lo incrementa y, superado el umbral, fija `lockedUntil`.
    *
