@@ -2080,3 +2080,63 @@ Esta decisión cubre la **fase 1**: esquema y primitivas criptográficas con sus
 tests. Las rutas HTTP, la resolución de principal, los endpoints
 administrativos y las pantallas van en fases posteriores. Nada de lo que aquí
 se construye habilita por sí solo un inicio de sesión.
+
+---
+
+## DEC-046
+
+Status: Accepted
+
+Date: 2026-08-26
+
+Decision:
+**Plan para desarrollar todo lo que falta, y proveedor de pagos.**
+
+1. **Reparto entre sesiones** (detalle en HO-025): la sesión paralela
+   construye identidad completa —participante y administrador sobre el mismo
+   módulo, roles y políticas distintas— y los endpoints de admin, con
+   migraciones 0010–0019. Esta sesión construye comercio, pipeline de
+   participaciones, AMOE, ajustes, controles de sorteo, entrega al TPA, portal
+   del participante, checkout, pantallas de cuenta y admin (fase 4), con
+   migraciones desde 0020.
+2. **Dominio puro primero, adaptadores después.** Mientras la fase 2 de
+   identidad no tenga contrato, comercio, participaciones y sorteo se
+   construyen como dominio con puertos (`LedgerRepository`, `Clock`,
+   `Csprng`, `PaymentProvider`, `SealStore`…) e implementaciones en memoria
+   con tests; los adaptadores a Drizzle, objeto-storage y las rutas HTTP
+   entran en la ronda siguiente sobre el registro de rutas de `apps/api`
+   (`build<Modulo>Routes` + una línea en `app.ts`).
+3. **Proveedor de pagos: `MockPaymentProvider` ahora; el real es decisión
+   del usuario.** El adaptador `PaymentProvider` (sesión de checkout en modo
+   `hosted_redirect` o `embedded_component`, verificación de firma sobre raw
+   body, parseo de eventos, refund) se implementa completo con un proveedor
+   mock determinista y firma HMAC real. Elegir Stripe, Adyen u otro es un
+   DEC pendiente que requiere al usuario: un modelo de sweepstakes es alto
+   riesgo para muchos procesadores y no puede darse por aprobado ninguno.
+4. **Verificación de email** (`eligibility.email_verification_required`):
+   mecanismo construido por identidad; consecuencia sobre las participaciones
+   leída por el pipeline de award desde la configuración de la promoción,
+   default `false`, TBD legal (HO-024). Con `true`, la concesión queda
+   retenida hasta la verificación, con la misma clave de idempotencia.
+5. **Sin dependencias nuevas ni `pnpm install` desde esta sesión** hasta
+   que aterrice el lockfile de identidad; después, un único `pnpm install`
+   con los agentes parados.
+
+Context:
+El usuario ordenó "desarrolla todo" (2026-08-26) con la sesión paralela ya
+dentro de identidad. `CLAUDE.md` §4 prohíbe dos sistemas de autenticación y
+dos modelos de entries; el reparto evita ambos.
+
+Alternatives:
+Construir auth de participante en esta sesión (descartado: segundo sistema
+de identidad). Elegir proveedor de pagos por criterio técnico (descartado:
+decisión comercial y de riesgo del cliente).
+
+Reason:
+Cada sesión avanza en territorio disjunto y todo lo que toca base de datos o
+HTTP espera al contrato de identidad, que es la única dependencia real.
+
+Affected areas: todo el repositorio, por fases.
+
+Proposed by: Team Lead (sesión frontend)
+Agreed by: sesión paralela (reparto y rango de migraciones confirmados)
