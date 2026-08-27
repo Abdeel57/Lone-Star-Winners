@@ -2018,3 +2018,65 @@ Affected areas: `apps/web` (hero, diccionarios, banda de confianza).
 Proposed by: security-integration (auditoría en la sesión paralela), vía
 Team Lead
 Agreed by: Team Lead
+
+---
+
+## DEC-045
+
+Status: Accepted
+
+Date: 2026-08-26
+
+Decision:
+Implementación de identidad de DEC-006. Tres piezas nuevas de esquema y dos
+dependencias.
+
+**Esquema (migración `0010`).** Las credenciales NO se añaden como columnas de
+`identities`:
+
+- `identity_credentials` — hash Argon2id, uno por identidad. Tabla aparte
+  porque una credencial tiene ciclo de vida propio (rotación, expiración,
+  bloqueo por intentos) y porque así un `SELECT` sobre `identities` —la tabla
+  que más se lee— nunca arrastra el hash.
+- `identity_mfa_factors` — factores TOTP. Varios por identidad: sustituir un
+  autenticador perdido no puede exigir borrar el histórico del anterior.
+- `sessions` — sesión opaca y revocable. Se almacena **solo el hash** del
+  token, nunca el token: una filtración de la tabla no debe permitir suplantar
+  a nadie. La misma razón por la que se guarda el hash de una contraseña.
+
+**Dependencias.**
+
+- `@node-rs/argon2` para Argon2id. Node no trae Argon2, y `crypto.scrypt` no es
+  lo que pide DEC-006. Se elige sobre `argon2` (node-argon2) porque distribuye
+  binarios precompilados por plataforma y **no ejecuta script de instalación**:
+  `pnpm-workspace.yaml` restringe `onlyBuiltDependencies` a `lefthook` y `msw`
+  como decisión de seguridad, y meter un compilador nativo en esa lista para
+  poder hashear contraseñas sería pagar un precio desproporcionado.
+- `otpauth` para TOTP (RFC 6238). Cero dependencias y usa WebCrypto.
+
+Context:
+DEC-006 fija el diseño desde 2026-08-25 pero nada estaba implementado: no
+existía tabla de sesiones ni columna de contraseña. El usuario pidió el panel
+de administración (2026-08-26) al ver la tienda vacía tras el despliegue de
+DEC-043.
+
+Alternatives:
+Columnas de credenciales dentro de `identities` (descartado: mezcla dos ciclos
+de vida y hace que la tabla más leída cargue el hash). Guardar el token de
+sesión en claro para poder buscarlo (descartado: convierte un volcado de la
+tabla en suplantación inmediata). `hash-wasm` (candidato razonable, WASM puro y
+sin riesgo de plataforma; se prefiere `@node-rs/argon2` por ser el camino
+habitual para autenticación de servidor, con la nota de que si el binario de
+Linux diera problemas en el contenedor, `hash-wasm` es el reemplazo directo).
+
+Reason:
+Ninguna de las dos dependencias obliga a relajar la política de scripts de
+instalación, que es la que impide que un paquete cualquiera ejecute código
+durante `pnpm install`. Guardar el hash del token de sesión, y no el token, es
+lo que hace que la tabla `sessions` sea inútil para un atacante que la lea.
+
+Nota de alcance:
+Esta decisión cubre la **fase 1**: esquema y primitivas criptográficas con sus
+tests. Las rutas HTTP, la resolución de principal, los endpoints
+administrativos y las pantallas van en fases posteriores. Nada de lo que aquí
+se construye habilita por sí solo un inicio de sesión.

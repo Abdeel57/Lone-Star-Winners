@@ -5,3 +5,4 @@ export * from "./catalog.js";
 export * from "./feature-flags.js";
 export * from "./entries.js";
 export * from "./cart.js";
+export * from "./credentials.js";

@@ -189,6 +189,20 @@ const RUNTIME_AND_DATA_VARS: readonly EnvVarSpec[] = Object.freeze([
     { secret: true },
   ),
 
+  // ----- Segundo factor (DEC-006, DEC-045) -----------------------------
+  v(
+    "MFA_SECRET_ENCRYPTION_KEY",
+    "api",
+    "string",
+    // NO_ENVIRONMENT mientras la fase 1 solo aporta las primitivas: ningun
+    // proceso la lee todavia. La fase 2, que expone la inscripcion de MFA por
+    // HTTP, la pasara a obligatoria en entornos desplegados. Declararla
+    // obligatoria antes de que nadie la use solo impediria arrancar.
+    NO_ENVIRONMENT,
+    "Clave AES-256 (32 bytes en base64url) con la que se cifra el secreto TOTP antes de persistirlo. Rotarla invalida todos los factores MFA inscritos.",
+    { secret: true },
+  ),
+
   // ----- Colas (DEC-020) -----------------------------------------------
   v("PGBOSS_SCHEMA", "api", "string", ALL_ENVIRONMENTS, "Esquema de pg-boss."),
   v("PGBOSS_POLL_INTERVAL_SECONDS", "api", "integer", ALL_ENVIRONMENTS, "Intervalo de sondeo."),
