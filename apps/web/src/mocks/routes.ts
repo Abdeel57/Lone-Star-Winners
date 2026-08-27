@@ -1,7 +1,29 @@
-import { API_PATHS, officialRulesPath, productPath, promotionPath } from "@/lib/api";
+import {
+  API_PATHS,
+  checkoutSessionPath,
+  officialRulesPath,
+  orderPath,
+  productPath,
+  promotionPath,
+} from "@/lib/api";
 
+import {
+  activeSession,
+  entrySummary,
+  entryTransactionPage,
+  manyBatchesPage,
+  orderDetails,
+  orderPage,
+  participant,
+} from "./fixtures/account";
 import { cartWithQuote, emptyCartWithQuote } from "./fixtures/cart";
 import { catalog, productDetails } from "./fixtures/catalog";
+import {
+  completedCheckout,
+  hostedRedirectSession,
+  ORDER_DRAFT_ID,
+  pendingCheckout,
+} from "./fixtures/checkout";
 import { defaultConfig } from "./fixtures/config";
 import { officialRules } from "./fixtures/official-rules";
 import { activePromotion, publicPromotionDetails, publicPromotions } from "./fixtures/promotions";
@@ -99,6 +121,63 @@ export const mockRoutes: readonly MockRoute[] = [
   { method: "POST", path: API_PATHS.cartItems, body: cartWithQuote },
   { method: "PATCH", path: CART_ITEM_ROUTE, body: cartWithQuote },
   { method: "DELETE", path: CART_ITEM_ROUTE, body: emptyCartWithQuote },
+
+  /*
+   * Identidad (DEC-006).
+   *
+   * El cuerpo por defecto de `GET /auth/session` es el de una sesion ACTIVA, y
+   * no el anonimo. La razon es la de siempre en esta tabla: el fixture por
+   * defecto tiene que ser el que permita ver las pantallas. El estado sin
+   * sesion no queda sin cubrir -lo sirven `scenarios.anonymous()` en los tests
+   * y la cookie en `dev-server.ts`-, y ahi si es el estado por defecto.
+   *
+   * NINGUNA de estas respuestas lleva token. La sesion es una cookie `httpOnly`
+   * que emite `dev-server.ts`; el cuerpo solo dice con quien se ha iniciado.
+   */
+  { method: "GET", path: API_PATHS.authSession, body: activeSession },
+  { method: "POST", path: API_PATHS.authRegister, body: activeSession },
+  { method: "POST", path: API_PATHS.authLogin, body: activeSession },
+  { method: "POST", path: API_PATHS.authMfaVerify, body: activeSession },
+  /*
+   * Logout: `{ ok: true }` y no un acuse cualquiera. Es la forma que publica
+   * la seccion 10, y es idempotente: siempre 200, haya sesion o no.
+   */
+  { method: "POST", path: API_PATHS.authLogout, body: { ok: true } },
+  { method: "POST", path: API_PATHS.authPasswordForgot, body: { acknowledged: true } },
+  { method: "POST", path: API_PATHS.authPasswordReset, body: { acknowledged: true } },
+  { method: "POST", path: API_PATHS.authVerifyEmail, body: { acknowledged: true } },
+  { method: "POST", path: API_PATHS.authVerifyEmailResend, body: { acknowledged: true } },
+  { method: "GET", path: API_PATHS.me, body: participant },
+  { method: "PATCH", path: API_PATHS.me, body: participant },
+
+  // Portal del participante
+  { method: "GET", path: API_PATHS.entrySummary, body: entrySummary },
+  { method: "GET", path: API_PATHS.entryTransactions, body: entryTransactionPage },
+  /*
+   * Los rangos de numeros los sirve la tabla, pero la interfaz solo los PIDE si
+   * `visible_entry_numbers_enabled` esta encendido, y el flag esta apagado por
+   * defecto. Que el fixture exista no enciende nada: hace falta ademas un
+   * escenario de configuracion que encienda el flag.
+   */
+  { method: "GET", path: API_PATHS.entryNumbers, body: manyBatchesPage },
+  { method: "GET", path: API_PATHS.orders, body: orderPage },
+  ...orderDetails.map((order): MockRoute => ({
+    method: "GET",
+    path: orderPath(order.id),
+    body: order,
+  })),
+
+  // Checkout
+  { method: "POST", path: API_PATHS.checkoutSession, body: hostedRedirectSession },
+  /*
+   * Dos entradas para el estado de la sesion de pago: la del borrador conocido
+   * -que responde COMPLETED, que es lo que la pagina de retorno necesita para
+   * poder llevar a la confirmacion- y una comodin para cualquier otro
+   * identificador, que responde PENDING. La especifica va PRIMERA porque
+   * `dev-server.ts` y MSW resuelven por orden de declaracion.
+   */
+  { method: "GET", path: checkoutSessionPath(ORDER_DRAFT_ID), body: completedCheckout },
+  { method: "GET", path: `${API_PATHS.checkoutSessions}/:draftId`, body: pendingCheckout },
 ];
 
 /**

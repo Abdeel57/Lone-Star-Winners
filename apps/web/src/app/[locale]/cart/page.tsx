@@ -104,9 +104,20 @@ export default async function CartPage({
             title={t("cart.signInRequired.title")}
             description={t("cart.signInRequired.body")}
             action={
-              <Link href="/shop" className={buttonVariants({ variant: "secondary" })}>
-                {t("cart.continueShopping")}
-              </Link>
+              // Con vuelta al carrito. Mandar a alguien a la portada despues de
+              // entrar le obliga a rehacer el camino hasta donde estaba, y el
+              // sitio donde peor sienta eso es justo el paso anterior a pagar.
+              <div className="flex flex-wrap items-center gap-3">
+                <Link
+                  href="/account/login?next=%2Fcart"
+                  className={buttonVariants({ variant: "accent" })}
+                >
+                  {t("account.signInRequired.signIn")}
+                </Link>
+                <Link href="/shop" className={buttonVariants({ variant: "secondary" })}>
+                  {t("cart.continueShopping")}
+                </Link>
+              </div>
             }
           />
         </div>
@@ -162,22 +173,20 @@ export default async function CartPage({
 
               <p className="mt-s2 text-caption text-text-subtle">{t("cart.subtotalNote")}</p>
 
-              {/* El checkout llega en un hito posterior. Se dice, en vez de
-                  enseñar un boton que no lleva a ninguna parte: un boton muerto
-                  en el paso de pago es un problema de confianza. */}
-              <Alert tone="info" className="mt-s4">
-                {t("cart.checkoutUnavailable")}
-              </Alert>
+              {/* ROJO (DEC-042): es la accion de COMPRA de la pantalla. El oro
+                  de esta columna se queda donde importa, en la cifra de
+                  participaciones que pinta `EntryQuotePanel` justo debajo. */}
+              <div className="mt-s4 flex flex-col gap-s3">
+                <Link
+                  href="/checkout"
+                  className={buttonVariants({ variant: "accent", fullWidth: true })}
+                >
+                  {t("cart.checkout")}
+                </Link>
 
-              {/* ROJO (DEC-042). Mientras el checkout no exista, esta es la
-                  accion de compra que la tarjeta si puede ofrecer, y ocupa el
-                  sitio donde ira el boton de pago. El oro de esta columna se
-                  queda donde importa: en la cifra de participaciones que pinta
-                  `EntryQuotePanel` justo debajo. */}
-              <div className="mt-s4">
                 <Link
                   href="/shop"
-                  className={buttonVariants({ variant: "accent", fullWidth: true })}
+                  className={buttonVariants({ variant: "ghost", fullWidth: true })}
                 >
                   {t("cart.continueShopping")}
                 </Link>

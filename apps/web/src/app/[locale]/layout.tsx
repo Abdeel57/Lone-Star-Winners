@@ -114,7 +114,7 @@ export default async function LocaleLayout({
               estaba. */}
           <AnnouncementBar locale={locale} />
 
-          <SiteHeader />
+          <SiteHeader locale={locale} />
 
           <main id="main" aria-label={t("mainLandmark")} className="flex-1">
             {children}

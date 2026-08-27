@@ -95,6 +95,20 @@ const DIST_DIR = process.env.SMOKE_DIST_DIR ?? ".next-smoke";
 const ERROR_STATE_TEXTS = ["No hemos podido cargar esta sección", "We could not load this section"];
 
 /**
+ * Cookie de sesion de la API simulada.
+ *
+ * Se repite aqui por el mismo motivo que `ERROR_STATE_TEXTS`: si alguien cambia
+ * el nombre o el valor en `src/mocks/dev-server.ts` sin actualizar esta linea,
+ * el humo dejaria de probar el portal CON sesion y seguiria en verde probando
+ * el estado sin sesion. Prefiero que eso se vea al leer el fichero antes que
+ * importar el fixture y comprobarlo contra si mismo.
+ *
+ * El valor es un token de MENTIRA con la FORMA del real: 43 caracteres
+ * base64url, opaco, sin nada dentro que decodificar (DEC-006).
+ */
+const SESSION_COOKIE = "lsw_dev_session=Zk3TQ8pR2mVxL7bN4yH1sD6gJ0wC5fA9eU-tKiO_qXz";
+
+/**
  * Rutas y lo que tiene que aparecer en cada una.
  *
  * `expect` son cadenas que SOLO pueden venir de un fixture servido por la API:
@@ -196,6 +210,106 @@ const CHECKS = [
     expect: ["Camiseta de algodón grueso", "$50.00", "250"],
   },
   { path: "/es/faq", expect: [] },
+
+  // --- Identidad -----------------------------------------------------------
+  //
+  // Sin datos de fixture que comprobar: lo que se prueba es que responden 200 y
+  // que NO renderizan el estado de error de la capa de API, que es exactamente
+  // lo que pasaria si la lectura de sesion de la cabecera fallara.
+  { path: "/es/account/login", expect: [] },
+  { path: "/en/account/login", expect: [] },
+  { path: "/es/account/register", expect: [] },
+  { path: "/es/account/forgot-password", expect: [] },
+  { path: "/es/account/reset-password", expect: [] },
+  { path: "/es/account/verify-email", expect: [] },
+  /*
+   * El segundo factor SIN sesion: la pantalla existe y dice que no hay nada que
+   * completar, en vez de romperse. Es el estado que ve cualquiera que abra la
+   * URL de memoria.
+   */
+  { path: "/es/account/mfa", expect: [] },
+
+  // --- Portal SIN sesion ---------------------------------------------------
+  //
+  // El estado "inicia sesion" NO es un error, y esta es la unica red que lo
+  // distingue de uno: si estas rutas pintaran el estado de error, el humo
+  // fallaria aunque respondieran 200.
+  { path: "/es/account", expect: [] },
+  { path: "/es/account/entries", expect: [] },
+  { path: "/es/account/orders", expect: [] },
+  { path: "/en/account/profile", expect: [] },
+  { path: "/es/checkout", expect: [] },
+
+  // --- Portal CON sesion ---------------------------------------------------
+  //
+  // La cookie es la que emite la API simulada al iniciar sesion (ver
+  // `src/mocks/dev-server.ts`). El valor se repite aqui a proposito, igual que
+  // `ERROR_STATE_TEXTS`: si alguien lo cambia sin actualizar esta lista, el
+  // humo deja de probar el portal con sesion y prefiero que eso se vea al leer
+  // el fichero antes que importar el fixture y comprobarlo contra si mismo.
+  //
+  // Es un token de MENTIRA con la FORMA del real: 43 caracteres base64url,
+  // opaco, sin nada dentro que decodificar.
+  {
+    path: "/es/account",
+    headers: { cookie: SESSION_COOKIE },
+    // El nombre sale de la sesion y la cifra del saldo, que son dos rutas
+    // distintas del portal: si una fallara, la otra seguiria apareciendo.
+    expect: ["Alex Rivera", "11,450"],
+  },
+  {
+    path: "/en/account",
+    headers: { cookie: SESSION_COOKIE },
+    expect: ["Alex Rivera", "11,450"],
+  },
+  {
+    path: "/es/account/entries",
+    headers: { cookie: SESSION_COOKIE },
+    // El desglose por procedencia: compra y AMOE en el mismo conjunto.
+    expect: ["11,450", "11,250", "200"],
+  },
+  {
+    path: "/es/account/entries/ledger",
+    headers: { cookie: SESSION_COOKIE },
+    // Un movimiento positivo y uno NEGATIVO: la devolucion tiene que verse.
+    expect: ["11,000", "-500"],
+  },
+  {
+    path: "/es/account/orders",
+    headers: { cookie: SESSION_COOKIE },
+    expect: ["LSW-10524", "LSW-10608"],
+  },
+  {
+    path: "/es/account/orders/ord_0000000000000001",
+    headers: { cookie: SESSION_COOKIE },
+    // La traza del calculo, con su version de reglas: es lo que permite
+    // explicar la cifra meses despues (DEC-012).
+    expect: ["LSW-10524", "prv_0000000000000001", "250"],
+  },
+  {
+    path: "/en/account/profile",
+    headers: { cookie: SESSION_COOKIE },
+    expect: ["participant@example.com"],
+  },
+  {
+    path: "/es/checkout",
+    headers: { cookie: `${SESSION_COOKIE}; lsw_dev_cart=1` },
+    expect: ["Camiseta de algodón grueso", "250"],
+  },
+  {
+    // La vuelta del proveedor con un borrador que nadie ha pagado todavia. La
+    // pagina NO se cree la URL: pregunta al backend y pinta "pendiente".
+    path: "/es/checkout/return?draft=chk_0000000000000001",
+    headers: { cookie: SESSION_COOKIE },
+    expect: [],
+  },
+  {
+    path: "/es/orders/ord_0000000000000002/confirmation",
+    headers: { cookie: SESSION_COOKIE },
+    // Pedido pagado con las participaciones TODAVIA no otorgadas: la pantalla
+    // tiene que decirlo sin prometer nada.
+    expect: ["LSW-10608"],
+  },
 ];
 
 function log(message) {

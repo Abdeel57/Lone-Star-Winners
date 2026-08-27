@@ -723,6 +723,21 @@ export interface SiteConfigResponse {
   readonly amoe_mode: AmoeMode | null;
   /** Locales que el backend declara soportados, en etiquetas BCP-47. */
   readonly supported_locales: readonly string[];
+  /**
+   * [PROVISIONAL] Consentimientos que exige el alta.
+   *
+   * PETICION ADITIVA a `backend`, no una reescritura del contrato: el campo es
+   * OPCIONAL, de modo que la respuesta que `docs/API_CONTRACT.md` publica hoy
+   * -sin este campo- sigue siendo valida y la interfaz sigue funcionando.
+   *
+   * Ausente o vacio significa QUE NO SE PIDE NINGUNO, y el formulario de alta no
+   * pinta ninguna casilla. Es deliberadamente esa la direccion segura: la
+   * alternativa -que el frontend escriba de su cosecha un "acepto las Reglas
+   * Oficiales" cuando el backend calla- seria inventar un requisito legal, que
+   * es justo lo que CLAUDE.md #2 prohibe. Que existan consentimientos y cuales
+   * sean lo decide el abogado del cliente y lo publica el backend.
+   */
+  readonly required_consents?: readonly ConsentRequirement[];
 }
 
 /**
@@ -742,4 +757,503 @@ export interface ApiErrorEnvelope {
     readonly details?: unknown;
     readonly request_id?: string;
   };
+}
+
+// ---------------------------------------------------------------------------
+// Identidad (DEC-006, DEC-045) - seccion 10 de docs/API_CONTRACT.md
+// ---------------------------------------------------------------------------
+
+/**
+ * [CONTRATO] Fase del ciclo de vida de una sesion.
+ *
+ * TRES ESTADOS, Y `MFA_PENDING` NO ES UNA VARIANTE DE `ACTIVE`. El documento lo
+ * dice con estas palabras: es una sesion que ya paso la contrasena y "todavia
+ * no vale para nada" salvo para completar el segundo factor. No es una pantalla
+ * que se pueda saltar; es una sesion que AUN NO AUTENTICA.
+ *
+ * La consecuencia para la interfaz es concreta y hay que respetarla en cada
+ * pantalla: `MFA_PENDING` NO da acceso a nada. El portal no se pinta, la
+ * cabecera no ensena el menu de cuenta, y lo unico que se ofrece es completar
+ * el segundo factor. Tratarlo como "casi dentro" seria abrir una puerta que el
+ * backend tiene cerrada.
+ */
+export type SessionLifecycle = "ANONYMOUS" | "ACTIVE" | "MFA_PENDING";
+
+export const SESSION_LIFECYCLES: readonly SessionLifecycle[] = [
+  "ANONYMOUS",
+  "ACTIVE",
+  "MFA_PENDING",
+];
+
+/**
+ * [CONTRATO] Audiencia de la sesion.
+ *
+ * UN SOLO SISTEMA DE IDENTIDAD, DOS POLITICAS (CLAUDE.md #4, DEC-006). No
+ * existe `/admin/login`: participante y personal usan las mismas rutas, y lo
+ * que cambia es la politica que decide el backend a partir de los roles -nombre
+ * de cookie, `SameSite`, `Path`, TTL, inactividad y si el MFA es obligatorio-.
+ *
+ * El frontend NO decide nada de eso y no rellena ni un atributo de cookie: los
+ * propaga tal como llegan (`session-server.ts`). Lo unico que hace con este
+ * campo es saber a quien esta atendiendo.
+ */
+export type SessionScope = "PARTICIPANT" | "STAFF";
+
+export const SESSION_SCOPES: readonly SessionScope[] = ["PARTICIPANT", "STAFF"];
+
+/**
+ * [CONTRATO] Estado de la sesion (`SessionState` de la seccion 10).
+ *
+ * Copia literal. Es la respuesta de `GET /auth/session`, de `POST /auth/login`
+ * y de `POST /auth/mfa/verify`.
+ *
+ * `GET /auth/session` RESPONDE 200 SIEMPRE. Sin sesion devuelve `ANONYMOUS`, no
+ * 401, y el documento explica por que: es lo que el frontend consulta en cada
+ * render, y un 401 ahi obligaria a tratar el caso normal -un visitante- como un
+ * error.
+ *
+ * QUE NO HAY AQUI, Y NO ES UN OLVIDO
+ * ----------------------------------
+ * No hay token. Ninguno. La sesion es opaca y vive en una cookie `httpOnly`; el
+ * token son 43 caracteres base64url sin nada dentro, y toda la informacion esta
+ * en la fila de `sessions`, que es lo que la hace revocable de verdad. Un campo
+ * de token en esta interfaz seria la puerta de entrada a guardarlo en el
+ * cliente, que es exactamente lo que DEC-006 prohibe.
+ *
+ * Tampoco hay nombre para mostrar, idioma preferido ni fecha de alta: eso es
+ * PERFIL y viaja por `GET /me`, que sigue sin contrato. Esta respuesta contesta
+ * "quien eres y en que estado esta tu sesion", no "como te llamas".
+ *
+ * `email_verified` SE PUBLICA COMO DATO Y NADA MAS. El propio contrato lo
+ * subraya: que ese dato tenga consecuencias sobre las participaciones es una
+ * decision legal que todavia no existe (`docs/LEGAL_PENDING.md`). La interfaz
+ * ensena el estado y ofrece verificar; no afirma ninguna consecuencia.
+ */
+export interface SessionState {
+  readonly authenticated: boolean;
+  readonly state: SessionLifecycle;
+  readonly scope: SessionScope;
+  /** Correo de la sesion. Cadena vacia cuando es `ANONYMOUS`. */
+  readonly email: string;
+  readonly email_verified: boolean;
+  /** Roles del contrato. Vacio para un participante sin rol de personal. */
+  readonly roles: readonly string[];
+}
+
+/**
+ * [CONTRATO] Respuesta de `POST /auth/logout`.
+ *
+ * Siempre 200 y siempre `{ ok: true }`, haya sesion o no. El documento razona
+ * las dos mitades: un 401 al cerrar sesion no le sirve a nadie, y ademas
+ * revelaria si la cookie presentada era valida.
+ */
+export interface LogoutResponse {
+  readonly ok: boolean;
+}
+
+/**
+ * [PROVISIONAL] Perfil del participante.
+ *
+ * SIGUE SIENDO PROVISIONAL aunque la seccion 10 ya sea contrato: esa seccion
+ * publica la SESION, no el PERFIL. `GET /me` no esta en el documento, y el
+ * nombre para mostrar, el idioma preferido y la fecha de alta tienen que salir
+ * de algun sitio. Esta es la peticion concreta del frontend.
+ *
+ * Tampoco hay aqui fecha de nacimiento, estado de residencia ni edad. No es un
+ * olvido: la elegibilidad la fijan las Official Rules y hoy sigue en
+ * `docs/LEGAL_PENDING.md`. Pedir un dato personal que todavia no se sabe si
+ * hace falta es recoger datos por si acaso (CLAUDE.md #2).
+ */
+export interface ParticipantProfile {
+  readonly id: string;
+  readonly email: string;
+  /** Nombre para mostrar, o `null` si el participante no ha puesto ninguno. */
+  readonly display_name: string | null;
+  readonly email_verified: boolean;
+  /**
+   * Idioma preferido como ETIQUETA BCP-47 (DEC-029), o `null` si no ha elegido.
+   *
+   * Se tipa `string` y no la union de etiquetas: el backend puede soportar un
+   * idioma que la interfaz todavia no tenga, y en ese caso hay que poder
+   * tratarlo como no reconocido en vez de dejar de compilar.
+   */
+  readonly language_preference: string | null;
+  /** Alta de la cuenta. ISO-8601 UTC. */
+  readonly created_at: string;
+}
+
+/**
+ * [PROVISIONAL] Consentimiento que el alta exige.
+ *
+ * ES LA PIEZA QUE IMPIDE HARDCODEAR LO LEGAL EN EL ALTA. La lista de casillas
+ * que hay que marcar para registrarse -aceptar Reglas Oficiales, confirmar
+ * elegibilidad, lo que el abogado decida- NO la decide el frontend: llega como
+ * dato, cada una con su clave y su VERSION, y el formulario pinta las que le
+ * manden y devuelve las que se marcaron.
+ *
+ * `text_key` es una clave de copy del frontend (DEC-022), no prosa del backend:
+ * el texto se escribe en los dos diccionarios como todo lo demas. Si el backend
+ * manda una clave que la interfaz no conoce, la casilla se pinta con un texto
+ * generico que remite a las Reglas Oficiales -nunca con la clave en crudo- y
+ * sigue siendo obligatoria.
+ *
+ * `version` viaja de vuelta al backend en el alta para que quede registrado QUE
+ * version se acepto. Sin ella, aceptar las reglas es una afirmacion sin fecha.
+ */
+export interface ConsentRequirement {
+  /** Identificador estable del consentimiento (`OFFICIAL_RULES`, ...). */
+  readonly key: string;
+  /** Version aceptada. Se devuelve tal cual en el alta. */
+  readonly version: string;
+  /** Clave de copy del frontend (DEC-022). */
+  readonly text_key: string;
+  /**
+   * Si es obligatorio marcarlo para completar el alta. El backend REVALIDA: que
+   * aqui llegue `false` no autoriza a la interfaz a decidir nada.
+   */
+  readonly required: boolean;
+}
+
+/** [PROVISIONAL] Consentimiento aceptado, tal como se envia en el alta. */
+export interface ConsentAcceptance {
+  readonly key: string;
+  readonly version: string;
+}
+
+/**
+ * [PROVISIONAL] Acuse de una accion que no devuelve recurso.
+ *
+ * Lo usan las cuatro rutas que SIGUEN EN TBD -registro, verificacion de correo,
+ * restablecimiento de contrasena e inscripcion de MFA-, que son la fase
+ * siguiente de identidad. No confundir con `LogoutResponse`, que si es contrato
+ * y tiene otra forma (`{ ok: true }`): dos acuses distintos porque los publican
+ * dos fases distintas, y unificarlos aqui seria inventarse la forma de la que
+ * todavia no existe.
+ */
+export interface AcknowledgedResponse {
+  readonly acknowledged: boolean;
+}
+
+// ---------------------------------------------------------------------------
+// Portal del participante (seccion 6 de docs/API_CONTRACT.md)
+// ---------------------------------------------------------------------------
+
+/**
+ * [CONTRATO] Saldo de participaciones en una promocion.
+ *
+ * Copia literal de la respuesta de `GET /account/entry-summary`.
+ *
+ * COMPRA Y AMOE SON EL MISMO UNIVERSO (principio #9). `purchase_entries` y
+ * `amoe_entries` son la PROCEDENCIA de un unico saldo, no dos saldos. La
+ * interfaz los pinta como desglose y NO los suma: `active_entries` ya viene
+ * calculado, y sumarlos aqui produciria una segunda cifra que puede discrepar
+ * de la del backend en cuanto exista un tercer origen (un ajuste manual).
+ *
+ * El numero sale de la vista SQL de saldo, derivada del ledger. Nunca de un
+ * contador editable (DEC-007).
+ */
+export interface EntrySummary {
+  readonly promotion_id: string;
+  readonly active_entries: number;
+  readonly purchase_entries: number;
+  readonly amoe_entries: number;
+  /** Instante al que corresponde el saldo. ISO-8601 UTC. */
+  readonly as_of: string;
+}
+
+/**
+ * [CONTRATO] Movimiento del ledger del propio participante.
+ *
+ * Copia literal de un elemento de `GET /account/entry-transactions`.
+ *
+ * `quantity_delta` puede ser NEGATIVO, y ese es justamente el punto: una
+ * devolucion es una FILA NUEVA con delta de signo contrario, no la desaparicion
+ * de la original (DEC-007, principios #6 y #7). La interfaz tiene que saber
+ * pintar el signo, y no puede ofrecer ninguna forma de ocultar un movimiento.
+ *
+ * `type`, `source_type` y `reason_key` son ENUMS ESTABLES cuyo copy es del
+ * frontend (DEC-022). El contrato nombra `PURCHASE_EARNED`, `PURCHASE` y
+ * `ORDER_QUALIFIED` como ejemplos pero NO cierra la lista, asi que se tipan
+ * `string` y se traducen con el patron de lista explicita mas generico: un
+ * valor nuevo produce una frase util, nunca una clave tecnica en pantalla.
+ */
+export interface EntryTransaction {
+  readonly id: string;
+  readonly type: string;
+  readonly source_type: string;
+  /** Entero con signo (DEC-010). Negativo en las correcciones. */
+  readonly quantity_delta: number;
+  readonly reason_key: string;
+  /** Instante en que el movimiento surte efecto. ISO-8601 UTC. */
+  readonly effective_at: string;
+  /** Transaccion que este movimiento revierte, o `null`. */
+  readonly reverses_transaction_id: string | null;
+}
+
+export type EntryTransactionPage = CursorPage<EntryTransaction>;
+
+/**
+ * [CONTRATO] Rango de numeros asignado al participante.
+ *
+ * Copia literal de un elemento de `GET /account/entry-numbers`.
+ *
+ * LOS NUMEROS SON CADENAS, jamas numeros (DEC-010). `LSW26-000450001` no es un
+ * entero, y aunque lo fuera, un identificador que se formatea con separador de
+ * miles deja de ser el identificador.
+ *
+ * Toda la ruta esta detras de `visible_entry_numbers_enabled`, apagado. Con el
+ * flag apagado el backend responde 404 -los rangos se asignan igual, para que
+ * sean reconstruibles hacia atras, pero no se muestran-, asi que la interfaz NO
+ * pide este recurso salvo que el flag este encendido.
+ *
+ * AVISO que el contrato repite y aqui se repite tambien: la secuencia de
+ * numeros NO es el algoritmo del sorteo. Que existan numeros no autoriza a
+ * sortear sobre ellos (DEC-017, principio #11).
+ */
+export interface EntryBatch {
+  readonly batch_id: string;
+  readonly quantity: number;
+  /** Primer numero del rango. CADENA (DEC-010). */
+  readonly first_number: string;
+  /** Ultimo numero del rango. CADENA (DEC-010). */
+  readonly last_number: string;
+}
+
+export type EntryBatchPage = CursorPage<EntryBatch>;
+
+/**
+ * [PROVISIONAL] Estado de un pedido.
+ *
+ * El contrato nombra `OrderSummary` y `OrderDetail` como respuestas de la
+ * seccion 6 pero no publica su forma. Este enum es la peticion del frontend.
+ *
+ * `CHARGEBACK` existe separado de `REFUNDED` porque no son lo mismo para quien
+ * mira su pedido -uno lo pidio el participante y el otro su banco- y porque las
+ * Official Rules pueden tratarlos distinto.
+ */
+export type OrderStatus =
+  | "PENDING_PAYMENT"
+  | "PAID"
+  | "FULFILLED"
+  | "CANCELLED"
+  | "REFUNDED"
+  | "PARTIALLY_REFUNDED"
+  | "CHARGEBACK";
+
+export const ORDER_STATUSES: readonly OrderStatus[] = [
+  "PENDING_PAYMENT",
+  "PAID",
+  "FULFILLED",
+  "CANCELLED",
+  "REFUNDED",
+  "PARTIALLY_REFUNDED",
+  "CHARGEBACK",
+];
+
+/**
+ * [PROVISIONAL] Estado de las participaciones asociadas a un pedido.
+ *
+ * ES UN CAMPO APARTE DE `status` A PROPOSITO. Que el pedido este pagado y que
+ * las participaciones esten otorgadas no son la misma afirmacion y no ocurren
+ * en el mismo instante: las entries se generan cuando la orden alcanza el
+ * estado que las Official Rules definan como cualificante, a partir de la
+ * confirmacion del proveedor de pago, y NUNCA cuando el navegador llega a una
+ * pagina de exito. Si la interfaz dedujera una cosa de la otra, prometeria en
+ * la pagina de confirmacion algo que el backend todavia no ha dicho.
+ *
+ * - `NOT_APPLICABLE` ......... el pedido no esta asociado a ninguna promocion.
+ * - `PENDING_QUALIFICATION` .. hay promocion, pero el backend aun no ha
+ *   otorgado nada.
+ * - `GRANTED` ................ otorgadas.
+ * - `PARTIALLY_REVERSED` ..... otorgadas y revertidas en parte.
+ * - `REVERSED` ............... revertidas por completo.
+ */
+export type OrderEntryState =
+  "NOT_APPLICABLE" | "PENDING_QUALIFICATION" | "GRANTED" | "PARTIALLY_REVERSED" | "REVERSED";
+
+export const ORDER_ENTRY_STATES: readonly OrderEntryState[] = [
+  "NOT_APPLICABLE",
+  "PENDING_QUALIFICATION",
+  "GRANTED",
+  "PARTIALLY_REVERSED",
+  "REVERSED",
+];
+
+/** [PROVISIONAL] Pedido en el listado del participante. */
+export interface OrderSummary {
+  readonly id: string;
+  /** Numero visible del pedido. Es una CADENA: no se formatea como cifra. */
+  readonly order_number: string;
+  readonly status: OrderStatus;
+  /** Instante del pedido. ISO-8601 UTC. */
+  readonly placed_at: string;
+  /** Total CALCULADO POR EL BACKEND. */
+  readonly total: MoneyMinor;
+  readonly item_count: number;
+  /** Promocion a la que quedo asociado, o `null`. */
+  readonly promotion_id: string | null;
+  readonly entry_state: OrderEntryState;
+  /**
+   * Participaciones VIGENTES de este pedido, servidas por el backend.
+   *
+   * `null` mientras no haya cifra -pedido pendiente, o sin promocion-. No es
+   * `0`: que no se sepa todavia y que sean cero son dos afirmaciones distintas
+   * delante de alguien que acaba de comprar.
+   */
+  readonly entries_granted: number | null;
+}
+
+/** [PROVISIONAL] Linea de un pedido. */
+export interface OrderLine {
+  readonly line_id: string;
+  readonly sku: string;
+  readonly product_slug: string;
+  readonly product_name: LocalizedText;
+  readonly variant_name: LocalizedText;
+  readonly image_url: string | null;
+  readonly quantity: number;
+  readonly unit_price: MoneyMinor;
+  /** Total de linea CALCULADO POR EL BACKEND. */
+  readonly line_total: MoneyMinor;
+}
+
+/**
+ * [PROVISIONAL] Direccion postal.
+ *
+ * SIN NINGUNA REGLA DE JURISDICCION. No hay lista de estados, ni validacion de
+ * codigo postal, ni pais por defecto: la elegibilidad territorial la fijan las
+ * Official Rules y sigue en `docs/LEGAL_PENDING.md`. La interfaz recoge lo que
+ * el participante escribe y el backend valida (CLAUDE.md #2 y #14).
+ *
+ * `region` y no `state`: el nombre del campo tampoco debe presuponer que la
+ * subdivision territorial se llama estado en toda jurisdiccion cubierta.
+ */
+export interface PostalAddress {
+  readonly full_name: string;
+  readonly line1: string;
+  readonly line2: string | null;
+  readonly city: string;
+  readonly region: string;
+  readonly postal_code: string;
+  readonly country: string;
+}
+
+/**
+ * [PROVISIONAL] Traza del calculo de participaciones que produjo un pedido.
+ *
+ * El contrato la describe con estas palabras: `entry_calculation` con
+ * `rules_version_id`, `engine_version` y el desglose que se persistio en el
+ * `EntryCalculationSnapshot`. Es lo que permite responder por que esta compra
+ * genero 37 entries y no 36 meses despues, cuando el catalogo y las reglas ya
+ * han cambiado.
+ *
+ * Los campos son los mismos que los de `EntryQuote` porque describen lo mismo
+ * -una evaluacion de las reglas- pero NO es el mismo objeto: una cotizacion es
+ * orientativa y se recalcula, y un snapshot es historico e inmutable. Se
+ * declara aparte para que nadie use uno donde va el otro.
+ */
+export interface EntryCalculationSnapshot {
+  readonly rules_version_id: string;
+  readonly engine_version: number;
+  /** Instante de la evaluacion persistida. ISO-8601 UTC. */
+  readonly evaluated_at: string;
+  readonly eligible_subtotal: MoneyMinor;
+  readonly entries_before_caps: number;
+  readonly final_entries: number;
+  readonly eligible_items: readonly EntryQuoteEligibleItem[];
+  readonly ineligible_items: readonly EntryQuoteIneligibleItem[];
+  readonly applied_multipliers: readonly EntryQuoteAppliedMultiplier[];
+  readonly applied_caps: readonly EntryQuoteAppliedCap[];
+}
+
+/** [PROVISIONAL] Detalle de un pedido. */
+export interface OrderDetail extends OrderSummary {
+  readonly items: readonly OrderLine[];
+  readonly subtotal: MoneyMinor;
+  /** Envio, o `null` si todavia no esta determinado. */
+  readonly shipping_total: MoneyMinor | null;
+  /** Impuestos, o `null` si todavia no estan determinados. */
+  readonly tax_total: MoneyMinor | null;
+  readonly shipping_address: PostalAddress | null;
+  /** Traza del calculo, o `null` si el pedido no ha generado ninguna. */
+  readonly entry_calculation: EntryCalculationSnapshot | null;
+}
+
+export type OrderPage = CursorPage<OrderSummary>;
+
+// ---------------------------------------------------------------------------
+// Checkout (adaptador agnostico de proveedor de pago)
+// ---------------------------------------------------------------------------
+
+/**
+ * [PROVISIONAL] Como se cobra.
+ *
+ * EL PROVEEDOR DE PAGO NO ESTA DECIDIDO. Es un DEC pendiente del usuario, y
+ * hasta que exista no puede haber en el frontend ni una linea que presuponga
+ * Stripe, Shopify Payments ni ningun otro. Por eso el checkout se modela como
+ * un ADAPTADOR: el backend dice como se cobra y la interfaz sabe pintar las dos
+ * formas que existen en el mercado.
+ *
+ * - `hosted_redirect` .... el proveedor tiene su propia pagina. Se sale del
+ *   sitio, se paga alli y se vuelve a la URL de retorno. Implementada.
+ * - `embedded_component` . el proveedor da un componente que se monta dentro de
+ *   la pagina. Es el punto de extension: la rama existe y esta documentada,
+ *   pero no se implementa contra un proveedor imaginario.
+ *
+ * Ninguna de las dos implica que el navegador vea nunca un numero de tarjeta:
+ * en la primera no pasa por aqui, y en la segunda lo recoge el componente del
+ * proveedor dentro de su propio contexto.
+ */
+export type CheckoutMode = "hosted_redirect" | "embedded_component";
+
+export const CHECKOUT_MODES: readonly CheckoutMode[] = ["hosted_redirect", "embedded_component"];
+
+/**
+ * [PROVISIONAL] Apertura de una sesion de pago.
+ *
+ * `client_config` es DELIBERADAMENTE OPACO. Cada proveedor necesita cosas
+ * distintas -una URL, una clave publicable, un identificador de sesion- y
+ * tiparlo aqui obligaria a elegir proveedor, que es exactamente la decision que
+ * no esta tomada. La interfaz solo lee las claves que necesita la modalidad que
+ * sabe pintar, y comprueba su tipo en tiempo de ejecucion antes de usarlas.
+ *
+ * `order_draft_id` identifica el BORRADOR de pedido. No es el pedido: el pedido
+ * lo crea el backend cuando el pago se confirma, y hasta entonces no hay nada
+ * que ensenar en el historial.
+ */
+export interface CheckoutSessionResponse {
+  /** Nombre del proveedor, para poder decirlo y para la traza. */
+  readonly provider: string;
+  readonly mode: CheckoutMode;
+  readonly client_config: Record<string, unknown>;
+  readonly order_draft_id: string;
+}
+
+/**
+ * [PROVISIONAL] Estado de una sesion de pago.
+ *
+ * LA INTERFAZ NO DECIDE SI SE HA PAGADO. La pagina de retorno recibe del
+ * proveedor unos parametros en la URL y NO se los cree: pregunta al backend,
+ * que es quien ha recibido -o no- el webhook firmado. Un `?outcome=paid` en la
+ * barra de direcciones lo escribe cualquiera.
+ */
+export type CheckoutSessionStatus = "PENDING" | "COMPLETED" | "CANCELLED" | "FAILED";
+
+export const CHECKOUT_SESSION_STATUSES: readonly CheckoutSessionStatus[] = [
+  "PENDING",
+  "COMPLETED",
+  "CANCELLED",
+  "FAILED",
+];
+
+/** [PROVISIONAL] Respuesta de `GET /checkout/sessions/{order_draft_id}`. */
+export interface CheckoutSessionState {
+  readonly order_draft_id: string;
+  readonly status: CheckoutSessionStatus;
+  /**
+   * Pedido resultante, o `null` mientras no exista. Que sea nulable con
+   * `status: "COMPLETED"` es posible y hay que saber pintarlo: el pago puede
+   * estar confirmado y el pedido tardar un instante en materializarse.
+   */
+  readonly order_id: string | null;
 }

@@ -1,8 +1,11 @@
 import { cn } from "@lsw/ui";
 import { getTranslations } from "next-intl/server";
 
+import type { Locale } from "@/i18n/locales";
 import { Link } from "@/i18n/navigation";
+import { loadSession } from "@/lib/participant-server";
 
+import { AccountGlyph, AccountMenu, type AccountDestination } from "./account-menu";
 import { BrandLockup } from "./brand-lockup";
 import { LanguageSwitcher } from "./language-switcher";
 import { MobileNav, type NavDestination } from "./mobile-nav";
@@ -58,8 +61,37 @@ import { MobileNav, type NavDestination } from "./mobile-nav";
  * al hacer scroll, el contenido pasa POR DEBAJO de la marca en vez de empujarla
  * fuera.
  */
-export async function SiteHeader() {
+export async function SiteHeader({ locale }: { readonly locale: Locale }) {
   const t = await getTranslations();
+
+  /*
+   * LA CABECERA SI PIDE LA SESION, Y EL CARRITO SIGUE SIN PEDIR SU CONTADOR.
+   *
+   * No es incoherente. Un contador de articulos obliga a leer el carrito ENTERO
+   * -sus lineas y su cotizacion- en cada pagina del sitio, incluida la portada,
+   * y una cifra de participaciones recalculada en cada render es justo lo que
+   * DEC-023 saca del camino comun. Saber si hay sesion es una lectura pequena y
+   * de respuesta constante, y sin ella la cabecera tendria que ofrecer a la vez
+   * "iniciar sesion" y "mi cuenta", que es peor que la lectura.
+   *
+   * `loadSession` corta antes de salir a la red cuando el navegador no manda
+   * ninguna cookie, asi que un visitante que nunca ha entrado no genera ni una
+   * peticion de mas. Y pide la SESION y no el PERFIL: le basta el correo, que
+   * ya viene en `SessionState`, y el perfil es una lectura mas que solo el
+   * portal necesita.
+   *
+   * `MFA_PENDING` cuenta como NO tener sesion en esta cabecera, y es lo
+   * correcto: esa sesion todavia no autentica, asi que ofrecer el menu de
+   * cuenta prometeria un acceso que el backend no da.
+   */
+  const { state } = await loadSession(locale);
+
+  const accountDestinations: readonly AccountDestination[] = [
+    { href: "/account", label: t("account.nav.overview") },
+    { href: "/account/entries", label: t("account.nav.entries") },
+    { href: "/account/orders", label: t("account.nav.orders") },
+    { href: "/account/profile", label: t("account.nav.profile") },
+  ];
 
   /*
    * La lista de destinos se declara UNA vez y la consumen las dos
@@ -130,6 +162,29 @@ export async function SiteHeader() {
               partia en tres. */}
           <LanguageSwitcher className="hidden xl:flex" />
 
+          {/*
+           * TRES ESTADOS Y NO DOS. Con sesion, el menu de cuenta; sin ella, un
+           * enlace a entrar. Y si la sesion NO SE HA PODIDO LEER, tambien el
+           * enlace a entrar: es lo unico que no miente, porque ofrecer "mi
+           * cuenta" a quien quiza no la tenga abierta acaba en una pantalla que
+           * le vuelve a pedir la contrasena sin explicar por que.
+           */}
+          {state.kind === "active" ? (
+            <AccountMenu
+              locale={locale}
+              label={t("account.menuLabel")}
+              closeLabel={t("nav.closeMenu")}
+              signOutLabel={t("auth.signOut")}
+              accountName={state.session.email}
+              destinations={accountDestinations}
+            />
+          ) : (
+            <Link href="/account/login" className={cn(ACCOUNT_LINK, FOCUS)}>
+              <AccountGlyph />
+              <span className="sr-only">{t("auth.login.title")}</span>
+            </Link>
+          )}
+
           <Link href="/cart" className={cn(CART_LINK, FOCUS)}>
             <CartIcon />
             {/* El rotulo solo aparece cuando hay sitio. Por debajo de `sm` el
@@ -169,6 +224,11 @@ function CartIcon() {
 const NAV_LINK = cn(
   "lsw-display inline-flex min-h-touch items-center whitespace-nowrap rounded-md px-3",
   "text-body-sm font-medium transition-colors duration-fast ease-standard",
+);
+
+const ACCOUNT_LINK = cn(
+  "inline-flex min-h-touch min-w-touch items-center justify-center rounded-md",
+  "text-text transition-colors duration-fast ease-standard hover:text-brand",
 );
 
 const CART_LINK = cn(

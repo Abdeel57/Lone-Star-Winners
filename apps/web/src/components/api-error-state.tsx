@@ -39,6 +39,11 @@ const TRANSLATED_CODES = [
   // Frontend
   "NETWORK_UNAVAILABLE",
   "MALFORMED_RESPONSE",
+  "FIELD_REQUIRED",
+  "PASSWORD_CONFIRMATION_MISMATCH",
+  "CONSENT_REQUIRED",
+  "CHECKOUT_MODE_UNSUPPORTED",
+  "PAYMENT_PROVIDER_UNAVAILABLE",
   // Transversales del contrato
   "UNAUTHENTICATED",
   "FORBIDDEN",
@@ -46,6 +51,7 @@ const TRANSLATED_CODES = [
   "RATE_LIMITED",
   "INTERNAL_ERROR",
   "SERVICE_UNAVAILABLE",
+  "NOT_FOUND",
   // Dominio
   "PROMOTION_NOT_FOUND",
   "RULES_VERSION_NOT_FOUND",
@@ -55,6 +61,31 @@ const TRANSLATED_CODES = [
   "CART_ITEM_NOT_FOUND",
   "NO_ACTIVE_PROMOTION",
   "CALCULATION_CONFIG_INVALID",
+  "ORDER_NOT_FOUND",
+  "CART_EMPTY",
+  "CHECKOUT_UNAVAILABLE",
+  "SHIPPING_ADDRESS_INVALID",
+  /*
+   * Identidad (DEC-006). Estos codigos los publicara `packages/security`, no
+   * `docs/API_CONTRACT.md`, y por eso son la parte mas provisional de esta
+   * lista. Estan escritos con la forma que tiene el resto del contrato; si el
+   * agente de identidad elige otros nombres, se renombran aqui y el resto de la
+   * interfaz no se entera.
+   *
+   * `INVALID_CREDENTIALS` es UNO SOLO a proposito: nunca "ese correo no existe"
+   * y "esa contrasena no es". Distinguirlos convierte la pantalla de inicio de
+   * sesion en un comprobador de quien tiene cuenta.
+   */
+  "INVALID_CREDENTIALS",
+  "EMAIL_ALREADY_REGISTERED",
+  "WEAK_PASSWORD",
+  "ACCOUNT_LOCKED",
+  "EMAIL_NOT_VERIFIED",
+  "RESET_TOKEN_INVALID",
+  "RESET_TOKEN_EXPIRED",
+  "VERIFICATION_TOKEN_INVALID",
+  "VERIFICATION_TOKEN_EXPIRED",
+  "MFA_CODE_INVALID",
 ] as const;
 
 type TranslatedCode = (typeof TRANSLATED_CODES)[number];
@@ -108,6 +139,46 @@ export function useApiErrorMessage(): (code: string | null) => string {
         return t("NO_ACTIVE_PROMOTION");
       case "CALCULATION_CONFIG_INVALID":
         return t("CALCULATION_CONFIG_INVALID");
+      case "FIELD_REQUIRED":
+        return t("FIELD_REQUIRED");
+      case "PASSWORD_CONFIRMATION_MISMATCH":
+        return t("PASSWORD_CONFIRMATION_MISMATCH");
+      case "CONSENT_REQUIRED":
+        return t("CONSENT_REQUIRED");
+      case "CHECKOUT_MODE_UNSUPPORTED":
+        return t("CHECKOUT_MODE_UNSUPPORTED");
+      case "PAYMENT_PROVIDER_UNAVAILABLE":
+        return t("PAYMENT_PROVIDER_UNAVAILABLE");
+      case "NOT_FOUND":
+        return t("NOT_FOUND");
+      case "ORDER_NOT_FOUND":
+        return t("ORDER_NOT_FOUND");
+      case "CART_EMPTY":
+        return t("CART_EMPTY");
+      case "CHECKOUT_UNAVAILABLE":
+        return t("CHECKOUT_UNAVAILABLE");
+      case "SHIPPING_ADDRESS_INVALID":
+        return t("SHIPPING_ADDRESS_INVALID");
+      case "INVALID_CREDENTIALS":
+        return t("INVALID_CREDENTIALS");
+      case "EMAIL_ALREADY_REGISTERED":
+        return t("EMAIL_ALREADY_REGISTERED");
+      case "WEAK_PASSWORD":
+        return t("WEAK_PASSWORD");
+      case "ACCOUNT_LOCKED":
+        return t("ACCOUNT_LOCKED");
+      case "EMAIL_NOT_VERIFIED":
+        return t("EMAIL_NOT_VERIFIED");
+      case "RESET_TOKEN_INVALID":
+        return t("RESET_TOKEN_INVALID");
+      case "RESET_TOKEN_EXPIRED":
+        return t("RESET_TOKEN_EXPIRED");
+      case "VERIFICATION_TOKEN_INVALID":
+        return t("VERIFICATION_TOKEN_INVALID");
+      case "VERIFICATION_TOKEN_EXPIRED":
+        return t("VERIFICATION_TOKEN_EXPIRED");
+      case "MFA_CODE_INVALID":
+        return t("MFA_CODE_INVALID");
     }
   };
 }

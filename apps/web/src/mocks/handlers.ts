@@ -3,12 +3,15 @@ import { http, HttpResponse, type JsonBodyType, type RequestHandler } from "msw"
 import {
   API_PATHS,
   apiBaseUrl,
+  checkoutSessionPath,
   officialRulesPath,
+  orderPath,
   productPath,
   promotionPath,
   type ApiErrorEnvelope,
 } from "@/lib/api";
 
+import { anonymousSession } from "./fixtures/account";
 import { mockRoutes, MOCK_REQUEST_ID, type MockMethod } from "./routes";
 
 /**
@@ -168,4 +171,116 @@ export const scenarios = {
     http.get(url(path), () => HttpResponse.json({ oops: true }, { status: 500 })),
 
   networkFailure: (path: string) => http.get(url(path), () => HttpResponse.error()),
+
+  // -------------------------------------------------------------------------
+  // Identidad y portal del participante
+  // -------------------------------------------------------------------------
+
+  /**
+   * Visitante sin sesion.
+   *
+   * `200` con `ANONYMOUS`, que es lo que publica la seccion 10. No un 401: es
+   * lo que el frontend consulta en cada render, y un 401 ahi obligaria a tratar
+   * el caso normal como un error.
+   */
+  anonymous: () => http.get(url(API_PATHS.authSession), () => HttpResponse.json(anonymousSession)),
+
+  session: (body: JsonBodyType) =>
+    http.get(url(API_PATHS.authSession), () => HttpResponse.json(body)),
+
+  /**
+   * Sesion caducada.
+   *
+   * La otra forma legitima de decir "no hay sesion". La capa de recursos la
+   * reduce al mismo estado que el 200 anonimo, y este escenario existe para
+   * comprobar exactamente eso.
+   */
+  sessionExpired: () =>
+    http.get(url(API_PATHS.authSession), () =>
+      HttpResponse.json(errorEnvelope("UNAUTHENTICATED"), { status: 401 }),
+    ),
+
+  /** Inicio de sesion correcto que devuelve el `SessionState` que se le pase. */
+  login: (body: JsonBodyType) => http.post(url(API_PATHS.authLogin), () => HttpResponse.json(body)),
+
+  loginRejected: (code: string, status = 401) =>
+    http.post(url(API_PATHS.authLogin), () => HttpResponse.json(errorEnvelope(code), { status })),
+
+  /**
+   * Cuenta bloqueada.
+   *
+   * 423 con `retry_after_seconds` en `details`, tal como publica la seccion 10.
+   * El bloqueo es TEMPORAL a proposito: uno permanente convertiria el
+   * formulario en una forma de dejar fuera a cualquiera cuyo correo se conozca.
+   */
+  loginLocked: (retryAfterSeconds: number) =>
+    http.post(url(API_PATHS.authLogin), () =>
+      HttpResponse.json(
+        errorEnvelope("ACCOUNT_LOCKED", { retry_after_seconds: retryAfterSeconds }),
+        {
+          status: 423,
+        },
+      ),
+    ),
+
+  /** Segundo factor rechazado: invalido, caducado o YA USADO. El backend no los distingue. */
+  mfaRejected: () =>
+    http.post(url(API_PATHS.authMfaVerify), () =>
+      HttpResponse.json(errorEnvelope("MFA_CODE_INVALID"), { status: 401 }),
+    ),
+
+  registerRejected: (code: string, details?: unknown) =>
+    http.post(url(API_PATHS.authRegister), () =>
+      HttpResponse.json(errorEnvelope(code, details), { status: 422 }),
+    ),
+
+  entrySummary: (body: JsonBodyType) =>
+    http.get(url(API_PATHS.entrySummary), () => HttpResponse.json(body)),
+
+  entryTransactions: (body: JsonBodyType) =>
+    http.get(url(API_PATHS.entryTransactions), () => HttpResponse.json(body)),
+
+  entryNumbers: (body: JsonBodyType) =>
+    http.get(url(API_PATHS.entryNumbers), () => HttpResponse.json(body)),
+
+  /**
+   * Rangos con el flag apagado.
+   *
+   * Es el comportamiento que el contrato describe: los rangos se asignan igual
+   * -para que sean reconstruibles hacia atras- pero la ruta responde 404
+   * mientras `visible_entry_numbers_enabled` este apagado.
+   */
+  entryNumbersHidden: () =>
+    http.get(url(API_PATHS.entryNumbers), () =>
+      HttpResponse.json(errorEnvelope("NOT_FOUND"), { status: 404 }),
+    ),
+
+  orders: (body: JsonBodyType) => http.get(url(API_PATHS.orders), () => HttpResponse.json(body)),
+
+  order: (orderId: string, body: JsonBodyType) =>
+    http.get(url(orderPath(orderId)), () => HttpResponse.json(body)),
+
+  orderNotFound: (orderId: string) =>
+    http.get(url(orderPath(orderId)), () =>
+      HttpResponse.json(errorEnvelope("ORDER_NOT_FOUND"), { status: 404 }),
+    ),
+
+  /** Cualquier ruta del portal, sin sesion. */
+  accountUnauthenticated: (path: string) =>
+    http.get(url(path), () => HttpResponse.json(errorEnvelope("UNAUTHENTICATED"), { status: 401 })),
+
+  // -------------------------------------------------------------------------
+  // Checkout
+  // -------------------------------------------------------------------------
+
+  checkoutSession: (body: JsonBodyType) =>
+    http.post(url(API_PATHS.checkoutSession), () => HttpResponse.json(body)),
+
+  checkoutRejected: (code: string, status = 409) =>
+    http.post(url(API_PATHS.checkoutSession), () =>
+      HttpResponse.json(errorEnvelope(code), { status }),
+    ),
+
+  checkoutState: (orderDraftId: string, body: JsonBodyType) =>
+    http.get(url(checkoutSessionPath(orderDraftId)), () => HttpResponse.json(body)),
 };
