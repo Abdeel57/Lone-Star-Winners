@@ -1985,26 +1985,35 @@ requires_second_approval, as_of }`. Es una LECTURA: ni fila de ledger, ni
 | GET    | `/api/v1/admin/promotions/{id}/potential-winners`                    | `winner.workflow.read`      | no      |
 | POST   | `/api/v1/admin/potential-winners/{id}/status`                        | `winner.status.update`      | sí      |
 
-- **`POST /admin/draws` NO SORTEA HOY, y no es un "todavía no".** Consulta los
-  cinco cerrojos de DEC-017 en orden y se niega en el primero que no pasa. El
-  cerrojo 1 -`internal_draw_enabled`, persistido y apagado- está cerrado, así que
-  responde `409 INTERNAL_DRAW_DISABLED` y ahí acaba. Si el flag se encendiera sin
-  que `@lsw/tpa` esté montado, responde `409 DRAW_ENGINE_NOT_WIRED` en vez de
-  improvisar una selección: un sorteo escrito a mano en un handler no tiene
-  rechazo de muestreo, ni commit-reveal, ni cadena de registro.
-- **La lectura de autorizaciones usa `draw.result.read`** porque
-  `draw.authorization.read` no existe en el catálogo. HO-026 nombra esta
-  reutilización como la alternativa aceptada.
-- **La ruta de SEGUNDA APROBACIÓN no existe todavía**, porque `draw.approve`
-  tampoco existe en el catálogo (HO-026 la aceptó como capacidad propia y la
-  resiembra la hace la sesión paralela). Se escribió y se retiró del código a
-  propósito: una ruta declarada y no registrada rompe el escáner de fuentes de
-  `tests/security`. Entra -tabla, código y todo- cuando la capacidad se siembre.
-- **`POST /potential-winners/{id}/status`** responde
-  `409 WINNER_WORKFLOW_NOT_WIRED`: la máquina de estados del expediente vive en
-  `@lsw/tpa`, y replicarla aquí crearía una segunda máquina.
-
----
+- **`POST /admin/draws` llama a `initiateDraw()` de `@lsw/tpa`** con los puertos
+  reales: flag persistido (`ConfigRepository`, nunca entorno), `authorize()` de
+  `@lsw/security`, repositorios de PostgreSQL, CSPRNG del sistema (el rechazo de
+  muestreo vive en `@lsw/tpa/random`) y la cadena de `@lsw/audit`. Consulta los
+  cinco cerrojos y se niega en el primero que no pasa, dejando `AuditEvent`
+  `draw.rejected` de la negativa.
+  - Cerrojo 1 (flag apagado o no evaluado): `409 INTERNAL_DRAW_DISABLED`.
+  - Cerrojos 2-5: `409 DRAW_REFUSED`.
+  - En los dos casos, `details.reason` lleva el **`reason_code` estable del
+    dominio** (`draw.refused.*`) y `details` el contexto. Nunca viaja prosa
+    (DEC-031).
+    Hoy el cerrojo 1 está cerrado por defecto, y aunque se encendiera el cerrojo 3
+    se niega con `draw.refused.second_approval_missing` mientras no exista la ruta
+    de segunda aprobación (`draw.approve`, sesión paralela). Sin transacción
+    envolvente a propósito: cada negativa escribe su evento antes de lanzar, y una
+    transacción lo retrocedería. `DRAW_ENGINE_NOT_WIRED` deja de existir.
+- **Éxito**: `201` con el `DrawingEvent` encadenado (`record_hash`,
+  `previous_record_hash`) y el expediente de `PotentialWinner` en `SELECTED`
+  persistido en su propia transacción (si el proceso muriera en medio, sobrevive
+  el `DrawingEvent`, que es la evidencia). Tres hechos auditables:
+  `draw.initiated`, `draw.completed`, `winner.selected`.
+- **`POST /potential-winners/{id}/status`** aplica la transición con
+  `transitionPotentialWinner` de `@lsw/tpa`; aquí no se replica la máquina, se
+  llama. Una transición no permitida responde `409 WINNER_TRANSITION_NOT_ALLOWED`
+  con `details: { reason, from, to, allowed[] }` (los destinos salen de la misma
+  máquina, para que el panel no lleve su propia tabla). Dos transiciones
+  concurrentes desde el mismo estado: `409 WINNER_TRANSITION_CONFLICT`, solo se
+  aplica una. Emite `winner.status_changed`. `WINNER_WORKFLOW_NOT_WIRED` deja de
+  existir.
 
 ## 11.6 Exportación al third-party administrator (DEC-016)
 
@@ -2027,24 +2036,54 @@ requires_second_approval, as_of }`. Es una LECTURA: ni fila de ledger, ni
   anterior al corte en una fila escrita DESPUÉS -un pago que liquida tarde-, y
   sin el tope de secuencia esa fila entraría en un recálculo posterior y
   cambiaría un digest ya firmado.
-- **Validar** reconcilia y devuelve `{ snapshot_id, passed, checks[] }`. `passed`
-  solo si TODAS las comprobaciones pasan; nunca "casi". Comprueba que los tramos
-  del universo empiezan en 1, no dejan hueco y no se solapan: comprobar solo el
-  total dejaría pasar un hueco compensado por un solapamiento.
-- **Finalizar y descargar se niegan hoy**
-  (`409 EXPORT_DIGEST_CALCULATOR_NOT_CONFIGURED`,
-  `409 EXPORT_ARTIFACT_NOT_AVAILABLE`): el cálculo del digest, el árbol de Merkle
-  y el artefacto reproducible viven en `@lsw/audit`, del que `apps/api` no
-  depende todavía. NO se devuelve el digest guardado: el cerrojo 4 de DEC-017
-  consiste en RECALCULAR desde el origen y comparar, y un digest comparado
-  consigo mismo es un control que nunca falla.
-- **Entregar** se niega con `409 EXPORT_DELIVERY_NOT_CONFIGURED`: el canal lo
-  impone el administrador externo, que sigue sin elegir.
-- **Resultados** crea expedientes de `PotentialWinner` con
-  `source: EXTERNAL_ADMINISTRATOR` y sin `drawing_event_id`: no hubo sorteo
-  interno, y decir lo contrario sería afirmar que existe un registro que no
-  existe. Solo se acepta sobre un snapshot en `DELIVERED`.
-
-Owner de 11.5 y 11.6: `backend` implementa la superficie HTTP y la persistencia;
-**el formato del artefacto, la firma y la entrega son de `security-integration`**
-(DEC-016), igual que los cinco cerrojos de DEC-017, que viven en `@lsw/tpa`.
+- **Formas que cambian respecto a la propuesta**: `GET .../download` exige
+  `?reason=` (3..2000 caracteres) y responde `200 application/octet-stream` (ZIP
+  determinista) con `Content-Disposition: attachment`, `X-Content-Type-Options:
+nosniff`, `Cache-Control: no-store` y `X-LSW-Artifact-Sha256`. El body de
+  `POST .../results` sustituye `reason_code` por `external_reference` (1..200).
+- **Validar** congela el universo elegible en tramos de ordinales, reúne los
+  números del ledger y ejecuta `runReconciliationChecks` de `@lsw/tpa`, incluida
+  la verificación REAL de la hash chain de la promoción con `@lsw/audit`.
+  Devuelve `{ snapshot_id, passed, checks[] }`: cada `check.id` es un código
+  estable `reconciliation.*` y `check.detail` lleva severidad y contexto; ningún
+  `check` lleva prosa (DEC-031). `passed` solo si nada `CRITICAL` bloquea. La
+  línea de caducidad aparece SIEMPRE, valga cero o no (DEC-033/034), y la cadena
+  aparece como `reconciliation.chain_not_sealed` (AVISO) mientras no haya almacén
+  write-once (DEC-037). Escribe la transición `VALIDATING` solo al pasar de
+  `DRAFT`; revalidar es una lectura.
+- **Finalizar** reconcilia; si algo crítico bloquea responde
+  `409 EXPORT_RECONCILIATION_BLOCKED` con
+  `details: { reason: "tpa.reconciliation_blocked", failed_checks[] }`. Si no,
+  calcula `content_digest` y `merkle_root` con `buildExportArtifact` desde el
+  ORIGEN y los escribe en una FILA NUEVA de `export_snapshot_states`, con las
+  MISMAS cifras con las que se calculó el digest. `200` con el manifiesto. Sobre
+  un snapshot que no está en `DRAFT`/`VALIDATING`:
+  `409 EXPORT_SNAPSHOT_NOT_FINALIZABLE`. `artifact_sha256` NO se escribe al
+  finalizar: es el hash del paquete, que incluye la procedencia, que incluye
+  `finalized_at`. Los códigos `EXPORT_DIGEST_CALCULATOR_NOT_CONFIGURED`,
+  `EXPORT_FINALIZATION_NOT_WIRED` y `EXPORT_ARTIFACT_NOT_AVAILABLE` dejan de
+  existir.
+- **Descargar** sirve el paquete ZIP determinista con `200`. Descarga DIRECTA y
+  no enlace efímero: `export.download` ya exige step-up, así que la autenticación
+  fuerte va en la petición en vez de en una URL que se puede reenviar. Exige
+  `?reason=` escrito (es el fichero con más datos de participantes del sistema y
+  toda descarga deja constancia de quién, cuándo y POR QUÉ) y emite
+  `export.downloaded` con `artifact_sha256`.
+- **Entregar** distingue dos cosas que no son la misma:
+  - ENVIAR por un canal (`SFTP`, `HTTPS_API`, `SIGNED_URL`) se niega con
+    `409 EXPORT_DELIVERY_NOT_CONFIGURED` y `details.reason = "tpa.dry_run"`. La
+    negativa la produce el adaptador con el paquete real, así que deja
+    `export.delivery_failed`. Falta el administrador externo y su canal
+    (`docs/LEGAL_PENDING.md`); pasar a `LIVE` exige modo explícito Y canal.
+  - REGISTRAR EL ACUSE de una entrega hecha por descarga manual autenticada
+    (`MANUAL_DOWNLOAD`) sí funciona: pasa por `recordDeliveryReceipt` del
+    adaptador, deja `export.delivery_acknowledged` y escribe la transición
+    `DELIVERED` con método, referencia y `artifact_sha256`. Si el
+    `acknowledged_sha256` no coincide con el hash reconstruido:
+    `409 EXPORT_ACKNOWLEDGEMENT_MISMATCH`.
+- **Resultados** pasa por el adaptador: `ingestPotentialWinnerResult` deja
+  `tpa.result_ingested` y `toPotentialWinners` construye los expedientes con
+  `source: EXTERNAL_ADMINISTRATOR` y sin `drawing_event_id`. Solo se acepta sobre
+  un snapshot en `DELIVERED`. El motivo del expediente lo fija `@lsw/tpa`
+  (`winner.selected_by_external_administrator`, DEC-022); `external_reference`
+  ata el expediente al envío del que salió.
