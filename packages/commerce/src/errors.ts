@@ -1,9 +1,9 @@
 /**
  * Errores del dominio de commerce.
  *
- * DEC-022: el backend envia **codigos estables**, nunca prosa traducida.
- * DEC-031: `code` ES la clave canonica de traduccion, y por eso estas clases ya
- * no llevan un `messageKey` aparte. Dos campos con el mismo proposito acaban
+ * DEC-022: el backend envia CODIGOS ESTABLES, nunca prosa traducida.
+ * DEC-031: `code` ES la clave canonica de traduccion, y por eso estas clases no
+ * llevan un `messageKey` aparte. Dos campos con el mismo proposito acaban
  * desincronizados, y el que se muestre en pantalla dependeria de cual leyese
  * cada capa.
  *
@@ -12,13 +12,35 @@
  * que lo resuelve a partir del `code`.
  */
 
-export class CommerceError extends Error {
-  public readonly code: string;
+export const COMMERCE_ERROR_CODES = [
+  "PAYMENT_PROVIDER_NOT_CONFIGURED",
+  "ORDER_NOT_FOUND",
+  "ORDER_INVALID_TRANSITION",
+  "ORDER_PAYMENT_INVALID_TRANSITION",
+  "ORDER_CURRENCY_MISMATCH",
+  "ORDER_EMPTY",
+  "ORDER_QUALIFICATION_NOT_CONFIGURED",
+  "REFUND_EXCEEDS_ORDER",
+  "REFUND_LINE_UNKNOWN",
+  "REFUND_LINE_QUANTITY_INVALID",
+  "WEBHOOK_SIGNATURE_INVALID",
+] as const;
 
-  public constructor(code: string, message?: string) {
-    super(message ?? code);
+export type CommerceErrorCode = (typeof COMMERCE_ERROR_CODES)[number];
+
+export class CommerceError extends Error {
+  public readonly code: CommerceErrorCode;
+  public readonly details: Readonly<Record<string, unknown>>;
+
+  public constructor(
+    code: CommerceErrorCode,
+    details: Readonly<Record<string, unknown>> = {},
+    internal?: string,
+  ) {
+    super(internal ?? code);
     this.name = "CommerceError";
     this.code = code;
+    this.details = details;
   }
 }
 
@@ -32,8 +54,16 @@ export class PaymentProviderNotConfiguredError extends CommerceError {
   public constructor() {
     super(
       "PAYMENT_PROVIDER_NOT_CONFIGURED",
+      {},
       "No payment provider is configured. Choosing one requires its own DEC entry.",
     );
     this.name = "PaymentProviderNotConfiguredError";
   }
+}
+
+export function isCommerceError(error: unknown, code?: CommerceErrorCode): error is CommerceError {
+  if (!(error instanceof CommerceError)) {
+    return false;
+  }
+  return code === undefined || error.code === code;
 }

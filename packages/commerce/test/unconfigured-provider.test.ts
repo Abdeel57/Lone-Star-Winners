@@ -1,9 +1,18 @@
+/**
+ * La ausencia de proveedor, hecha explicita.
+ *
+ * Lo que se prueba aqui es que NADA funciona a medias. Un puerto que devolviera
+ * exito simulado seria capaz de generar participaciones sin cobro real, que es
+ * justo el escenario que DEC-009 intenta hacer imposible.
+ */
+
 import { describe, expect, it } from "vitest";
 
 import {
   PaymentProviderNotConfiguredError,
   UNCONFIGURED_PAYMENT_PROVIDER_NAME,
   UnconfiguredPaymentProvider,
+  receiveWebhook,
 } from "../src/index.js";
 
 const provider = new UnconfiguredPaymentProvider();
@@ -27,6 +36,12 @@ describe("UnconfiguredPaymentProvider", () => {
     ).rejects.toBeInstanceOf(PaymentProviderNotConfiguredError);
   });
 
+  it("falla al consultar un pago", async () => {
+    await expect(provider.getPayment("pay-fake")).rejects.toBeInstanceOf(
+      PaymentProviderNotConfiguredError,
+    );
+  });
+
   it("falla al intentar un refund", async () => {
     await expect(
       provider.refund({
@@ -38,8 +53,20 @@ describe("UnconfiguredPaymentProvider", () => {
     ).rejects.toBeInstanceOf(PaymentProviderNotConfiguredError);
   });
 
-  it("rechaza un webhook con codigo de motivo en vez de lanzar, para que quede registrado", async () => {
-    const result = await provider.verifyWebhook({
+  it("rechaza la firma con codigo de motivo en vez de lanzar, para que quede registrado", () => {
+    const result = provider.verifyWebhookSignature({
+      rawBody: Buffer.from("{}", "utf8"),
+      headers: {},
+      receivedAt: new Date(0),
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.reasonCode).toBe("PROVIDER_NOT_CONFIGURED");
+    }
+  });
+
+  it("la secuencia completa tambien rechaza, sin llegar a parsear", () => {
+    const result = receiveWebhook(provider, {
       rawBody: Buffer.from("{}", "utf8"),
       headers: {},
       receivedAt: new Date(0),

@@ -192,3 +192,14 @@ Cinco decisiones que el dominio de sorteo deja preparadas pero **no toma**:
    `DrawAuthorization` con referencia documental, la puerta no se abre.
 5. **Retención del `DrawingEvent` y del expediente de ganador potencial**, y
    requisitos documentales de verificación de ganador.
+
+## Order qualification point
+
+TBD
+
+¿Una compra elegible genera participaciones al **autorizarse** el pago o al
+**capturarse**? (Y, con refunds parciales, ¿desde qué estado se revierten?)
+No existe un default que no sea una decisión legal disfrazada, así que
+`order_qualification.qualifying_payment_state` en la configuración de la
+promoción **no tiene valor por defecto**: el pipeline falla si falta. Hasta
+que se decida, ninguna promoción puede otorgar participaciones por compra.

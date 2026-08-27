@@ -2140,3 +2140,51 @@ Affected areas: todo el repositorio, por fases.
 
 Proposed by: Team Lead (sesión frontend)
 Agreed by: sesión paralela (reparto y rango de migraciones confirmados)
+
+---
+
+## DEC-047
+
+Status: Accepted
+
+Date: 2026-08-26
+
+Decision:
+Dos reglas de escritura del ledger salidas de la implementación del pipeline
+de participaciones (B3/B4):
+
+1. **`entry_transactions.id` se pasa explícitamente al insertar**, igual que
+   `recorded_at` (DEC-035). Tiene `DEFAULT gen_random_uuid()` **y** forma parte
+   de `LEDGER_CANONICAL_FIELDS_V1`: si el escritor deja actuar al DEFAULT no
+   conoce el `id` hasta después del INSERT, y para entonces la tabla es
+   append-only. La cadena nace rota igual. `LedgerAppendInput.id` es
+   obligatorio.
+2. **La descalificación emite una fila por cohorte `(procedencia,
+expires_at)`**, con `source_ref = disqualification:<decisionId>:<expiryKey>`.
+   Una descalificación no se ancla a una transacción concreta, así que no
+   hereda `expires_at` como los reversals de DEC-034: con `+10` que caduca en
+   T5, descalificación en T3 con `expires_at = NULL`, en T6 el saldo sería
+   −10. Por cohortes, cada fila negativa caduca con lo que anula, y de paso
+   el desglose por procedencia (principio #9) sobrevive a la
+   descalificación. Con el flag de caducidad apagado degenera en el caso
+   simple.
+
+Context:
+Ambas las encontraron los tests del dominio puro antes de que exista el
+adaptador a base de datos, que es el momento barato.
+
+Alternatives:
+Un solo reversal de descalificación sin `expires_at` (descartado: saldo
+negativo demostrado en test). Leer el `id` después del INSERT (descartado:
+imposible en tabla append-only con hash en la propia fila).
+
+Reason:
+Mismo criterio que DEC-034 y DEC-035: las reglas del ledger se fijan antes
+de que existan datos, porque después cuestan una migración sobre una tabla
+que no admite `UPDATE`.
+
+Affected areas: `packages/sweepstakes`, `packages/database` (adaptador
+Drizzle, ronda siguiente), `packages/audit`.
+
+Proposed by: backend-sweepstakes
+Agreed by: Team Lead
