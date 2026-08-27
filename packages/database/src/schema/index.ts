@@ -14,3 +14,8 @@ export * from "./orders.js";
 export * from "./amoe.js";
 export * from "./entry-operations.js";
 export * from "./draw.js";
+// HO-028 (DEC-007, DEC-008): persistencia encadenada de la auditoria. Al final
+// por el mismo motivo que el bloque de arriba: el orden de este barrel es el
+// orden en que se fueron anadiendo dominios, y reordenarlo produce conflictos
+// en cada rebase sin cambiar nada.
+export * from "./audit-events.js";

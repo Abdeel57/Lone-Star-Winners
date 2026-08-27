@@ -8,6 +8,10 @@
  *   `canonicalization.ts` que campos cubre cada version, y con que semantica
  *                         de bordes se evaluo el saldo (DEC-033 / DEC-034).
  *   `chain.ts`            la hash chain de DEC-008 y su verificador.
+ *   `audit-events.ts`     el camino de escritura de `audit_events`: payload,
+ *                         clave de cadena y puerto de encadenado.
+ *   `safe-diff.ts`        allowlist con suelo para `before` / `after`.
+ *   `audit-chain-job.ts`  el job que verifica todas las cadenas de auditoria.
  *   `sealing.ts`          el anclaje externo sin el cual la cadena solo prueba
  *                         consistencia interna.
  *   `merkle.ts`           prueba de pertenencia de UN registro (DEC-016).
@@ -34,3 +38,6 @@ export * from "./sealing.js";
 export * from "./export-artifact.js";
 export * from "./verifier.js";
 export * from "./ports.js";
+export * from "./audit-events.js";
+export * from "./safe-diff.js";
+export * from "./audit-chain-job.js";

@@ -175,6 +175,41 @@ export const AUDIT_EVENT_CANONICAL_FIELDS_V1: readonly string[] = Object.freeze(
 ]);
 
 /**
+ * Columnas de `audit_events` deliberadamente FUERA del payload.
+ *
+ * Existe por el mismo motivo que `LEDGER_EXCLUDED_FIELDS_V1`: el test de
+ * paridad de `tests/security` exige que incluidas + excluidas = columnas de la
+ * tabla, de modo que una columna nueva no pueda entrar sin que alguien decida
+ * explicitamente si el hash debe cubrirla.
+ */
+export const AUDIT_EVENT_EXCLUDED_FIELDS_V1: readonly ExcludedField[] = Object.freeze([
+  Object.freeze({
+    field: "sequence_no",
+    reason:
+      "GENERATED ALWAYS AS IDENTITY: lo asigna la base de datos durante el INSERT, y el hash " +
+      "se calcula antes. Queda protegido por el encadenamiento, que se verifica en ese orden.",
+  }),
+  Object.freeze({
+    field: "chain_key",
+    reason:
+      "Es la CLAVE de la cadena, no un dato del hecho. Entra en el hash por el prefijo del " +
+      "preimage (DEC-035), y una restriccion CHECK la ata a promotion_id: no puede divergir.",
+  }),
+  Object.freeze({
+    field: "canonicalization_version",
+    reason: "Es la etiqueta del algoritmo. Se ata al hash desde el prefijo del preimage.",
+  }),
+  Object.freeze({
+    field: "chain_prev_hash",
+    reason: "Es la ENTRADA del encadenamiento, no parte del hecho registrado.",
+  }),
+  Object.freeze({
+    field: "chain_hash",
+    reason: "Es la SALIDA. Incluirlo seria pedirle al hash que se contenga a si mismo.",
+  }),
+]);
+
+/**
  * Campos de un `DrawingEvent` cubiertos por el hash en la version 1 (DEC-017).
  *
  * DOS AUSENCIAS DELIBERADAS, Y LAS DOS IMPORTAN:
@@ -290,6 +325,7 @@ export interface CanonicalizationVersionDescriptor {
   readonly ledgerFields: readonly string[];
   readonly ledgerExcludedFields: readonly ExcludedField[];
   readonly auditEventFields: readonly string[];
+  readonly auditEventExcludedFields: readonly ExcludedField[];
   readonly drawingEventFields: readonly string[];
   readonly balancePredicate: BalancePredicateSemantics;
 }
@@ -301,6 +337,7 @@ export const CANONICALIZATION_V1: CanonicalizationVersionDescriptor = Object.fre
   ledgerFields: LEDGER_CANONICAL_FIELDS_V1,
   ledgerExcludedFields: LEDGER_EXCLUDED_FIELDS_V1,
   auditEventFields: AUDIT_EVENT_CANONICAL_FIELDS_V1,
+  auditEventExcludedFields: AUDIT_EVENT_EXCLUDED_FIELDS_V1,
   drawingEventFields: DRAWING_EVENT_CANONICAL_FIELDS_V1,
   balancePredicate: BALANCE_PREDICATE_V1,
 });

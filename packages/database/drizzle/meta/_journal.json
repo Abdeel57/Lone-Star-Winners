@@ -106,6 +106,13 @@
       "when": 1787616023000,
       "tag": "0023_draw_and_export",
       "breakpoints": false
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1787616024000,
+      "tag": "0024_audit_events",
+      "breakpoints": false
     }
   ]
 }

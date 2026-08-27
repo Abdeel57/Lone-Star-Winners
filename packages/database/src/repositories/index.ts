@@ -65,6 +65,11 @@ export * from "./payment-event-repository.js";
 export * from "./snapshot-repository.js";
 export * from "./draw-repositories.js";
 export * from "./tpa-ports.js";
+// HO-028: persistencia encadenada de la auditoria. NO entra en
+// `createSweepstakesRepositories`: escribir un `AuditEvent` exige el puerto de
+// encadenado de `@lsw/audit`, y quien lo monta es `apps/api`, que es donde se
+// decide con que implementacion concreta corre el sistema.
+export * from "./audit-event-repository.js";
 
 export interface SweepstakesRepositories {
   readonly unitOfWork: DrizzleUnitOfWork;
