@@ -251,50 +251,100 @@ function killTree(child) {
   }
 }
 
-/**
- * Ruta del `tsconfig.json` de la app. Ver `restoreTsConfig`.
- */
-const TSCONFIG = join(APP_DIR, "tsconfig.json");
+/* eslint-disable security/detect-non-literal-fs-filename --
+ * Las rutas de este bloque se componen con `join(APP_DIR, ...)` a partir de la
+ * lista literal `NEXT_MANAGED_FILES`, declarada aqui mismo. No hay ninguna
+ * ruta que un visitante -ni el entorno- pueda influir, y esto ademas no es
+ * codigo servido: es la herramienta que arranca el humo. */
 
 /**
- * Devuelve `tsconfig.json` a como estaba antes de arrancar el hijo.
+ * FICHEROS VERSIONADOS QUE NEXT REESCRIBE SEGUN EL `distDir`.
  *
- * POR QUE HACE FALTA
- * ------------------
- * `next dev` REESCRIBE el `tsconfig.json` del proyecto al arrancar: se asegura
- * de que `include` contenga los tipos generados bajo su `distDir` y, de paso,
- * vuelve a serializar el fichero entero con su propio formato. Con el `distDir`
- * propio del humo (`.next-smoke`), eso mete en el fichero VERSIONADO una ruta
- * que apunta a un directorio generado que solo existe mientras corre el humo, y
- * ademas rompe `format:check`.
+ * POR QUE EXISTE ESTA LISTA
+ * -------------------------
+ * `next dev` no solo LEE la configuracion del proyecto: al arrancar ESCRIBE en
+ * el arbol de fuentes para dejar la integracion de TypeScript apuntando a su
+ * directorio de build. Mientras el humo compartia `.next` con todo el mundo,
+ * eso era invisible -reescribia los mismos valores que ya estaban-. Con el
+ * `distDir` propio (`.next-smoke`) deja de serlo: cada fichero de esta lista
+ * queda apuntando a un directorio generado que solo existe mientras corre el
+ * humo, en un fichero que esta EN GIT.
  *
- * No es un fallo del aislamiento del `distDir`: es la otra mitad del mismo
- * problema -un proceso auxiliar que escribe en el arbol de fuentes- y se cierra
- * igual, dejando las cosas como estaban. Solo se escribe si el contenido
- * cambio, para no tocar la fecha del fichero cuando no hay nada que deshacer.
+ * El sintoma es de los caros: el arbol se ensucia solo, el diff aparece en el
+ * commit de otro, y `format:check` falla en un fichero que nadie edito.
+ *
+ * ES UNA LISTA EXPLICITA, no un descubrimiento automatico. Cada entrada dice
+ * QUE reescribe Next en ella, porque el dia que Next cambie de estrategia esa
+ * frase es lo que permite comprobar si la entrada sigue haciendo falta.
  */
-function restoreTsConfig(before) {
-  if (before === null) return;
+const NEXT_MANAGED_FILES = [
+  {
+    name: "tsconfig.json",
+    // Next se asegura de que `include` contenga los tipos generados bajo su
+    // `distDir`, y de paso reserializa el fichero entero con su propio formato
+    // -lo que ademas rompe `format:check`, que si tiene opinion sobre el.
+    why: "include de los tipos generados + reserializado",
+  },
+  {
+    name: "next-env.d.ts",
+    // La cabecera lleva una `/// <reference path="./<distDir>/types/routes.d.ts" />`
+    // que Next reescribe con el `distDir` en vigor. Hallazgo de la sesion de
+    // Railway: un build con `LSW_NEXT_DIST_DIR=.next-build` se lo dejo apuntando
+    // ahi. El fichero dice "should not be edited" y esta versionado: las dos
+    // cosas a la vez significan que quien lo toque tiene que devolverlo.
+    why: "referencia a los tipos de rutas del distDir",
+  },
+];
 
-  try {
-    if (readFileSync(TSCONFIG, "utf8") === before) return;
-    writeFileSync(TSCONFIG, before);
-    log("[smoke] tsconfig.json restaurado (lo reescribio el next dev del humo).");
-  } catch (error) {
-    log(`[smoke] AVISO: no se pudo restaurar tsconfig.json: ${String(error)}`);
+/**
+ * Lee los ficheros de `NEXT_MANAGED_FILES` ANTES de arrancar el hijo.
+ *
+ * Devuelve una instantanea; `null` en `content` significa que el fichero no
+ * estaba, y entonces no hay nada que devolver (no se crea uno nuevo: restaurar
+ * es deshacer un cambio, no inventarse un fichero).
+ */
+function captureNextManagedFiles() {
+  return NEXT_MANAGED_FILES.map((entry) => {
+    const path = join(APP_DIR, entry.name);
+
+    try {
+      return { ...entry, path, content: readFileSync(path, "utf8") };
+    } catch {
+      return { ...entry, path, content: null };
+    }
+  });
+}
+
+/**
+ * Devuelve cada fichero a como estaba antes de arrancar el hijo.
+ *
+ * Solo escribe si el contenido CAMBIO, para no tocar la fecha de un fichero
+ * que nadie modifico. Un fallo al restaurar se avisa pero no tumba el humo: el
+ * resultado de las comprobaciones sigue siendo valido y lo que hay que ver es
+ * que quedo un fichero sucio.
+ */
+function restoreNextManagedFiles(snapshot) {
+  for (const entry of snapshot) {
+    if (entry.content === null) continue;
+
+    try {
+      if (readFileSync(entry.path, "utf8") === entry.content) continue;
+      writeFileSync(entry.path, entry.content);
+      log(`[smoke] ${entry.name} restaurado: lo reescribio el next dev del humo (${entry.why}).`);
+    } catch (error) {
+      log(`[smoke] AVISO: no se pudo restaurar ${entry.name}: ${String(error)}`);
+    }
   }
 }
+
+/* eslint-enable security/detect-non-literal-fs-filename */
 
 async function main() {
   const nextBin = require.resolve("next/dist/bin/next");
 
-  // Se guarda ANTES de arrancar: el hijo lo reescribe. Ver `restoreTsConfig`.
-  let tsConfigBefore = null;
-  try {
-    tsConfigBefore = readFileSync(TSCONFIG, "utf8");
-  } catch {
-    // Sin tsconfig no hay nada que restaurar.
-  }
+  // Se guardan ANTES de arrancar: el hijo los reescribe. Ver
+  // `NEXT_MANAGED_FILES`.
+  const managedBefore = captureNextManagedFiles();
 
   log(`[smoke] arrancando next dev en ${BASE} con API simulada en ${API_BASE_URL}`);
 
@@ -360,7 +410,7 @@ async function main() {
     }
   } finally {
     killTree(child);
-    restoreTsConfig(tsConfigBefore);
+    restoreNextManagedFiles(managedBefore);
   }
 
   log("");

@@ -906,3 +906,54 @@ What I need from you:
    despliegue de DEC-043 pone en Internet catálogo, promociones y Reglas
    Oficiales en ambos idiomas, con los dieciséis puntos legales en TBD.
    Ninguna página puede presentar una promoción como vigente.
+
+---
+
+## HO-023
+
+Status: OPEN
+
+## Handoff
+
+Date: 2026-08-26
+From: frontend (vía Team Lead)
+To: backend (configuración raíz, DEC-024)
+
+Context:
+Al aislar el directorio de build del smoke (`LSW_NEXT_DIST_DIR`, leído y
+validado en `apps/web/next.config.mjs`) aparecieron tres problemas de
+infraestructura que viven en `turbo.json`, no en `apps/web`:
+
+1. **`LSW_NEXT_DIST_DIR` no entra en la clave de caché de turbo.** Con turbo en
+   modo `strict`, `LSW_NEXT_DIST_DIR=.next-build pnpm run build` devuelve
+   `8 cached, 8 total` y **no crea `.next-build`**: turbo reproduce la caché de
+   `.next` sin construir nada. Peor que inútil: parece que funcionó. Solo
+   funciona saltándose turbo (`cd apps/web && LSW_NEXT_DIST_DIR=.next-build
+pnpm build`).
+2. **`pnpm run build` envenena un `next dev` vivo incluso con 100 % cache
+   hit**, porque turbo _restaura_ `.next/**` desde la caché encima del servidor
+   en marcha. Reproducido: tras un build totalmente cacheado, `/es`, `/es/shop`
+   y `/healthz` pasaron a 500 y el proceso no se recuperó sin reinicio.
+3. **Un build aislado real ensucia `tsconfig.json` y `next-env.d.ts`** (Next
+   los reescribe con el `distDir`). El smoke ya los guarda y restaura
+   (`NEXT_MANAGED_FILES` en `apps/web/scripts/smoke.mjs`), pero el build no
+   tiene ese guardián.
+
+What I need from you:
+
+- Declarar `LSW_NEXT_DIST_DIR` en `env` de la tarea `build` (o `globalEnv`) de
+  `turbo.json`, para que un build aislado no colisione con la caché del build
+  normal.
+- Decidir qué hacer con `outputs`: hoy lista `.next/**`; con `distDir` distinto
+  no se captura nada (aceptable) o se añade `.next-build/**` (entonces la
+  caché lo restauraría también).
+- Valorar una receta de desarrollo documentada ("no ejecutes `pnpm run build`
+  con un `next dev` abierto; usa el build aislado") o, mejor, un script raíz
+  `build:isolated` que fije el `distDir`, salte la caché de turbo para
+  `@lsw/web` y restaure los dos ficheros gestionados por Next.
+
+Affected files: `turbo.json`, `package.json` (raíz), `apps/web/scripts/smoke.mjs`
+(referencia del guardián).
+
+Blocking: NO para el trabajo diario; SÍ para que la receta del build aislado
+sea fiable en CI.

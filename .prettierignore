@@ -5,6 +5,7 @@ build/
 out/
 .next/
 .next-smoke/
+.next-build/
 .turbo/
 coverage/
 playwright-report/
