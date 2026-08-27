@@ -408,7 +408,8 @@
     "withPool": "{status} — entry pool of {entries} entries",
     "opensOn": "opens {date}",
     "closesOn": "closes {date}",
-    "officialRules": "The Official Rules govern every promotion"
+    "officialRules": "The Official Rules govern every promotion",
+    "rulesPending": "Official Rules pending publication"
   },
   "marquee": {
     "item1": "Eligible merchandise",

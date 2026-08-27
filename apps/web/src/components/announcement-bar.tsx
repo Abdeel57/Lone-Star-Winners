@@ -1,9 +1,15 @@
 import { cn } from "@lsw/ui";
-import { getTranslations } from "next-intl/server";
+import { useTranslations } from "next-intl";
 
 import { formatInteger, formatZonedDate } from "@/i18n/formatters";
 import type { Locale } from "@/i18n/locales";
-import { fetchActivePromotion, fetchPromotion, type PromotionStatus } from "@/lib/api";
+import { usePromotionStatusLabel } from "@/i18n/promotion-labels";
+import {
+  fetchActivePromotion,
+  fetchPromotion,
+  type EntryPool,
+  type PromotionSummary,
+} from "@/lib/api";
 import { presentPromotion } from "@/lib/promotion-state";
 
 /**
@@ -44,63 +50,118 @@ import { presentPromotion } from "@/lib/promotion-state";
  * junto con ella: o el universo entra en `PromotionSummary`, o hay una ruta que
  * lo publique.
  *
- * ROTACION SIN JAVASCRIPT
- * -----------------------
- * Las dos frases se apilan en la misma celda y alternan por opacidad con una
- * animacion CSS (`.lsw-announce-item` en `globals.css`). Sin JavaScript se ve
- * igual; con `prefers-reduced-motion` no rota y se queda la primera, que es la
- * informativa. Ninguna de las dos es un enlace: una diana que aparece y
- * desaparece sola es una trampa para el puntero y para el teclado.
+ * DOS PIEZAS Y NO UNA
+ * -------------------
+ * Este componente asincrono solo PIDE los datos; quien decide que frases se
+ * escriben es `AnnouncementBand`, que es sincrono y recibe la promocion por
+ * props. La division es la misma que ya tenia `PromotionHero`, y por el mismo
+ * motivo: la decision de que se anuncia sobre una promocion dada se puede
+ * probar entonces con un fixture, sin simular el servidor de Next ni la capa de
+ * red.
  */
 export async function AnnouncementBar({ locale }: { readonly locale: Locale }) {
-  const t = await getTranslations();
-  const tStatus = await getTranslations("promotionStatus");
-
   const result = await fetchActivePromotion(locale);
   if (!result.ok || result.data === null) return null;
 
   const promotion = result.data;
-  const presentation = presentPromotion(promotion.status);
 
-  /**
-   * Etiqueta traducida del estado.
+  /*
+   * SIN REGLAS PUBLICADAS NO SE PIDE EL DETALLE (DEC-044).
    *
-   * `switch` exhaustivo, igual que `usePromotionStatusLabel`. Aqui no se puede
-   * usar aquel -es un hook y esto es un Server Component asincrono-, pero la
-   * razon de escribirlo asi es la misma: `tStatus(status)` construiria la clave
-   * en tiempo de ejecucion y dejaria de estar comprobada por el tipado, de modo
-   * que un estado nuevo del contrato apareceria como la clave en crudo en la
-   * banda mas visible del sitio.
-   *
-   * Va DENTRO del componente, cerrando sobre `tStatus`, y no como funcion
-   * suelta con el traductor por parametro: el tipo que `next-intl` da a un
-   * traductor con espacio de nombres no se puede escribir a mano sin
-   * instanciarlo mal, y una anotacion equivocada rechaza las nueve claves.
+   * No es solo un viaje que se ahorra: es que el unico dato que ese viaje trae
+   * -el universo de participaciones- es precisamente el que la banda no puede
+   * escribir cuando la promocion no tiene documento que la gobierne. La
+   * condicion se vuelve a evaluar dentro de `AnnouncementBand`, que es donde
+   * manda; aqui pasar `null` deja el fallo del lado seguro aunque aquella
+   * cambiara.
    */
-  const statusLabelFor = (status: PromotionStatus): string => {
-    switch (status) {
-      case "DRAFT":
-        return tStatus("DRAFT");
-      case "SCHEDULED":
-        return tStatus("SCHEDULED");
-      case "ACTIVE":
-        return tStatus("ACTIVE");
-      case "CLOSED":
-        return tStatus("CLOSED");
-      case "EXPORT_PREPARATION":
-        return tStatus("EXPORT_PREPARATION");
-      case "DRAW_PENDING":
-        return tStatus("DRAW_PENDING");
-      case "POTENTIAL_WINNER_REVIEW":
-        return tStatus("POTENTIAL_WINNER_REVIEW");
-      case "COMPLETED":
-        return tStatus("COMPLETED");
-      case "CANCELLED":
-        return tStatus("CANCELLED");
-    }
-  };
+  const entryPool =
+    promotion.rules_version_id === null ? null : await fetchEntryPool(promotion, locale);
 
-  const statusLabel = statusLabelFor(promotion.status);
+  return <AnnouncementBand promotion={promotion} entryPool={entryPool} locale={locale} />;
+}
+
+/**
+ * Universo de participaciones, si la promocion declara uno.
+ *
+ * La peticion del detalle es de mejor esfuerzo: un fallo aqui deja la barra
+ * exactamente como estaba antes de DEC-042, no la tumba. La misma direccion
+ * segura de fallo que gobierna los feature flags.
+ */
+async function fetchEntryPool(
+  promotion: PromotionSummary,
+  locale: Locale,
+): Promise<EntryPool | null> {
+  const detailResult = await fetchPromotion(promotion.slug, locale);
+  if (!detailResult.ok) return null;
+
+  /*
+   * `?? null` Y NO `!== null`.
+   *
+   * `entry_pool` es un campo `[PROVISIONAL]`: esta pedido a `backend` y hoy no
+   * lo publica `docs/API_CONTRACT.md`. El tipo dice `EntryPool | null`, pero un
+   * backend que todavia no lo conozca no manda `null`: no manda NADA, y en
+   * tiempo de ejecucion eso es `undefined`, que pasa limpiamente por una
+   * comprobacion contra `null` y revienta en el acceso siguiente. Lo medimos:
+   * la barra devolvia un 500 en todas las paginas del sitio contra una API que
+   * servia la forma anterior. Mientras un campo sea provisional se lee asi.
+   */
+  return detailResult.data.entry_pool ?? null;
+}
+
+/**
+ * Las frases de la banda, ya decidido que hay promocion vigente.
+ *
+ * SIN REGLAS OFICIALES PUBLICADAS, LA BANDA NO ANUNCIA LA PROMOCION (DEC-044)
+ * ---------------------------------------------------------------------------
+ * El hero de la portada ya se contiene cuando `rules_version_id` es `null`:
+ * retira el verbo, el chip de estado, la cuenta atras, el universo y el boton
+ * rojo. Esta banda vive por ENCIMA de ese hero y en todas las paginas del
+ * sitio, asi que decir aqui "Abierta - cierra el 30 dic 2026 - universo de
+ * 10,000 participaciones" contradecia al hero en la misma pantalla, y lo
+ * repetia en la tienda, en el carrito y en las preguntas frecuentes, que es
+ * donde nadie lo iba a corregir.
+ *
+ * La banda NO desaparece, y esa es la diferencia con "no hay promocion
+ * vigente". Ahi no habia nada que anunciar; aqui hay algo, y es justamente lo
+ * que falta. Enmudecer la banda dejaria el sitio sin ninguna senal de por que
+ * el hero se ha quedado corto. Lo que se publica es una sola frase -que las
+ * Reglas Oficiales estan pendientes de publicacion- sin estado, sin plazo, sin
+ * universo y sin rotacion.
+ *
+ * La senal es `rules_version_id`, por el mismo motivo que en el hero: ES el
+ * identificador de la version ACTIVE de las reglas, y el contrato lo declara
+ * `null` mientras no haya ninguna (DEC-012). Comprobar ademas que el documento
+ * se sirve exigiria una peticion mas por render cuyo fallo transitorio haria
+ * afirmar que las reglas no estan publicadas cuando si lo estan.
+ *
+ * ROTACION SIN JAVASCRIPT
+ * -----------------------
+ * Las frases se apilan en la misma celda y alternan por opacidad con una
+ * animacion CSS (`.lsw-announce-item` en `globals.css`). Sin JavaScript se ve
+ * igual; con `prefers-reduced-motion` no rota y se queda la primera, que es la
+ * informativa. Ninguna es un enlace: una diana que aparece y desaparece sola es
+ * una trampa para el puntero y para el teclado.
+ *
+ * Con UNA sola frase no se usa esa clase, y no es un detalle de estilo: la
+ * animacion arranca en `opacity: 0` y solo es legible porque hay una segunda
+ * frase cubriendo el hueco. Una unica frase con `.lsw-announce-item` estaria
+ * invisible la mitad del tiempo.
+ */
+export function AnnouncementBand({
+  promotion,
+  entryPool,
+  locale,
+}: {
+  readonly promotion: PromotionSummary;
+  readonly entryPool: EntryPool | null;
+  readonly locale: Locale;
+}) {
+  const t = useTranslations();
+  const statusLabelFor = usePromotionStatusLabel();
+
+  const hasRules = promotion.rules_version_id !== null;
+  const presentation = presentPromotion(promotion.status);
 
   /*
    * El plazo que se anuncia es el MISMO al que apunta la cuenta atras, y por la
@@ -129,26 +190,6 @@ export async function AnnouncementBar({ locale }: { readonly locale: Locale }) {
           dateStyle: "medium",
         });
 
-  /*
-   * Universo de participaciones, si la promocion declara uno.
-   *
-   * La peticion del detalle es de mejor esfuerzo: un fallo aqui deja la barra
-   * exactamente como estaba antes de DEC-042, no la tumba. La misma direccion
-   * segura de fallo que gobierna los feature flags.
-   */
-  const detailResult = await fetchPromotion(promotion.slug, locale);
-  /*
-   * `?? null` Y NO `!== null`.
-   *
-   * `entry_pool` es un campo `[PROVISIONAL]`: esta pedido a `backend` y hoy no
-   * lo publica `docs/API_CONTRACT.md`. El tipo dice `EntryPool | null`, pero un
-   * backend que todavia no lo conozca no manda `null`: no manda NADA, y en
-   * tiempo de ejecucion eso es `undefined`, que pasa limpiamente por una
-   * comprobacion contra `null` y revienta en el acceso siguiente. Lo medimos:
-   * la barra devolvia un 500 en todas las paginas del sitio contra una API que
-   * servia la forma anterior. Mientras un campo sea provisional se lee asi.
-   */
-  const entryPool = detailResult.ok ? (detailResult.data.entry_pool ?? null) : null;
   const entryPoolCap = entryPool === null ? null : formatInteger(entryPool.cap, locale);
 
   const when =
@@ -157,6 +198,8 @@ export async function AnnouncementBar({ locale }: { readonly locale: Locale }) {
       : presentation.countdownTarget === "starts_at"
         ? t("announcement.opensOn", { date: deadline })
         : t("announcement.closesOn", { date: deadline });
+
+  const statusLabel = statusLabelFor(promotion.status);
 
   const statusPhrase =
     when === null
@@ -170,6 +213,12 @@ export async function AnnouncementBar({ locale }: { readonly locale: Locale }) {
             when,
             entries: entryPoolCap,
           });
+
+  const phrases: readonly string[] = hasRules
+    ? [statusPhrase, t("announcement.officialRules")]
+    : [t("announcement.rulesPending")];
+
+  const rotates = phrases.length > 1;
 
   return (
     <div
@@ -194,14 +243,17 @@ export async function AnnouncementBar({ locale }: { readonly locale: Locale }) {
       <div className="lsw-container flex items-center justify-center gap-3 py-2">
         <Chevron direction="left" />
 
-        {/* Rejilla de UNA celda: las dos frases se superponen, de modo que la
-            barra tiene la altura de la mas alta y no da saltos al alternar.
-            Por eso el texto puede envolver sin provocar reflujo: con el
-            universo dentro, la frase de estado ya no cabe en una linea a 360px,
-            y truncarla dejaria fuera justo el dato nuevo. */}
+        {/* Rejilla de UNA celda: las frases se superponen, de modo que la barra
+            tiene la altura de la mas alta y no da saltos al alternar. Por eso el
+            texto puede envolver sin provocar reflujo: con el universo dentro, la
+            frase de estado ya no cabe en una linea a 360px, y truncarla dejaria
+            fuera justo el dato nuevo. */}
         <p className="grid min-w-0 flex-1 justify-items-center text-center">
-          <span className={PHRASE}>{statusPhrase}</span>
-          <span className={PHRASE}>{t("announcement.officialRules")}</span>
+          {phrases.map((phrase) => (
+            <span key={phrase} className={rotates ? ROTATING_PHRASE : STATIC_PHRASE}>
+              {phrase}
+            </span>
+          ))}
         </p>
 
         <Chevron direction="right" />
@@ -210,19 +262,24 @@ export async function AnnouncementBar({ locale }: { readonly locale: Locale }) {
   );
 }
 
+const PHRASE = cn("lsw-display text-balance text-overline");
+
 /**
  * La opacidad de partida y la rotacion las gobierna `.lsw-announce-item` en
  * `globals.css`, no una utilidad de Tailwind: las utilidades se emiten en una
  * capa posterior y ganarian a la regla de `prefers-reduced-motion`, dejando las
  * dos frases invisibles para quien pidio que nada se moviera.
  */
-const PHRASE = cn("lsw-announce-item lsw-display text-balance text-overline");
+const ROTATING_PHRASE = cn("lsw-announce-item", PHRASE);
+
+/** Una sola frase no rota, y por tanto no puede empezar en `opacity: 0`. */
+const STATIC_PHRASE = PHRASE;
 
 /**
  * Flecha decorativa de los extremos.
  *
  * No es un boton: no hay nada que pulsar, porque la rotacion es automatica y
- * las dos frases se leen enteras sin intervencion. Pintarla como control seria
+ * las frases se leen enteras sin intervencion. Pintarla como control seria
  * ofrecer una diana que no hace nada, que es peor que no ofrecerla.
  */
 function Chevron({ direction }: { readonly direction: "left" | "right" }) {

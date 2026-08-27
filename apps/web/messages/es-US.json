@@ -408,7 +408,8 @@
     "withPool": "{status} — universo de {entries} participaciones",
     "opensOn": "abre el {date}",
     "closesOn": "cierra el {date}",
-    "officialRules": "Las Reglas Oficiales rigen cada promoción"
+    "officialRules": "Las Reglas Oficiales rigen cada promoción",
+    "rulesPending": "Reglas Oficiales pendientes de publicación"
   },
   "marquee": {
     "item1": "Mercancía elegible",

@@ -77,6 +77,26 @@ export default async function PromotionDetailPage({
   const presentation = presentPromotion(promotion.status);
   const hasRules = promotion.rules_version_id !== null;
 
+  /*
+   * LA CUENTA ATRAS CAE CON LAS REGLAS SIN PUBLICAR (DEC-044).
+   *
+   * Mismo criterio que el hero de la portada, y por el mismo motivo: un
+   * marcador contando hacia el cierre es el elemento de URGENCIA de la
+   * pantalla, y no se puede meter prisa hacia el plazo de una promocion cuyo
+   * documento rector todavia no existe. Debajo, esta misma pagina ya dice que
+   * las Reglas Oficiales no estan publicadas; anunciarlo y a la vez llevar la
+   * cuenta era decir dos cosas distintas en la misma pantalla.
+   *
+   * El plazo ESCRITO se queda -las dos tarjetas de apertura y cierre, y la nota
+   * de zona horaria-: es la misma informacion sin el reclamo, y quien viene a
+   * apuntarse la fecha la necesita. Es la linea que ya se trazo en el hero.
+   *
+   * La linea temporal tambien se queda: no cuenta hacia nada, describe en que
+   * paso del proceso esta la promocion, que es lo que esta pagina existe para
+   * responder incluso despues del cierre.
+   */
+  const countdownTarget = hasRules ? presentation.countdownTarget : null;
+
   const opensAt = formatZonedDateTime(promotion.starts_at, locale, {
     timeZone: promotion.legal_timezone,
     showTimeZoneName: true,
@@ -111,18 +131,16 @@ export default async function PromotionDetailPage({
             {pickLocalized(promotion.summary, locale)}
           </p>
 
-          {presentation.countdownTarget === null ? null : (
+          {countdownTarget === null ? null : (
             <div className="mt-s8">
               <PromotionCountdown
                 targetIso={
-                  presentation.countdownTarget === "starts_at"
-                    ? promotion.starts_at
-                    : promotion.ends_at
+                  countdownTarget === "starts_at" ? promotion.starts_at : promotion.ends_at
                 }
                 nowIso={nowIso}
                 locale={locale}
                 timeZone={promotion.legal_timezone}
-                variant={presentation.countdownTarget === "starts_at" ? "opens" : "closes"}
+                variant={countdownTarget === "starts_at" ? "opens" : "closes"}
                 size="scoreboard"
               />
             </div>
