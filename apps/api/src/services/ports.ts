@@ -95,6 +95,16 @@ export interface PromotionRepository {
    */
   findActive(): Promise<PromotionRecord | null>;
   findBySlug(slug: string): Promise<PromotionRecord | null>;
+  /**
+   * `after` ES EL PARAMETRO DEL PUERTO, NO EL DE HTTP.
+   *
+   * En el cable la paginacion se pide con `?cursor=`, que es lo que declaran
+   * `docs/API_CONTRACT.md` y `http/pagination.ts`. Aqui llega ya DECODIFICADO:
+   * el cursor HTTP es un valor opaco en base64url y este parametro es la
+   * posicion que lleva dentro. Son dos cosas distintas y por eso se llaman
+   * distinto; la coordinacion entre sesiones ya confundio una con otra una vez.
+   * Renombrar cualquiera de los dos haria que pareciesen lo mismo.
+   */
   listPublic(options: { limit: number; after: string | null }): Promise<readonly PromotionRecord[]>;
   findRulesVersion(rulesVersionId: string): Promise<RulesVersionRecord | null>;
 }

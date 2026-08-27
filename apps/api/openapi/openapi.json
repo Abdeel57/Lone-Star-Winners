@@ -1816,7 +1816,36 @@
                       "items": {
                         "additionalProperties": false,
                         "properties": {
+                          "entries_after_if_approved": {
+                            "anyOf": [
+                              {
+                                "maximum": 9007199254740991,
+                                "minimum": -9007199254740991,
+                                "type": "integer"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
                           "entries_awarded": {
+                            "anyOf": [
+                              {
+                                "maximum": 9007199254740991,
+                                "minimum": -9007199254740991,
+                                "type": "integer"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "entries_before": {
+                            "maximum": 9007199254740991,
+                            "minimum": -9007199254740991,
+                            "type": "integer"
+                          },
+                          "entries_if_approved": {
                             "anyOf": [
                               {
                                 "maximum": 9007199254740991,
@@ -1881,7 +1910,10 @@
                           "entries_awarded",
                           "participant_id",
                           "period_bucket",
-                          "flagged_duplicate"
+                          "flagged_duplicate",
+                          "entries_before",
+                          "entries_if_approved",
+                          "entries_after_if_approved"
                         ],
                         "type": "object"
                       },
@@ -3742,6 +3774,269 @@
           }
         ],
         "summary": "Solicitar un ajuste manual de participaciones.",
+        "tags": [
+          "admin"
+        ],
+        "x-lsw-authorization": {
+          "kind": "PERMISSION",
+          "permission": "entry.adjust.create",
+          "requires_step_up": true
+        }
+      }
+    },
+    "/api/v1/admin/entry-adjustments/preview": {
+      "post": {
+        "description": "Devuelve `before`, `proposed_delta` y `after` calculados por el motor bajo el predicado de saldo, mas si el debito dejaria el saldo negativo -el MISMO predicado que rechaza el ajuste al aplicarlo- y si haria falta una segunda firma. El panel no puede producir ninguna de las tres cifras sin reimplementar el motor. Es POST y no GET porque el cuerpo lleva el identificador de un participante: en un GET viajaria en la URL, y las URL acaban en logs de acceso y en historiales de navegador.",
+        "operationId": "previewEntryAdjustment",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "direction": {
+                    "enum": [
+                      "CREDIT",
+                      "DEBIT"
+                    ],
+                    "type": "string"
+                  },
+                  "participant_id": {
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                    "type": "string"
+                  },
+                  "promotion_id": {
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                    "type": "string"
+                  },
+                  "quantity": {
+                    "maximum": 100000000,
+                    "minimum": 1,
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "promotion_id",
+                  "participant_id",
+                  "direction",
+                  "quantity"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "after": {
+                      "maximum": 9007199254740991,
+                      "minimum": -9007199254740991,
+                      "type": "integer"
+                    },
+                    "as_of": {
+                      "type": "string"
+                    },
+                    "before": {
+                      "maximum": 9007199254740991,
+                      "minimum": -9007199254740991,
+                      "type": "integer"
+                    },
+                    "proposed_delta": {
+                      "maximum": 9007199254740991,
+                      "minimum": -9007199254740991,
+                      "type": "integer"
+                    },
+                    "requires_second_approval": {
+                      "type": "boolean"
+                    },
+                    "would_make_balance_negative": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "before",
+                    "proposed_delta",
+                    "after",
+                    "would_make_balance_negative",
+                    "requires_second_approval",
+                    "as_of"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 200."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "additionalProperties": {},
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "request_id"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 401."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "additionalProperties": {},
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "request_id"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 403."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "additionalProperties": {},
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "request_id"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 404."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "additionalProperties": {},
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "request_id"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 422."
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Que pasaria si se pidiera este ajuste. No escribe nada.",
         "tags": [
           "admin"
         ],
@@ -14939,7 +15234,7 @@
     },
     "/api/v1/promotions/{slug}/amoe-config": {
       "get": {
-        "description": "`mode` es un enum precisamente porque las cuatro modalidades exigen pantallas distintas; un booleano no permitiria decidir cual renderizar. Con el flag apagado responde `enabled: false` y nada mas.",
+        "description": "`mode` es un enum precisamente porque las cuatro modalidades exigen pantallas distintas; un booleano no permitiria decidir cual renderizar. Con el flag apagado responde `enabled: false` y nada mas, salvo `promotion_id`. `required_fields` sale de `identity_requirements`, para que el formulario no invente ningun campo; `instructions` es texto LEGALMENTE CONTROLANTE publicado por el abogado en la version de reglas -el sistema no lo redacta, y si no esta configurado responde `null`-.",
         "operationId": "getAmoeConfig",
         "parameters": [
           {
@@ -14975,11 +15270,44 @@
                         }
                       ]
                     },
+                    "external_url": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
                     "identity_requirements": {
                       "items": {
                         "type": "string"
                       },
                       "type": "array"
+                    },
+                    "instructions": {
+                      "anyOf": [
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "en-US": {
+                              "type": "string"
+                            },
+                            "es-US": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "en-US",
+                            "es-US"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
                     },
                     "limit_period": {
                       "anyOf": [
@@ -15019,6 +15347,59 @@
                             "EXTERNAL_INSTRUCTIONS"
                           ],
                           "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "promotion_id": {
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                      "type": "string"
+                    },
+                    "required_fields": {
+                      "anyOf": [
+                        {
+                          "items": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "key": {
+                                "type": "string"
+                              },
+                              "label_key": {
+                                "type": "string"
+                              },
+                              "max_length": {
+                                "maximum": 9007199254740991,
+                                "minimum": -9007199254740991,
+                                "type": "integer"
+                              },
+                              "required": {
+                                "type": "boolean"
+                              },
+                              "type": {
+                                "enum": [
+                                  "TEXT",
+                                  "EMAIL",
+                                  "TEL",
+                                  "TEXTAREA",
+                                  "DATE",
+                                  "CODE"
+                                ],
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "key",
+                              "type",
+                              "required",
+                              "label_key",
+                              "max_length"
+                            ],
+                            "type": "object"
+                          },
+                          "type": "array"
                         },
                         {
                           "type": "null"
@@ -15068,9 +15449,13 @@
                   },
                   "required": [
                     "enabled",
+                    "promotion_id",
                     "mode",
                     "submission_window",
                     "identity_requirements",
+                    "required_fields",
+                    "instructions",
+                    "external_url",
                     "entries_per_approved_submission",
                     "requires_review",
                     "max_per_participant_per_period",

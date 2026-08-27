@@ -45,6 +45,7 @@ import type { RouteDefinition } from "../http/route-registry.js";
 import {
   adjustmentSchema,
   disqualificationSchema,
+  entryAdjustmentPreviewSchema,
   paymentEventSchema,
   refundResultSchema,
 } from "../http/schemas-b5.js";
@@ -75,6 +76,22 @@ const createAdjustmentBodySchema = z.object({
   /** DEC-022: clave estable, obligatoria. Un ajuste sin motivo no es auditable. */
   reason_key: z.string().regex(REASON_KEY),
   reason_detail: z.string().max(2000).nullable().optional(),
+});
+
+/**
+ * Cuerpo de la previsualizacion.
+ *
+ * Es el mismo objeto que la solicitud MENOS el motivo: se previsualiza lo que
+ * se va a pedir, asi que el panel manda lo que ya tiene y no una forma paralela
+ * que pudiera describir un ajuste distinto del que acabara enviando. El motivo
+ * no esta porque no influye en ninguna de las cifras -y exigirlo obligaria a
+ * teclearlo antes de saber si el ajuste es siquiera posible-.
+ */
+const previewAdjustmentBodySchema = z.object({
+  promotion_id: z.uuid(),
+  participant_id: z.uuid(),
+  direction: z.enum(["CREDIT", "DEBIT"]),
+  quantity: z.number().int().min(1).max(100_000_000),
 });
 
 const adjustmentParamsSchema = z.object({ adjustment_id: z.uuid() });
@@ -229,6 +246,59 @@ export function buildAdjustmentRoutes(dependencies: AppDependencies): RouteDefin
             approved_by: row.approvedByAdminUserId,
             approved_at: row.approvedAt?.toISOString() ?? null,
             entry_transaction_id: row.entryTransactionId,
+          };
+        } catch (error) {
+          return translateAdjustmentError(error);
+        }
+      },
+    },
+
+    {
+      method: "POST",
+      url: "/api/v1/admin/entry-adjustments/preview",
+      operationId: "previewEntryAdjustment",
+      summary: "Que pasaria si se pidiera este ajuste. No escribe nada.",
+      description:
+        "Devuelve `before`, `proposed_delta` y `after` calculados por el motor bajo el predicado de saldo, mas si el debito dejaria el saldo negativo -el MISMO predicado que rechaza el ajuste al aplicarlo- y si haria falta una segunda firma. El panel no puede producir ninguna de las tres cifras sin reimplementar el motor. Es POST y no GET porque el cuerpo lleva el identificador de un participante: en un GET viajaria en la URL, y las URL acaban en logs de acceso y en historiales de navegador.",
+      tags: ["admin"],
+      // Misma capacidad que CREAR, no la de leer el ledger. La pregunta que
+      // contesta es "que pasaria si yo pidiera esto", y quien no puede pedirlo
+      // no tiene por que poder simularlo sobre un participante concreto.
+      authorization: { kind: "PERMISSION", permission: "entry.adjust.create" },
+      schema: {
+        body: previewAdjustmentBodySchema,
+        response: {
+          200: entryAdjustmentPreviewSchema,
+          401: errorEnvelopeSchema,
+          403: errorEnvelopeSchema,
+          404: errorEnvelopeSchema,
+          422: errorEnvelopeSchema,
+        },
+      },
+      handler: async (request) => {
+        const staff = await requireStaff(dependencies, request);
+        const body = request.body as z.infer<typeof previewAdjustmentBodySchema>;
+
+        try {
+          // SIN `withTransaction`: es una lectura y no escribe ni una fila.
+          // Envolverla sugeriria lo contrario a quien leyera esto despues.
+          const preview = await domain.adjustments.preview(
+            {
+              promotionId: body.promotion_id,
+              participantId: body.participant_id,
+              direction: body.direction,
+              quantity: body.quantity,
+            },
+            staff,
+          );
+
+          return {
+            before: preview.before,
+            proposed_delta: preview.proposedDelta,
+            after: preview.after,
+            would_make_balance_negative: preview.wouldMakeBalanceNegative,
+            requires_second_approval: preview.requiresSecondApproval,
+            as_of: preview.asOf.toISOString(),
           };
         } catch (error) {
           return translateAdjustmentError(error);

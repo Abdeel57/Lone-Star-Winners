@@ -584,3 +584,226 @@ describe("descalificacion", () => {
     expect(reversal?.metadata).toMatchObject({ decision_id: "case-1" });
   });
 });
+
+/**
+ * HO-031: previsualizacion de un ajuste.
+ *
+ * LA PROPIEDAD QUE ESTA SUITE TIENE QUE SOSTENER: previsualizar y aplicar
+ * responden lo mismo sobre el saldo negativo. Si divergieran, la divergencia
+ * seria de la peor clase -una pantalla en verde seguida de un rechazo- y por
+ * eso los dos caminos comparten literalmente la misma funcion.
+ */
+describe("previsualizacion de un ajuste", () => {
+  it("devuelve antes, cambio y despues sobre el saldo real", async () => {
+    const { harness, adjustments, award } = setup();
+    await award.awardForQualifiedOrder(qualifiedOrder());
+    const before = balanceOf(harness);
+
+    const preview = await adjustments.preview(
+      {
+        promotionId: PROMOTION_ID,
+        participantId: PARTICIPANT_ID,
+        direction: "CREDIT",
+        quantity: 5,
+      },
+      requester,
+    );
+
+    expect(preview.before).toBe(before);
+    expect(preview.proposedDelta).toBe(5);
+    expect(preview.after).toBe(before + 5);
+    expect(preview.wouldMakeBalanceNegative).toBe(false);
+    expect(preview.asOf).toEqual(NOW);
+  });
+
+  it("un debito lleva el signo que llevara la fila del ledger", async () => {
+    const { harness, adjustments, award } = setup();
+    await award.awardForQualifiedOrder(qualifiedOrder());
+    const before = balanceOf(harness);
+
+    const preview = await adjustments.preview(
+      { promotionId: PROMOTION_ID, participantId: PARTICIPANT_ID, direction: "DEBIT", quantity: 5 },
+      requester,
+    );
+
+    expect(preview.proposedDelta).toBe(-5);
+    expect(preview.after).toBe(before - 5);
+  });
+
+  it("previsualizar y aplicar coinciden sobre el saldo negativo", async () => {
+    const { harness, adjustments, award } = setup({
+      flags: { dual_approval_for_sensitive_actions_enabled: false },
+    });
+    await award.awardForQualifiedOrder(qualifiedOrder());
+    const excessive = balanceOf(harness) + 1;
+
+    const preview = await adjustments.preview(
+      {
+        promotionId: PROMOTION_ID,
+        participantId: PARTICIPANT_ID,
+        direction: "DEBIT",
+        quantity: excessive,
+      },
+      requester,
+    );
+    expect(preview.wouldMakeBalanceNegative).toBe(true);
+
+    // Y el ajuste real, con esos mismos numeros, se rechaza.
+    await expect(
+      adjustments.request(
+        {
+          promotionId: PROMOTION_ID,
+          participantId: PARTICIPANT_ID,
+          direction: "DEBIT",
+          quantity: excessive,
+          reasonKey: "ADMIN_CORRECTION_APPLIED",
+          reasonDetail: null,
+        },
+        selfApprover,
+      ),
+    ).rejects.toSatisfy((error: unknown) =>
+      isSweepstakesError(error, "ADJUSTMENT_WOULD_MAKE_BALANCE_NEGATIVE"),
+    );
+  });
+
+  it("un debito exacto hasta cero NO se marca como negativo", async () => {
+    // El borde importa: dejar el saldo en cero es legitimo, dejarlo en -1 no.
+    const { harness, adjustments, award } = setup();
+    await award.awardForQualifiedOrder(qualifiedOrder());
+    const exact = balanceOf(harness);
+
+    const preview = await adjustments.preview(
+      {
+        promotionId: PROMOTION_ID,
+        participantId: PARTICIPANT_ID,
+        direction: "DEBIT",
+        quantity: exact,
+      },
+      requester,
+    );
+
+    expect(preview.after).toBe(0);
+    expect(preview.wouldMakeBalanceNegative).toBe(false);
+  });
+
+  it("refleja el flag de doble aprobacion, no el rol de quien pregunta", async () => {
+    const encendido = setup();
+    await expect(
+      encendido.adjustments.preview(
+        {
+          promotionId: PROMOTION_ID,
+          participantId: PARTICIPANT_ID,
+          direction: "CREDIT",
+          quantity: 1,
+        },
+        requester,
+      ),
+    ).resolves.toMatchObject({ requiresSecondApproval: true });
+
+    const apagado = setup({ flags: { dual_approval_for_sensitive_actions_enabled: false } });
+    await expect(
+      apagado.adjustments.preview(
+        {
+          promotionId: PROMOTION_ID,
+          participantId: PARTICIPANT_ID,
+          direction: "CREDIT",
+          quantity: 1,
+        },
+        requester,
+      ),
+    ).resolves.toMatchObject({ requiresSecondApproval: false });
+  });
+
+  it("no escribe: ni fila de ledger, ni expediente, ni evento de auditoria", async () => {
+    const { harness, adjustments, award } = setup();
+    await award.awardForQualifiedOrder(qualifiedOrder());
+    const rows = harness.ledger.all().length;
+    const events = harness.audit.events.length;
+
+    await adjustments.preview(
+      {
+        promotionId: PROMOTION_ID,
+        participantId: PARTICIPANT_ID,
+        direction: "CREDIT",
+        quantity: 5,
+      },
+      requester,
+    );
+
+    expect(harness.ledger.all()).toHaveLength(rows);
+    expect(harness.audit.events).toHaveLength(events);
+    expect(await harness.adjustments.listPendingApproval(PROMOTION_ID)).toHaveLength(0);
+  });
+
+  it("exige la capacidad de CREAR ajustes, no la de aprobarlos", async () => {
+    const { adjustments } = setup();
+    await expect(
+      adjustments.preview(
+        {
+          promotionId: PROMOTION_ID,
+          participantId: PARTICIPANT_ID,
+          direction: "CREDIT",
+          quantity: 1,
+        },
+        approver,
+      ),
+    ).rejects.toSatisfy((error: unknown) => isSweepstakesError(error, "CAPABILITY_REQUIRED"));
+  });
+
+  it("un principal de participante no puede previsualizar aunque lleve la capacidad", async () => {
+    // El ambito lo fija el modulo de identidad y no se puede fabricar desde el
+    // lado del participante. Comprobar solo la capacidad dejaria pasar a un
+    // participante con una clave de administracion pegada a mano.
+    const { adjustments } = setup();
+    const impostor: Principal = {
+      actor: { type: "PARTICIPANT", participantId: PARTICIPANT_ID },
+      scope: "PARTICIPANT",
+      capabilities: ["entry.adjust.create"],
+    };
+
+    await expect(
+      adjustments.preview(
+        {
+          promotionId: PROMOTION_ID,
+          participantId: PARTICIPANT_ID,
+          direction: "CREDIT",
+          quantity: 1,
+        },
+        impostor,
+      ),
+    ).rejects.toSatisfy((error: unknown) => isSweepstakesError(error, "CAPABILITY_REQUIRED"));
+  });
+
+  it("con los ajustes manuales apagados no hay nada que previsualizar", async () => {
+    const { adjustments } = setup({ flags: { manual_adjustments_enabled: false } });
+    await expect(
+      adjustments.preview(
+        {
+          promotionId: PROMOTION_ID,
+          participantId: PARTICIPANT_ID,
+          direction: "CREDIT",
+          quantity: 1,
+        },
+        requester,
+      ),
+    ).rejects.toSatisfy((error: unknown) =>
+      isSweepstakesError(error, "MANUAL_ADJUSTMENTS_NOT_ENABLED"),
+    );
+  });
+
+  it("un participante sin ninguna fila previsualiza sobre CERO, no sobre nulo", async () => {
+    const { adjustments } = setup();
+    const preview = await adjustments.preview(
+      {
+        promotionId: PROMOTION_ID,
+        participantId: PARTICIPANT_ID,
+        direction: "CREDIT",
+        quantity: 3,
+      },
+      requester,
+    );
+
+    expect(preview.before).toBe(0);
+    expect(preview.after).toBe(3);
+  });
+});

@@ -38,6 +38,7 @@
  * (DEC-032): asi cumple el principio 8 sin haber elegido nada por el abogado.
  */
 
+import { computeBalanceAt } from "../balance/predicate.js";
 import { SWEEPSTAKES_CAPABILITIES } from "../capabilities.js";
 import { SweepstakesError } from "../errors.js";
 import type { JsonObject } from "../json.js";
@@ -56,7 +57,14 @@ import { isIdempotencyConflict } from "../ports/ledger-repository.js";
 import type { PromotionContext, PromotionContextPort } from "../ports/promotion-context.js";
 import type { UnitOfWork } from "../ports/unit-of-work.js";
 import { ENTRY_CALCULATION_ENGINE_VERSION } from "../engine-version.js";
-import { readAmoeConfig, AmoeConfigError, type AmoeConfig } from "./config.js";
+import {
+  amoeRequiredFields,
+  readAmoeConfig,
+  AmoeConfigError,
+  type AmoeConfig,
+  type AmoeInstructions,
+  type AmoeRequiredField,
+} from "./config.js";
 import { periodBucket } from "./period.js";
 import {
   amoeFingerprint,
@@ -89,6 +97,7 @@ export type AmoeSubmitOutcome =
  */
 export interface AmoeConfigView {
   readonly enabled: boolean;
+  readonly promotionId: string;
   readonly mode: AmoeConfig["mode"] | null;
   readonly windowStartsAt: string | null;
   readonly windowEndsAt: string | null;
@@ -97,6 +106,47 @@ export interface AmoeConfigView {
   readonly identityRequirements: readonly string[];
   readonly maxPerParticipantPerPeriod: number | null;
   readonly limitPeriod: AmoeConfig["limit"]["period"] | null;
+  /**
+   * Los campos del formulario, ya resueltos. `null` con la via apagada.
+   *
+   * Se sirven en LAS CUATRO modalidades y no solo en `ONLINE_FORM`, porque
+   * `identity_requirements` lo exige el dominio en cualquier envio que entre
+   * por la API: un envio de `MAIL_IN_REVIEW` transcrito por un operador
+   * necesita las mismas claves. Que modalidad merece un formulario en pantalla
+   * lo decide la interfaz; que claves exige el sistema lo decide esto.
+   */
+  readonly requiredFields: readonly AmoeRequiredField[] | null;
+  /**
+   * Texto legalmente controlante, en los dos idiomas, o `null`.
+   *
+   * `null` significa "el abogado no ha publicado instrucciones", nunca "no hay
+   * instrucciones": el sistema no rellena ese hueco. Una promocion
+   * `MAIL_IN_REVIEW` con `instructions: null` es una configuracion incompleta
+   * y la interfaz remite a las Reglas Oficiales en vez de inventarse un sobre.
+   */
+  readonly instructions: AmoeInstructions | null;
+  readonly externalUrl: string | null;
+}
+
+/**
+ * Proyeccion de lo que haria una aprobacion, para quien la decide.
+ *
+ * Las tres cifras salen del ledger y de la configuracion, JAMAS de una resta en
+ * el cliente: quien aprueba tiene que ver antes, cambio y despues, y las tres
+ * tienen que venir de la misma lectura para que no se contradigan.
+ */
+export interface AmoeApprovalProjection {
+  /** Saldo activo del participante en la promocion, al instante de la lectura. */
+  readonly entriesBefore: number;
+  /**
+   * Lo que otorgaria ESTE envio, segun la version de reglas BAJO LA QUE SE
+   * ENVIO. `null` si esa version ya no declara configuracion AMOE legible: la
+   * aprobacion fallaria, y ensenar una cifra que no se va a cumplir seria peor
+   * que no ensenar ninguna.
+   */
+  readonly entriesIfApproved: number | null;
+  /** `entriesBefore + entriesIfApproved`, o `null` por el mismo motivo. */
+  readonly entriesAfterIfApproved: number | null;
 }
 
 export interface AmoeServiceDependencies {
@@ -128,6 +178,11 @@ export class AmoeService {
     if (!context.flags.amoe_enabled) {
       return {
         enabled: false,
+        // `promotionId` es la UNICA excepcion, y viaja tambien con la via
+        // apagada: es el dato que el cliente acaba de usar para preguntar, no
+        // un parametro de la configuracion. Devolverlo no revela nada, y sin el
+        // una respuesta desacoplada de su peticion no se puede correlacionar.
+        promotionId: context.promotionId,
         mode: null,
         windowStartsAt: null,
         windowEndsAt: null,
@@ -136,11 +191,15 @@ export class AmoeService {
         identityRequirements: [],
         maxPerParticipantPerPeriod: null,
         limitPeriod: null,
+        requiredFields: null,
+        instructions: null,
+        externalUrl: null,
       };
     }
     const config = this.readConfig(context);
     return {
       enabled: true,
+      promotionId: context.promotionId,
       mode: config.mode,
       windowStartsAt: config.submission_window.starts_at,
       windowEndsAt: config.submission_window.ends_at,
@@ -149,7 +208,99 @@ export class AmoeService {
       identityRequirements: config.identity_requirements,
       maxPerParticipantPerPeriod: config.limit.max_per_participant_per_period,
       limitPeriod: config.limit.period,
+      requiredFields: amoeRequiredFields(config),
+      // `?? null` y no el valor directo: la clave es opcional en la
+      // configuracion, asi que puede llegar `undefined`, y `undefined` no
+      // sobrevive a `JSON.stringify` -el campo desapareceria de la respuesta en
+      // vez de llegar nulo-. Ausente y nulo tienen que significar lo mismo en
+      // el cable, no una la ausencia del campo y otra su nulidad.
+      instructions: config.instructions ?? null,
+      externalUrl: config.external_url ?? null,
     };
+  }
+
+  /**
+   * Que pasaria si se aprobara cada uno de estos envios.
+   *
+   * SE CALCULA AQUI Y NO EN EL PANEL. La cifra de "despues" es una suma sobre
+   * el saldo del ledger con la cantidad que fija la version de reglas del
+   * envio; hacerla en el cliente seria una segunda implementacion del motor,
+   * que es exactamente lo que el escaner `no-client-entry-math` del frontend
+   * existe para impedir.
+   *
+   * DOS CACHES, Y NO SON UNA OPTIMIZACION COSMETICA. Una cola de revision con
+   * treinta envios de la misma persona haria treinta lecturas del historial
+   * completo del ledger. Ademas de caro, cada lectura ocurre en un instante
+   * distinto, y dos filas de la misma pantalla podrian ensenar saldos previos
+   * distintos para el mismo participante. Con una sola lectura por
+   * participante, la pantalla es coherente consigo misma.
+   *
+   * El saldo previo NO es acumulativo entre filas: cada proyeccion contesta
+   * "si apruebo ESTE", no "si los apruebo todos". Aprobar dos seguidos exige
+   * releer, y por eso la respuesta lleva su instante.
+   */
+  public async approvalProjections(
+    submissions: readonly AmoeSubmission[],
+  ): Promise<ReadonlyMap<string, AmoeApprovalProjection>> {
+    const now = this.deps.clock.now();
+    const balances = new Map<string, number>();
+    const grants = new Map<string, number | null>();
+    const projections = new Map<string, AmoeApprovalProjection>();
+
+    for (const submission of submissions) {
+      const balanceKey = `${submission.promotionId} ${submission.participantId}`;
+      let entriesBefore = balances.get(balanceKey);
+      if (entriesBefore === undefined) {
+        const history = await this.deps.ledger.listForParticipant(
+          submission.promotionId,
+          submission.participantId,
+        );
+        entriesBefore = computeBalanceAt(
+          history,
+          submission.promotionId,
+          submission.participantId,
+          now,
+        ).activeEntries;
+        balances.set(balanceKey, entriesBefore);
+      }
+
+      let entriesIfApproved = grants.get(submission.rulesVersionId);
+      if (entriesIfApproved === undefined) {
+        entriesIfApproved = await this.grantSizeUnderRulesVersion(submission.rulesVersionId);
+        grants.set(submission.rulesVersionId, entriesIfApproved);
+      }
+
+      projections.set(submission.id, {
+        entriesBefore,
+        entriesIfApproved,
+        entriesAfterIfApproved:
+          entriesIfApproved === null ? null : entriesBefore + entriesIfApproved,
+      });
+    }
+
+    return projections;
+  }
+
+  /**
+   * Cuantas participaciones vale un envio bajo una version de reglas concreta.
+   *
+   * `null` -y no una excepcion- cuando esa version no declara AMOE legible: la
+   * cola de revision tiene que poder pintarse aunque una de sus filas apunte a
+   * una configuracion rota, y con una excepcion aqui una sola fila mala dejaria
+   * al revisor sin pantalla. La aprobacion de ESA fila seguira fallando, que es
+   * donde el fallo importa.
+   */
+  private async grantSizeUnderRulesVersion(rulesVersionId: string): Promise<number | null> {
+    try {
+      const raw = await this.deps.promotions.getRulesConfig(rulesVersionId);
+      const config = readAmoeConfig(raw);
+      return config?.entries_per_approved_submission ?? null;
+    } catch (error) {
+      if (error instanceof AmoeConfigError) {
+        return null;
+      }
+      throw error;
+    }
   }
 
   public async submit(input: AmoeSubmitInput): Promise<AmoeSubmitOutcome> {

@@ -95,6 +95,54 @@ export type AdjustmentOutcome =
       readonly transaction: LedgerTransaction;
     };
 
+export interface AdjustmentPreviewInput {
+  readonly promotionId: string;
+  readonly participantId: string;
+  readonly direction: AdjustmentDirection;
+  readonly quantity: number;
+}
+
+/**
+ * Lo que pasaria si el ajuste se pidiera AHORA. No escribe nada.
+ *
+ * Existe para que la pantalla de confirmacion pueda ensenar antes, cambio y
+ * despues sin calcular ninguno de los tres. El "despues" no es una resta
+ * trivial -depende del predicado de saldo, de la ventana de caducidad y de que
+ * cuenta como POSTED- y reimplementarlo en el panel seria una segunda
+ * definicion de lo unico que no admite dos.
+ *
+ * `asOf` viaja con la respuesta porque un saldo es una FOTO, no un hecho
+ * permanente: entre la previsualizacion y la solicitud puede entrar una compra,
+ * un reembolso o una descalificacion. Sin el instante, una pantalla abierta
+ * media hora parece decir algo sobre el presente.
+ */
+export interface AdjustmentPreview {
+  readonly before: number;
+  /** Con signo: el que tendra la fila del ledger. */
+  readonly proposedDelta: number;
+  readonly after: number;
+  readonly wouldMakeBalanceNegative: boolean;
+  readonly requiresSecondApproval: boolean;
+  readonly asOf: Date;
+}
+
+/**
+ * La comprobacion de saldo negativo, escrita UNA SOLA VEZ.
+ *
+ * La llaman `apply` -donde decide si el ajuste se rechaza- y `preview` -donde
+ * decide que ve quien lo va a pedir-. Si fueran dos expresiones separadas,
+ * podrian discrepar, y la forma en que discreparian es la peor posible: una
+ * previsualizacion en verde seguida de un rechazo, o al reves, un aviso de
+ * saldo negativo sobre un ajuste que el sistema si habria aceptado.
+ */
+function debitWouldGoNegative(
+  direction: AdjustmentDirection,
+  quantity: number,
+  activeEntries: number,
+): boolean {
+  return direction === "DEBIT" && quantity > activeEntries;
+}
+
 export interface DisqualificationInput {
   readonly promotionId: string;
   readonly participantId: string;
@@ -202,6 +250,60 @@ export class AdjustmentService {
     // que en la auditoria se vea que NO hubo segundo par de ojos, en vez de
     // dejarlo en `null` y que parezca que se aplico solo.
     return await this.apply(adjustment, principal, now);
+  }
+
+  /**
+   * Previsualiza un ajuste SIN escribir nada.
+   *
+   * Es una LECTURA, y por eso no emite evento de auditoria ni consume
+   * idempotencia: no ha ocurrido ningun hecho que auditar. Lo que si comparte
+   * con la solicitud es la puerta -misma capacidad, mismo ambito de personal y
+   * mismo flag- porque una previsualizacion tambien revela el saldo de un
+   * participante, y ese dato no es mas publico por venir sin efectos.
+   *
+   * No exige `actor.type === "ADMIN"` como si hace `request`. Esa exigencia
+   * existe alli porque el expediente GUARDA quien lo pidio y una columna de
+   * solicitante vacia haria irrastreable el ajuste. Aqui no se guarda nada, asi
+   * que la exigencia no tendria a que servir.
+   */
+  public async preview(
+    input: AdjustmentPreviewInput,
+    principal: Principal,
+  ): Promise<AdjustmentPreview> {
+    this.requireCapability(principal, SWEEPSTAKES_CAPABILITIES.entryAdjustCreate);
+
+    if (!Number.isSafeInteger(input.quantity) || input.quantity <= 0) {
+      throw new SweepstakesError("REVERSAL_AMOUNT_INVALID", { quantity: input.quantity });
+    }
+
+    const context = await this.requireContext(input.promotionId);
+    if (!context.flags.manual_adjustments_enabled) {
+      throw new SweepstakesError("MANUAL_ADJUSTMENTS_NOT_ENABLED", {
+        promotion_id: input.promotionId,
+      });
+    }
+
+    const now = this.deps.clock.now();
+    const history = await this.deps.ledger.listForParticipant(
+      input.promotionId,
+      input.participantId,
+    );
+    const balance = computeBalanceAt(history, input.promotionId, input.participantId, now);
+
+    const proposedDelta = input.direction === "CREDIT" ? input.quantity : -input.quantity;
+
+    return {
+      before: balance.activeEntries,
+      proposedDelta,
+      after: balance.activeEntries + proposedDelta,
+      wouldMakeBalanceNegative: debitWouldGoNegative(
+        input.direction,
+        input.quantity,
+        balance.activeEntries,
+      ),
+      requiresSecondApproval: context.flags.dual_approval_for_sensitive_actions_enabled,
+      asOf: now,
+    };
   }
 
   public async approve(adjustmentId: string, principal: Principal): Promise<AdjustmentOutcome> {
@@ -461,7 +563,7 @@ export class AdjustmentService {
         adjustment.participantId,
         now,
       );
-      if (adjustment.quantity > balance.activeEntries) {
+      if (debitWouldGoNegative(adjustment.direction, adjustment.quantity, balance.activeEntries)) {
         throw new SweepstakesError("ADJUSTMENT_WOULD_MAKE_BALANCE_NEGATIVE", {
           adjustment_id: adjustment.id,
           balance: balance.activeEntries,

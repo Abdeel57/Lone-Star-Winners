@@ -147,6 +147,15 @@
       "summary": "Rechazar un ajuste pendiente, con motivo."
     },
     {
+      "method": "POST",
+      "path": "/api/v1/admin/entry-adjustments/preview",
+      "operation_id": "previewEntryAdjustment",
+      "authorization": "entry.adjust.create",
+      "requires_step_up": true,
+      "tags": ["admin"],
+      "summary": "Que pasaria si se pidiera este ajuste. No escribe nada."
+    },
+    {
       "method": "GET",
       "path": "/api/v1/admin/export-snapshots/:snapshot_id",
       "operation_id": "getExportSnapshot",

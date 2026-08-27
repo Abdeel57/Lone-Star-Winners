@@ -140,6 +140,7 @@ describe("el flag manda", () => {
     const view = await amoe.configView(PROMOTION_ID);
     expect(view).toEqual({
       enabled: true,
+      promotionId: PROMOTION_ID,
       mode: "ONLINE_FORM",
       windowStartsAt: "2026-08-01T05:00:00.000Z",
       windowEndsAt: "2026-12-01T06:00:00.000Z",
@@ -148,6 +149,23 @@ describe("el flag manda", () => {
       identityRequirements: ["full_name", "postal_code"],
       maxPerParticipantPerPeriod: 1,
       limitPeriod: "DAY",
+      // Sin descriptores en la configuracion, cada campo cae en su default
+      // honesto: control de texto -que es lo que el transporte acepta-, la
+      // propia clave como puntero de copy, y el tope del transporte.
+      requiredFields: [
+        { key: "full_name", type: "TEXT", required: true, labelKey: "full_name", maxLength: 500 },
+        {
+          key: "postal_code",
+          type: "TEXT",
+          required: true,
+          labelKey: "postal_code",
+          maxLength: 500,
+        },
+      ],
+      // El abogado no ha publicado ninguna de las dos cosas. `null`, no texto
+      // de relleno.
+      instructions: null,
+      externalUrl: null,
     });
     // La politica de duplicados NO se publica: seria regalar el mapa de los
     // controles antifraude.
@@ -688,5 +706,228 @@ describe("cola de revision y permisos", () => {
     await expect(amoe.cancel(outcome.submission.id, PARTICIPANT_ID)).rejects.toSatisfy(
       (error: unknown) => isSweepstakesError(error, "AMOE_SUBMISSION_NOT_REVIEWABLE"),
     );
+  });
+});
+
+/**
+ * HO-031: lo que la via gratuita necesita para pintarse sin inventar nada.
+ *
+ * La lista de campos y las instrucciones son las dos piezas que impiden que el
+ * frontend redacte el formulario o el sobre. Ninguna de las dos la produce el
+ * codigo: salen de `PromotionRulesVersion.config`, y donde no estan, la
+ * respuesta es `null`.
+ */
+describe("campos del formulario, instrucciones y destino externo", () => {
+  it("sin descriptores, cada campo cae en su valor por defecto honesto", async () => {
+    const { amoe } = enabled();
+    const view = await amoe.configView(PROMOTION_ID);
+
+    // `TEXT` no es una suposicion sobre el dato: es lo que el transporte acepta
+    // y lo que el dominio valida. La clave del payload hace de puntero de copy
+    // porque inventar una traduccion aqui seria redactar interfaz.
+    expect(view.requiredFields).toEqual([
+      { key: "full_name", type: "TEXT", required: true, labelKey: "full_name", maxLength: 500 },
+      { key: "postal_code", type: "TEXT", required: true, labelKey: "postal_code", maxLength: 500 },
+    ]);
+  });
+
+  it("un descriptor cambia el control y la etiqueta, nunca la lista", async () => {
+    const { amoe } = enabled({
+      identity_fields: {
+        postal_code: { type: "TEXT", label_key: "postalCode", max_length: 10 },
+        // Descriptor de una clave que NO esta en `identity_requirements`: no
+        // anade ningun campo. Que datos se piden es materia legal y lo dice esa
+        // lista, no este mapa.
+        social_security_number: { type: "TEXT", label_key: "ssn" },
+      },
+    });
+
+    const view = await amoe.configView(PROMOTION_ID);
+
+    expect(view.requiredFields?.map((field) => field.key)).toEqual(["full_name", "postal_code"]);
+    expect(view.requiredFields?.[1]).toEqual({
+      key: "postal_code",
+      type: "TEXT",
+      required: true,
+      labelKey: "postalCode",
+      maxLength: 10,
+    });
+  });
+
+  it("el orden es el de la lista legal, no el del mapa de descriptores", async () => {
+    const { amoe } = enabled({
+      identity_requirements: ["postal_code", "full_name"],
+      identity_fields: { full_name: { type: "TEXT" }, postal_code: { type: "TEXT" } },
+    });
+
+    const view = await amoe.configView(PROMOTION_ID);
+    expect(view.requiredFields?.map((field) => field.key)).toEqual(["postal_code", "full_name"]);
+  });
+
+  it("una clave `__proto__` en la lista no lee la cadena de prototipos", async () => {
+    const { amoe } = enabled({ identity_requirements: ["__proto__"] });
+    const view = await amoe.configView(PROMOTION_ID);
+
+    expect(view.requiredFields).toEqual([
+      { key: "__proto__", type: "TEXT", required: true, labelKey: "__proto__", maxLength: 500 },
+    ]);
+  });
+
+  it("las instrucciones se publican tal cual, en los dos idiomas", async () => {
+    const { amoe } = enabled({
+      instructions: { "en-US": "FIXTURE ONLY.", "es-US": "SOLO FIXTURE." },
+    });
+
+    const view = await amoe.configView(PROMOTION_ID);
+    expect(view.instructions).toEqual({ "en-US": "FIXTURE ONLY.", "es-US": "SOLO FIXTURE." });
+  });
+
+  it("unas instrucciones en un solo idioma rompen la configuracion", async () => {
+    // DEC-021: ninguno de los dos locales es traduccion secundaria del otro.
+    // Publicar la via gratuita solo en ingles es cerrarla para la mitad de los
+    // participantes, y eso no puede pasar por un descuido de configuracion.
+    const { amoe } = enabled({
+      instructions: { "en-US": "FIXTURE ONLY." } as unknown as AmoeConfig["instructions"],
+    });
+
+    await expect(amoe.configView(PROMOTION_ID)).rejects.toSatisfy((error: unknown) =>
+      isSweepstakesError(error, "AMOE_CONFIG_INVALID"),
+    );
+  });
+
+  it("un destino externo que no es https rompe la configuracion", async () => {
+    // Un `javascript:` renderizado como `href` es ejecucion de codigo de
+    // terceros en la pagina. Se rechaza donde se LEE la configuracion, para que
+    // no dependa de que el frontend se acuerde de mirarlo.
+    const { amoe } = enabled({ external_url: `${"java"}script:alert(1)` });
+
+    await expect(amoe.configView(PROMOTION_ID)).rejects.toSatisfy((error: unknown) =>
+      isSweepstakesError(error, "AMOE_CONFIG_INVALID"),
+    );
+  });
+
+  it("un destino http tampoco pasa", async () => {
+    const { amoe } = enabled({ external_url: "http://example.test/free" });
+
+    await expect(amoe.configView(PROMOTION_ID)).rejects.toSatisfy((error: unknown) =>
+      isSweepstakesError(error, "AMOE_CONFIG_INVALID"),
+    );
+  });
+
+  it("con la via apagada no se filtra ni la lista de campos ni las instrucciones", async () => {
+    const { amoe } = setup({
+      rulesConfig: baseRulesConfig({
+        amoe: amoeConfig({
+          instructions: { "en-US": "FIXTURE ONLY.", "es-US": "SOLO FIXTURE." },
+          external_url: "https://example.test/free",
+        }),
+      }),
+    });
+
+    const view = await amoe.configView(PROMOTION_ID);
+    expect(view.enabled).toBe(false);
+    expect(view.requiredFields).toBeNull();
+    expect(view.instructions).toBeNull();
+    expect(view.externalUrl).toBeNull();
+    // La promocion por la que se pregunto SI viaja: no es un parametro de AMOE.
+    expect(view.promotionId).toBe(PROMOTION_ID);
+  });
+});
+
+/**
+ * HO-031: antes y despues de una aprobacion, calculados por el motor.
+ *
+ * El panel no puede producir ninguna de las dos cifras: el saldo previo esta en
+ * el ledger y la cantidad la fija la version de reglas DEL ENVIO.
+ */
+describe("proyeccion de la aprobacion", () => {
+  it("suma sobre el saldo real del participante", async () => {
+    const { harness, amoe, award } = enabled({ requires_review: true });
+    await award.awardForQualifiedOrder(qualifiedOrder());
+
+    const submitted = await amoe.submit({
+      promotionId: PROMOTION_ID,
+      participantId: PARTICIPANT_ID,
+      payload: PAYLOAD,
+    });
+
+    const before = computeBalanceAt(harness.ledger.all(), PROMOTION_ID, PARTICIPANT_ID, NOW);
+    expect(before.activeEntries).toBeGreaterThan(0);
+
+    const projections = await amoe.approvalProjections([submitted.submission]);
+    const projection = projections.get(submitted.submission.id);
+
+    expect(projection?.entriesBefore).toBe(before.activeEntries);
+    expect(projection?.entriesIfApproved).toBe(5);
+    expect(projection?.entriesAfterIfApproved).toBe(before.activeEntries + 5);
+  });
+
+  it("la cantidad sale de la version de reglas DEL ENVIO, no de la vigente", async () => {
+    // Es el mismo principio que gobierna la aprobacion: aplicar la version
+    // nueva cambiaria retroactivamente lo que valia un envio ya hecho.
+    const { harness, amoe } = enabled({ requires_review: true });
+    const submitted = await amoe.submit({
+      promotionId: PROMOTION_ID,
+      participantId: PARTICIPANT_ID,
+      payload: PAYLOAD,
+    });
+
+    const historic = "55555555-5555-4555-8555-555555555555";
+    harness.promotions.registerRulesVersion(
+      historic,
+      baseRulesConfig({ amoe: amoeConfig({ entries_per_approved_submission: 42 }) }),
+    );
+
+    const projections = await amoe.approvalProjections([
+      { ...submitted.submission, rulesVersionId: historic },
+    ]);
+
+    expect(projections.get(submitted.submission.id)?.entriesIfApproved).toBe(42);
+  });
+
+  it("una version de reglas sin AMOE legible proyecta null en vez de una cifra falsa", async () => {
+    // La aprobacion de ESE envio fallara. Ensenar un numero que no se va a
+    // cumplir es peor que no ensenar ninguno, y una excepcion aqui dejaria al
+    // revisor sin pantalla por culpa de una sola fila.
+    const { harness, amoe } = enabled({ requires_review: true });
+    const submitted = await amoe.submit({
+      promotionId: PROMOTION_ID,
+      participantId: PARTICIPANT_ID,
+      payload: PAYLOAD,
+    });
+
+    const broken = "66666666-6666-4666-8666-666666666666";
+    harness.promotions.registerRulesVersion(broken, baseRulesConfig());
+
+    const projections = await amoe.approvalProjections([
+      { ...submitted.submission, rulesVersionId: broken },
+    ]);
+    const projection = projections.get(submitted.submission.id);
+
+    // El saldo previo SI se conoce: no depende de la configuracion.
+    expect(projection?.entriesBefore).toBe(0);
+    expect(projection?.entriesIfApproved).toBeNull();
+    expect(projection?.entriesAfterIfApproved).toBeNull();
+  });
+
+  it("no escribe nada: es una lectura", async () => {
+    const { harness, amoe } = enabled({ requires_review: true });
+    const submitted = await amoe.submit({
+      promotionId: PROMOTION_ID,
+      participantId: PARTICIPANT_ID,
+      payload: PAYLOAD,
+    });
+    const rowsBefore = harness.ledger.all().length;
+    const eventsBefore = harness.audit.events.length;
+
+    await amoe.approvalProjections([submitted.submission]);
+
+    expect(harness.ledger.all()).toHaveLength(rowsBefore);
+    expect(harness.audit.events).toHaveLength(eventsBefore);
+  });
+
+  it("una cola vacia devuelve un mapa vacio, no falla", async () => {
+    const { amoe } = enabled({ requires_review: true });
+    await expect(amoe.approvalProjections([])).resolves.toHaveProperty("size", 0);
   });
 });

@@ -162,7 +162,7 @@ export function buildAmoeRoutes(dependencies: AppDependencies): RouteDefinition[
       operationId: "getAmoeConfig",
       summary: "Modalidad AMOE vigente y lo que exige.",
       description:
-        "`mode` es un enum precisamente porque las cuatro modalidades exigen pantallas distintas; un booleano no permitiria decidir cual renderizar. Con el flag apagado responde `enabled: false` y nada mas.",
+        "`mode` es un enum precisamente porque las cuatro modalidades exigen pantallas distintas; un booleano no permitiria decidir cual renderizar. Con el flag apagado responde `enabled: false` y nada mas, salvo `promotion_id`. `required_fields` sale de `identity_requirements`, para que el formulario no invente ningun campo; `instructions` es texto LEGALMENTE CONTROLANTE publicado por el abogado en la version de reglas -el sistema no lo redacta, y si no esta configurado responde `null`-.",
       tags: ["amoe"],
       authorization: {
         kind: "PUBLIC",
@@ -188,12 +188,28 @@ export function buildAmoeRoutes(dependencies: AppDependencies): RouteDefinition[
           const view = await domain.amoe.configView(promotion.id);
           return {
             enabled: view.enabled,
+            promotion_id: view.promotionId,
             mode: view.mode,
             submission_window: {
               opens_at: view.windowStartsAt,
               closes_at: view.windowEndsAt,
             },
             identity_requirements: [...view.identityRequirements],
+            required_fields:
+              view.requiredFields === null
+                ? null
+                : view.requiredFields.map((field) => ({
+                    key: field.key,
+                    type: field.type,
+                    required: field.required,
+                    label_key: field.labelKey,
+                    max_length: field.maxLength,
+                  })),
+            // Texto legal, copiado tal cual. El backend no lo redacta, no lo
+            // traduce y no lo recorta: lo publica el abogado en la version de
+            // reglas y aqui solo cambia de forma.
+            instructions: view.instructions === null ? null : { ...view.instructions },
+            external_url: view.externalUrl,
             entries_per_approved_submission: view.entriesPerApprovedSubmission,
             requires_review: view.requiresReview,
             max_per_participant_per_period: view.maxPerParticipantPerPeriod,
@@ -310,16 +326,33 @@ export function buildAmoeRoutes(dependencies: AppDependencies): RouteDefinition[
 
         const submissions = await domain.amoe.reviewQueue(query.promotion_id, staff);
 
+        // UNA sola pasada de proyeccion para toda la cola, y no una por fila.
+        // Ademas de barata, es la que hace que dos filas del mismo participante
+        // ensenen el mismo saldo previo: calculadas por separado, cada una
+        // leeria el ledger en un instante distinto y la pantalla se
+        // contradiria consigo misma.
+        const projections = await domain.amoe.approvalProjections(submissions);
+
         const items = await Promise.all(
-          submissions.map(async (submission) => ({
-            ...presentSubmission(submission, await entriesFor(submission)),
-            participant_id: submission.participantId,
-            period_bucket: submission.periodBucket,
-            flagged_duplicate: Object.prototype.hasOwnProperty.call(
-              submission.metadata,
-              "duplicate_of_submission_id",
-            ),
-          })),
+          submissions.map(async (submission) => {
+            const projection = projections.get(submission.id);
+            return {
+              ...presentSubmission(submission, await entriesFor(submission)),
+              participant_id: submission.participantId,
+              period_bucket: submission.periodBucket,
+              flagged_duplicate: Object.prototype.hasOwnProperty.call(
+                submission.metadata,
+                "duplicate_of_submission_id",
+              ),
+              // `?? 0` solo para satisfacer al tipo: `approvalProjections`
+              // devuelve una entrada por cada envio que recibe, y estos son
+              // exactamente los que recibio. Un hueco aqui seria un fallo de
+              // programacion, no un estado del dominio.
+              entries_before: projection?.entriesBefore ?? 0,
+              entries_if_approved: projection?.entriesIfApproved ?? null,
+              entries_after_if_approved: projection?.entriesAfterIfApproved ?? null,
+            };
+          }),
         );
 
         return { items, next_cursor: null };

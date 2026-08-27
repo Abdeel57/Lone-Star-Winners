@@ -38,7 +38,7 @@
 
 import { z } from "zod";
 
-import { AMOE_MODES } from "../enums.js";
+import { AMOE_MODES, type LocaleCode } from "../enums.js";
 
 /** Instante ISO-8601 con zona explicita (DEC-011). */
 const instantSchema = z
@@ -70,6 +70,77 @@ export type AmoeLimitPeriod = (typeof AMOE_LIMIT_PERIODS)[number];
  */
 export const AMOE_DUPLICATE_POLICIES = ["REJECT", "FLAG_FOR_REVIEW"] as const;
 export type AmoeDuplicatePolicy = (typeof AMOE_DUPLICATE_POLICIES)[number];
+
+/**
+ * Que CONTROL pinta el formulario para un campo.
+ *
+ * Gobierna presentacion, y nada mas: que teclado abre un telefono, si el
+ * navegador ofrece un calendario. NO gobierna ninguna validacion legal -no hay
+ * aqui formatos de codigo postal, ni edades minimas, ni longitudes obligadas-.
+ * El dominio revalida el payload contra `identity_requirements` y es quien
+ * decide; un envio con el control "equivocado" se acepta o se rechaza por lo
+ * que dice el dominio, jamas por lo que pintara el navegador.
+ */
+export const AMOE_FIELD_TYPES = ["TEXT", "EMAIL", "TEL", "TEXTAREA", "DATE", "CODE"] as const;
+export type AmoeFieldType = (typeof AMOE_FIELD_TYPES)[number];
+
+/**
+ * Tope de caracteres de un valor del payload.
+ *
+ * Es el limite del TRANSPORTE -el mismo que declara el cuerpo de
+ * `POST /amoe-submissions`- y por eso se puede publicar sin inventar nada: lo
+ * que lo supere lo rechaza la API, asi que decirlo por adelantado es describir
+ * el sistema, no imponer una regla nueva.
+ */
+export const AMOE_FIELD_MAX_LENGTH = 500;
+
+export const amoeFieldDescriptorSchema = z
+  .object({
+    type: z.enum(AMOE_FIELD_TYPES).optional(),
+    /** Puntero al copy del frontend (DEC-022). Nunca prosa. */
+    label_key: z.string().min(1).max(120).optional(),
+    max_length: z.number().int().min(1).max(AMOE_FIELD_MAX_LENGTH).optional(),
+  })
+  .readonly();
+
+/**
+ * Instrucciones en los dos locales de DEC-021. Ninguno es traduccion secundaria
+ * del otro, asi que los dos son OBLIGATORIOS cuando la clave esta presente.
+ *
+ * El tipo se declara sobre `LocaleCode` y el esquema enumera las claves: si
+ * algun dia se anadiera un locale de primera clase, el esquema dejaria de
+ * satisfacer al tipo y el paquete no compilaria. Es la unica forma de que
+ * "ambos idiomas" no se convierta en "los dos que habia cuando se escribio".
+ */
+export type AmoeInstructions = Readonly<Record<LocaleCode, string>>;
+
+const localizedInstructionsSchema = z
+  .object({
+    "en-US": z.string().min(1).max(8000),
+    "es-US": z.string().min(1).max(8000),
+  })
+  .readonly() satisfies z.ZodType<AmoeInstructions>;
+
+const externalUrlSchema = z.string().min(1).max(2000).refine(isHttpsUrl, {
+  error: "must_be_https_url",
+});
+
+/**
+ * Solo `https:`.
+ *
+ * No se comprueba con una expresion regular: `new URL` es quien decide que es
+ * un esquema, y una regexp que intentara distinguir `https:` de
+ * `java\nscript:` acabaria dejando pasar el segundo. Un destino con otro
+ * esquema renderizado como `href` es ejecucion de codigo de terceros en la
+ * pagina de la via gratuita.
+ */
+function isHttpsUrl(value: string): boolean {
+  try {
+    return new URL(value).protocol === "https:";
+  } catch {
+    return false;
+  }
+}
 
 export const amoeLimitSchema = z
   .object({
@@ -107,6 +178,44 @@ export const amoeConfigSchema = z
      * texto en ingles y en espanol lo resuelve el frontend (DEC-022).
      */
     identity_requirements: z.array(z.string().min(1)).readonly(),
+    /**
+     * Descriptores de PRESENTACION de los campos, por clave del payload.
+     *
+     * OPCIONAL, y lo que declara NO es legal: que control pinta el navegador y
+     * a que etiqueta de copy apunta el campo. Que datos se piden -eso si es
+     * legal- lo sigue diciendo `identity_requirements` y solo el; un descriptor
+     * de una clave que no este ahi no anade ningun campo al formulario.
+     *
+     * Existe porque sin el, la unica forma de que la interfaz supiera pintar un
+     * campo de correo como correo seria adivinarlo del nombre de la clave, y
+     * adivinar el nombre de una clave que escribe el abogado es exactamente la
+     * clase de suposicion que este paquete no hace.
+     */
+    identity_fields: z.record(z.string().min(1), amoeFieldDescriptorSchema).nullish(),
+    /**
+     * Instrucciones de la via gratuita, EN LOS DOS IDIOMAS.
+     *
+     * ES TEXTO LEGALMENTE CONTROLANTE y por eso vive en la version de reglas y
+     * no en el copy del frontend: la direccion postal, el formato del sobre y
+     * los plazos de `MAIL_IN_REVIEW` los redacta el abogado del cliente. Es la
+     * excepcion consciente a DEC-022 -aqui el backend SI publica prosa- y la
+     * razon de que se exijan los dos locales (DEC-021): unas instrucciones
+     * publicadas en un solo idioma son una via gratuita que no existe para la
+     * mitad de los participantes.
+     *
+     * Ausente = `null`. El sistema NO la redacta ni la traduce.
+     */
+    instructions: localizedInstructionsSchema.nullish(),
+    /**
+     * Destino de `EXTERNAL_INSTRUCTIONS`. Solo `https:`, y se comprueba aqui.
+     *
+     * Validarlo en el momento de leer la configuracion -y no al pintarlo-
+     * significa que un `javascript:` en la configuracion de una promocion
+     * rompe la promocion en vez de llegar a un navegador. El frontend vuelve a
+     * comprobarlo, y esa duplicidad es deliberada: ninguna de las dos capas es
+     * la unica que lo mira.
+     */
+    external_url: externalUrlSchema.nullish(),
   })
   .superRefine((config, ctx) => {
     if (config.mode === "MAIL_IN_REVIEW" && !config.requires_review) {
@@ -116,6 +225,64 @@ export const amoeConfigSchema = z
   .readonly();
 
 export type AmoeConfig = z.infer<typeof amoeConfigSchema>;
+
+/**
+ * Un campo del formulario, ya resuelto: lo que la configuracion declara mas los
+ * valores por defecto de los descriptores que no declara.
+ *
+ * `key` es la clave del `payload` -la que exige `identity_requirements`- y
+ * `labelKey` es un puntero al copy del frontend (DEC-022). Son dos cosas
+ * distintas a proposito: la primera la decide el abogado y viaja en el envio;
+ * la segunda solo decide que palabra se lee encima del campo.
+ */
+export interface AmoeRequiredField {
+  readonly key: string;
+  readonly type: AmoeFieldType;
+  /**
+   * Hoy SIEMPRE `true`: la lista sale de `identity_requirements`, y el dominio
+   * rechaza el envio al que le falte cualquiera de ellas
+   * (`AMOE_PAYLOAD_INVALID`). Viaja explicito de todos modos para que la
+   * interfaz no tenga que deducir de un nombre de campo si puede dejarlo
+   * vacio, y para que el dia que las Official Rules admitan un campo opcional
+   * la forma de la respuesta no cambie.
+   */
+  readonly required: boolean;
+  readonly labelKey: string;
+  readonly maxLength: number;
+}
+
+/**
+ * Resuelve los campos del formulario a partir de la configuracion.
+ *
+ * El ORDEN es el de `identity_requirements`, no el de `identity_fields`: el
+ * orden en que se piden los datos es parte de como se presenta la via gratuita,
+ * y lo fija la lista legal, no un mapa de descriptores cuyo orden de claves
+ * nadie garantiza.
+ *
+ * Los descriptores se recorren a un `Map` antes de consultarlos, por el mismo
+ * motivo que `assertPayloadComplete` en el servicio: con acceso indexado
+ * directo, una clave `__proto__` leeria la cadena de prototipos en vez del dato.
+ */
+export function amoeRequiredFields(config: AmoeConfig): readonly AmoeRequiredField[] {
+  const descriptors = new Map(Object.entries(config.identity_fields ?? {}));
+
+  return config.identity_requirements.map((key) => {
+    const descriptor = descriptors.get(key);
+    return Object.freeze({
+      key,
+      // `TEXT` no es una suposicion sobre el dato: es exactamente lo que el
+      // transporte acepta -una cadena- y lo que el dominio valida. Un descriptor
+      // ausente no autoriza a estrechar el control.
+      type: descriptor?.type ?? "TEXT",
+      required: true,
+      // Sin descriptor, la clave del payload ES la clave de copy. Si el
+      // frontend no la conoce, pinta su etiqueta generica; inventarle aqui una
+      // traduccion seria redactar interfaz desde el backend.
+      labelKey: descriptor?.label_key ?? key,
+      maxLength: descriptor?.max_length ?? AMOE_FIELD_MAX_LENGTH,
+    });
+  });
+}
 
 const amoeSliceSchema = z.object({ amoe: z.unknown().optional() });
 
