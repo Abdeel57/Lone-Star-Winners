@@ -33,6 +33,7 @@
     "db:check": "drizzle-kit check",
     "db:migrate": "tsc -p tsconfig.build.json && node dist/scripts/migrate-cli.js",
     "db:bootstrap": "tsc -p tsconfig.build.json && node dist/scripts/bootstrap-cli.js",
+    "db:create-admin": "tsc -p tsconfig.build.json && node dist/scripts/create-admin-cli.js",
     "db:seed": "tsc -p tsconfig.build.json && node dist/scripts/seed-cli.js"
   },
   "dependencies": {
