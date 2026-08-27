@@ -9,18 +9,49 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative, resolve, sep } from "node:path";
 
+/**
+ * Directorios que el caminante nunca abre: dependencias, caches y salidas de
+ * compilacion. Nada de lo que hay dentro lo escribio una persona del equipo,
+ * asi que un hallazgo ahi no es un defecto del repositorio: es ruido. Y un
+ * escaner ruidoso acaba desactivado, que es la unica forma de fallo que
+ * ninguno de estos tests puede detectar por si mismo.
+ */
 const IGNORED_DIRECTORIES = new Set([
   ".git",
   "node_modules",
   "dist",
   "build",
   "out",
-  ".next",
   ".turbo",
   "coverage",
   "playwright-report",
   "test-results",
 ]);
+
+/**
+ * Prefijos de directorio ignorados.
+ *
+ * `.next` no es UN directorio, es una familia: `apps/web` compila a `.next`, el
+ * smoke de `scripts/smoke.mjs` usa su propio `distDir` en `.next-smoke` para no
+ * pisar al servidor de desarrollo vivo, y el build aislado escribe en
+ * `.next-build`. `.gitignore` ya trata a los tres como artefactos.
+ *
+ * Enumerarlos uno a uno fue precisamente el defecto: el caminante bajaba a
+ * `apps/web/.next-smoke/server/middleware.js` -un bundle de webpack con mas de
+ * cien `eval(` y expresiones regulares generadas- y el escaner de `HO-014`
+ * devolvia 45 falsos positivos. En CI, con el smoke corriendo antes que los
+ * tests, eso es un rojo permanente. Se ignora la familia entera para que el
+ * cuarto `distDir` que alguien invente no repita la historia.
+ */
+const IGNORED_DIRECTORY_PREFIXES: readonly string[] = [".next"];
+
+/** Si el caminante debe saltarse un directorio, por su nombre. */
+export function isIgnoredDirectory(name: string): boolean {
+  return (
+    IGNORED_DIRECTORIES.has(name) ||
+    IGNORED_DIRECTORY_PREFIXES.some((prefix) => name.startsWith(prefix))
+  );
+}
 
 const TEXT_EXTENSIONS = new Set([
   ".ts",
@@ -88,7 +119,7 @@ export function listRepoTextFiles(startAt = repoRoot()): readonly RepoFile[] {
   const walk = (directory: string): void => {
     for (const entry of readdirSync(directory, { withFileTypes: true })) {
       if (entry.isDirectory()) {
-        if (!IGNORED_DIRECTORIES.has(entry.name)) {
+        if (!isIgnoredDirectory(entry.name)) {
           walk(join(directory, entry.name));
         }
         continue;

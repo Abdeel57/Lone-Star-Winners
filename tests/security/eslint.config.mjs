@@ -59,6 +59,18 @@ export default tseslint.config(
     rules: { "security/detect-non-literal-fs-filename": "off" },
   },
   {
+    // El test de las exclusiones del caminante tiene que ESCRIBIR el artefacto
+    // que dice ignorar -`apps/web/.next-smoke/...` y un arbol de control en el
+    // temporal del sistema-, y esas rutas se componen con `join` a partir de la
+    // raiz del repositorio y de `mkdtempSync`. Son rutas calculadas por
+    // construccion, no entrada de un tercero: la regla avisa de path traversal
+    // con dato de usuario, y aqui no hay usuario. Mismo motivo que en
+    // `helpers/repo.ts`, y con el mismo alcance: fichero concreto, regla
+    // concreta.
+    files: ["src/invariants/scanner-ignores.test.ts"],
+    rules: { "security/detect-non-literal-fs-filename": "off" },
+  },
+  {
     // `detect-unsafe-regex` usa una heuristica de altura de estrella, y aqui
     // marca tres patrones que no son explotables:
     //
