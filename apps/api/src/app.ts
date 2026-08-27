@@ -31,6 +31,7 @@ import {
 import cookie from "@fastify/cookie";
 
 import { createSessionAuthorizer } from "./http/session-authorizer.js";
+import { createSessionPrincipalResolver } from "./http/session-principal.js";
 import { buildAuthRoutes } from "./routes/auth.js";
 import { buildCartRoutes } from "./routes/cart.js";
 import { buildHealthRoutes } from "./routes/health.js";
@@ -43,8 +44,9 @@ import { buildDrawRoutes } from "./routes/draw.js";
 import { buildExportRoutes } from "./routes/export.js";
 import { buildOrdersRoutes, installRawBodyForPaymentWebhooks } from "./routes/orders.js";
 import { buildPortalRoutes } from "./routes/portal.js";
-import { installPrincipalResolver, noPrincipalResolver } from "./http/principal.js";
+import { installPrincipalResolver } from "./http/principal.js";
 import { createIdentityRepositories } from "./services/drizzle-identity.js";
+import { createParticipantLookup } from "./services/participant-lookup.js";
 import { createRepositories } from "./services/drizzle-repositories.js";
 import type { IdentityRepositories } from "./services/identity-ports.js";
 import type { Repositories } from "./services/ports.js";
@@ -176,16 +178,23 @@ export async function createApp(dependencies: AppDependencies): Promise<FastifyI
   //        publico por uno real, respaldado por la tabla de sesiones. Es el
   //        momento en que las rutas con permiso dejan de ser inalcanzables.
   //
-  //        El resolutor de principal sigue sin conocer a nadie, y no es un
-  //        descuido: las rutas de carrito admiten ademas SESIONES ANONIMAS
-  //        (DEC-023), que no existen todavia. Un participante autenticado ya
-  //        se autoriza; un visitante sin cuenta sigue sin carrito, y eso se
-  //        cierra cuando exista el registro.
+  //        El resolutor de principal ya traduce sesion -> participante. Un
+  //        visitante SIN cuenta sigue sin carrito: las rutas de carrito admiten
+  //        ademas sesiones anonimas (DEC-023) y esas no existen todavia, asi
+  //        que el resolutor devuelve `null` para el y su ruta responde 401.
+  //        Falla cerrado, y se cierra del todo cuando exista el registro.
   app.decorate(
     "lswAuthorizer",
     createSessionAuthorizer({ identity: dependencies.identity, config }),
   );
-  installPrincipalResolver(app, noPrincipalResolver);
+  installPrincipalResolver(
+    app,
+    createSessionPrincipalResolver({
+      identity: dependencies.identity,
+      config,
+      participants: createParticipantLookup(dependencies.database.db),
+    }),
+  );
 
   // ---- 3. Zod como unico lenguaje de esquemas (DEC-014) ----
   app.setValidatorCompiler(zodValidatorCompiler);

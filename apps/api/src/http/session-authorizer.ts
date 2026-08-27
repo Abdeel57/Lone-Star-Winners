@@ -16,16 +16,25 @@
  *   `PUBLIC`      - pasa siempre. La justificacion esta en la ruta.
  *   `PARTICIPANT` - exige sesion ACTIVA. Una sesion de personal con el segundo
  *                   factor pendiente NO sirve: no esta autenticada.
- *   `PERMISSION`  - exige ademas sesion de audiencia STAFF y que `authorize()`
- *                   conceda la capacidad.
+ *   `PERMISSION`  - exige ademas que `authorize()` conceda la capacidad con los
+ *                   roles EFECTIVOS de la sesion.
  *
- * POR QUE UNA SESION `PARTICIPANT` NO ABRE UNA RUTA DE PERMISO
- *   Aunque la persona tuviera roles administrativos. El scope se fija al emitir
- *   la sesion y no se promociona: si alguien inicio sesion en el escaparate,
- *   esa sesion vale para el escaparate. Sin esto, la cookie `SameSite=Lax` del
- *   storefront podria usarse para operar el panel, y toda la politica reforzada
- *   de la sesion de personal -`Strict`, scope `/admin`, TTL corto, inactividad-
- *   dejaria de significar nada.
+ * DONDE SE SEPARAN ESCAPARATE Y PANEL
+ *   En `resolveSession`, al decidir los roles efectivos, y NO con un corte por
+ *   scope delante de `authorize()`. Una sesion `PARTICIPANT` lleva el rol
+ *   `PARTICIPANT` y nada mas, aunque la persona tenga roles administrativos;
+ *   una sesion `STAFF` lleva los suyos.
+ *
+ *   La primera version cortaba aqui por scope, y tenia dos problemas. Uno
+ *   visible: dejaba inalcanzables las siete capacidades del rol `PARTICIPANT`,
+ *   y con ellas el portal entero. Otro invisible: no impedia la escalada que
+ *   pretendia impedir, porque los roles seguian saliendo de la persona y no de
+ *   la sesion, asi que bastaba con que una ruta de participante consultara algo
+ *   para que los roles de personal viajaran con ella.
+ *
+ *   Con los roles derivados del scope, `authorize()` deniega por si solo
+ *   cualquier capacidad de personal a una sesion de escaparate, con el catalogo
+ *   en la mano y sin que este fichero opine. Una decision, un sitio.
  */
 
 import {
@@ -100,7 +109,37 @@ export async function resolveSession(
     return null;
   }
 
-  const roles = (await deps.identity.identities.listAdminRoles(session.identityId)) as RoleId[];
+  const adminRoles = (await deps.identity.identities.listAdminRoles(
+    session.identityId,
+  )) as RoleId[];
+
+  /**
+   * Los roles EFECTIVOS los decide el scope de la sesion, no solo quien eres.
+   *
+   * Una sesion `PARTICIPANT` lleva el rol `PARTICIPANT` y nada mas, aunque la
+   * persona tenga roles administrativos. Una sesion `STAFF` lleva los suyos.
+   *
+   * POR QUE NO BASTA CON MIRAR LOS ROLES DE LA PERSONA
+   *   `audienceForRoles` hace que quien tiene roles de personal reciba siempre
+   *   una sesion STAFF al iniciar sesion, asi que en el camino normal esto no
+   *   cambia nada. Lo que cubre es el camino que SI ocurre: alguien inicia
+   *   sesion como participante y DESPUES se le conceden roles de personal. Su
+   *   sesion de escaparate sigue viva, con cookie `SameSite=Lax` y scope `/`,
+   *   y sin esta linea pasaria a conceder capacidades de personal sin que nadie
+   *   volviera a autenticarse ni pasara por MFA.
+   *
+   *   `SESSION_POLICIES` declara `rotateOnPrivilegeChange: true` para ese caso,
+   *   pero esa rotacion NO esta implementada todavia (comprobado: la propiedad
+   *   no se lee en ningun sitio). Hasta que lo este, esto es lo unico que
+   *   separa las dos audiencias, y aun despues seguira siendo la defensa que no
+   *   depende de que la rotacion funcione.
+   *
+   * El rol `PARTICIPANT` concede exactamente sus siete capacidades propias
+   * (`entry.self.read`, `order.self.read`, `amoe.self.submit`...), que es lo
+   * que el portal del participante necesita.
+   */
+  const roles: readonly RoleId[] = session.scope === "STAFF" ? adminRoles : ["PARTICIPANT"];
+
   const now = Date.now();
 
   // La politica la evalua `packages/security`. Aqui solo se traducen fechas.
@@ -147,14 +186,25 @@ export function createSessionAuthorizer(deps: SessionAuthorizerDeps): Authorizer
       return { allowed: true };
     }
 
-    // A partir de aqui, `PERMISSION`.
-    if (session.scope !== "STAFF") {
-      // No es UNAUTHENTICATED: la sesion es valida, simplemente no es del
-      // alcance que esta ruta exige. Devolverlo como 401 mandaria al frontend a
-      // pedir credenciales que ya tiene.
-      return { allowed: false, reason: "FORBIDDEN" };
-    }
-
+    /**
+     * A partir de aqui, `PERMISSION`. NO hay corte por scope.
+     *
+     * Lo hubo, y estaba mal: cortaba toda sesion que no fuera STAFF antes de
+     * preguntar nada, y con eso dejaba inalcanzables las siete capacidades del
+     * rol `PARTICIPANT` -y con ellas el portal entero, que es contrato
+     * publicado en las secciones 6 y 11.2-. Lo detecto la sesion paralela al
+     * integrar sus rutas.
+     *
+     * El corte sobra porque la separacion ya esta hecha aguas arriba: los roles
+     * efectivos salen del scope de la sesion (ver `resolveSession`), asi que
+     * una sesion de escaparate llega aqui con `["PARTICIPANT"]` y `authorize()`
+     * le deniega cualquier capacidad de personal por si misma, con el catalogo
+     * en la mano.
+     *
+     * Es mejor asi: la decision la toma el catalogo una sola vez, en vez de
+     * tomarla dos veces -aqui por scope y alli por capacidad- con el riesgo de
+     * que un dia digan cosas distintas.
+     */
     const decision = authorize({
       roles: session.roles,
       capability: authorization.permission,
