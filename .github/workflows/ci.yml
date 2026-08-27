@@ -131,6 +131,27 @@ jobs:
       - name: turbo run typecheck
         run: pnpm run typecheck
 
+      # POR QUE EL CONTRATO SE COMPRUEBA EN ESTE JOB Y NO EN UNO PROPIO
+      #
+      #   `contract:emit` importa el registro de rutas de apps/api, que resuelve
+      #   `@lsw/database` desde su `dist`. El paso anterior ya lo ha construido:
+      #   la tarea `typecheck` de turbo.json declara `dependsOn: ["^build"]`, asi
+      #   que `turbo run typecheck` corre `@lsw/database#build` (y audit,
+      #   commerce, security, sweepstakes y tpa) antes de llegar aqui. Un job
+      #   nuevo repetiria esa compilacion entera para ejecutar un `git diff`.
+      #
+      #   Hasta 5c80f48 este gate no existia porque estaba siempre rojo: el
+      #   emisor escribia `route-manifest.json` en crudo y Prettier lo volvia a
+      #   compactar. Ahora el emisor escribe ya el formato de Prettier, asi que
+      #   el check es idempotente y un diff significa un cambio real de contrato.
+      - name: "Contrato: falla si cambias una ruta o un esquema y no regeneras el openapi/ committeado"
+        run: |
+          set -euo pipefail
+          if ! pnpm --filter @lsw/api run contract:check; then
+            echo "::error title=Contrato::openapi/openapi.json o openapi/route-manifest.json no coinciden con las rutas de apps/api. Ejecuta 'pnpm --filter @lsw/api run contract:emit' y commitea los dos ficheros."
+            exit 1
+          fi
+
   # -------------------------------------------------------------------------
   # Tests unitarios y de invariante (DEC-018).
   #
