@@ -1001,3 +1001,59 @@ Affected files: `packages/sweepstakes/src/rules-keys.ts`,
 `packages/database` (validador de activación), `docs/LEGAL_PENDING.md`
 
 Blocking: YES para activar cualquier promoción real.
+
+---
+
+## HO-025
+
+Status: OPEN
+
+## Handoff
+
+Date: 2026-08-26
+From: Team Lead (sesión frontend, lone-star-2e)
+To: sesión paralela (lone-star-c4: identidad, admin, despliegue) y agentes propios
+
+Context:
+El usuario ordena **desarrollar todo lo que falta**: cuentas de participante,
+checkout y pagos, portal del participante, AMOE, panel de administración,
+ganadores. La sesión paralela ya está en las fases 1–3 del admin (esquema de
+credenciales/MFA/sesiones, rutas de auth, endpoints de catálogo admin), y
+`CLAUDE.md` §4 prohíbe dos sistemas de autenticación y dos modelos de entries.
+
+Reparto propuesto para no pisarse:
+
+| Dominio                                                                                                                                                           | Quién           | Dónde                                                                                                                                                       |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Identidad: credenciales, sesiones, MFA, **auth de participante y de admin** (mismo módulo, roles distintos)                                                       | sesión paralela | `packages/database` (migraciones 0010–0019), `packages/security`, `apps/api` (rutas `/auth/*`, `/admin/*`), `docs/API_CONTRACT.md` (secciones Auth y Admin) |
+| Comercio: órdenes, `PaymentProvider` con proveedor **mock** (el real es un DEC pendiente del usuario), webhooks, refunds/chargebacks como intenciones de reversal | esta sesión     | `packages/commerce` (lógica pura + puertos ahora; rutas en `apps/api` cuando aterrice la fase 2)                                                            |
+| Participaciones: pipeline orden calificada → snapshot de cálculo → ledger; AMOE: envío → revisión → ledger con procedencia AMOE; ajustes y descalificación        | esta sesión     | `packages/sweepstakes` (dominio puro con puertos), adaptadores en `packages/database` con migraciones **0020+**                                             |
+| Portal del participante, checkout, AMOE (4 modalidades tras flag), pantallas de auth, admin (fase 4)                                                              | esta sesión     | `apps/web` completo, contra MSW con contratos `[PROVISIONAL]` hasta reconciliar                                                                             |
+
+Reglas de convivencia mientras dure:
+
+1. **Ninguna dependencia nueva ni `pnpm install`** desde esta sesión hasta que
+   aterrice el lockfile de la fase 1 (argon2, otpauth).
+2. **Ningún fichero de `apps/api` ni `packages/database`** desde esta sesión
+   hasta que la fase 2 tenga contrato; el dominio se construye puro, con
+   puertos, en `packages/commerce` y `packages/sweepstakes`.
+3. `docs/API_CONTRACT.md`: la sesión paralela escribe Auth y Admin; esta
+   sesión aportará Commerce, Entries, AMOE y Portal como secciones nuevas al
+   final, **después** de que la fase 2 aterrice.
+4. `docs/DECISIONS.md`: DEC-045 es de la sesión paralela; el siguiente de esta
+   sesión es DEC-046 y se escribe cuando DEC-045 haya aterrizado.
+
+What I need from you (sesión paralela):
+
+- Confirmar el reparto y el rango de migraciones.
+- Que la fase 2 incluya las rutas de **participante** (`register`, `login`,
+  `logout`, `verify-email`, `password-reset`, `session`) sobre el mismo módulo,
+  o decir explícitamente que las deja para esta sesión sobre sus primitivas.
+- Cómo registra rutas `apps/api` (fichero compartido o por módulo), para que
+  las rutas de comercio entren sin conflicto.
+
+Affected files: ver tabla.
+
+Blocking:
+NO para arrancar el dominio puro y el frontend; SÍ para conectar auth real y
+para las rutas de comercio en `apps/api`.
