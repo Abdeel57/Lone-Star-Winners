@@ -299,10 +299,19 @@ export const adminParticipantPage: AdminParticipantPage = {
 /**
  * Envios pendientes de decision.
  *
- * El primero trae `entries_before` y `entries_after_if_approved` -la peticion
- * aditiva- y el segundo NO. Es deliberado: la confirmacion tiene que saber
- * pintar las tres columnas cuando el backend las publica y marcar el "despues"
- * como no publicado cuando no, en vez de calcularlo.
+ * LOS DOS TRAEN `entries_before` -siempre es un numero: cero es un saldo
+ * conocido- y se diferencian en la PROYECCION: el primero la trae completa y el
+ * segundo la trae en `null`, que es lo que sirve el backend cuando la version de
+ * reglas DEL ENVIO ya no declara AMOE legible. Ese caso tiene que verse en
+ * pantalla como "sin publicar" y no como un cero, porque la aprobacion fallaria
+ * y una cifra que no se va a cumplir es peor que ninguna.
+ *
+ * LAS TRES CIFRAS ESTAN TECLEADAS, no calculadas: 11.450 + 200 = 11.650 hoy y
+ * podria no serlo manana -con un tope, una caducidad o una descalificacion de
+ * por medio-, y ese es exactamente el caso que estos fixtures tienen que poder
+ * representar.
+ *
+ * NO SON ACUMULATIVAS ENTRE FILAS: cada una contesta "si apruebo ESTA".
  */
 export const adminAmoeSubmissions: readonly AdminAmoeSubmission[] = [
   {
@@ -317,19 +326,27 @@ export const adminAmoeSubmissions: readonly AdminAmoeSubmission[] = [
       email: "participant@example.com",
       postal_code: "78701",
     },
-    entries_if_approved: 200,
+    entries_awarded: null,
     entries_before: 11_450,
+    entries_if_approved: 200,
     entries_after_if_approved: 11_650,
   },
   {
+    /*
+     * SIN `payload`, que es lo que sirve la cola de verdad: "lleva
+     * `participant_id` interno; nunca el payload". La pantalla tiene que decir
+     * que no esta publicado, y no dejar un hueco que parece un envio vacio.
+     */
     id: "amo_0000000000000007",
     promotion_id: PROMOTION_ID,
     participant_id: "par_0000000000000002",
     participant_email: "a****@example.com",
     status: "PENDING_REVIEW",
     submitted_at: "2026-09-13T08:31:00.000Z",
-    payload: { code: "LSW-FREE-4821" },
-    entries_if_approved: 200,
+    entries_awarded: null,
+    entries_before: 0,
+    entries_if_approved: null,
+    entries_after_if_approved: null,
   },
 ];
 
@@ -397,27 +414,37 @@ export const emptyAdjustmentPage: AdminAdjustmentPage = { items: [], next_cursor
 /**
  * Previsualizacion de un ajuste.
  *
- * `entries_after` ES UN NUMERO TECLEADO. No es `entries_before` mas
- * `proposed_delta` calculado aqui, aunque lo parezca: el dia que exista un tope
- * o una regla de caducidad dejaria de coincidir, y ese es exactamente el caso
- * que este fixture tiene que poder representar.
+ * `after` ES UN NUMERO TECLEADO. No es `before` mas `proposed_delta` calculado
+ * aqui, aunque lo parezca: el dia que exista un tope o una regla de caducidad
+ * dejaria de coincidir, y ese es exactamente el caso que este fixture tiene que
+ * poder representar.
+ *
+ * `as_of` esta porque un saldo es una FOTO. Sin el instante, la pantalla que lo
+ * ensena parece hablar del presente aunque lleve media hora abierta.
  */
 export const adjustmentPreview: AdjustmentPreview = {
-  participant_id: participant.id,
-  promotion_id: PROMOTION_ID,
-  entries_before: 11_450,
+  before: 11_450,
   proposed_delta: 500,
-  entries_after: 11_950,
-  warnings: [],
+  after: 11_950,
+  would_make_balance_negative: false,
   requires_second_approval: true,
+  as_of: "2026-09-14T12:00:00.000Z",
 };
 
-/** Previsualizacion con advertencias del motor. */
-export const adjustmentPreviewWithWarnings: AdjustmentPreview = {
+/**
+ * Debito que dejaria el saldo por debajo de cero.
+ *
+ * `would_make_balance_negative` lo contesta LA MISMA funcion que rechaza el
+ * ajuste al aplicarlo, asi que este fixture representa una previsualizacion que
+ * la interfaz NO debe dejar firmar. El `after` sigue tecleado -aqui es el saldo
+ * que quedaria, no un cero de cortesia- porque quien mira tiene derecho a ver
+ * por que no se le deja continuar.
+ */
+export const adjustmentPreviewNegative: AdjustmentPreview = {
   ...adjustmentPreview,
   proposed_delta: -12_000,
-  entries_after: 0,
-  warnings: ["BALANCE_WOULD_GO_NEGATIVE", "ENTRY_CAP_REACHED"],
+  after: -550,
+  would_make_balance_negative: true,
 };
 
 // ---------------------------------------------------------------------------

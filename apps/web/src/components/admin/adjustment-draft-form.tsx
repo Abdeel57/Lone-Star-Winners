@@ -1,8 +1,9 @@
-import { Button, Card, CardTitle, FormField, Input } from "@lsw/ui";
+import { Button, Card, CardTitle, FormField, Input, Select } from "@lsw/ui";
 import { getTranslations } from "next-intl/server";
 
 import { adminHref } from "@/i18n/admin-routing";
 import type { Locale } from "@/i18n/locales";
+import { ADJUSTMENT_DIRECTIONS } from "@/lib/api";
 
 /**
  * Primer paso de un ajuste manual: quien, en que promocion y cuanto.
@@ -23,10 +24,19 @@ import type { Locale } from "@/i18n/locales";
  * endpoint de busqueda seria crear una API alternativa para no coordinarse, que
  * es lo que prohibe `CLAUDE.md` seccion 4.
  *
- * SIN VALIDACION DE NEGOCIO. El campo del delta acepta un entero con signo -que
- * es la forma del dato, DEC-010- y nada mas. Ni tope, ni minimo, ni "no puede
- * dejar el saldo negativo": eso lo decide el motor, y una regla escrita aqui
- * rechazaria ajustes que el backend acepta.
+ * SENTIDO Y CANTIDAD, NO UN ENTERO CON SIGNO
+ * ------------------------------------------
+ * Es la forma que pide la API (`direction` + `quantity` positiva), y asi la
+ * interfaz no tiene que interpretar nada: no hay un menos que traducir a
+ * `DEBIT`, ni un signo que se pierda al copiar y pegar convirtiendo una resta en
+ * una suma. Restar participaciones pasa a ser una eleccion explicita en un
+ * desplegable, que es lo que es.
+ *
+ * SIN VALIDACION DE NEGOCIO. El campo de la cantidad acepta digitos -la forma
+ * del dato, DEC-010- y nada mas. Ni tope, ni minimo, ni "no puede dejar el saldo
+ * negativo": eso lo decide el motor, lo contesta la previsualizacion en
+ * `would_make_balance_negative`, y una regla escrita aqui rechazaria ajustes que
+ * el backend acepta.
  */
 export async function AdjustmentDraftForm({
   locale,
@@ -64,20 +74,30 @@ export async function AdjustmentDraftForm({
           />
         </FormField>
 
-        <FormField label={t("deltaLabel")} description={t("deltaHint")} required>
+        <FormField label={t("directionLabel")} description={t("directionHint")} required>
+          <Select name="direction" defaultValue={ADJUSTMENT_DIRECTIONS[0]} required>
+            {ADJUSTMENT_DIRECTIONS.map((direction) => (
+              <option key={direction} value={direction}>
+                {direction === "CREDIT" ? t("directionCredit") : t("directionDebit")}
+              </option>
+            ))}
+          </Select>
+        </FormField>
+
+        <FormField label={t("quantityLabel")} description={t("quantityHint")} required>
           {/*
            * `inputMode="numeric"` y no `type="number"`: el control numerico del
            * navegador incrementa con la rueda del raton, y una rueda sobre un
            * campo con foco cambiando el numero de participaciones de alguien es
            * exactamente el accidente que esta pantalla existe para evitar.
            *
-           * `pattern` acepta signo y digitos, que es la FORMA del dato
-           * (DEC-010), no una regla de negocio.
+           * `pattern` acepta solo digitos, que es la FORMA del dato (DEC-010) -el
+           * sentido va aparte-, no una regla de negocio.
            */}
           <Input
-            name="quantity_delta"
+            name="quantity"
             inputMode="numeric"
-            pattern="-?[0-9]+"
+            pattern="[0-9]+"
             autoComplete="off"
             spellCheck={false}
             required

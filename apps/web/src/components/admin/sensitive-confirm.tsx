@@ -64,6 +64,8 @@ export function SensitiveConfirmForm({
   submitLabel,
   confirmLabel,
   warnings,
+  balanceAsOf,
+  blockedReason,
   destructive,
 }: {
   readonly locale: Locale;
@@ -75,8 +77,35 @@ export function SensitiveConfirmForm({
   readonly submitLabel: string;
   /** Texto de la casilla de confirmacion, ya traducido. */
   readonly confirmLabel: string;
-  /** Advertencias del backend, ya traducidas. */
+  /**
+   * Advertencias del backend, ya traducidas.
+   *
+   * LISTA, no una sola: una accion puede tropezar con varias cosas a la vez -un
+   * tope alcanzado y una promocion cerrada- y quedarse con la primera esconde
+   * las demas. Hoy ninguna ruta publica una lista; la unica senal que existe es
+   * `would_make_balance_negative` de la previsualizacion, y esa llega por
+   * `blockedReason` porque no advierte: impide.
+   */
   readonly warnings?: readonly string[];
+  /**
+   * Instante al que corresponde el "antes", ya formateado. `undefined` cuando la
+   * accion no compara contra un saldo.
+   *
+   * UN SALDO ES UNA FOTO, y sin la hora una pantalla abierta media hora parece
+   * hablar del presente: entre la lectura y la firma puede entrar una compra o
+   * una descalificacion.
+   */
+  readonly balanceAsOf?: string;
+  /**
+   * Motivo por el que esta accion NO se puede enviar, ya traducido.
+   *
+   * Lo dice EL BACKEND -por ejemplo, que el ajuste dejaria el saldo negativo- y
+   * la interfaz se limita a repetirlo y a no dejar firmar. NO es el control: la
+   * misma funcion que produce este aviso rechaza la accion al aplicarla. Lo que
+   * evita es mandar a alguien a leer, motivar y confirmar una accion que ya se
+   * sabe que va a fallar.
+   */
+  readonly blockedReason?: string;
   /** Si la accion resta participaciones o rechaza algo. Cambia el tono, no la regla. */
   readonly destructive?: boolean;
 }) {
@@ -118,6 +147,13 @@ export function SensitiveConfirmForm({
           </ul>
         </Alert>
       )}
+
+      {/*
+       * El bloqueo va ARRIBA del todo y en tono de peligro, no junto al boton:
+       * quien abre esta pantalla tiene que saber que no va a poder firmarla
+       * antes de leer la tabla, elegir motivo y escribir una nota.
+       */}
+      {blockedReason === undefined ? null : <Alert tone="danger">{blockedReason}</Alert>}
 
       {/*
        * La tabla de impacto va en banda CLARA: es lo que hay que leer con
@@ -168,6 +204,12 @@ export function SensitiveConfirmForm({
             ))}
           </tbody>
         </table>
+
+        {balanceAsOf === undefined ? null : (
+          <p className="mt-s3 text-caption text-light-text-muted">
+            {t("balanceAsOf", { instant: balanceAsOf })}
+          </p>
+        )}
       </div>
 
       <FormField
@@ -217,7 +259,13 @@ export function SensitiveConfirmForm({
         variant={destructive === true ? "danger" : "accent"}
         size="lg"
         loading={pending}
-        disabled={!confirmed}
+        /*
+         * Dos motivos para no dejar enviar, y ninguno de los dos es el control:
+         * que no se haya marcado la casilla, y que el backend ya haya dicho que
+         * esta accion no se puede aplicar. Se escriben en positivo y a mano
+         * (HO-027): `blocked` es exactamente "hay un motivo publicado".
+         */
+        disabled={!confirmed || blockedReason !== undefined}
       >
         {submitLabel}
       </Button>

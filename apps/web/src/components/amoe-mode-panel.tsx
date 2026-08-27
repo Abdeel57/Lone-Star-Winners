@@ -61,9 +61,17 @@ export async function AmoeModePanel({
   const externalUrl = normalized.externalUrl;
 
   /*
-   * El formulario SOLO se ofrece con las tres condiciones a la vez: modalidad
-   * que lo admite, campos publicados por el backend, y promocion identificada.
-   * Sin campos no se puede componer un envio sin inventarse que se pide, y sin
+   * QUE MODALIDAD PINTA UN FORMULARIO LO DECIDE ESTA INTERFAZ, no la presencia
+   * de `required_fields`. La configuracion publica esas claves en LAS CUATRO
+   * modalidades -el dominio las exige en cualquier envio que entre por la API-,
+   * asi que unas instrucciones postales llegan con campos declarados y siguen
+   * siendo un envio por correo. Pintar un formulario porque "vienen campos"
+   * diria que se puede participar desde la web, que es exactamente lo contrario
+   * de lo que dicen esas instrucciones.
+   *
+   * Dicho eso, el formulario SOLO se ofrece con las tres condiciones a la vez:
+   * modalidad que lo admite, campos publicados y promocion identificada. Sin
+   * campos no se puede componer un envio sin inventarse que se pide, y sin
    * identificador no hay a que promocion enviarlo.
    */
   const formModes = config.mode === "ONLINE_FORM" || config.mode === "CODE";

@@ -31,21 +31,46 @@ import { activePromotion } from "./promotions";
 
 const PROMOTION_ID = activePromotion.id;
 
-/** Via gratuita APAGADA: todo en `null`. Es el estado por defecto (DEC-032). */
+/**
+ * Via gratuita APAGADA. Es el estado por defecto (DEC-032).
+ *
+ * TODO EN `null` SALVO `promotion_id`, que viaja tambien con la via apagada
+ * porque no es un parametro de AMOE: es el dato con el que se pregunto. El
+ * fixture lo lleva a proposito -encontrarlo relleno junto a `enabled: false` no
+ * es ninguna incoherencia- para que ninguna pantalla lo trate como tal.
+ */
 export const amoeDisabledConfig: AmoeConfig = {
   enabled: false,
   mode: null,
-  promotion_id: null,
+  promotion_id: PROMOTION_ID,
   submission_window: { opens_at: null, closes_at: null },
   instructions: null,
   required_fields: null,
   external_url: null,
 };
 
+/**
+ * Campos del formulario en linea.
+ *
+ * `max_length` VIENE SIEMPRE: la API lo declara obligatorio y el dominio pone
+ * 500 cuando la configuracion no dice otra cosa. Que el fixture lo omitiera
+ * probaria un camino que la API no produce.
+ *
+ * `label_key` va SIN NAMESPACE, como lo sirve el backend: la interfaz las
+ * resuelve dentro de `amoe.fields`.
+ */
 const onlineFormFields: readonly AmoeFieldSpec[] = [
-  { name: "full_name", kind: "text", label_key: "fullName", required: true, max_length: 120 },
-  { name: "email", kind: "email", label_key: "email", required: true, max_length: 254 },
-  { name: "postal_code", kind: "text", label_key: "postalCode", required: true, max_length: 12 },
+  { key: "full_name", type: "TEXT", required: true, label_key: "fullName", max_length: 120 },
+  { key: "email", type: "EMAIL", required: true, label_key: "email", max_length: 254 },
+  { key: "postal_code", type: "TEXT", required: true, label_key: "postalCode", max_length: 12 },
+];
+
+/**
+ * Un solo campo de codigo. Lo usan la modalidad CODE y, como en produccion, las
+ * modalidades que NO pintan formulario: las claves viajan igual.
+ */
+const codeFields: readonly AmoeFieldSpec[] = [
+  { key: "code", type: "CODE", required: true, label_key: "code", max_length: 16 },
 ];
 
 /** Formulario en linea. */
@@ -70,15 +95,17 @@ export const amoeOnlineFormConfig: AmoeConfig = {
 /**
  * Envio por correo postal.
  *
- * SIN CAMPOS Y SIN FORMULARIO, y esa ausencia es el fixture: la interfaz tiene
- * que renderizar instrucciones y NINGUN control de envio. Un boton aqui
- * sugeriria que se puede participar desde la web, que es lo contrario de lo que
- * dicen las instrucciones.
+ * TRAE CAMPOS Y NO TIENE FORMULARIO, y ESE es el fixture. La API publica
+ * `required_fields` en LAS CUATRO modalidades -el dominio exige esas claves en
+ * cualquier envio que entre por la API-, asi que un fixture con `null` aqui
+ * probaria un camino que no existe y dejaria sin probar el que si: que la
+ * interfaz decide por MODALIDAD, no por "vienen campos". Un boton de envio aqui
+ * sugeriria que se puede participar desde la web, que es exactamente lo
+ * contrario de lo que dicen las instrucciones.
  */
 export const amoeMailInConfig: AmoeConfig = {
   ...amoeOnlineFormConfig,
   mode: "MAIL_IN_REVIEW",
-  required_fields: null,
   instructions: {
     "en-US":
       "This text is served by the backend. In production it carries the mailing address, the required format and the limits, exactly as the Official Rules state them.\n\nNothing on this page is written by the interface.",
@@ -91,9 +118,7 @@ export const amoeMailInConfig: AmoeConfig = {
 export const amoeCodeConfig: AmoeConfig = {
   ...amoeOnlineFormConfig,
   mode: "CODE",
-  required_fields: [
-    { name: "code", kind: "code", label_key: "code", required: true, max_length: 16 },
-  ],
+  required_fields: codeFields,
   instructions: {
     "en-US":
       "This text is served by the backend. In production it explains how a code is obtained and how it is submitted, as set out in the Official Rules.",
@@ -106,13 +131,17 @@ export const amoeCodeConfig: AmoeConfig = {
  * Instrucciones externas.
  *
  * El destino es `https:` a proposito: la interfaz descarta cualquier otro
- * esquema antes de pintarlo como enlace, y un fixture con `http:` haria que el
+ * esquema antes de pintarlo como enlace -aunque el backend ya lo haya validado,
+ * y esa duplicidad es deliberada-, y un fixture con `http:` haria que el
  * escenario probara el camino equivocado.
+ *
+ * Tambien trae campos, como los trae la API: seguir sin pintar formulario aqui
+ * es lo que se prueba.
  */
 export const amoeExternalConfig: AmoeConfig = {
   ...amoeOnlineFormConfig,
   mode: "EXTERNAL_INSTRUCTIONS",
-  required_fields: null,
+  required_fields: codeFields,
   external_url: "https://example.invalid/free-entry",
   instructions: {
     "en-US":
@@ -158,7 +187,7 @@ export const amoeFormWithoutFieldsConfig: AmoeConfig = {
  * (principios #6 y #7). Un fixture sin envios cancelados dejaria sin probar el
  * unico camino en el que la interfaz podria hacer desaparecer una procedencia.
  *
- * `entries_granted` es `null` en los que no otorgaron nada, NO `0`: "todavia no
+ * `entries_awarded` es `null` en los que no otorgaron nada, NO `0`: "todavia no
  * se sabe" y "ninguna" son afirmaciones distintas.
  */
 export const amoeSubmissions: readonly AmoeSubmission[] = [
@@ -169,7 +198,7 @@ export const amoeSubmissions: readonly AmoeSubmission[] = [
     submitted_at: "2026-09-12T15:04:00.000Z",
     decided_at: null,
     reason_key: null,
-    entries_granted: null,
+    entries_awarded: null,
     cancellable: true,
   },
   {
@@ -179,7 +208,7 @@ export const amoeSubmissions: readonly AmoeSubmission[] = [
     submitted_at: "2026-09-05T11:22:00.000Z",
     decided_at: "2026-09-06T09:10:00.000Z",
     reason_key: null,
-    entries_granted: 200,
+    entries_awarded: 200,
     cancellable: false,
   },
   {
@@ -189,7 +218,7 @@ export const amoeSubmissions: readonly AmoeSubmission[] = [
     submitted_at: "2026-09-02T18:40:00.000Z",
     decided_at: "2026-09-03T08:00:00.000Z",
     reason_key: "DUPLICATE_SUBMISSION",
-    entries_granted: null,
+    entries_awarded: null,
     cancellable: false,
   },
   {
@@ -199,7 +228,7 @@ export const amoeSubmissions: readonly AmoeSubmission[] = [
     submitted_at: "2026-08-28T12:00:00.000Z",
     decided_at: "2026-08-28T12:30:00.000Z",
     reason_key: null,
-    entries_granted: null,
+    entries_awarded: null,
     cancellable: false,
   },
 ];
@@ -214,19 +243,19 @@ export const emptyAmoeSubmissionPage: AmoeSubmissionPage = { items: [], next_cur
 /**
  * Respuesta a un envio con revision manual.
  *
- * `entries: null` no es un olvido: una modalidad con revision no otorga nada en
- * el momento del envio, y prometer una cifra antes de la revision seria afirmar
- * su resultado.
+ * `entries_awarded: null` no es un olvido: una modalidad con revision no otorga
+ * nada en el momento del envio, y prometer una cifra antes de la revision seria
+ * afirmar su resultado.
  */
 export const amoePendingSubmissionResponse: AmoeSubmissionResponse = {
   submission_id: "amo_0000000000000005",
   status: "PENDING_REVIEW",
-  entries: null,
+  entries_awarded: null,
 };
 
 /** Respuesta de una modalidad que otorga al instante. */
 export const amoeApprovedSubmissionResponse: AmoeSubmissionResponse = {
   submission_id: "amo_0000000000000006",
   status: "APPROVED",
-  entries: 200,
+  entries_awarded: 200,
 };

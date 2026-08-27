@@ -25,7 +25,7 @@ import type { AmoeSubmission } from "@/lib/api";
  * Official Rules. Deducirlo del estado -"si esta pendiente, se puede retirar"-
  * seria inventarse una regla de participacion.
  *
- * NINGUNA CIFRA SE CALCULA AQUI. `entries_granted` se pinta tal como llega, y
+ * NINGUNA CIFRA SE CALCULA AQUI. `entries_awarded` se pinta tal como llega, y
  * `null` NO es cero: "todavia no se sabe" y "ninguna" son dos afirmaciones
  * distintas delante de alguien que participo sin comprar.
  */
@@ -84,9 +84,9 @@ function AmoeSubmissionCard({
         </Badge>
       </div>
 
-      {submission.entries_granted === null ? null : (
+      {submission.entries_awarded === null ? null : (
         <p className="mt-s3 text-body-sm text-text-muted">
-          {t("entriesGranted", { count: formatEntryCount(submission.entries_granted, locale) })}
+          {t("entriesGranted", { count: formatEntryCount(submission.entries_awarded, locale) })}
         </p>
       )}
 

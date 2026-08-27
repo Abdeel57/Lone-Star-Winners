@@ -21,11 +21,18 @@ import { SensitiveConfirmForm, type SensitiveImpactRow } from "./sensitive-confi
  * gratuito real, que es la condicion que separa un sweepstakes de una loteria
  * privada. Por eso aqui no hay ningun boton de un solo clic.
  *
- * LOS DATOS ENVIADOS SE PINTAN COMO TEXTO
- * ---------------------------------------
+ * LOS DATOS ENVIADOS SE PINTAN COMO TEXTO, CUANDO LLEGAN
+ * ------------------------------------------------------
  * `payload` lo escribio un desconocido. Se recorre como pares clave/valor y se
  * renderiza como texto plano; no hay `dangerouslySetInnerHTML` en ninguna parte
  * de esta interfaz y este es justo el sitio donde mas caro saldria.
+ *
+ * HOY LA COLA NO LO PUBLICA: el documento es tajante -"lleva `participant_id`
+ * interno; nunca el payload"- porque un listado de revision no es el sitio donde
+ * repartir datos personales. La pantalla lo DICE en vez de ensenar un hueco que
+ * parece un envio vacio, que son dos cosas muy distintas delante de quien tiene
+ * que decidir. El bloque se conserva para el dia que exista una lectura
+ * autorizada de un envio concreto.
  *
  * LAS CLAVES DEL `payload` NO SE TRADUCEN, y es deliberado: son los nombres de
  * campo que declaro `required_fields`, los decide el abogado del cliente y
@@ -127,7 +134,15 @@ export async function AmoeDecisionPanel({
       <div className="mt-s5">
         <h3 className="text-label font-medium text-text">{t("payloadHeading")}</h3>
 
-        {Object.keys(submission.payload).length === 0 ? (
+        {/*
+         * TRES ESTADOS, y distinguirlos importa: no publicado -la cola no trae
+         * el payload-, publicado y vacio -un envio sin campos-, y publicado con
+         * datos. Colapsar los dos primeros haria que una limitacion del listado
+         * pareciera un envio en blanco.
+         */}
+        {submission.payload === undefined ? (
+          <p className="mt-s2 text-body-sm text-text-muted">{t("payloadNotPublished")}</p>
+        ) : Object.keys(submission.payload).length === 0 ? (
           <p className="mt-s2 text-body-sm text-text-muted">{t("payloadEmpty")}</p>
         ) : (
           <dl className="mt-s3 grid grid-cols-1 gap-s2 sm:grid-cols-2">
@@ -166,14 +181,19 @@ export async function AmoeDecisionPanel({
   );
 
   /*
-   * LAS TRES COLUMNAS, FILA POR FILA.
+   * LAS TRES COLUMNAS, FILA POR FILA, TAL COMO LAS SIRVE LA COLA.
    *
    * El estado tiene las tres: se sabe de donde viene y a donde va. Las
-   * participaciones tienen "antes" y "cambio" siempre, y "despues" SOLO si el
-   * backend lo publica (`entries_after_if_approved`, peticion abierta). No se
-   * calcula: sumar el delta al saldo seria reimplementar el motor en la
+   * participaciones vienen calculadas POR EL MOTOR -`entries_before`,
+   * `entries_if_approved` y `entries_after_if_approved`- y aqui solo se
+   * formatean. Sumar el delta al saldo seria reimplementar el motor en la
    * interfaz, y la red `no-client-entry-math.test.ts` esta para que eso no pase
    * inadvertido.
+   *
+   * `entries_before` SIEMPRE trae numero: cero es un saldo conocido, no un
+   * hueco. Las otras dos son `null` cuando la version de reglas DEL ENVIO ya no
+   * declara AMOE legible; entonces la aprobacion fallaria, y ensenar una cifra
+   * que no se va a cumplir es peor que marcar la fila como no publicada.
    */
   function buildImpact(): readonly SensitiveImpactRow[] {
     const rows: SensitiveImpactRow[] = [
@@ -186,35 +206,45 @@ export async function AmoeDecisionPanel({
     ];
 
     const granted = submission.entries_if_approved;
-    if (granted === null) return rows;
-
-    const balanceBefore = submission.entries_before;
-    const balanceAfter = submission.entries_after_if_approved;
-
-    const beforeText =
-      balanceBefore === undefined || balanceBefore === null
-        ? t("balanceNotPublished")
-        : formatEntryCount(balanceBefore, locale);
+    const beforeText = formatEntryCount(submission.entries_before, locale);
 
     // Un rechazo no otorga nada: el "despues" es el "antes" tal cual, no una
     // cifra nueva. Se reusa el mismo texto y no se recalcula.
-    const afterText =
-      decision === "reject"
-        ? balanceBefore === undefined || balanceBefore === null
-          ? null
-          : formatEntryCount(balanceBefore, locale)
-        : balanceAfter === undefined || balanceAfter === null
-          ? null
-          : formatEntryCount(balanceAfter, locale);
+    if (decision === "reject") {
+      rows.push({
+        label: t("impactEntries"),
+        before: beforeText,
+        delta: t("entriesNone"),
+        after: beforeText,
+      });
+
+      return rows;
+    }
+
+    if (granted === null) {
+      /*
+       * La proyeccion no se puede calcular: la version de reglas del envio ya
+       * no declara AMOE legible. Se dice -con las dos casillas de la derecha sin
+       * publicar- en vez de omitir la fila, que ocultaria que hay un efecto
+       * sobre las participaciones cuyo alcance no se conoce.
+       */
+      rows.push({
+        label: t("impactEntries"),
+        before: beforeText,
+        delta: t("balanceNotPublished"),
+        after: null,
+      });
+
+      return rows;
+    }
+
+    const balanceAfter = submission.entries_after_if_approved;
 
     rows.push({
       label: t("impactEntries"),
       before: beforeText,
-      delta:
-        decision === "approve"
-          ? formatSignedEntries(granted, (value) => formatEntryCount(value, locale))
-          : t("entriesNone"),
-      after: afterText,
+      delta: formatSignedEntries(granted, (value) => formatEntryCount(value, locale)),
+      after: balanceAfter === null ? null : formatEntryCount(balanceAfter, locale),
     });
 
     return rows;

@@ -45,9 +45,20 @@ import { AmoeCallout } from "@/components/amoe-callout";
 import { AmoeForm } from "@/components/amoe-form";
 import { AmoeSubmissionList } from "@/components/amoe-submission-list";
 import { formatEntryCount } from "@/i18n/formatters";
-import { isSafeExternalUrl, normalizeAmoeConfig } from "@/lib/amoe-config";
+import {
+  isSafeExternalUrl,
+  normalizeAmoeConfig,
+  normalizeAmoeField,
+  type NormalizedAmoeField,
+} from "@/lib/amoe-config";
 import { LOCALES, type Locale } from "@/i18n/locales";
-import { AMOE_MODES, type AmoeConfig, type AmoeFieldSpec, type AmoeMode } from "@/lib/api";
+import {
+  AMOE_FIELD_TYPES,
+  AMOE_MODES,
+  type AmoeConfig,
+  type AmoeFieldSpec,
+  type AmoeMode,
+} from "@/lib/api";
 import {
   amoeCodeConfig,
   amoeDisabledConfig,
@@ -146,9 +157,14 @@ describe("el aviso de la via gratuita depende del flag, no del modo", () => {
   });
 });
 
+/** Los campos, tal como los recibe el formulario: ya normalizados. */
+function fieldsOf(config: AmoeConfig): readonly NormalizedAmoeField[] {
+  return normalizeAmoeConfig(config).fields;
+}
+
 describe("formulario de participacion gratuita", () => {
   it("pinta EXACTAMENTE los campos declarados, y ni uno mas", () => {
-    const fields = amoeOnlineFormConfig.required_fields ?? [];
+    const fields = fieldsOf(amoeOnlineFormConfig);
     expect(fields.length).toBeGreaterThan(0);
 
     const { container } = renderIn(
@@ -162,7 +178,7 @@ describe("formulario de participacion gratuita", () => {
     );
 
     for (const field of fields) {
-      expect(container.querySelector(`[name="${field.name}"]`), field.name).not.toBeNull();
+      expect(container.querySelector(`[name="${field.key}"]`), field.key).not.toBeNull();
     }
 
     // Nada que el backend no haya pedido. Se cuentan los controles con nombre
@@ -172,11 +188,31 @@ describe("formulario de participacion gratuita", () => {
       .filter((name): name is string => name !== null)
       .filter((name) => !["locale", "promotion_slug", "promotion_id"].includes(name));
 
-    expect(named.sort()).toEqual(fields.map((field) => field.name).sort());
+    expect(named.sort()).toEqual(fields.map((field) => field.key).sort());
+  });
+
+  it("el nombre del control es `key`, no la clave de etiqueta", () => {
+    /*
+     * Las dos existen y NO son la misma: `key` es como viaja el dato en el
+     * payload y `label_key` es una clave de copy. Confundirlas produce un envio
+     * con nombres que el backend rechaza -o, peor, uno que acepta con los datos
+     * en el campo equivocado-.
+     */
+    const fields = fieldsOf(amoeOnlineFormConfig);
+    const named = fields.find((field) => field.key !== field.labelKey);
+    expect(named).toBeDefined();
+
+    const { container } = renderIn(
+      "en",
+      <AmoeForm locale="en" promotionSlug="gmc-2025" promotionId="pro_1" fields={fields} />,
+    );
+
+    expect(container.querySelector(`[name="${named?.key ?? ""}"]`)).not.toBeNull();
+    expect(container.querySelector(`[name="${named?.labelKey ?? ""}"]`)).toBeNull();
   });
 
   it("la modalidad de codigo pinta su unico campo", () => {
-    const fields = amoeCodeConfig.required_fields ?? [];
+    const fields = fieldsOf(amoeCodeConfig);
     expect(fields).toHaveLength(1);
 
     const { container } = renderIn(
@@ -191,25 +227,140 @@ describe("formulario de participacion gratuita", () => {
     expect(code).toHaveAttribute("type", "text");
   });
 
-  it("una clave de etiqueta desconocida no se muestra en crudo", () => {
-    const fields: readonly AmoeFieldSpec[] = [
-      { name: "mystery", kind: "text", label_key: "SOMETHING_NEW", required: true },
-    ];
+  it("cada tipo del contrato produce su control, y ninguno se queda sin pintar", () => {
+    // La lista se recorre ENTERA: un tipo nuevo en el contrato que nadie
+    // conectara aqui pintaria un campo sin control o rompería el `switch`.
+    const fields: readonly AmoeFieldSpec[] = AMOE_FIELD_TYPES.map((type) => ({
+      key: type.toLowerCase(),
+      type,
+      required: true,
+      label_key: "note",
+      max_length: 50,
+    }));
 
-    renderIn(
+    const { container } = renderIn(
       "en",
-      <AmoeForm locale="en" promotionSlug="gmc-2025" promotionId="pro_1" fields={fields} />,
+      <AmoeForm
+        locale="en"
+        promotionSlug="gmc-2025"
+        promotionId="pro_1"
+        fields={fields.map(normalizeAmoeField)}
+      />,
     );
 
-    // Se pinta con la etiqueta generica, y el campo SIGUE enviandose: perderlo
-    // seria peor que etiquetarlo mal.
-    expect(screen.getByText(enMessages.amoe.fields.fallback, { exact: false })).toBeInTheDocument();
-    expect(screen.queryByText("SOMETHING_NEW")).toBeNull();
+    for (const type of AMOE_FIELD_TYPES) {
+      const control = container.querySelector(`[name="${type.toLowerCase()}"]`);
+      expect(control, type).not.toBeNull();
+    }
+
+    expect(container.querySelector('[name="textarea"]')?.tagName).toBe("TEXTAREA");
+    expect(container.querySelector('[name="email"]')).toHaveAttribute("type", "email");
+    expect(container.querySelector('[name="tel"]')).toHaveAttribute("type", "tel");
+    expect(container.querySelector('[name="date"]')).toHaveAttribute("type", "date");
+  });
+
+  it("una clave de etiqueta desconocida no se muestra en crudo", () => {
+    /*
+     * PASA DE VERDAD: el valor por defecto de `label_key` en el backend es la
+     * PROPIA CLAVE del payload, asi que una promocion sin descriptor de
+     * presentacion manda claves que la interfaz no conoce. Ensenar
+     * `participant_full_legal_name` a alguien que quiere participar gratis es
+     * lo peor de las dos opciones.
+     */
+    const fields: readonly AmoeFieldSpec[] = [
+      {
+        key: "participant_full_legal_name",
+        type: "TEXT",
+        required: true,
+        label_key: "participant_full_legal_name",
+        max_length: 120,
+      },
+      { key: "mystery", type: "TEXT", required: false, label_key: "SOMETHING_NEW", max_length: 30 },
+    ];
+
+    const { container } = renderIn(
+      "en",
+      <AmoeForm
+        locale="en"
+        promotionSlug="gmc-2025"
+        promotionId="pro_1"
+        fields={fields.map(normalizeAmoeField)}
+      />,
+    );
+
+    // Los dos caen en la etiqueta generica...
+    expect(screen.getAllByText(enMessages.amoe.fields.fallback, { exact: false })).toHaveLength(2);
+
+    // ...ninguna clave tecnica aparece en pantalla...
+    expect(container.textContent).not.toContain("SOMETHING_NEW");
+    expect(container.textContent).not.toContain("participant_full_legal_name");
+
+    // ...y los campos SIGUEN enviandose: perderlos seria peor que etiquetarlos
+    // mal, porque un envio incompleto lo rechaza el backend.
+    expect(container.querySelector('[name="participant_full_legal_name"]')).not.toBeNull();
+    expect(container.querySelector('[name="mystery"]')).not.toBeNull();
+  });
+
+  it("las claves que el backend sirve hoy tienen etiqueta humana en los dos idiomas", () => {
+    /*
+     * Las que documenta el contrato, SIN namespace. Se comprueba sobre la
+     * pantalla y no indexando el diccionario: lo que importa es que ninguna
+     * llegue al generico, porque entonces varios campos se llamarian igual y
+     * nadie sabria cual rellenar.
+     */
+    const served = ["fullName", "email", "postalCode", "dateOfBirth", "code", "note"];
+
+    const fields: readonly AmoeFieldSpec[] = served.map((labelKey, index) => ({
+      key: `field_${index}`,
+      type: "TEXT",
+      required: true,
+      label_key: labelKey,
+      max_length: 100,
+    }));
+
+    for (const locale of LOCALES) {
+      const messages = messagesFor(locale);
+
+      const view = renderIn(
+        locale,
+        <AmoeForm
+          locale={locale}
+          promotionSlug="gmc-2025"
+          promotionId="pro_1"
+          fields={fields.map(normalizeAmoeField)}
+        />,
+      );
+
+      // Ni una cae en el generico...
+      expect(
+        screen.queryByText(messages.amoe.fields.fallback, { exact: false }),
+        `generico en ${locale}`,
+      ).toBeNull();
+
+      /*
+       * ...y las seis etiquetas son DISTINTAS entre si. Es la comprobacion que
+       * de verdad importa: si dos claves acabaran resolviendose al mismo texto,
+       * quien rellena el formulario veria dos campos con el mismo nombre y no
+       * sabria cual es cual. No se comprueba que la etiqueta no contenga la
+       * clave -"code" se traduce como "Code" y "Note" como "Nota", y eso es
+       * correcto-, sino que ninguna se pierda.
+       */
+      const labels = [...view.container.querySelectorAll("label")].map((label) =>
+        (label.textContent ?? "").replace("*", "").trim(),
+      );
+
+      expect(labels, `etiquetas en ${locale}`).toHaveLength(served.length);
+      expect(new Set(labels).size, `etiquetas distintas en ${locale}`).toBe(served.length);
+
+      view.unmount();
+    }
   });
 
   it("no impone ninguna validacion que el backend no haya declarado", () => {
-    const fields: readonly AmoeFieldSpec[] = [
-      { name: "full_name", kind: "text", label_key: "fullName", required: true },
+    // Sin tope declarado: el campo se pinta sin `maxLength`, no con uno
+    // inventado. `null` y ausente significan lo mismo (`normalizeAmoeField`).
+    const fields: readonly NormalizedAmoeField[] = [
+      { key: "full_name", type: "TEXT", required: true, labelKey: "fullName", maxLength: null },
     ];
 
     const { container } = renderIn(
@@ -227,9 +378,9 @@ describe("formulario de participacion gratuita", () => {
     expect(input).not.toHaveAttribute("minLength");
   });
 
-  it("traslada el tope de caracteres SOLO cuando el backend lo declara", () => {
-    const fields = amoeOnlineFormConfig.required_fields ?? [];
-    const withMax = fields.find((field) => field.max_length !== undefined);
+  it("traslada el tope de caracteres tal como llega", () => {
+    const fields = fieldsOf(amoeOnlineFormConfig);
+    const withMax = fields.find((field) => field.maxLength !== null);
     expect(withMax).toBeDefined();
 
     const { container } = renderIn(
@@ -237,26 +388,40 @@ describe("formulario de participacion gratuita", () => {
       <AmoeForm locale="en" promotionSlug="gmc-2025" promotionId="pro_1" fields={fields} />,
     );
 
-    expect(container.querySelector(`[name="${withMax?.name ?? ""}"]`)).toHaveAttribute(
+    expect(container.querySelector(`[name="${withMax?.key ?? ""}"]`)).toHaveAttribute(
       "maxLength",
-      String(withMax?.max_length),
+      String(withMax?.maxLength),
     );
   });
 });
 
 describe("configuracion AMOE: las cinco situaciones", () => {
-  it("apagada llega con todo en null", () => {
+  it("apagada llega con todo en null MENOS la promocion por la que se pregunto", () => {
     expect(amoeDisabledConfig.enabled).toBe(false);
     expect(amoeDisabledConfig.mode).toBeNull();
     expect(amoeDisabledConfig.instructions).toBeNull();
     expect(amoeDisabledConfig.required_fields).toBeNull();
     expect(amoeDisabledConfig.external_url).toBeNull();
-    expect(amoeDisabledConfig.promotion_id).toBeNull();
+
+    /*
+     * `promotion_id` VIAJA TAMBIEN CON LA VIA APAGADA y eso NO es una
+     * incoherencia: no es un parametro de AMOE, es el dato con el que se
+     * pregunto. Tratarlo como sospechoso llevaria a alguna pantalla a decir que
+     * la configuracion esta corrupta cuando esta exactamente como debe.
+     */
+    expect(amoeDisabledConfig.promotion_id).not.toBeNull();
+    expect(normalizeAmoeConfig(amoeDisabledConfig).enabled).toBe(false);
   });
 
-  it("el envio postal NO declara campos: no se envia desde la web", () => {
+  it("el envio postal declara campos y AUN ASI no pinta formulario", () => {
+    /*
+     * `required_fields` llega en LAS CUATRO modalidades: el dominio exige esas
+     * claves en cualquier envio que entre por la API. Quien decide si hay
+     * formulario es la MODALIDAD, no la presencia de campos.
+     */
     expect(amoeMailInConfig.mode).toBe("MAIL_IN_REVIEW");
-    expect(amoeMailInConfig.required_fields).toBeNull();
+    expect(amoeMailInConfig.required_fields).not.toBeNull();
+    expect(amoeExternalConfig.required_fields).not.toBeNull();
     expect(amoeMailInConfig.instructions).not.toBeNull();
   });
 
@@ -310,12 +475,12 @@ describe("envios del participante", () => {
 
   it("la cifra otorgada se pinta tal como llega, y `null` no es cero", () => {
     const approved = amoeSubmissions.find((submission) => submission.status === "APPROVED");
-    expect(approved?.entries_granted).not.toBeNull();
+    expect(approved?.entries_awarded).not.toBeNull();
 
     renderIn("en", <AmoeSubmissionList submissions={amoeSubmissions} locale="en" />);
 
     expect(
-      screen.getByText(formatEntryCount(approved?.entries_granted ?? 0, "en"), { exact: false }),
+      screen.getByText(formatEntryCount(approved?.entries_awarded ?? 0, "en"), { exact: false }),
     ).toBeInTheDocument();
 
     // Los que no otorgaron nada NO muestran un cero: "todavia no se sabe" y
@@ -504,10 +669,57 @@ describe("configuracion AMOE incompleta", () => {
 
   it("los campos declarados se conservan tal cual cuando SI vienen", () => {
     const normalized = normalizeAmoeConfig(amoeOnlineFormConfig);
+    const declared = amoeOnlineFormConfig.required_fields ?? [];
 
     expect(normalized.enabled).toBe(true);
-    expect(normalized.fields).toEqual(amoeOnlineFormConfig.required_fields);
     expect(normalized.instructions).toEqual(amoeOnlineFormConfig.instructions);
+
+    // Mismos campos, mismo ORDEN, mismos valores. La normalizacion cambia la
+    // forma del objeto, no lo que se pide: uno de mas seria recogida de datos
+    // que nadie autorizo y uno de menos, un envio que el backend rechaza.
+    expect(normalized.fields.map((field) => field.key)).toEqual(declared.map((field) => field.key));
+    expect(normalized.fields.map((field) => field.maxLength)).toEqual(
+      declared.map((field) => field.max_length),
+    );
+    expect(normalized.fields.map((field) => field.type)).toEqual(
+      declared.map((field) => field.type),
+    );
+  });
+
+  it("un campo sin tipo, sin tope o sin `required` produce un control utilizable", () => {
+    /*
+     * La API los declara los tres obligatorios (HO-031), pero "los sirve hoy" no
+     * es "no pueden faltar nunca": una promocion a medio configurar o un entorno
+     * con otra version siguen pudiendo llegar asi. El campo tiene que PINTARSE
+     * igual -perderlo es un envio incompleto- y sin inventarse un tope.
+     */
+    const incomplete = { key: "note", label_key: "note" } as unknown as AmoeFieldSpec;
+    const normalized = normalizeAmoeField(incomplete);
+
+    expect(normalized.type).toBe("TEXT");
+    expect(normalized.maxLength).toBeNull();
+    expect(normalized.required).toBe(false);
+  });
+
+  it("un tipo desconocido cae a TEXT en vez de descartar el campo", () => {
+    const exotic = {
+      key: "signature",
+      type: "SIGNATURE",
+      required: true,
+      label_key: "note",
+      max_length: 0,
+    } as unknown as AmoeFieldSpec;
+
+    const normalized = normalizeAmoeField(exotic);
+
+    // TEXT transporta cualquier texto; descartar el campo produciria un envio
+    // que el backend rechaza con `AMOE_PAYLOAD_INVALID`.
+    expect(normalized.type).toBe("TEXT");
+
+    // `maxLength="0"` impediria escribir en el campo: un tope inservible es
+    // igual que no tener tope.
+    expect(normalized.maxLength).toBeNull();
+    expect(normalized.required).toBe(true);
   });
 });
 

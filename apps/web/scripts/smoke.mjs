@@ -394,10 +394,43 @@ const CHECKS = [
     expect: ["promotions@example.com", "1,284,500"],
   },
   {
-    // Cola de revision AMOE: el envio de un participante y el codigo del otro.
+    // Cola de revision AMOE. El listado NO ensena lo que se envio: la cola
+    // "lleva `participant_id` interno; nunca el payload".
     path: "/admin/es/amoe",
     headers: { cookie: STAFF_COOKIE },
-    expect: ["participant@example.com", "LSW-FREE-4821"],
+    expect: ["participant@example.com"],
+  },
+  {
+    /*
+     * EL PANEL DE DECISION, que es donde se ven las tres cifras de la
+     * proyeccion: antes, cambio y despues, calculadas por el motor y servidas
+     * por la cola (HO-031). Ninguna de las tres se puede producir en el panel,
+     * asi que si el backend dejara de mandarlas esto falla aqui y no en una
+     * pantalla que ensena un numero inventado.
+     *
+     * `11.450` y `11.650` son el saldo previo y el resultante; `Alex Rivera`
+     * sale del payload, que este fixture SI trae para probar que se pinta como
+     * texto cuando llega.
+     */
+    path: "/admin/es/amoe?submission=amo_0000000000000001&decision=approve",
+    headers: { cookie: STAFF_COOKIE },
+    expect: ["Alex Rivera", "11,450", "11,650"],
+  },
+  {
+    /*
+     * PREVISUALIZACION DE UN AJUSTE, contra la API simulada.
+     *
+     * Es la unica red que prueba el viaje entero: la URL lleva participante,
+     * promocion, SENTIDO y cantidad; el servidor hace el `POST` a
+     * `/admin/entry-adjustments/preview`; y la confirmacion pinta antes, cambio
+     * y despues con lo que conteste. Si alguien volviera a calcular el "despues"
+     * en la interfaz, esto seguiria pasando -daria el mismo numero- pero
+     * `no-client-entry-math.test.ts` fallaria; y si la ruta se rompiera, aqui
+     * saldria el estado de error en vez de las cifras.
+     */
+    path: "/admin/es/adjustments?participant_id=par_0000000000000001&promotion_id=prm_status_ACTIVE&direction=CREDIT&quantity=500",
+    headers: { cookie: STAFF_COOKIE },
+    expect: ["11,450", "11,950"],
   },
   {
     // Promociones, con la version de reglas vigente en el listado.

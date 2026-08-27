@@ -50,12 +50,15 @@ vi.mock("@/lib/admin/actions", () => ({
 
 import { SensitiveConfirmForm } from "@/components/admin/sensitive-confirm";
 import { StaffLoginForm, StaffMfaForm } from "@/components/admin/staff-auth-forms";
-import { formatEntryCount } from "@/i18n/formatters";
+import { formatEntryCount, formatZonedDateTime } from "@/i18n/formatters";
 import { LOCALES, type Locale } from "@/i18n/locales";
-import { adjustmentPreview } from "@/mocks/fixtures/admin";
+import { adjustmentPreview, adjustmentPreviewNegative } from "@/mocks/fixtures/admin";
 
 import enMessages from "../../messages/en-US.json";
 import esMessages from "../../messages/es-US.json";
+
+/** Identificador con el que se pregunto. La previsualizacion contesta cifras. */
+const PARTICIPANT_ID = "par_0000000000000001";
 
 /**
  * CONFIRMACION DE UNA MUTACION SENSIBLE (FE-M7).
@@ -68,7 +71,7 @@ import esMessages from "../../messages/es-US.json";
  * con otra fila del ledger y otra entrada de auditoria.
  *
  * Y una segunda cosa, igual de importante: que el "despues" NO se calcule aqui.
- * El fixture de previsualizacion trae un `entries_after` TECLEADO, y la pantalla
+ * El fixture de previsualizacion trae un `after` TECLEADO, y la pantalla
  * lo pinta tal cual. Si algun dia alguien sumara el delta al saldo, este test
  * seguiria pasando -daria el mismo numero- pero
  * `no-client-entry-math.test.ts` fallaria. Las dos redes se complementan.
@@ -93,9 +96,9 @@ function adjustmentImpact(locale: Locale) {
   return [
     {
       label: messages.admin.adjustments.impactEntries,
-      before: formatEntryCount(adjustmentPreview.entries_before, locale),
+      before: formatEntryCount(adjustmentPreview.before, locale),
       delta: `+${formatEntryCount(adjustmentPreview.proposed_delta, locale)}`,
-      after: formatEntryCount(adjustmentPreview.entries_after, locale),
+      after: formatEntryCount(adjustmentPreview.after, locale),
     },
   ];
 }
@@ -122,7 +125,7 @@ describe("confirmacion de una mutacion sensible", () => {
             submitted.push(formData);
             return Promise.resolve(IDLE_RESULT);
           }}
-          hiddenFields={{ participant_id: adjustmentPreview.participant_id }}
+          hiddenFields={{ participant_id: PARTICIPANT_ID }}
           impact={adjustmentImpact(locale)}
           reasons={reasonsFor(locale)}
           submitLabel={messages.admin.adjustments.proposeSubmit}
@@ -137,10 +140,10 @@ describe("confirmacion de una mutacion sensible", () => {
 
       // Y las tres cifras, tal como llegan del backend.
       expect(
-        screen.getByText(formatEntryCount(adjustmentPreview.entries_before, locale)),
+        screen.getByText(formatEntryCount(adjustmentPreview.before, locale)),
       ).toBeInTheDocument();
       expect(
-        screen.getByText(formatEntryCount(adjustmentPreview.entries_after, locale)),
+        screen.getByText(formatEntryCount(adjustmentPreview.after, locale)),
       ).toBeInTheDocument();
 
       view.unmount();
@@ -159,7 +162,7 @@ describe("confirmacion de una mutacion sensible", () => {
           submitted.push(formData);
           return Promise.resolve(IDLE_RESULT);
         }}
-        hiddenFields={{ participant_id: adjustmentPreview.participant_id }}
+        hiddenFields={{ participant_id: PARTICIPANT_ID }}
         impact={adjustmentImpact("en")}
         reasons={reasonsFor("en")}
         submitLabel={messages.admin.adjustments.proposeSubmit}
@@ -185,7 +188,7 @@ describe("confirmacion de una mutacion sensible", () => {
           submitted.push(formData);
           return Promise.resolve(IDLE_RESULT);
         }}
-        hiddenFields={{ participant_id: adjustmentPreview.participant_id }}
+        hiddenFields={{ participant_id: PARTICIPANT_ID }}
         impact={adjustmentImpact("en")}
         reasons={reasonsFor("en")}
         submitLabel={messages.admin.adjustments.proposeSubmit}
@@ -216,7 +219,7 @@ describe("confirmacion de una mutacion sensible", () => {
           submitted.push(formData);
           return Promise.resolve(IDLE_RESULT);
         }}
-        hiddenFields={{ participant_id: adjustmentPreview.participant_id }}
+        hiddenFields={{ participant_id: PARTICIPANT_ID }}
         impact={adjustmentImpact("en")}
         reasons={reasonsFor("en")}
         submitLabel={messages.admin.adjustments.proposeSubmit}
@@ -254,9 +257,13 @@ describe("confirmacion de una mutacion sensible", () => {
         impact={[
           {
             label: messages.admin.amoeReview.impactEntries,
-            // El "antes" SI lo publica el backend; el "despues" no. Es el caso
-            // real de la cola AMOE mientras `entries_after_if_approved` siga
-            // siendo una peticion abierta.
+            /*
+             * El "antes" SIEMPRE es un numero; el "despues" no siempre existe.
+             * Es el caso real de la cola AMOE cuando la version de reglas DEL
+             * ENVIO ya no declara AMOE legible: la aprobacion fallaria, asi que
+             * el backend manda `entries_after_if_approved: null` en vez de una
+             * cifra que no se va a cumplir.
+             */
             before: formatEntryCount(11_450, "en"),
             delta: "+200",
             after: null,
@@ -283,7 +290,7 @@ describe("confirmacion de una mutacion sensible", () => {
           submitted.push(formData);
           return Promise.resolve(IDLE_RESULT);
         }}
-        hiddenFields={{ participant_id: adjustmentPreview.participant_id }}
+        hiddenFields={{ participant_id: PARTICIPANT_ID }}
         impact={adjustmentImpact("en")}
         reasons={reasonsFor("en")}
         warnings={[
@@ -298,6 +305,97 @@ describe("confirmacion de una mutacion sensible", () => {
     expect(screen.getByText(messages.admin.confirm.warningsTitle)).toBeInTheDocument();
     expect(screen.getByText(messages.admin.warnings.BALANCE_WOULD_GO_NEGATIVE)).toBeInTheDocument();
     expect(screen.getByText(messages.admin.warnings.ENTRY_CAP_REACHED)).toBeInTheDocument();
+  });
+
+  it("el saldo se ensena CON su hora, porque es una foto", async () => {
+    const user = userEvent.setup();
+    const messages = enMessages;
+
+    /*
+     * Entre la previsualizacion y la firma puede entrar una compra o una
+     * descalificacion. Sin el instante, una pantalla abierta media hora parece
+     * hablar del presente, y quien firma cree estar leyendo el saldo de ahora.
+     */
+    const asOf =
+      formatZonedDateTime(adjustmentPreview.as_of, "en", {
+        timeZone: "UTC",
+        showTimeZoneName: true,
+      }) ?? "";
+
+    expect(asOf).not.toBe("");
+
+    renderIn(
+      "en",
+      <SensitiveConfirmForm
+        locale="en"
+        action={(_previous, formData) => {
+          submitted.push(formData);
+          return Promise.resolve(IDLE_RESULT);
+        }}
+        hiddenFields={{ participant_id: PARTICIPANT_ID }}
+        impact={adjustmentImpact("en")}
+        reasons={reasonsFor("en")}
+        balanceAsOf={asOf}
+        submitLabel={messages.admin.adjustments.proposeSubmit}
+        confirmLabel={messages.admin.adjustments.proposeConfirm}
+      />,
+    );
+
+    expect(screen.getByText(asOf, { exact: false })).toBeInTheDocument();
+
+    // Y sigue siendo firmable: la hora informa, no bloquea.
+    await user.click(screen.getByLabelText(messages.admin.adjustments.proposeConfirm));
+    expect(
+      screen.getByRole("button", { name: messages.admin.adjustments.proposeSubmit }),
+    ).toBeEnabled();
+  });
+
+  it("un ajuste que dejaria el saldo negativo NO se puede firmar", async () => {
+    const user = userEvent.setup();
+    const messages = enMessages;
+
+    /*
+     * `would_make_balance_negative` lo contesta LA MISMA funcion que rechaza el
+     * ajuste al aplicarlo. La pantalla no lo deduce de las cifras -restar aqui
+     * seria reimplementar el motor- y no ofrece la firma: no es el control, pero
+     * evita hacer leer, motivar y confirmar algo que ya se sabe que falla.
+     */
+    expect(adjustmentPreviewNegative.would_make_balance_negative).toBe(true);
+
+    renderIn(
+      "en",
+      <SensitiveConfirmForm
+        locale="en"
+        action={(_previous, formData) => {
+          submitted.push(formData);
+          return Promise.resolve(IDLE_RESULT);
+        }}
+        hiddenFields={{ participant_id: PARTICIPANT_ID }}
+        impact={[
+          {
+            label: messages.admin.adjustments.impactEntries,
+            before: formatEntryCount(adjustmentPreviewNegative.before, "en"),
+            delta: formatEntryCount(adjustmentPreviewNegative.proposed_delta, "en"),
+            after: formatEntryCount(adjustmentPreviewNegative.after, "en"),
+          },
+        ]}
+        reasons={reasonsFor("en")}
+        blockedReason={messages.admin.warnings.BALANCE_WOULD_GO_NEGATIVE}
+        submitLabel={messages.admin.adjustments.proposeSubmit}
+        confirmLabel={messages.admin.adjustments.proposeConfirm}
+        destructive
+      />,
+    );
+
+    // Se dice POR QUE, y se dice antes de la tabla.
+    expect(screen.getByText(messages.admin.warnings.BALANCE_WOULD_GO_NEGATIVE)).toBeInTheDocument();
+
+    const submit = screen.getByRole("button", { name: messages.admin.adjustments.proposeSubmit });
+    expect(submit).toBeDisabled();
+
+    // Ni siquiera marcando la casilla: el bloqueo no depende de la confirmacion.
+    await user.click(screen.getByLabelText(messages.admin.adjustments.proposeConfirm));
+    expect(submit).toBeDisabled();
   });
 });
 

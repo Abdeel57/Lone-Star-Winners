@@ -9,7 +9,9 @@
 
 export type {
   AcknowledgedResponse,
+  AdjustmentDirection,
   AdjustmentPreview,
+  AdjustmentPreviewRequest,
   AdjustmentStatus,
   AdminAdjustment,
   AdminAdjustmentPage,
@@ -34,8 +36,8 @@ export type {
   AdminRulesVersion,
   AdminRulesVersionPage,
   AmoeConfig,
-  AmoeFieldKind,
   AmoeFieldSpec,
+  AmoeFieldType,
   AmoeMode,
   AmoeSubmission,
   AmoeSubmissionPage,
@@ -104,9 +106,10 @@ export type {
   VariantAvailability,
 } from "./contract";
 export {
+  ADJUSTMENT_DIRECTIONS,
   ADJUSTMENT_STATUSES,
   ADMIN_CAPABILITIES,
-  AMOE_FIELD_KINDS,
+  AMOE_FIELD_TYPES,
   AMOE_MODES,
   AMOE_SUBMISSION_STATUSES,
   CHECKOUT_MODES,

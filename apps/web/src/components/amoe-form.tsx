@@ -9,7 +9,7 @@ import type { Locale } from "@/i18n/locales";
 import { useAmoeFieldLabel } from "@/i18n/amoe-labels";
 import { IDLE } from "@/lib/action-result";
 import { submitAmoeAction } from "@/lib/amoe-actions";
-import type { AmoeFieldSpec } from "@/lib/api";
+import type { NormalizedAmoeField } from "@/lib/amoe-config";
 
 /**
  * Formulario de participacion gratuita.
@@ -20,15 +20,18 @@ import type { AmoeFieldSpec } from "@/lib/api";
  * mas seria recogida de datos personales que nadie autorizo.
  *
  * LAS ETIQUETAS SON CLAVES DE COPY DEL FRONTEND (DEC-022), igual que en los
- * consentimientos del alta. Si el backend manda una clave que la interfaz no
- * conoce, el campo se pinta con una etiqueta generica -nunca con la clave en
- * crudo- y SE SIGUE ENVIANDO: perder el campo seria peor que etiquetarlo mal.
+ * consentimientos del alta, y llegan SIN NAMESPACE (`fullName`, `postalCode`).
+ * El valor por defecto de `label_key` en el backend es la propia clave del
+ * payload, asi que una promocion sin descriptor de presentacion manda claves
+ * que la interfaz no conoce: en ese caso el campo se pinta con una etiqueta
+ * generica -nunca con la clave en crudo- y SE SIGUE ENVIANDO, porque perder el
+ * campo seria peor que etiquetarlo mal.
  *
- * SIN VALIDACION PROPIA. `maxLength` se traslada solo si el backend lo declara,
- * y no hay `pattern`, ni longitud minima, ni comprobacion de formato mas alla
- * de la que el navegador hace por el tipo de campo. Una restriccion del cliente
- * que no coincida exactamente con la del backend rechaza envios validos, y en
- * la unica via que no exige comprar nada eso es especialmente caro.
+ * SIN VALIDACION PROPIA. `maxLength` se traslada solo si el backend declara uno
+ * utilizable, y no hay `pattern`, ni longitud minima, ni comprobacion de formato
+ * mas alla de la que el navegador hace por el tipo de campo. Una restriccion del
+ * cliente que no coincida exactamente con la del backend rechaza envios validos,
+ * y en la unica via que no exige comprar nada eso es especialmente caro.
  *
  * EL ENVIO NO SE PUEDE REPETIR POR ACCIDENTE: mientras la accion esta en curso
  * el boton queda deshabilitado. No es el control -el backend responde
@@ -44,7 +47,7 @@ export function AmoeForm({
   readonly locale: Locale;
   readonly promotionSlug: string;
   readonly promotionId: string;
-  readonly fields: readonly AmoeFieldSpec[];
+  readonly fields: readonly NormalizedAmoeField[];
 }) {
   const t = useTranslations("amoe.form");
   const fieldLabel = useAmoeFieldLabel();
@@ -63,27 +66,27 @@ export function AmoeForm({
 
       {fields.map((field) => (
         <FormField
-          key={field.name}
-          label={fieldLabel(field.label_key)}
+          key={field.key}
+          label={fieldLabel(field.labelKey)}
           required={field.required}
-          error={fieldError(field.name)}
+          error={fieldError(field.key)}
         >
-          {field.kind === "textarea" ? (
+          {field.type === "TEXTAREA" ? (
             <Textarea
-              name={field.name}
+              name={field.key}
               rows={4}
-              {...(field.max_length === undefined ? {} : { maxLength: field.max_length })}
+              {...(field.maxLength === null ? {} : { maxLength: field.maxLength })}
             />
           ) : (
             <Input
-              name={field.name}
-              type={inputTypeFor(field.kind)}
-              {...(field.kind === "email" ? { inputMode: "email" as const } : {})}
-              {...(field.kind === "tel" ? { inputMode: "tel" as const } : {})}
-              {...(field.kind === "code" ? { autoCapitalize: "characters" as const } : {})}
+              name={field.key}
+              type={inputTypeFor(field.type)}
+              {...(field.type === "EMAIL" ? { inputMode: "email" as const } : {})}
+              {...(field.type === "TEL" ? { inputMode: "tel" as const } : {})}
+              {...(field.type === "CODE" ? { autoCapitalize: "characters" as const } : {})}
               autoComplete="off"
               spellCheck={false}
-              {...(field.max_length === undefined ? {} : { maxLength: field.max_length })}
+              {...(field.maxLength === null ? {} : { maxLength: field.maxLength })}
             />
           )}
         </FormField>
@@ -101,21 +104,21 @@ export function AmoeForm({
 /**
  * Tipo de `input` para cada clase de campo.
  *
- * `date` usa el selector nativo y `email`/`tel` cambian el teclado del telefono.
- * `code` es `text` a proposito: `type="number"` incrementaria con la rueda del
+ * `DATE` usa el selector nativo y `EMAIL`/`TEL` cambian el teclado del telefono.
+ * `CODE` es `text` a proposito: `type="number"` incrementaria con la rueda del
  * raton y admitiria notacion cientifica, y un codigo no es una cifra.
  */
-function inputTypeFor(kind: AmoeFieldSpec["kind"]): string {
-  switch (kind) {
-    case "email":
+function inputTypeFor(type: NormalizedAmoeField["type"]): string {
+  switch (type) {
+    case "EMAIL":
       return "email";
-    case "tel":
+    case "TEL":
       return "tel";
-    case "date":
+    case "DATE":
       return "date";
-    case "text":
-    case "code":
-    case "textarea":
+    case "TEXT":
+    case "CODE":
+    case "TEXTAREA":
       return "text";
   }
 }

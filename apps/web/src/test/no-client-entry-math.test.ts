@@ -64,6 +64,20 @@ const ENTRY_FIELDS = [
   "entries_after",
   "entries_before",
   "base_entries_per_unit",
+  /*
+   * Los nombres que cerro HO-031. `entries_awarded` es el mismo dato en las tres
+   * formas AMOE, y los tres de la cola de revision son la PROYECCION que calcula
+   * el motor: sumar `entries_before` y `entries_if_approved` para pintar el
+   * "despues" seria exactamente la segunda implementacion que esta red impide,
+   * y ademas daria un numero distinto en cuanto haya un tope o una caducidad.
+   *
+   * `proposed_delta` viene con signo desde la previsualizacion: se formatea, no
+   * se opera con el.
+   */
+  "entries_awarded",
+  "entries_if_approved",
+  "entries_after_if_approved",
+  "proposed_delta",
 ];
 
 function listSourceFiles(directory: string): string[] {

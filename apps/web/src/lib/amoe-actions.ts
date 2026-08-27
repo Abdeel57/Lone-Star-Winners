@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import type { Locale } from "@/i18n/locales";
 import { cancelAmoeSubmission, fetchAmoeConfig, submitAmoe } from "@/lib/api";
 
+import { normalizeAmoeConfig } from "./amoe-config";
 import { fromFailure, invalid, SUCCEEDED, type ActionResult } from "./action-result";
 import { localeFrom, textFrom } from "./form-input";
 import { mutableSession } from "./session-server";
@@ -57,25 +58,31 @@ async function payloadFor(
     return { ok: false, result: invalid("AMOE_NOT_ENABLED") };
   }
 
-  const fields = config.data.required_fields;
-  if (fields === null || fields.length === 0) {
+  /*
+   * Se leen los campos YA NORMALIZADOS, por la misma razon que la pantalla: la
+   * clave del payload es `key` -no una etiqueta, no un nombre inventado aqui- y
+   * una respuesta a la que le falte algun descriptor tiene que producir un envio
+   * igualmente, no una excepcion en la unica via que no exige comprar nada.
+   */
+  const fields = normalizeAmoeConfig(config.data).fields;
+  if (fields.length === 0) {
     return { ok: false, result: invalid("AMOE_PAYLOAD_INVALID") };
   }
 
   const payload: Record<string, string> = {};
 
   for (const field of fields) {
-    const raw = formData.get(field.name);
+    const raw = formData.get(field.key);
     const value = typeof raw === "string" ? raw.trim() : "";
 
     if (value.length === 0) {
       if (field.required) {
-        return { ok: false, result: invalid("FIELD_REQUIRED", field.name) };
+        return { ok: false, result: invalid("FIELD_REQUIRED", field.key) };
       }
       continue;
     }
 
-    payload[field.name] = value;
+    payload[field.key] = value;
   }
 
   return { ok: true, payload };

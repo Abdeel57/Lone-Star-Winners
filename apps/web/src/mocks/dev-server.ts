@@ -4,6 +4,7 @@ import { apiBaseUrl, API_PATHS, type SessionState } from "@/lib/api";
 
 import { activeSession, anonymousSession, MOCK_SESSION_TOKEN } from "./fixtures/account";
 import {
+  adjustmentPreviewNegative,
   complianceOfficerSession,
   promotionManagerSession,
   staffMfaPendingSession,
@@ -227,7 +228,7 @@ export function createMockApiHandler(
     const outcome =
       resolveIdentity(request, method, pathname, rawBody) ??
       resolveAmoeScenario(method, pathname) ??
-      resolveAdmin(request, pathname, matched.body) ??
+      resolveAdmin(request, pathname, rawBody, matched.body) ??
       resolveAccount(request, method, pathname, matched.body) ??
       resolveCheckout(request, method, pathname, rawBody, prefix, base) ??
       resolveCart(request, method, pathname);
@@ -724,15 +725,58 @@ function resolveAmoeScenario(method: string, pathname: string): MockOutcome | nu
 function resolveAdmin(
   request: IncomingMessage,
   pathname: string,
+  rawBody: string,
   body: unknown,
 ): MockOutcome | null {
   if (!pathname.startsWith("/admin/")) return null;
 
-  if (hasStaffCookie(request, STAFF_ACTIVE_TOKEN)) return { body };
+  if (hasStaffCookie(request, STAFF_ACTIVE_TOKEN)) {
+    return { body: adminBodyFor(pathname, rawBody, body) };
+  }
   if (hasStaffCookie(request, STAFF_PENDING_TOKEN)) return UNAUTHENTICATED;
   if (hasSessionCookie(request)) return FORBIDDEN;
 
   return UNAUTHENTICATED;
+}
+
+/**
+ * Cuerpo de una ruta del panel, cuando el fixture fijo no basta.
+ *
+ * HOY SOLO LA PREVISUALIZACION DE UN AJUSTE, y por un motivo concreto: el
+ * estado que hay que poder VER en el navegador es el que la interfaz no deja
+ * firmar -un debito que dejaria el saldo por debajo de cero-, y con un fixture
+ * fijo ese camino no se alcanza nunca. Un estado deliberado que nadie mira es
+ * exactamente donde se cuela un fallo silencioso.
+ *
+ * NO CALCULA NADA: elige entre dos previsualizaciones YA ESCRITAS segun el
+ * sentido que pide el cuerpo. El backend de verdad calcula las tres cifras y el
+ * predicado con la misma funcion que rechaza el ajuste al aplicarlo.
+ */
+function adminBodyFor(pathname: string, rawBody: string, fallback: unknown): unknown {
+  if (pathname !== API_PATHS.adminAdjustmentPreview) return fallback;
+
+  return directionFrom(rawBody) === "DEBIT" ? adjustmentPreviewNegative : fallback;
+}
+
+/** Sentido declarado en el cuerpo, o `null` si no se puede leer. */
+function directionFrom(rawBody: string): string | null {
+  if (rawBody === "") return null;
+
+  try {
+    const parsed: unknown = JSON.parse(rawBody);
+
+    // Comprobacion en POSITIVO y por partes (HO-027): objeto, con la clave, y
+    // con valor de texto. `JSON.parse` devuelve `any`, y aqui llega de la red.
+    const isObject = typeof parsed === "object" && parsed !== null;
+    if (!isObject) return null;
+
+    const value = (parsed as Record<string, unknown>).direction;
+    return typeof value === "string" ? value : null;
+  } catch {
+    // Un cuerpo ilegible no es motivo para romper el mock: se sirve el fixture
+    // por defecto, igual que si no hubiera venido nada.
+    return null;
+  }
 }
 
 /**

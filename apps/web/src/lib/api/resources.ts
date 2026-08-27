@@ -3,6 +3,7 @@ import type { Locale } from "@/i18n/locales";
 import type {
   AcknowledgedResponse,
   AdjustmentPreview,
+  AdjustmentPreviewRequest,
   AdminAdjustment,
   AdminAdjustmentPage,
   AdminAmoeSubmission,
@@ -154,11 +155,14 @@ export const API_PATHS = {
   adminAmoeSubmissions: "/admin/amoe-submissions",
   adminAdjustments: "/admin/entry-adjustments",
   /**
-   * [PROVISIONAL] Previsualizacion de un ajuste. NO esta en el contrato.
+   * [CONTRATO] Previsualizacion de un ajuste (seccion 11.4, `IMPLEMENTED`).
    *
    * Es la peticion mas importante del panel: sin ella la confirmacion de un
    * ajuste no puede ensenar el saldo resultante, porque el frontend no puede
    * calcularlo (DEC-023, requisito R13).
+   *
+   * Exige `entry.adjust.create` y NO `entry.ledger.read`: quien no puede pedir
+   * un ajuste no tiene por que poder simularlo sobre un participante concreto.
    */
   adminAdjustmentPreview: "/admin/entry-adjustments/preview",
   /** [PROVISIONAL] Dominio de `security-integration` (DEC-016). */
@@ -1113,17 +1117,22 @@ export function fetchAdminAdjustments(
 /**
  * Previsualizacion de un ajuste: antes, delta y despues.
  *
- * NO MUTA NADA pese a ser `POST`. Existe porque la confirmacion de una mutacion
- * sensible tiene que ensenar el saldo resultante y EL FRONTEND NO PUEDE
- * CALCULARLO: sumar el delta al saldo seria una segunda implementacion del
- * motor de participaciones viviendo en la interfaz (DEC-023, requisito R13).
+ * NO MUTA NADA pese a ser `POST`: ni fila de ledger, ni expediente, ni evento de
+ * auditoria. Existe porque la confirmacion de una mutacion sensible tiene que
+ * ensenar el saldo resultante y EL FRONTEND NO PUEDE CALCULARLO: sumar el delta
+ * al saldo seria una segunda implementacion del motor de participaciones
+ * viviendo en la interfaz (DEC-023, requisito R13).
+ *
+ * EL CUERPO LLEVA SENTIDO Y CANTIDAD POSITIVA, no un entero con signo. Es la
+ * forma que pide la API y la que evita que un menos perdido al copiar convierta
+ * una resta en una suma.
+ *
+ * CON `manual_adjustments_enabled` APAGADO RESPONDE 404, igual que crear. Eso no
+ * es una averia: la funcion no existe para nadie, y la pantalla lo pinta como
+ * estado deliberado.
  */
 export function previewAdjustment(
-  input: {
-    readonly participant_id: string;
-    readonly promotion_id: string;
-    readonly quantity_delta: number;
-  },
+  input: AdjustmentPreviewRequest,
   locale: Locale,
   session: SessionContext,
 ): Promise<ApiResult<AdjustmentPreview>> {
@@ -1141,14 +1150,17 @@ export function previewAdjustment(
  * actor: `entry.adjust.create` y `entry.adjust.approve` son capacidades
  * distintas porque un ajuste que se aprueba a si mismo es una edicion del
  * ledger con otro nombre.
+ *
+ * EL CUERPO ES EL DE LA PREVISUALIZACION MAS EL MOTIVO, y esa herencia de tipo
+ * es deliberada: se pide EXACTAMENTE lo que se previsualizo. Dos formas
+ * paralelas permitirian confirmar un ajuste distinto del que se leyo en la
+ * tabla de impacto, que es la unica manera de que esa tabla mienta.
  */
 export function createAdjustment(
-  input: {
-    readonly participant_id: string;
-    readonly promotion_id: string;
-    readonly quantity_delta: number;
+  input: AdjustmentPreviewRequest & {
     readonly reason_key: string;
-    readonly reason_note: string | null;
+    /** Nota libre. `null` cuando la clave de motivo se explica sola. */
+    readonly reason_detail: string | null;
   },
   locale: Locale,
   session: SessionContext,

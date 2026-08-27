@@ -22,6 +22,7 @@ import { approveAdjustmentAction, createAdjustmentAction } from "@/lib/admin/act
 import { can, type AdminActor } from "@/lib/admin/capabilities";
 import { ADJUSTMENT_APPROVAL_REASONS, ADJUSTMENT_REASONS } from "@/lib/admin/reason-codes";
 import {
+  ADJUSTMENT_DIRECTIONS,
   fetchAdminAdjustments,
   previewAdjustment,
   type AdminAdjustment,
@@ -70,7 +71,8 @@ export default async function AdminAdjustmentsPage({
     cursor?: string;
     participant_id?: string;
     promotion_id?: string;
-    quantity_delta?: string;
+    direction?: string;
+    quantity?: string;
     approve?: string;
   }>;
 }) {
@@ -191,8 +193,8 @@ export default async function AdminAdjustmentsPage({
 }
 
 /**
- * Propuesta: formulario de tres campos y, si la URL los trae, la
- * previsualizacion con su confirmacion.
+ * Propuesta: formulario de cuatro campos -participante, promocion, sentido y
+ * cantidad- y, si la URL los trae, la previsualizacion con su confirmacion.
  */
 async function ProposalSection({
   locale,
@@ -204,7 +206,8 @@ async function ProposalSection({
   readonly query: {
     participant_id?: string;
     promotion_id?: string;
-    quantity_delta?: string;
+    direction?: string;
+    quantity?: string;
   };
 }) {
   const t = await getTranslations({ locale, namespace: "admin.adjustments" });
@@ -213,22 +216,35 @@ async function ProposalSection({
 
   const participantId = query.participant_id;
   const promotionId = query.promotion_id;
-  const rawDelta = query.quantity_delta;
 
-  const draftComplete =
-    participantId !== undefined && promotionId !== undefined && rawDelta !== undefined;
+  /*
+   * SENTIDO Y CANTIDAD, tal como los pide la API. La interfaz no traduce un
+   * signo a un sentido ni al reves: `direction` se compara contra la lista del
+   * contrato y `quantity` tiene que ser un entero positivo. Las dos son
+   * comprobaciones de FORMA -que la URL sea legible-, no reglas de negocio; si
+   * el ajuste es posible lo contesta la previsualizacion.
+   */
+  const direction = ADJUSTMENT_DIRECTIONS.find((value) => value === query.direction) ?? null;
 
-  const delta = rawDelta === undefined ? Number.NaN : Number.parseInt(rawDelta, 10);
-  const deltaUsable = Number.isSafeInteger(delta) && delta !== 0;
+  const rawQuantity = query.quantity;
+  const parsed = rawQuantity === undefined ? Number.NaN : Number.parseInt(rawQuantity, 10);
+  const quantity = Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
 
-  const preview =
-    draftComplete && deltaUsable
-      ? await previewAdjustment(
-          { participant_id: participantId, promotion_id: promotionId, quantity_delta: delta },
-          locale,
-          session,
-        )
-      : null;
+  const draftStarted = query.direction !== undefined || rawQuantity !== undefined;
+
+  const draftUsable =
+    participantId !== undefined &&
+    promotionId !== undefined &&
+    direction !== null &&
+    quantity !== null;
+
+  const preview = draftUsable
+    ? await previewAdjustment(
+        { participant_id: participantId, promotion_id: promotionId, direction, quantity },
+        locale,
+        session,
+      )
+    : null;
 
   return (
     <section aria-labelledby="adjustments-new" className="flex flex-col gap-s5">
@@ -238,10 +254,23 @@ async function ProposalSection({
 
       <AdjustmentDraftForm locale={locale} defaultPromotionId={promotionId ?? null} />
 
-      {draftComplete && !deltaUsable ? <Alert tone="danger">{t("deltaInvalid")}</Alert> : null}
+      {draftStarted && !draftUsable ? <Alert tone="danger">{t("draftInvalid")}</Alert> : null}
 
       {preview === null ? null : !preview.ok ? (
-        <ApiErrorState failure={preview.error} headingLevel="h3" />
+        /*
+         * UN 404 AQUI NO ES UNA AVERIA. Con `manual_adjustments_enabled`
+         * apagado la ruta responde 404 -igual que crear-: la funcion no existe
+         * para nadie, y un 403 sugeriria que existe y que a este operador no se
+         * le deja usarla. Se pinta como ausencia deliberada, que es la
+         * diferencia entre "esto no esta encendido" y "esto esta roto".
+         */
+        preview.error.status === 404 ? (
+          <Alert tone="info" title={t("previewUnavailableTitle")}>
+            {t("previewUnavailableBody")}
+          </Alert>
+        ) : (
+          <ApiErrorState failure={preview.error} headingLevel="h3" />
+        )
       ) : (
         <Card elevation="raised" padding="lg">
           <CardTitle as="h3" size="sm">
@@ -249,7 +278,14 @@ async function ProposalSection({
           </CardTitle>
 
           <p className="mt-s2 text-body-sm text-text-muted">
-            {t("confirmBody", { participant: preview.data.participant_id })}
+            {/*
+             * El participante sale de la URL y no de la respuesta: la
+             * previsualizacion contesta CIFRAS -antes, cambio, despues- y no
+             * repite el identificador con el que se pregunto. Es el mismo que
+             * viaja en los campos ocultos, asi que lo que se lee y lo que se
+             * firma no pueden separarse.
+             */}
+            {t("confirmBody", { participant: participantId ?? "" })}
           </p>
 
           {preview.data.requires_second_approval ? (
@@ -262,26 +298,54 @@ async function ProposalSection({
             <SensitiveConfirmForm
               locale={locale}
               action={createAdjustmentAction}
+              /*
+               * Se firma EXACTAMENTE lo que se previsualizo: los mismos cuatro
+               * datos que produjeron la tabla. No se reenvia `proposed_delta`
+               * -la API pide sentido y cantidad- ni se reconstruye ninguno de
+               * los dos a partir del otro.
+               */
               hiddenFields={{
-                participant_id: preview.data.participant_id,
-                promotion_id: preview.data.promotion_id,
-                quantity_delta: String(preview.data.proposed_delta),
+                participant_id: participantId ?? "",
+                promotion_id: promotionId ?? "",
+                direction: direction ?? "",
+                quantity: String(quantity ?? ""),
               }}
               impact={[
                 {
                   label: t("impactEntries"),
-                  before: formatEntryCount(preview.data.entries_before, locale),
+                  before: formatEntryCount(preview.data.before, locale),
                   delta: formatSignedEntries(preview.data.proposed_delta, (value) =>
                     formatEntryCount(value, locale),
                   ),
-                  after: formatEntryCount(preview.data.entries_after, locale),
+                  after: formatEntryCount(preview.data.after, locale),
                 },
               ]}
+              /*
+               * LA HORA DEL SALDO. Un saldo es una foto: entre esta lectura y la
+               * firma puede entrar una compra o una descalificacion, y sin el
+               * instante una pantalla abierta media hora parece hablar del
+               * presente.
+               */
+              balanceAsOf={
+                formatZonedDateTime(preview.data.as_of, locale, {
+                  timeZone: "UTC",
+                  showTimeZoneName: true,
+                }) ?? preview.data.as_of
+              }
+              /*
+               * `would_make_balance_negative` lo contesta LA MISMA funcion que
+               * rechaza el ajuste al aplicarlo, no una reimplementacion. Si
+               * llega encendido no se ofrece la firma: no es el control -el
+               * backend rechaza igual- pero evita hacer leer, motivar y
+               * confirmar algo que ya se sabe que va a fallar.
+               */
+              {...(preview.data.would_make_balance_negative
+                ? { blockedReason: warningLabel("BALANCE_WOULD_GO_NEGATIVE") }
+                : {})}
               reasons={ADJUSTMENT_REASONS.map((key) => ({ value: key, label: reasonLabel(key) }))}
-              warnings={preview.data.warnings.map((warning) => warningLabel(warning))}
               submitLabel={t("proposeSubmit")}
               confirmLabel={t("proposeConfirm")}
-              destructive={preview.data.proposed_delta < 0}
+              destructive={direction === "DEBIT"}
             />
           </div>
         </Card>

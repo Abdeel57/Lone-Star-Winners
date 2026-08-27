@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import { adminHref } from "@/i18n/admin-routing";
 import { FALLBACK_LOCALE, type Locale } from "@/i18n/locales";
 import {
+  ADJUSTMENT_DIRECTIONS,
   approveAdjustment,
   approveAmoeSubmission,
   createAdjustment,
@@ -13,6 +14,7 @@ import {
   logout,
   rejectAmoeSubmission,
   verifyMfa,
+  type AdjustmentDirection,
 } from "@/lib/api";
 import { fromFailure, invalid, SUCCEEDED, type ActionResult } from "@/lib/action-result";
 import { localeFrom, secretFrom, textFrom } from "@/lib/form-input";
@@ -173,6 +175,40 @@ export async function staffLogoutAction(formData: FormData): Promise<void> {
   redirect(adminHref(locale, "/login"));
 }
 
+/**
+ * Sentido de un ajuste, comprobado contra la lista del contrato.
+ *
+ * SE COMPARA CON LA LISTA y no se acepta cualquier texto: un `direction`
+ * manipulado en el navegador tiene que morir aqui con un error de forma, no
+ * viajar al backend para que lo rechace. No es una regla de negocio -cuanto y
+ * en que sentido se puede ajustar lo decide el motor-, es el enum del contrato.
+ */
+function directionFrom(formData: FormData): AdjustmentDirection | null {
+  const raw = textFrom(formData, "direction");
+  if (raw === null) return null;
+
+  const known = ADJUSTMENT_DIRECTIONS.find((direction) => direction === raw);
+  return known ?? null;
+}
+
+/**
+ * Cantidad de un ajuste: entero POSITIVO.
+ *
+ * El signo lo lleva `direction`, asi que aqui un cero o un negativo son formas
+ * invalidas del dato (DEC-010), no decisiones de negocio. Cuanto puede valer un
+ * ajuste, si hay tope y si el saldo puede quedar negativo lo decide el backend,
+ * y ninguna de esas tres preguntas se responde aqui.
+ */
+function positiveQuantityFrom(formData: FormData): number | null {
+  const raw = textFrom(formData, "quantity");
+  if (raw === null) return null;
+
+  const quantity = Number.parseInt(raw, 10);
+  if (!Number.isSafeInteger(quantity)) return null;
+
+  return quantity > 0 ? quantity : null;
+}
+
 /** Lee clave de motivo y nota, con la nota obligatoria cuando la clave lo exige. */
 function reasonFrom(
   formData: FormData,
@@ -263,8 +299,9 @@ export async function rejectAmoeAction(
  * porque un ajuste que se aprueba a si mismo es una edicion del ledger con otro
  * nombre.
  *
- * EL DELTA SE ENVIA TAL COMO SE TECLEO. Aqui no se suma, no se compara con
- * ningun saldo y no se calcula ningun resultado: el "despues" lo publica la
+ * SE ENVIA EXACTAMENTE LO QUE SE PREVISUALIZO: el mismo sentido y la misma
+ * cantidad que produjeron la tabla de impacto. Aqui no se suma, no se compara
+ * con ningun saldo y no se calcula ningun resultado: el "despues" lo publica la
  * previsualizacion del backend, porque el frontend no puede calcularlo
  * (DEC-023, requisito R13 de `security`).
  */
@@ -281,19 +318,11 @@ export async function createAdjustmentAction(
   const promotionId = textFrom(formData, "promotion_id");
   if (promotionId === null) return invalid("FIELD_REQUIRED", "promotion_id");
 
-  const rawDelta = textFrom(formData, "quantity_delta");
-  if (rawDelta === null) return invalid("FIELD_REQUIRED", "quantity_delta");
+  const direction = directionFrom(formData);
+  if (direction === null) return invalid("VALIDATION_FAILED", "direction");
 
-  /*
-   * Se exige ENTERO CON SIGNO y distinto de cero. No es una regla de negocio:
-   * es la forma del dato que publica el contrato (DEC-010). Cuanto puede valer
-   * un ajuste, si hay tope y si el saldo puede quedar negativo lo decide el
-   * backend, y ninguna de esas tres preguntas se responde aqui.
-   */
-  const delta = Number.parseInt(rawDelta, 10);
-  if (!Number.isSafeInteger(delta) || delta === 0) {
-    return invalid("VALIDATION_FAILED", "quantity_delta");
-  }
+  const quantity = positiveQuantityFrom(formData);
+  if (quantity === null) return invalid("VALIDATION_FAILED", "quantity");
 
   const reason = reasonFrom(formData);
   if (isActionResult(reason)) return reason;
@@ -303,9 +332,10 @@ export async function createAdjustmentAction(
     {
       participant_id: participantId,
       promotion_id: promotionId,
-      quantity_delta: delta,
+      direction,
+      quantity,
       reason_key: reason.reason_key,
-      reason_note: reason.note,
+      reason_detail: reason.note,
     },
     locale,
     session,

@@ -862,6 +862,18 @@ export interface SessionState {
    * `AdminCapability[]` a proposito: el backend puede publicar una capacidad
    * que la interfaz todavia no conozca, y eso tiene que poder ignorarse en vez
    * de dejar de compilar contra una respuesta legitima.
+   *
+   * TODO(HO-031): el campo SIGUE SIN EXISTIR en la sesion que sirve la API. La
+   * forma esperada cuando llegue, para que el espejo local se pueda borrar de
+   * una vez y sin adivinar nada:
+   *
+   *   readonly capabilities: readonly string[];
+   *
+   * es decir, SIEMPRE PRESENTE y nunca `undefined` -asi "no publicado" y "sin
+   * ninguna" dejan de ser el mismo valor-, y `[]` para un participante, que es
+   * lo que hace que el panel no le ensene nada. Sirve UNICAMENTE para pintar;
+   * jamas para autorizar: quien decide que se puede hacer es el backend, en cada
+   * peticion, y responde 403.
    */
   readonly capabilities?: readonly string[];
 }
@@ -1306,64 +1318,82 @@ export interface AmoeSubmissionWindow {
 }
 
 /**
- * [PROVISIONAL] Tipo de un campo del formulario AMOE.
+ * [CONTRATO] Tipo de un campo del formulario AMOE (`docs/API_CONTRACT.md` 11.3).
+ *
+ * MAYUSCULAS, y no es cosmetico: son los valores que sirve la API
+ * (`AMOE_FIELD_TYPES` del dominio). El enum del cable se escribe una vez y se
+ * compara sin normalizar; un `toLowerCase()` de cortesia en el camino seria el
+ * sitio donde un valor nuevo del backend se convertiria en silencio en otro
+ * conocido.
  *
  * Gobierna QUE control se pinta y que teclado abre un telefono. No gobierna
  * ninguna validacion legal: no hay aqui longitudes minimas, ni formatos de
  * codigo postal, ni edades. El backend revalida y es quien decide.
  */
-export type AmoeFieldKind = "text" | "email" | "tel" | "textarea" | "date" | "code";
+export type AmoeFieldType = "TEXT" | "EMAIL" | "TEL" | "TEXTAREA" | "DATE" | "CODE";
 
-export const AMOE_FIELD_KINDS: readonly AmoeFieldKind[] = [
-  "text",
-  "email",
-  "tel",
-  "textarea",
-  "date",
-  "code",
+export const AMOE_FIELD_TYPES: readonly AmoeFieldType[] = [
+  "TEXT",
+  "EMAIL",
+  "TEL",
+  "TEXTAREA",
+  "DATE",
+  "CODE",
 ];
 
 /**
- * [PROVISIONAL] Campo que el formulario AMOE tiene que pedir.
+ * [CONTRATO] Campo que el formulario AMOE tiene que pedir.
  *
  * ES LA PIEZA QUE IMPIDE QUE EL FRONTEND INVENTE EL FORMULARIO. Que datos se
  * piden para participar sin comprar es materia de las Official Rules
  * (CLAUDE.md #1 y #2): la interfaz pinta EXACTAMENTE los campos que llegan en
  * `required_fields`, en el orden que llegan, y ni uno mas. Un formulario con un
  * campo de mas es recogida de datos personales que nadie autorizo; con uno de
- * menos, un envio que el backend rechazara.
+ * menos, un envio que el backend rechazara con `AMOE_PAYLOAD_INVALID`.
+ *
+ * `key` es el nombre con el que el dato viaja en el `payload` del envio, y sale
+ * de `identity_requirements` una a una y en ese orden. NO es la etiqueta.
  *
  * `label_key` es una CLAVE DE COPY DEL FRONTEND (DEC-022), no prosa del
- * backend, exactamente igual que `ConsentRequirement.text_key`. Si el backend
- * manda una clave que la interfaz no conoce, el campo se pinta con una etiqueta
- * generica -nunca con la clave en crudo- y se sigue enviando: perder el campo
- * seria peor que etiquetarlo mal.
+ * backend, exactamente igual que `ConsentRequirement.text_key`. Llega SIN
+ * namespace (`fullName`, `postalCode`, `code`) y su valor por defecto en el
+ * backend es la propia `key`, asi que una promocion sin descriptor de
+ * presentacion manda claves que la interfaz no conoce. Ese caso NO es un error:
+ * el campo se pinta con una etiqueta generica -nunca con la clave en crudo- y
+ * se sigue enviando, porque perder el campo seria peor que etiquetarlo mal.
  */
 export interface AmoeFieldSpec {
   /** Nombre del campo tal como viaja en el `payload`. */
-  readonly name: string;
-  readonly kind: AmoeFieldKind;
-  /** Clave de copy del frontend (DEC-022). */
-  readonly label_key: string;
+  readonly key: string;
+  readonly type: AmoeFieldType;
   /** El backend REVALIDA: que aqui llegue `false` no decide nada. */
   readonly required: boolean;
+  /** Clave de copy del frontend (DEC-022), sin namespace. */
+  readonly label_key: string;
   /**
-   * Tope de caracteres, si el backend declara uno. Se traslada al control como
-   * `maxLength` para que el navegador ayude, nunca como validacion propia.
+   * Tope de caracteres que acepta el transporte. SIEMPRE presente -el dominio
+   * pone 500 cuando la configuracion no declara otro-. Se traslada al control
+   * como `maxLength` para que el navegador ayude, nunca como validacion propia.
+   *
+   * La interfaz lo normaliza igualmente en `@/lib/amoe-config`: un campo que
+   * llegara sin el tiene que producir un control sin tope, no un `maxLength`
+   * inventado ni una pantalla rota.
    */
-  readonly max_length?: number;
+  readonly max_length: number;
 }
 
 /**
- * [CONTRATO parcial] Configuracion AMOE vigente
- * (`GET /promotions/{slug}/amoe-config`).
+ * [CONTRATO] Configuracion AMOE vigente
+ * (`GET /promotions/{slug}/amoe-config`, `docs/API_CONTRACT.md` 11.3).
  *
  * DOS INTERRUPTORES, Y NO SON EL MISMO:
  *
  * - `enabled` dice si la via gratuita EXISTE. Es el reflejo de `amoe_enabled`
- *   (DEC-032). Apagado, TODO lo demas llega en `null` y la interfaz muestra un
- *   estado deliberado -"esta promocion no ofrece via gratuita"- que remite a
- *   las Reglas Oficiales. No es un error y no es una pantalla a medias.
+ *   (DEC-032). Apagado, todo lo demas llega en `null` SALVO `promotion_id` -que
+ *   no es un parametro de AMOE, sino el dato con el que se pregunto- y la
+ *   interfaz muestra un estado deliberado -"esta promocion no ofrece via
+ *   gratuita"- que remite a las Reglas Oficiales. No es un error y no es una
+ *   pantalla a medias.
  * - `mode` dice QUE interfaz renderizar. Es enum y no booleano precisamente
  *   porque las cuatro modalidades exigen pantallas distintas (DEC-032).
  *
@@ -1380,20 +1410,38 @@ export interface AmoeFieldSpec {
 export interface AmoeConfig {
   readonly enabled: boolean;
   readonly mode: AmoeMode | null;
-  /** Promocion a la que pertenece. `null` con la via apagada. */
+  /**
+   * Promocion a la que pertenece.
+   *
+   * VIAJA TAMBIEN CON LA VIA APAGADA, y por eso NO es senal de incoherencia
+   * encontrarlo relleno junto a `enabled: false`: la ruta se pide por `slug` y
+   * el envio se dirige por identificador, asi que sin este campo haria falta
+   * cruzar dos peticiones para saber a que promocion se pregunto.
+   */
   readonly promotion_id: string | null;
   readonly submission_window: AmoeSubmissionWindow;
   /** Texto controlante en los dos idiomas, o `null`. */
   readonly instructions: LocalizedText | null;
-  /** Campos del formulario. Solo con `mode: "ONLINE_FORM"`. */
+  /**
+   * Campos que exige la modalidad, o `null`.
+   *
+   * LLEGAN EN LAS CUATRO MODALIDADES, no solo en `ONLINE_FORM`: el dominio
+   * exige esas claves en cualquier envio que entre por la API, asi que la
+   * respuesta las publica siempre que la via este encendida. QUE MODALIDAD
+   * PINTA UN FORMULARIO LO DECIDE LA INTERFAZ (`AmoeModePanel`), no la
+   * presencia de esta lista: unas instrucciones postales con campos declarados
+   * siguen siendo un envio por correo, y un boton ahi sugeriria lo contrario.
+   */
   readonly required_fields: readonly AmoeFieldSpec[] | null;
   /**
-   * Destino externo. Solo con `mode: "EXTERNAL_INSTRUCTIONS"`.
+   * Destino externo, o `null`. Lo usa `EXTERNAL_INSTRUCTIONS`.
    *
-   * Se valida antes de pintarlo como enlace: solo `https:`. Un destino que
-   * llegue con otro esquema se muestra como texto y no como enlace, porque un
-   * `javascript:` renderizado como `href` es ejecucion de codigo de terceros en
-   * la pagina.
+   * El backend ya lo valida al leer la configuracion -solo `https:`, y una
+   * promocion con otro esquema se rompe con `409 AMOE_CONFIG_INVALID` en vez de
+   * llegar a un navegador-. La interfaz LO VUELVE A VALIDAR antes de pintarlo
+   * como enlace, y esa duplicidad es deliberada: un `javascript:` renderizado
+   * como `href` es ejecucion de codigo de terceros en la pagina, y el precio de
+   * comprobarlo dos veces es una llamada a `new URL`.
    */
   readonly external_url: string | null;
 }
@@ -1420,13 +1468,19 @@ export const AMOE_SUBMISSION_STATUSES: readonly AmoeSubmissionStatus[] = [
 ];
 
 /**
- * [PROVISIONAL] Respuesta a un envio AMOE
+ * [CONTRATO] Respuesta a un envio AMOE
  * (`POST /promotions/{promotion_id}/amoe-submissions`).
  *
- * `entries` puede ser `null` y ESO NO ES UN OLVIDO: una modalidad con revision
- * manual no otorga participaciones en el momento del envio, y prometer una
- * cifra que todavia no existe seria afirmar algo sobre el resultado de una
- * revision que no ha ocurrido. Solo se muestra cuando el backend la manda.
+ * EL CAMPO SE LLAMA `entries_awarded` EN LAS TRES FORMAS AMOE -esta respuesta,
+ * el listado del participante y la cola de revision-. No es `entries` ni
+ * `entries_granted`; `entries_granted` es de `OrderSummary` y ahi se queda.
+ * Tener dos nombres para la misma cifra segun quien la mire es como se acaba
+ * pintando `undefined` en la pantalla de alguien que participo sin comprar.
+ *
+ * Puede ser `null` y ESO NO ES UN OLVIDO: una modalidad con revision manual no
+ * otorga participaciones en el momento del envio, y prometer una cifra que
+ * todavia no existe seria afirmar algo sobre el resultado de una revision que
+ * no ha ocurrido. Solo se muestra cuando el backend la manda.
  *
  * La aprobacion crea una TRANSACCION DEL LEDGER con `source_type: "AMOE"`.
  * Nunca incrementa un contador (DEC-007, principio #9).
@@ -1435,7 +1489,7 @@ export interface AmoeSubmissionResponse {
   readonly submission_id: string;
   readonly status: AmoeSubmissionStatus;
   /** Participaciones otorgadas, cuando la modalidad las otorga al instante. */
-  readonly entries: number | null;
+  readonly entries_awarded: number | null;
 }
 
 /**
@@ -1449,6 +1503,13 @@ export interface AmoeSubmissionResponse {
  * `cancellable` LO DECIDE EL BACKEND. La interfaz no deduce de un estado si un
  * envio se puede retirar -eso depende de la ventana, de la modalidad y de las
  * Official Rules- y por eso el dato viaja explicito.
+ *
+ * TODO(HO-031): la API nombra el identificador `submission_id` en las tres
+ * formas AMOE, no `id`. Aqui sigue siendo `id` porque `decided_at`,
+ * `reason_key` y `cancellable` -que la respuesta publicada tampoco trae- siguen
+ * siendo peticiones abiertas a `backend`, y renombrar la mitad de una forma que
+ * todavia se va a cerrar entera solo repartiria el cambio en dos pasadas.
+ * Cuando esos tres campos se cierren, esta interfaz se alinea de una vez.
  */
 export interface AmoeSubmission {
   readonly id: string;
@@ -1456,12 +1517,13 @@ export interface AmoeSubmission {
   readonly status: AmoeSubmissionStatus;
   /** ISO-8601 UTC. */
   readonly submitted_at: string;
-  /** Instante de la decision, o `null` si sigue en revision. */
+  /** [PROVISIONAL] Instante de la decision, o `null` si sigue en revision. */
   readonly decided_at: string | null;
-  /** Motivo del rechazo, como clave estable. `null` si no lo hubo. */
+  /** [PROVISIONAL] Motivo del rechazo, como clave estable. `null` si no lo hubo. */
   readonly reason_key: string | null;
   /** Participaciones otorgadas por este envio, o `null`. */
-  readonly entries_granted: number | null;
+  readonly entries_awarded: number | null;
+  /** [PROVISIONAL] Si el backend admite retirarlo. */
   readonly cancellable: boolean;
 }
 
@@ -1719,7 +1781,19 @@ export interface AdminParticipantRow {
 
 export type AdminParticipantPage = CursorPage<AdminParticipantRow>;
 
-/** [PROVISIONAL] Envio AMOE en la cola de revision del panel. */
+/**
+ * [CONTRATO parcial] Envio AMOE en la cola de revision del panel
+ * (`docs/API_CONTRACT.md` 11.3).
+ *
+ * LA COLA PROYECTA EL EFECTO DE LA DECISION, Y LAS TRES CIFRAS LAS CALCULA EL
+ * MOTOR. Quien aprueba tiene que ver antes, cambio y despues antes de causarlo,
+ * y el panel no puede producir ninguna de las tres: el saldo esta en el ledger y
+ * la cantidad la fija la version de reglas DEL ENVIO, no la vigente hoy. Restar
+ * o sumar aqui seria una segunda implementacion del motor sobre datos parciales
+ * (DEC-023, requisito R13), que es lo que detecta `no-client-entry-math`.
+ *
+ * NO SON ACUMULATIVAS ENTRE FILAS: cada una contesta "si apruebo ESTA".
+ */
 export interface AdminAmoeSubmission {
   readonly id: string;
   readonly promotion_id: string;
@@ -1728,29 +1802,40 @@ export interface AdminAmoeSubmission {
   readonly status: AmoeSubmissionStatus;
   readonly submitted_at: string;
   /**
-   * Datos enviados, TAL COMO LLEGAN. Es un mapa opaco porque su forma la fija
-   * `required_fields` de la modalidad vigente, que decide el abogado del
-   * cliente: tiparlo aqui seria fijar en el frontend que se pide para
-   * participar gratis (CLAUDE.md #2).
+   * [PROVISIONAL] Datos enviados, TAL COMO LLEGAN.
    *
-   * Se renderiza como TEXTO, nunca como marcado: lo escribio un desconocido.
+   * OPCIONAL, y el documento dice por que: la cola "lleva `participant_id`
+   * interno; nunca el payload", porque contiene PII y un listado de revision no
+   * es el sitio donde repartirla. Se declara igualmente -no se borra- porque la
+   * pantalla tiene que saber pintarlo el dia que exista una lectura autorizada
+   * de un envio concreto; mientras tanto se dice que no esta publicado, en vez
+   * de ensenar un hueco que parece un envio vacio.
+   *
+   * Mapa opaco a proposito: su forma la fija `required_fields` de la modalidad,
+   * que decide el abogado del cliente, y tiparlo aqui seria fijar en el frontend
+   * que se pide para participar gratis (CLAUDE.md #2). Se renderiza como TEXTO,
+   * nunca como marcado: lo escribio un desconocido.
    */
-  readonly payload: Readonly<Record<string, string>>;
-  /** Participaciones que otorgaria la aprobacion, calculadas por el backend. */
-  readonly entries_if_approved: number | null;
+  readonly payload?: Readonly<Record<string, string>>;
   /**
-   * [PROVISIONAL, ADITIVO] Saldo del participante ANTES de la decision.
-   *
-   * Peticion abierta a `backend`, opcional para no invalidar la forma de hoy.
-   * La confirmacion de una accion sensible tiene que ensenar antes, cambio y
-   * despues, y de los tres el frontend no puede producir ninguno: el saldo lo
-   * tiene el ledger y el resultado lo calcula el motor. Sin estos dos campos, la
-   * fila de participaciones se pinta con el despues marcado como no publicado,
-   * que es correcto pero deja a quien aprueba sin la mitad de la informacion.
+   * Participaciones que ya genero este envio, o `null` mientras no las haya.
+   * Mismo nombre que en las otras dos formas AMOE.
    */
-  readonly entries_before?: number | null;
-  /** [PROVISIONAL, ADITIVO] Saldo resultante si se aprueba. Lo calcula el motor. */
-  readonly entries_after_if_approved?: number | null;
+  readonly entries_awarded: number | null;
+  /**
+   * Saldo del participante ANTES de la decision. SIEMPRE numero: un
+   * participante sin filas tiene cero, que es un saldo conocido y no un hueco.
+   */
+  readonly entries_before: number;
+  /**
+   * Cantidad que otorgaria la aprobacion, y saldo resultante.
+   *
+   * `null` -las dos- cuando la version de reglas del envio ya no declara AMOE
+   * legible: la aprobacion fallaria, y una cifra que no se va a cumplir es peor
+   * que ninguna. La pantalla marca entonces el "despues" como no publicado.
+   */
+  readonly entries_if_approved: number | null;
+  readonly entries_after_if_approved: number | null;
 }
 
 export type AdminAmoeSubmissionPage = CursorPage<AdminAmoeSubmission>;
@@ -1802,38 +1887,80 @@ export interface AdminAdjustment {
 export type AdminAdjustmentPage = CursorPage<AdminAdjustment>;
 
 /**
- * [PROVISIONAL] Previsualizacion de un ajuste
+ * [CONTRATO] Sentido de un ajuste manual.
+ *
+ * DOS CAMPOS -sentido y cantidad POSITIVA- y no un entero con signo, porque asi
+ * lo pide la API. Tiene su logica: `DEBIT` es una decision que se toma, no un
+ * caracter que se teclea delante de una cifra, y un menos que se pierde al
+ * copiar y pegar convierte una resta en una suma sin que nada falle.
+ */
+export type AdjustmentDirection = "CREDIT" | "DEBIT";
+
+export const ADJUSTMENT_DIRECTIONS: readonly AdjustmentDirection[] = ["CREDIT", "DEBIT"];
+
+/**
+ * [CONTRATO] Peticion de previsualizacion
+ * (`POST /admin/entry-adjustments/preview`, `docs/API_CONTRACT.md` 11.4).
+ *
+ * `quantity` es POSITIVA siempre; el sentido lo lleva `direction`.
+ */
+export interface AdjustmentPreviewRequest {
+  readonly promotion_id: string;
+  readonly participant_id: string;
+  readonly direction: AdjustmentDirection;
+  readonly quantity: number;
+}
+
+/**
+ * [CONTRATO] Previsualizacion de un ajuste
  * (`POST /admin/entry-adjustments/preview`).
  *
  * ES LA PETICION MAS IMPORTANTE DE TODO EL PANEL, y la razon es concreta: la
  * confirmacion de una mutacion sensible tiene que ensenar antes, delta y
- * despues, y EL FRONTEND NO PUEDE CALCULAR EL DESPUES. Sumar `entries_before` y
+ * despues, y EL FRONTEND NO PUEDE CALCULAR EL DESPUES. Sumar `before` y
  * `proposed_delta` seria una segunda implementacion del motor de participaciones
- * viviendo en la interfaz, que es lo que prohiben DEC-023 y el requisito R13 de
- * `security`, y lo que la red `no-client-entry-math.test.ts` detecta y hace
- * fallar.
+ * viviendo en la interfaz -el "antes" sale del predicado de saldo de DEC-034,
+ * que decide que filas cuentan al corte y cuales han caducado-, que es lo que
+ * prohiben DEC-023 y el requisito R13 de `security`, y lo que la red
+ * `no-client-entry-math.test.ts` detecta y hace fallar.
  *
  * Asi que el despues lo publica quien sabe calcularlo. La ruta es de SOLO
- * LECTURA pese a ser `POST`: no crea nada, no asienta nada y se puede llamar
- * mil veces. Es `POST` unicamente porque el cuerpo lleva participante,
- * promocion y delta, que no caben comodos en una query.
+ * LECTURA pese a ser `POST`: no crea fila de ledger, ni expediente, ni evento de
+ * auditoria, y se puede llamar mil veces. Es `POST` unicamente porque el cuerpo
+ * lleva un identificador de participante, y en un `GET` viajaria en la URL, que
+ * acaba en registros de acceso y en historiales de navegador.
+ *
+ * CON `manual_adjustments_enabled` APAGADO RESPONDE 404, igual que crear: la
+ * funcion no existe para nadie, y un 403 sugeriria que existe y que a este
+ * operador no se le deja usarla.
  */
 export interface AdjustmentPreview {
-  readonly participant_id: string;
-  readonly promotion_id: string;
-  /** Saldo actual. Entero (DEC-010). */
-  readonly entries_before: number;
-  /** Delta propuesto, con signo. */
+  /** Saldo activo al instante de la lectura. Cero es un saldo, no un vacio. */
+  readonly before: number;
+  /** Con signo: exactamente el que llevaria la fila del ledger (DEC-010). */
   readonly proposed_delta: number;
   /** Saldo resultante, CALCULADO POR EL BACKEND. */
-  readonly entries_after: number;
+  readonly after: number;
   /**
-   * Advertencias del motor: tope alcanzado, promocion cerrada, participante
-   * descalificado. Claves estables (DEC-022); el copy es del frontend.
+   * Si el debito dejaria el saldo negativo.
+   *
+   * Es LITERALMENTE la misma funcion que rechaza el ajuste al aplicarlo, no una
+   * reimplementacion, para que no exista una previsualizacion en verde seguida
+   * de un rechazo. La interfaz bloquea el envio cuando llega `true`: no es el
+   * control -el backend rechaza igual- pero evita mandar a alguien a firmar una
+   * accion que ya se sabe que va a fallar.
    */
-  readonly warnings: readonly string[];
+  readonly would_make_balance_negative: boolean;
   /** Si el backend exige segunda aprobacion para este ajuste (DEC-032). */
   readonly requires_second_approval: boolean;
+  /**
+   * Instante de la foto, ISO-8601 UTC.
+   *
+   * VIAJA PORQUE UN SALDO NO ES UN HECHO PERMANENTE: entre la previsualizacion y
+   * la solicitud puede entrar una compra o una descalificacion, y sin el
+   * instante una pantalla abierta media hora parece hablar del presente.
+   */
+  readonly as_of: string;
 }
 
 /**
