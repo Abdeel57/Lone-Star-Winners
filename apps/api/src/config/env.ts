@@ -184,6 +184,18 @@ export const environmentSchema = z
     /** DEC-006 fija la ventana de step-up en 5 minutos o menos. */
     STEP_UP_MAX_AGE_SECONDS: integerFromEnv(30, 300),
 
+    /**
+     * DEC-045: clave AES-256 (32 bytes en base64url) con la que se cifra el
+     * secreto TOTP antes de persistirlo. Se valida la LONGITUD aqui, no al
+     * usarla: si no, una clave corta fallaria en la primera inscripcion de MFA
+     * de alguien, en produccion, en vez de impedir el arranque.
+     */
+    MFA_SECRET_ENCRYPTION_KEY: z
+      .string()
+      .refine((value) => Buffer.from(value, "base64url").length === 32, {
+        error: "debe ser una clave de 32 bytes codificada en base64url",
+      }),
+
     // ----- Commerce -----
     // El procesador de pagos NO esta decidido (CLAUDE.md seccion 7).
     // `none` es el unico valor que este hito reconoce.
@@ -290,6 +302,9 @@ export interface ApiConfig {
     readonly adminIdleTimeoutMinutes: number;
     readonly stepUpMaxAgeSeconds: number;
   };
+  readonly mfa: {
+    readonly encryptionKey: string;
+  };
   readonly commerce: {
     readonly paymentProvider: string;
     readonly defaultCurrency: string;
@@ -360,6 +375,9 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): ApiConfig {
       adminTtlMinutes: env.ADMIN_SESSION_TTL_MINUTES,
       adminIdleTimeoutMinutes: env.ADMIN_SESSION_IDLE_TIMEOUT_MINUTES,
       stepUpMaxAgeSeconds: env.STEP_UP_MAX_AGE_SECONDS,
+    },
+    mfa: {
+      encryptionKey: env.MFA_SECRET_ENCRYPTION_KEY,
     },
     commerce: {
       paymentProvider: env.PAYMENT_PROVIDER,

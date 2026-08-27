@@ -93,6 +93,22 @@ export const ApiErrors = {
       details: { required_permission: requiredPermission },
     }),
 
+  /**
+   * 423 y no 401: la credencial puede ser correcta y aun asi no se entra. Un
+   * 401 haria que quien prueba contrasenas no distinguiera el bloqueo y
+   * siguiera gastando intentos, pero tambien impediria al usuario legitimo
+   * entender por que no entra.
+   *
+   * El bloqueo es temporal a proposito: uno permanente convierte el formulario
+   * de login en una forma de dejar fuera a cualquiera cuyo correo se conozca.
+   */
+  accountLocked: (retryAfterSeconds: number): ApiError =>
+    new ApiError({
+      statusCode: 423,
+      code: "ACCOUNT_LOCKED",
+      details: { retry_after_seconds: retryAfterSeconds },
+    }),
+
   notFound: (): ApiError => new ApiError({ statusCode: 404, code: "NOT_FOUND" }),
 
   validationFailed: (issues: readonly unknown[]): ApiError =>

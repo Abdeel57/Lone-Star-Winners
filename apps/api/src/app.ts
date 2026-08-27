@@ -33,12 +33,17 @@ import {
   runWithRequestContext,
   sanitizeIncomingCorrelationId,
 } from "./observability/request-context.js";
+import cookie from "@fastify/cookie";
+
+import { buildAuthRoutes } from "./routes/auth.js";
 import { buildCartRoutes } from "./routes/cart.js";
 import { buildHealthRoutes } from "./routes/health.js";
 import { buildMetaRoutes } from "./routes/meta.js";
 import { buildStorefrontRoutes } from "./routes/storefront.js";
 import { installPrincipalResolver, noPrincipalResolver } from "./http/principal.js";
+import { createIdentityRepositories } from "./services/drizzle-identity.js";
 import { createRepositories } from "./services/drizzle-repositories.js";
+import type { IdentityRepositories } from "./services/identity-ports.js";
 import type { Repositories } from "./services/ports.js";
 
 export interface AppDependencies {
@@ -51,6 +56,8 @@ export interface AppDependencies {
    * si vive en el (DEC-018).
    */
   readonly repositories: Repositories;
+  /** Puertos de identidad y sesion (DEC-006, DEC-045). */
+  readonly identity: IdentityRepositories;
 }
 
 export function createDependencies(config: ApiConfig): AppDependencies {
@@ -71,6 +78,7 @@ export function createDependencies(config: ApiConfig): AppDependencies {
     config,
     database,
     repositories: createRepositories(database.db),
+    identity: createIdentityRepositories(database.db),
     // `CLAUDE.md` seccion 7: el procesador de pagos no esta decidido. Hasta que
     // lo este, el puerto falla ruidosamente en vez de simular exito.
     paymentProvider: new UnconfiguredPaymentProvider(),
@@ -83,6 +91,7 @@ export function collectRouteDefinitions(dependencies: AppDependencies): RouteDef
     ...buildHealthRoutes(dependencies),
     ...buildStorefrontRoutes(dependencies),
     ...buildCartRoutes(dependencies),
+    ...buildAuthRoutes(dependencies),
   ];
 
   const metaRoutes = buildMetaRoutes({
@@ -107,6 +116,7 @@ export function collectContractRouteDefinitions(dependencies: AppDependencies): 
     ...buildHealthRoutes(dependencies),
     ...buildStorefrontRoutes(dependencies),
     ...buildCartRoutes(dependencies),
+    ...buildAuthRoutes(dependencies),
   ];
   routes.push(
     ...buildMetaRoutes({ serverUrl: dependencies.config.http.publicUrl, allRoutes: () => routes }),
@@ -158,6 +168,14 @@ export async function createApp(dependencies: AppDependencies): Promise<FastifyI
       done,
     );
   });
+
+  // ---- 4b. Cookies de sesion (DEC-006) ----
+  //
+  // Sin firmar a proposito. El token ya es opaco y de 256 bits, y su validez la
+  // decide la fila de `sessions`, no su forma: firmarlo solo anadiria un
+  // segundo secreto que rotar sin ganar ninguna garantia. Una cookie firmada
+  // pero no revocable seria peor que esta.
+  await app.register(cookie);
 
   // ---- 5. Seguridad de transporte ----
   await app.register(helmet, {

@@ -42,6 +42,9 @@ export const CONTRACT_GENERATION_CONFIG: ApiConfig = {
     adminIdleTimeoutMinutes: 15,
     stepUpMaxAgeSeconds: 300,
   },
+  mfa: {
+    encryptionKey: "BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc",
+  },
   commerce: {
     paymentProvider: "none",
     defaultCurrency: "USD",

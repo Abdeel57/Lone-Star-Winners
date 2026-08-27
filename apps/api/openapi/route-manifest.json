@@ -3,6 +3,42 @@
   "contract_version": "0.1.0",
   "routes": [
     {
+      "method": "POST",
+      "path": "/api/v1/auth/login",
+      "operation_id": "login",
+      "authorization": "PUBLIC",
+      "requires_step_up": false,
+      "tags": ["auth"],
+      "summary": "Iniciar sesion con correo y contrasena."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/logout",
+      "operation_id": "logout",
+      "authorization": "PUBLIC",
+      "requires_step_up": false,
+      "tags": ["auth"],
+      "summary": "Cerrar la sesion actual."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/mfa/verify",
+      "operation_id": "verifyMfa",
+      "authorization": "PUBLIC",
+      "requires_step_up": false,
+      "tags": ["auth"],
+      "summary": "Completar el segundo factor de una sesion en MFA_PENDING."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/auth/session",
+      "operation_id": "getSession",
+      "authorization": "PUBLIC",
+      "requires_step_up": false,
+      "tags": ["auth"],
+      "summary": "Estado de la sesion actual."
+    },
+    {
       "method": "GET",
       "path": "/api/v1/cart",
       "operation_id": "getCart",

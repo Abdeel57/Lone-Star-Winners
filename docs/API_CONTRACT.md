@@ -213,6 +213,10 @@ markdown, y es lo que verifica el test de contrato de DEC-015.
 | PATCH  | /api/v1/cart/items/:item_id             | `PARTICIPANT_SELF` |
 | DELETE | /api/v1/cart/items/:item_id             | `PARTICIPANT_SELF` |
 | GET    | /api/v1/cart/entry-quote                | `PARTICIPANT_SELF` |
+| POST   | /api/v1/auth/login                      | `PUBLIC`           |
+| POST   | /api/v1/auth/mfa/verify                 | `PUBLIC`           |
+| GET    | /api/v1/auth/session                    | `PUBLIC`           |
+| POST   | /api/v1/auth/logout                     | `PUBLIC`           |
 
 Las tres de infraestructura (`/api/v1/health`, `/api/v1/health/ready`,
 `/api/v1/openapi.json`) están documentadas más abajo y exentas de ese gate por
@@ -1229,3 +1233,114 @@ Status: PROPOSED
 - **Cualquier constante legal.** Edades mínimas, jurisdicciones, ratios,
   deadlines y topes NO aparecen en este documento. Viajan como datos desde
   `PromotionRulesVersion` (DEC-012).
+
+---
+
+## 10. Autenticación (DEC-006, DEC-045)
+
+**Estado:** `IMPLEMENTED` para las cuatro rutas de abajo. Inscripción de MFA,
+registro de participante, verificación de email y restablecimiento de
+contraseña siguen en `TBD`: son la fase siguiente.
+
+### Un solo sistema, dos políticas
+
+`CLAUDE.md` §4 prohíbe dos sistemas de autenticación y DEC-006 lo repite. **No
+existe `/admin/login`.** Participante y personal usan estas mismas rutas; lo
+que cambia es la política que decide `audienceForRoles` a partir de los roles:
+
+|              | `PARTICIPANT` | `STAFF`         |
+| ------------ | ------------- | --------------- |
+| Cookie       | `<base>`      | `<base>_staff`  |
+| `SameSite`   | `Lax`         | `Strict`        |
+| `Path`       | `/`           | `/admin`        |
+| TTL absoluto | 14 días       | 8 horas         |
+| Inactividad  | —             | 15 min          |
+| MFA          | no            | **obligatorio** |
+
+Los nombres llevan sufijo distinto para que una sesión de escaparate y una de
+panel coexistan en el mismo navegador. Sin eso, entrar al panel cerraría la
+sesión de la tienda y al revés, y el síntoma —"me desloguea solo"— sería muy
+difícil de atribuir.
+
+La fuente de esta tabla es `SESSION_POLICIES` en `packages/security`; aquí solo
+se refleja. Si divergen, manda el código.
+
+### El token es opaco
+
+43 caracteres `base64url` (`[A-Za-z0-9_-]`). **No es un JWT y no se decodifica:
+no lleva nada dentro.** Toda la información de la sesión vive en la fila de
+`sessions`, que es lo que la hace revocable de verdad. La base de datos guarda
+solo el hash SHA-256 del token.
+
+### `SessionState`
+
+```json
+{
+  "authenticated": true,
+  "state": "ACTIVE",
+  "scope": "STAFF",
+  "email": "persona@ejemplo.invalid",
+  "email_verified": true,
+  "roles": ["CATALOG_MANAGER"]
+}
+```
+
+`state` es `ANONYMOUS`, `ACTIVE` o **`MFA_PENDING`**. Este último es el estado
+de una sesión de personal que ya pasó la contraseña y **todavía no vale para
+nada** salvo para completar el segundo factor. No es una pantalla que se pueda
+saltar: es una sesión que aún no autentica.
+
+### `POST /api/v1/auth/login`
+
+`Authorization: PUBLIC` — es la ruta que se usa antes de tener sesión.
+
+Cuerpo: `{ "email": string, "password": string }`.
+
+Respuestas: `200` `SessionState` · `401` credenciales inválidas · `423` cuenta
+bloqueada, con `retry_after_seconds` · `422` cuerpo inválido.
+
+**No distingue "no existe" de "contraseña incorrecta".** Ambos devuelven `401`
+y consumen el mismo trabajo criptográfico, porque la diferencia de tiempo sería
+medible desde fuera y convertiría el login en un enumerador de correos
+registrados —que en un sweepstakes es una lista de participantes.
+
+Cinco fallos consecutivos bloquean 15 minutos. El bloqueo es **temporal** a
+propósito: uno permanente convertiría el formulario en una forma de dejar fuera
+a cualquiera cuyo correo se conozca.
+
+### `POST /api/v1/auth/mfa/verify`
+
+`Authorization: PUBLIC` — la sesión existe pero está en `MFA_PENDING`, así que
+exigir sesión válida aquí sería circular.
+
+Cuerpo: `{ "code": string }` (seis dígitos; se aceptan espacios).
+
+Respuestas: `200` `SessionState` con `state: "ACTIVE"` · `401` código inválido,
+caducado o **ya usado**.
+
+**Un código no vale dos veces**, ni siquiera dentro de su ventana de 30
+segundos. El consumo de la ventana es atómico en el motor.
+
+### `GET /api/v1/auth/session`
+
+`Authorization: PUBLIC`. **Sin sesión devuelve `200` con `ANONYMOUS`, no
+`401`**: es lo que consulta el frontend en cada render y un 401 ahí obligaría a
+tratar el caso normal como error.
+
+### `POST /api/v1/auth/logout`
+
+`Authorization: PUBLIC`. Idempotente: siempre `200 { "ok": true }`, haya sesión
+o no. Un 401 al cerrar sesión no le sirve a nadie y además revelaría si la
+cookie presentada era válida.
+
+**Revoca en base de datos además de borrar la cookie.** Borrar solo la cookie
+dejaría el token vivo para quien lo hubiera copiado.
+
+### Lo que NO está aquí, y por qué
+
+- **Inscripción de MFA, registro, verificación de email y reset de
+  contraseña.** Fase siguiente.
+- **Si la verificación de email condiciona ganar participaciones.** Depende de
+  `docs/LEGAL_PENDING.md` ("Email verification before earning entries", `TBD`).
+  El campo `email_verified` se publica como dato; **que ese dato tenga
+  consecuencias es una decisión legal que aún no existe**.

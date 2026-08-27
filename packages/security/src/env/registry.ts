@@ -194,11 +194,11 @@ const RUNTIME_AND_DATA_VARS: readonly EnvVarSpec[] = Object.freeze([
     "MFA_SECRET_ENCRYPTION_KEY",
     "api",
     "string",
-    // NO_ENVIRONMENT mientras la fase 1 solo aporta las primitivas: ningun
-    // proceso la lee todavia. La fase 2, que expone la inscripcion de MFA por
-    // HTTP, la pasara a obligatoria en entornos desplegados. Declararla
-    // obligatoria antes de que nadie la use solo impediria arrancar.
-    NO_ENVIRONMENT,
+    // Obligatoria desde la fase 2: `apps/api` la exige en el arranque para
+    // poder descifrar secretos TOTP. Sin ella el proceso no levanta, que es lo
+    // correcto: un MFA que no puede verificarse no es un MFA degradado, es un
+    // panel de administracion sin segundo factor.
+    ALL_ENVIRONMENTS,
     "Clave AES-256 (32 bytes en base64url) con la que se cifra el secreto TOTP antes de persistirlo. Rotarla invalida todos los factores MFA inscritos.",
     { secret: true },
   ),
