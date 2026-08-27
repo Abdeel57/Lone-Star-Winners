@@ -35,6 +35,58 @@ function looksLikePlaceholder(value: string): boolean {
   return PLACEHOLDER_MARKERS.some((marker) => upper.includes(marker));
 }
 
+/**
+ * Parametros de TLS que `pg` acepta DENTRO de la cadena de conexion.
+ *
+ * Existen porque `pg` no combina la configuracion: la fusiona, y gana la
+ * cadena. En `connection-parameters.js` hace
+ * `Object.assign({}, config, parse(config.connectionString))`, de modo que un
+ * `?sslmode=...` sobrescribe el objeto `ssl` que le pasa `app.ts`. Medido
+ * contra el `pg` instalado, pasando siempre `ssl: { rejectUnauthorized: true }`:
+ *
+ *   (sin query)          -> { rejectUnauthorized: true }
+ *   ?sslmode=disable     -> false          <- conexion en claro
+ *   ?sslmode=no-verify   -> { rejectUnauthorized: false }
+ *   ?ssl=0               -> false          <- conexion en claro
+ *
+ * Es decir: sin esta guarda, `DATABASE_SSL_MODE=verify-full` puede pasar toda
+ * la validacion y todos los tests mientras la conexion real viaja sin cifrar,
+ * porque la postura de TLS tendria dos fuentes de verdad y la que manda no es
+ * la que se valida. La cadena declara A DONDE se conecta; COMO se protege esa
+ * conexion lo declara `DATABASE_SSL_MODE`, y solo el.
+ */
+const TLS_QUERY_PARAMETERS = [
+  "sslmode",
+  "ssl",
+  "sslrootcert",
+  "sslcert",
+  "sslkey",
+  "sslnegotiation",
+  "uselibpqcompat",
+];
+
+/** Devuelve los parametros de TLS presentes en la query de una URL de conexion. */
+function tlsParametersIn(connectionString: string): readonly string[] {
+  let query: URLSearchParams;
+
+  try {
+    query = new URL(connectionString).searchParams;
+  } catch {
+    // Una cadena que no parsea la rechaza `startsWith("postgres")` o el propio
+    // `pg` al conectar. Aqui no se opina.
+    return [];
+  }
+
+  return TLS_QUERY_PARAMETERS.filter((parameter) => query.has(parameter));
+}
+
+const postgresUrlWithoutTlsOverrides = z
+  .string()
+  .startsWith("postgres")
+  .refine((value) => tlsParametersIn(value).length === 0, {
+    error: `la cadena de conexion no puede traer parametros de TLS en la query (${TLS_QUERY_PARAMETERS.join(", ")}): en \`pg\` SOBRESCRIBEN a DATABASE_SSL_MODE y dejarian la postura de TLS con dos fuentes de verdad. Quitalos: el modo se declara en DATABASE_SSL_MODE y en ningun otro sitio.`,
+  });
+
 const integerFromEnv = (min: number, max: number) =>
   z
     .string()
@@ -91,7 +143,7 @@ export const environmentSchema = z
     API_RATE_LIMIT_MAX_REQUESTS: integerFromEnv(1, 1_000_000),
 
     // ----- PostgreSQL (DEC-003) -----
-    DATABASE_URL_APP: z.string().startsWith("postgres"),
+    DATABASE_URL_APP: postgresUrlWithoutTlsOverrides,
     DATABASE_SSL_MODE: z.enum(SSL_MODES),
     /**
      * DEC-043: por que camino de red viaja la conexion a PostgreSQL.

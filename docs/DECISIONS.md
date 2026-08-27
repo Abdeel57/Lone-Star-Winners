@@ -1898,9 +1898,56 @@ tal en vez de esconderse en un valor por defecto. La lectura honesta es que se
 sustituye una garantía criptográfica por una topológica: aceptable mientras la
 base sea inalcanzable desde fuera del proyecto, e inaceptable en cuanto se le
 abra un endpoint público. **Requiere revisión de `security` antes de
-INTEGRATE** (ver `docs/AGENT_HANDOFF.md`, HO-022). El punto 3 no rebaja
-nada: lo que DEC-003 protege de verdad es el ledger frente a la aplicación, no
-frente al operador de la base.
+INTEGRATE** (ver `docs/AGENT_HANDOFF.md`, HO-022).
+
+~~El punto 3 no rebaja nada: lo que DEC-003 protege de verdad es el ledger
+frente a la aplicación, no frente al operador de la base.~~
+
+**Corrección (2026-08-26, auditoría de HO-022).** La frase tachada era falsa y
+se deja visible en vez de borrarla, porque afirmaba algo incorrecto sobre la
+garantía central del sistema y quien lea este ADR debe ver la corrección en el
+mismo sitio, no enmendada desde lejos.
+
+Lo cierto de la frase: la invariante de DEC-007 se sostiene. Verificado por la
+auditoría —ningún privilegio de `lsw_app` depende de `ALTER DEFAULT PRIVILEGES
+FOR ROLE lsw_migrator`; los únicos privilegios por defecto de
+`0000_baseline.sql:100-106` conceden `SELECT ON TABLES` a `lsw_readonly_report`
+y `USAGE, SELECT ON SEQUENCES` a `lsw_app`, y ninguno puede conceder
+UPDATE/DELETE. Todo privilegio DML es un GRANT explícito tabla a tabla, y
+`0006_entry_ledger.sql:1132-1134` añade `REVOKE UPDATE, DELETE, TRUNCATE`
+redundantes sobre las tres tablas del ledger.
+
+Lo que la frase ocultaba: `scripts/railway-env.mjs` coloca
+`DATABASE_URL_SUPERUSER` entre las variables **del servicio `api`**, y en
+Railway el `preDeployCommand` comparte entorno con el proceso que sirve. Esa
+credencial vive, por tanto, en el `process.env` de un proceso de larga
+duración expuesto a Internet, no confinada a un job de un solo uso. Importa
+porque DEC-007 y DEC-012 se aplican con **triggers**, y un trigger no defiende
+del propietario de la tabla: `lsw_reject_mutation`
+(`0000_baseline.sql:138`), `promotions_enforce_lifecycle`
+(`0002_promotions.sql:394`) y el cerrojo de activación de DEC-012 se
+neutralizan con `SET session_replication_role = 'replica'` o
+`ALTER TABLE ... DISABLE TRIGGER` desde el rol de esa URL.
+
+La formulación honesta es: **el punto 3 no rebaja nada para el rol de
+aplicación, y concentra una credencial capaz de saltarse los triggers en el
+proceso más expuesto a Internet.**
+
+Matiz adicional de la misma auditoría: `0000_baseline.sql:105` es el
+`ALTER DEFAULT PRIVILEGES` **sin `FOR ROLE`**, así que se registra contra quien
+ejecute la migración 0000 —bajo Railway, el superusuario— y las variantes
+`FOR ROLE lsw_migrator` de `:101` y `:106` quedan como peso muerto. Hoy es
+inocuo porque la única secuencia del esquema es una columna identidad
+(`0006_entry_ledger.sql:317`), que no requiere USAGE separado. Pero "los GRANT
+se aplican sea quien sea quien las ejecute" es cierto para tablas e
+**incidentalmente** cierto para secuencias: nadie debe apoyarse en la
+formulación fuerte.
+
+Pendiente, no resuelto aquí: sacar `DATABASE_URL_SUPERUSER` del entorno de
+ejecución de `api` si Railway permite acotarla al pre-deploy, o —mejor— usar
+`DATABASE_URL_MIGRATOR` con recurso al superusuario solo en arranque en frío,
+lo que reduce la ventana de "cada despliegue, para siempre" a "el primer
+despliegue".
 
 Nota de alcance:
 Este despliegue publica lo que hoy existe: catálogo, promociones, Reglas

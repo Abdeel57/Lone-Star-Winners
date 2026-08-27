@@ -103,7 +103,49 @@ async function setRolePassword(client: Client, entry: RolePassword): Promise<voi
 
 async function main(): Promise<void> {
   const superuserUrl = requireEnv("DATABASE_URL_SUPERUSER");
-  const sslMode = process.env.DATABASE_SSL_MODE ?? "disable";
+
+  /**
+   * Sin valor por defecto, y a proposito.
+   *
+   * Este script es el `preDeployCommand`: corre ANTES de que arranque la api y
+   * conecta con el SUPERUSUARIO. Un `?? "disable"` aqui significaba que una
+   * variable mal escrita en el gestor de secretos abria la sesion mas
+   * privilegiada del sistema en claro, y encima en silencio: la api se negaria
+   * a arrancar despues (correcto), pero el bootstrap ya habria conectado. La
+   * conexion mas privilegiada no puede ser la que menos se valida.
+   */
+  const sslMode = requireEnv("DATABASE_SSL_MODE");
+
+  if (!["disable", "require", "verify-ca", "verify-full"].includes(sslMode)) {
+    console.error(`[bootstrap] DATABASE_SSL_MODE invalido: ${sslMode}`);
+    process.exit(1);
+  }
+
+  // Misma razon que en `apps/api/src/config/env.ts`: en `pg` la query de la
+  // cadena de conexion SOBRESCRIBE el objeto `ssl`, asi que un `?sslmode=`
+  // aqui anularia en silencio lo que se decida abajo.
+  const tlsInQuery = [
+    "sslmode",
+    "ssl",
+    "sslrootcert",
+    "sslcert",
+    "sslkey",
+    "sslnegotiation",
+  ].filter((parameter) => {
+    try {
+      return new URL(superuserUrl).searchParams.has(parameter);
+    } catch {
+      return false;
+    }
+  });
+
+  if (tlsInQuery.length > 0) {
+    console.error(
+      `[bootstrap] DATABASE_URL_SUPERUSER trae ${tlsInQuery.join(", ")} en la query, y en \`pg\` eso sobrescribe a DATABASE_SSL_MODE. Quitalo.`,
+    );
+    process.exit(1);
+  }
+
   const useSsl = sslMode !== "disable";
 
   const passwords: readonly RolePassword[] = [

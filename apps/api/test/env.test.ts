@@ -126,6 +126,43 @@ describe("refuerzos que solo aplican en produccion", () => {
     );
   });
 
+  describe("la cadena de conexion no puede redefinir la postura de TLS", () => {
+    // El fallo real que esto previene: `pg` fusiona la configuracion haciendo
+    // `Object.assign({}, config, parse(config.connectionString))`, asi que la
+    // query GANA sobre el objeto `ssl`. Sin esta guarda, `verify-full` pasaba
+    // toda la validacion mientras la conexion viajaba en claro. Medido contra
+    // el `pg` instalado: `?sslmode=disable` -> ssl === false.
+    for (const parameter of [
+      "sslmode=disable",
+      "sslmode=require",
+      "sslmode=no-verify",
+      "ssl=0",
+      "sslrootcert=/tmp/ca.pem",
+    ]) {
+      it(`rechaza DATABASE_URL_APP con ${parameter}`, () => {
+        expect(() =>
+          loadConfig({
+            ...PRODUCTION_BASE,
+            DATABASE_URL_APP: `postgresql://lsw_app:secreto@db.interno.invalid:5432/lsw?${parameter}`,
+          }),
+        ).toThrow(/DATABASE_SSL_MODE/u);
+      });
+    }
+
+    it("acepta una cadena sin parametros de TLS", () => {
+      expect(loadConfig(PRODUCTION_BASE).database.appUrl).toContain("lsw_app");
+    });
+
+    it("no confunde un parametro no relacionado con uno de TLS", () => {
+      const config = loadConfig({
+        ...PRODUCTION_BASE,
+        DATABASE_URL_APP:
+          "postgresql://lsw_app:secreto@db.interno.invalid:5432/lsw?application_name=lsw-api",
+      });
+      expect(config.database.appUrl).toContain("application_name");
+    });
+  });
+
   describe("DEC-043: camino de red hacia PostgreSQL", () => {
     it("exige verify-full cuando no se declara nada (el defecto es el estricto)", () => {
       // Sin DATABASE_NETWORK el esquema asume `public`. Es la garantia de que

@@ -172,6 +172,19 @@ ledger: la aplicación corre como `lsw_app`, que nunca recibe `UPDATE`/`DELETE`
 sobre ledger ni auditoría (DEC-007), y eso lo garantizan los `GRANT`
 explícitos de cada migración, que se aplican sea quien sea quien las ejecute.
 
+> **Pero esto no sale gratis, y la primera versión de este documento lo
+> presentaba como si lo fuera.** `DATABASE_URL_SUPERUSER` se declara entre las
+> variables del servicio `api`, y en Railway el `preDeployCommand` comparte
+> entorno con el proceso que sirve: esa credencial vive en el `process.env` de
+> un proceso de larga duración expuesto a Internet. DEC-007 y DEC-012 se
+> aplican con **triggers**, y un trigger no defiende del propietario de la
+> tabla — desde ese rol se desactivan con `SET session_replication_role`.
+>
+> La formulación correcta: no rebaja nada **para el rol de aplicación**, y
+> concentra una credencial capaz de saltarse los triggers en el proceso más
+> expuesto. La corrección completa, con la refutación de la auditoría, está en
+> DEC-043.
+
 ---
 
 ## Rotar secretos

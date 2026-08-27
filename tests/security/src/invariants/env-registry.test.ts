@@ -16,6 +16,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   ENV_REGISTRY,
+  PRODUCTION_HARDENING_RULES,
   findUndeclaredNames,
   findUndocumentedNames,
   parseEnvFile,
@@ -125,6 +126,53 @@ describe("DEC-043: endurecimiento condicionado al camino de red", () => {
     expect(
       sslIssues({ DATABASE_NETWORK: "public", DATABASE_SSL_MODE: "verify-full" }),
     ).toHaveLength(0);
+  });
+
+  it("toda regla condicionada cubre TODOS los valores posibles de su condicion", () => {
+    // El agujero que esto cierra: `checkHardening` no hace nada, en silencio,
+    // cuando el valor condicionante no coincide con ninguna rama. Hoy es
+    // inofensivo porque `allowedValues` y zod rechazan los valores no
+    // previstos. Pero si alguien anade un tercer valor a DATABASE_NETWORKS sin
+    // anadir su rama, el endurecimiento de TLS desaparece entero y ningun test
+    // nombrado lo detecta: los de arriba prueban tres casos concretos, no
+    // exhaustividad.
+    const conditioned = PRODUCTION_HARDENING_RULES.filter((rule) => rule.appliesWhen !== undefined);
+    expect(conditioned.length).toBeGreaterThan(0);
+
+    const uncovered: string[] = [];
+
+    for (const rule of conditioned) {
+      const condition = rule.appliesWhen;
+      if (condition === undefined) {
+        continue;
+      }
+
+      const spec = ENV_REGISTRY.find((current) => current.name === condition.name);
+      const values = spec?.allowedValues ?? [];
+
+      // El caso "ausente" cuenta como un valor posible mas: omitir la variable
+      // no puede apagar el endurecimiento.
+      const cases: readonly (string | undefined)[] = [...values, undefined];
+
+      for (const value of cases) {
+        const covered = conditioned.some((candidate) => {
+          const other = candidate.appliesWhen;
+          if (other === undefined || candidate.name !== rule.name) {
+            return false;
+          }
+          return value === undefined ? other.whenAbsent : other.equals === value;
+        });
+
+        if (!covered) {
+          uncovered.push(`${rule.name} sin rama para ${condition.name}=${value ?? "(ausente)"}`);
+        }
+      }
+    }
+
+    expect(
+      uncovered,
+      `Reglas de endurecimiento con valores de condicion sin cubrir. Anadir un valor al enum sin anadir su rama apaga el endurecimiento en silencio:\n${uncovered.join("\n")}`,
+    ).toStrictEqual([]);
   });
 
   it("en red privada exige disable y rechaza el TLS que no se verifica", () => {

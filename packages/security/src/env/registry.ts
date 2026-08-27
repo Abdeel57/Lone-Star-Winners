@@ -433,6 +433,27 @@ export const PRODUCTION_HARDENING_RULES: readonly ProductionHardeningRule[] = Ob
     appliesTo: DEPLOYED_ENVIRONMENTS,
     rationale: "Una cookie de sesion sin Secure viaja en claro ante cualquier degradacion a http.",
   },
+  // La postura de TLS tiene UNA fuente de verdad: DATABASE_SSL_MODE. En `pg`
+  // la query de la cadena de conexion sobrescribe el objeto `ssl`
+  // (`Object.assign({}, config, parse(connectionString))`), asi que un
+  // `?sslmode=disable` colado en la URL anula verify-full sin que nada mas se
+  // entere. Medido: `?sslmode=disable` -> ssl === false, conexion en claro.
+  {
+    name: "DATABASE_URL_APP",
+    requirement: "MUST_NOT_CONTAIN",
+    value: "sslmode=",
+    appliesTo: DEPLOYED_ENVIRONMENTS,
+    rationale:
+      "Un sslmode en la cadena de conexion sobrescribe DATABASE_SSL_MODE en `pg` y puede dejar la conexion en claro mientras la validacion sigue diciendo verify-full.",
+  },
+  {
+    name: "DATABASE_URL_SUPERUSER",
+    requirement: "MUST_NOT_CONTAIN",
+    value: "sslmode=",
+    appliesTo: DEPLOYED_ENVIRONMENTS,
+    rationale: "Misma razon, y sobre la conexion mas privilegiada del sistema: la del bootstrap.",
+  },
+
   // DEC-043. Dos ramas, ninguna laxa: la unica diferencia es que sobre red
   // privada el certificado del proveedor es autofirmado y `verify-full` no
   // puede satisfacerse. `require` y `verify-ca` estan prohibidos en AMBAS: no
