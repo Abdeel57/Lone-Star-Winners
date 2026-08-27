@@ -1131,36 +1131,37 @@ Status: PROPOSED
 Superficie aislada y protegida. Toda ruta exige sesión administrativa con MFA
 (DEC-006); las marcadas con step-up exigen además re-autenticación reciente.
 
-| Method | Endpoint                                       | Authorization            | Status   |
-| ------ | ---------------------------------------------- | ------------------------ | -------- |
-| GET    | `/api/v1/admin/dashboard`                      | `dashboard.read`         | PROPOSED |
-| GET    | `/api/v1/admin/promotions`                     | `promotion.read`         | PROPOSED |
-| POST   | `/api/v1/admin/promotions`                     | `promotion.create`       | PROPOSED |
-| PATCH  | `/api/v1/admin/promotions/{id}`                | `promotion.update`       | PROPOSED |
-| POST   | `/api/v1/admin/promotions/{id}/activate`       | `promotion.activate`     | PROPOSED |
-| POST   | `/api/v1/admin/promotions/{id}/close`          | `promotion.close`        | PROPOSED |
-| GET    | `/api/v1/admin/promotions/{id}/rules-versions` | `rules.version.read`     | PROPOSED |
-| POST   | `/api/v1/admin/promotions/{id}/rules-versions` | `rules.version.create`   | PROPOSED |
-| POST   | `/api/v1/admin/rules-versions/{id}/activate`   | `rules.version.activate` | PROPOSED |
-| GET    | `/api/v1/admin/products`                       | `product.read`           | PROPOSED |
-| POST   | `/api/v1/admin/products`                       | `product.write`          | PROPOSED |
-| POST   | `/api/v1/admin/products/{id}/publish`          | `product.publish`        | PROPOSED |
-| GET    | `/api/v1/admin/participants`                   | `participant.list`       | PROPOSED |
-| GET    | `/api/v1/admin/participants/{id}`              | `participant.read`       | PROPOSED |
-| POST   | `/api/v1/admin/participants/{id}/disqualify`   | `participant.disqualify` | PROPOSED |
-| GET    | `/api/v1/admin/orders`                         | `order.read`             | PROPOSED |
-| POST   | `/api/v1/admin/orders/{id}/refund`             | `order.refund.initiate`  | PROPOSED |
-| GET    | `/api/v1/admin/entry-transactions`             | `entry.ledger.read`      | PROPOSED |
-| POST   | `/api/v1/admin/entry-adjustments`              | `entry.adjust.create`    | PROPOSED |
-| POST   | `/api/v1/admin/entry-adjustments/{id}/approve` | `entry.adjust.approve`   | PROPOSED |
-| GET    | `/api/v1/admin/amoe-submissions`               | `amoe.review.read`       | PROPOSED |
-| POST   | `/api/v1/admin/amoe-submissions/{id}/approve`  | `amoe.review.approve`    | PROPOSED |
-| POST   | `/api/v1/admin/amoe-submissions/{id}/reject`   | `amoe.review.reject`     | PROPOSED |
-| GET    | `/api/v1/admin/payment-webhooks`               | `payment.webhook.read`   | PROPOSED |
-| POST   | `/api/v1/admin/payment-webhooks/{id}/replay`   | `payment.webhook.replay` | PROPOSED |
-| GET    | `/api/v1/admin/reconciliation`                 | `reconciliation.read`    | PROPOSED |
-| GET    | `/api/v1/admin/feature-flags`                  | `flag.read`              | PROPOSED |
-| PATCH  | `/api/v1/admin/feature-flags/{key}`            | `flag.update`            | PROPOSED |
+| Method | Endpoint                                       | Authorization            | Status      |
+| ------ | ---------------------------------------------- | ------------------------ | ----------- |
+| GET    | `/api/v1/admin/dashboard`                      | `dashboard.read`         | PROPOSED    |
+| GET    | `/api/v1/admin/promotions`                     | `promotion.read`         | PROPOSED    |
+| POST   | `/api/v1/admin/promotions`                     | `promotion.create`       | PROPOSED    |
+| PATCH  | `/api/v1/admin/promotions/{id}`                | `promotion.update`       | PROPOSED    |
+| POST   | `/api/v1/admin/promotions/{id}/activate`       | `promotion.activate`     | PROPOSED    |
+| POST   | `/api/v1/admin/promotions/{id}/close`          | `promotion.close`        | PROPOSED    |
+| GET    | `/api/v1/admin/promotions/{id}/rules-versions` | `rules.version.read`     | PROPOSED    |
+| POST   | `/api/v1/admin/promotions/{id}/rules-versions` | `rules.version.create`   | PROPOSED    |
+| POST   | `/api/v1/admin/rules-versions/{id}/activate`   | `rules.version.activate` | PROPOSED    |
+| GET    | `/api/v1/admin/products`                       | `product.read`           | PROPOSED    |
+| POST   | `/api/v1/admin/products`                       | `product.write`          | PROPOSED    |
+| POST   | `/api/v1/admin/products/{id}/publish`          | `product.publish`        | PROPOSED    |
+| GET    | `/api/v1/admin/participants`                   | `participant.list`       | PROPOSED    |
+| GET    | `/api/v1/admin/participants/{id}`              | `participant.read`       | PROPOSED    |
+| POST   | `/api/v1/admin/participants/{id}/disqualify`   | `participant.disqualify` | PROPOSED    |
+| GET    | `/api/v1/admin/orders`                         | `order.read`             | PROPOSED    |
+| POST   | `/api/v1/admin/orders/{id}/refund`             | `order.refund.initiate`  | PROPOSED    |
+| GET    | `/api/v1/admin/entry-transactions`             | `entry.ledger.read`      | PROPOSED    |
+| POST   | `/api/v1/admin/entry-adjustments`              | `entry.adjust.create`    | PROPOSED    |
+| POST   | `/api/v1/admin/entry-adjustments/preview`      | `entry.adjust.create`    | IMPLEMENTED |
+| POST   | `/api/v1/admin/entry-adjustments/{id}/approve` | `entry.adjust.approve`   | PROPOSED    |
+| GET    | `/api/v1/admin/amoe-submissions`               | `amoe.review.read`       | PROPOSED    |
+| POST   | `/api/v1/admin/amoe-submissions/{id}/approve`  | `amoe.review.approve`    | PROPOSED    |
+| POST   | `/api/v1/admin/amoe-submissions/{id}/reject`   | `amoe.review.reject`     | PROPOSED    |
+| GET    | `/api/v1/admin/payment-webhooks`               | `payment.webhook.read`   | PROPOSED    |
+| POST   | `/api/v1/admin/payment-webhooks/{id}/replay`   | `payment.webhook.replay` | PROPOSED    |
+| GET    | `/api/v1/admin/reconciliation`                 | `reconciliation.read`    | PROPOSED    |
+| GET    | `/api/v1/admin/feature-flags`                  | `flag.read`              | PROPOSED    |
+| PATCH  | `/api/v1/admin/feature-flags/{key}`            | `flag.update`            | PROPOSED    |
 
 Notas que no caben en la tabla y que importan:
 
@@ -1384,6 +1385,7 @@ que compara el test de contrato contra `apps/api/openapi/route-manifest.json`.
 | POST   | /api/v1/admin/amoe-submissions/:submission_id/reject                                | `amoe.review.reject`        |
 | GET    | /api/v1/admin/entry-adjustments                                                     | `entry.ledger.read`         |
 | POST   | /api/v1/admin/entry-adjustments                                                     | `entry.adjust.create`       |
+| POST   | /api/v1/admin/entry-adjustments/preview                                             | `entry.adjust.create`       |
 | POST   | /api/v1/admin/entry-adjustments/:adjustment_id/approve                              | `entry.adjust.approve`      |
 | POST   | /api/v1/admin/entry-adjustments/:adjustment_id/reject                               | `entry.adjust.approve`      |
 | POST   | /api/v1/admin/participants/:participant_id/disqualify                               | `participant.disqualify`    |
@@ -1767,15 +1769,56 @@ Purpose: qué modalidad AMOE está vigente y qué exige.
 
 Response: 200
 {
-  "enabled": false, "mode": null,
+  "enabled": false, "promotion_id": "<uuid>", "mode": null,
   "submission_window": { "opens_at": null, "closes_at": null },
   "identity_requirements": [],
+  "required_fields": null,
+  "instructions": null,
+  "external_url": null,
   "entries_per_approved_submission": null, "requires_review": null,
   "max_per_participant_per_period": null, "limit_period": null
 }
 
-Con el flag apagado responde enabled: false y NADA MÁS: si la vía no existe, sus
-parámetros tampoco son asunto de nadie.
+Con la vía encendida, los cuatro campos nuevos:
+
+  promotion_id      la promoción por la que se preguntó. VIAJA TAMBIÉN CON LA VÍA
+                    APAGADA: no es un parámetro de AMOE, es el dato con el que se
+                    preguntó. La ruta se pide por slug y el envío se dirige por
+                    identificador.
+
+  required_fields   [{ key, type, required, label_key, max_length }] o null.
+                    Se deriva UNA A UNA de identity_requirements, en ese orden.
+                    ES LA PIEZA QUE IMPIDE QUE EL FRONTEND INVENTE EL FORMULARIO:
+                    la interfaz pinta exactamente esos campos y ni uno más. Uno de
+                    más es recogida de datos personales que nadie autorizó; uno de
+                    menos, un envío que el backend rechaza con AMOE_PAYLOAD_INVALID.
+                    type: TEXT | EMAIL | TEL | TEXTAREA | DATE | CODE. Gobierna qué
+                    control se pinta; ninguna validación legal. label_key es una
+                    clave de copy del frontend (DEC-022), sin namespace, no prosa
+                    del backend. Se sirve en LAS CUATRO modalidades: el dominio
+                    exige esas claves en cualquier envío que entre por la API.
+
+  instructions      { "en-US", "es-US" } o null. EXCEPCIÓN CONSCIENTE A DEC-022:
+                    aquí el backend SÍ publica prosa, porque es texto LEGALMENTE
+                    CONTROLANTE (dirección postal, formato del sobre, plazos) que
+                    escribe el abogado en PromotionRulesVersion.config. Se renderiza
+                    tal cual, como las Reglas Oficiales. Los DOS locales son
+                    obligatorios (DEC-021). null = no publicadas: la pantalla remite
+                    al documento; nadie rellena ese hueco.
+
+  external_url      destino de EXTERNAL_INSTRUCTIONS, o null. SOLO https:, validado
+                    al leer la configuración. Un javascript: escrito en la
+                    configuración rompe la promoción (409 AMOE_CONFIG_INVALID) en vez
+                    de llegar a un navegador.
+
+Origen: PromotionRulesVersion.config.amoe (DEC-012). Bloque opcional
+identity_fields: { "<clave>": { type?, label_key?, max_length? } }, solo
+presentación. Sin descriptor: type TEXT, label_key = la clave del payload,
+max_length 500. Un descriptor de una clave que NO está en identity_requirements
+no añade ningún campo.
+
+Con el flag apagado responde enabled: false y NADA MÁS salvo promotion_id: si la
+vía no existe, sus parámetros tampoco son asunto de nadie.
 
 Errors: 404 PROMOTION_NOT_FOUND; 409 AMOE_CONFIG_INVALID
 
@@ -1850,13 +1893,27 @@ Owner: backend
 Status: IMPLEMENTED
 ```
 
-| Método | Endpoint                                       | Authorization         | Notas                                                                 |
-| ------ | ---------------------------------------------- | --------------------- | --------------------------------------------------------------------- |
-| GET    | `/api/v1/admin/amoe-submissions?promotion_id=` | `amoe.review.read`    | Cola de revisión. Lleva `participant_id` interno; nunca el payload.   |
-| POST   | `/api/v1/admin/amoe-submissions/{id}/approve`  | `amoe.review.approve` | Cantidad según la versión de reglas **del envío**, no la vigente hoy. |
-| POST   | `/api/v1/admin/amoe-submissions/{id}/reject`   | `amoe.review.reject`  | `reason_key` obligatorio. Un rechazo NO consume cuota del límite.     |
+| Método | Endpoint                                       | Authorization         | Notas                                                                                                                                            |
+| ------ | ---------------------------------------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| GET    | `/api/v1/admin/amoe-submissions?promotion_id=` | `amoe.review.read`    | Cola de revisión. Lleva `participant_id` interno; nunca el payload. Añade `entries_before`, `entries_if_approved` y `entries_after_if_approved`. |
+| POST   | `/api/v1/admin/amoe-submissions/{id}/approve`  | `amoe.review.approve` | Cantidad según la versión de reglas **del envío**, no la vigente hoy.                                                                            |
+| POST   | `/api/v1/admin/amoe-submissions/{id}/reject`   | `amoe.review.reject`  | `reason_key` obligatorio. Un rechazo NO consume cuota del límite.                                                                                |
 
 ---
+
+- **La cola proyecta el efecto de la decisión, calculado por el motor.** Quien
+  aprueba tiene que ver antes, cambio y después, y el panel no puede producir
+  ninguna de las tres: el saldo está en el ledger y la cantidad la fija la versión
+  de reglas DEL ENVÍO. Restar en el cliente sería una segunda implementación del
+  motor. `entries_before` siempre trae número (cero es un saldo conocido);
+  `entries_if_approved` y `entries_after_if_approved` son `null` cuando esa versión
+  de reglas ya no declara AMOE legible: la aprobación fallaría, y una cifra que no
+  se va a cumplir es peor que ninguna. NO son acumulativas entre filas: cada una
+  contesta "si apruebo ESTA".
+- **El campo de participaciones se llama `entries_awarded` en las TRES formas
+  AMOE** (respuesta de envío, listado del participante y cola de revisión). No es
+  `entries` ni `entries_granted`; `entries_granted` es de `OrderSummary` y ahí se
+  queda.
 
 ## 11.4 Ajustes, descalificación, devoluciones y webhooks
 
@@ -1900,6 +1957,21 @@ entries_reversed }`. Hoy responde `503 PAYMENT_PROVIDER_NOT_CONFIGURED`.
   existe tal endpoint y no puede existir** (DEC-007).
 
 ---
+
+- **`preview` NO escribe nada.** Dado
+  `{ promotion_id, participant_id, direction, quantity }` devuelve
+  `{ before, proposed_delta, after, would_make_balance_negative,
+requires_second_approval, as_of }`. Es una LECTURA: ni fila de ledger, ni
+  expediente, ni evento de auditoría. `would_make_balance_negative` es
+  literalmente la misma función que rechaza el ajuste al aplicarlo, no una
+  reimplementación, para que no exista una previsualización en verde seguida de
+  un rechazo. `as_of` viaja porque un saldo es una foto: entre la previsualización
+  y la solicitud puede entrar una compra o una descalificación. Exige
+  `entry.adjust.create` y no `entry.ledger.read`: quien no puede pedir un ajuste
+  no tiene por qué poder simularlo sobre un participante concreto. Es POST y no
+  GET porque el cuerpo lleva un identificador de participante, y en un GET
+  viajaría en la URL. Con `manual_adjustments_enabled` apagado responde 404, igual
+  que crear. Errores: 401, 403, 404, 422.
 
 ## 11.5 Sorteo (DEC-017)
 
