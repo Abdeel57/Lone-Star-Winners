@@ -1274,3 +1274,50 @@ Affected files: `tests/e2e/**` (nuevo), `.github/workflows/ci.yml`,
 
 Blocking: SÍ para dar por integrado cualquier flujo; NO para seguir
 construyendo.
+
+---
+
+## HO-031
+
+Status: OPEN
+
+## Handoff
+
+Date: 2026-08-27
+From: frontend-ux (FE-M6/M7)
+To: backend-sweepstakes
+
+Context:
+Tres desajustes entre lo que sirve `apps/api` (§11) y lo que el panel y la
+vía gratuita necesitan, encontrados al construir contra MSW y verificar
+contra el manifiesto real.
+
+1. **`GET /promotions/:id/amoe-config`**: el backend sirve `enabled, mode,
+submission_window, entries_per_approved_submission, identity_requirements[],
+limit_period, max_per_participant_per_period, requires_review`. La vía
+   gratuita necesita además `required_fields[]` (campos del formulario
+   `ONLINE_FORM`, para no inventar ninguno), `instructions` localizadas
+   (`MAIL_IN_REVIEW` / `EXTERNAL_INSTRUCTIONS`: el texto es legal y no lo
+   redacta el frontend), `external_url` y `promotion_id`. Y `entries` frente a
+   `entries_awarded` en la respuesta del envío. El frontend ya trata ausente y
+   nulo como lo mismo y exige `enabled` booleano estricto (blindaje en
+   `apps/web/src/lib/amoe-config.ts`).
+2. **Peticiones aditivas (opcionales, no invalidan lo que se sirve hoy):**
+   - `SessionState.capabilities?[]`: el mapa rol→capacidad es autoritativo en
+     `packages/security`; que el frontend lo reimplemente es una segunda fuente
+     de verdad. Hoy hay un espejo local marcado que solo decide qué enlaces se
+     pintan.
+   - **`POST /admin/entry-adjustments/preview`** — la que más importa: la
+     confirmación `{before, proposed_delta, after}` necesita el "después", y el
+     frontend no puede calcularlo sin duplicar el motor (lo detectaría el
+     escáner `no-client-entry-math`).
+   - `AdminAmoeSubmission.entries_before` / `entries_after_if_approved`.
+3. **Paginación**: `docs/API_CONTRACT.md` dice `?cursor=`; la coordinación
+   entre sesiones dijo `?after=`. El frontend siguió el documento (`cursor`).
+   Confirmar una sola convención y corregir la que sobre.
+
+Affected files: `apps/api/src/routes/{amoe,adjustments,auth}.ts`,
+`docs/API_CONTRACT.md` §11.3/§11.4, `apps/web/src/lib/api/contract.ts`.
+
+Blocking: NO para el panel con mocks; SÍ para conectar AMOE y ajustes a la
+API real.
