@@ -1318,6 +1318,12 @@ limit_period, max_per_participant_per_period, requires_review`. La vía
    parámetro HTTP: dos capas distintas, y el puerto no es contrato. Nada que
    corregir en frontend ni en las rutas.
 
+4. **Pendiente menor (2026-08-27)**: la API nombra el identificador
+   `submission_id` en las tres formas AMOE y no publica `decided_at`,
+   `reason_key` ni `cancellable`; el frontend mantiene `id` y esos tres como
+   provisionales (`// TODO(HO-031)` en `contract.ts`) para alinearse de una
+   vez cuando el backend los cierre.
+
 Affected files: `apps/api/src/routes/{amoe,adjustments,auth}.ts`,
 `docs/API_CONTRACT.md` §11.3/§11.4, `apps/web/src/lib/api/contract.ts`.
 
