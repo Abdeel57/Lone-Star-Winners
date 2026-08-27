@@ -318,6 +318,7 @@ export function buildCartRoutes(dependencies: AppDependencies): RouteDefinition[
           200: cartWithQuoteSchema,
           401: errorEnvelopeSchema,
           404: errorEnvelopeSchema,
+          409: errorEnvelopeSchema,
           422: errorEnvelopeSchema,
         },
       },
@@ -329,6 +330,34 @@ export function buildCartRoutes(dependencies: AppDependencies): RouteDefinition[
         const cart = await repositories.carts.findOpen(cartOwnerOf(principal));
         if (cart === null) {
           throw ApiErrors.cartItemNotFound();
+        }
+
+        // La linea ya viene en `cart.lines`, con las existencias que se leyeron
+        // para `availability`. La comprobacion sale de ESA lectura y no de una
+        // consulta nueva: dos lecturas del inventario en la misma peticion
+        // podrian discrepar, y entonces la respuesta diria una cosa y el 409
+        // otra.
+        const target = cart.lines.find((line) => line.id === params.item_id);
+
+        // 404 ANTES que 409, y sin distinguir "no existe" de "es de otro": lo
+        // contrario convertiria la ruta en un oraculo con el que enumerar
+        // lineas ajenas midiendo que error devuelve.
+        if (target === undefined) {
+          throw ApiErrors.cartItemNotFound();
+        }
+
+        // El mismo `fitsStock` que decide el 409 en `POST /cart/items` y el
+        // `availability` de la respuesta. Un segundo criterio aqui dejaria
+        // subir por `PATCH` una cantidad que `POST` rechaza, que es
+        // exactamente la divergencia que el contrato ya prohibia (seccion 5:
+        // esta ruta declara `409 INSUFFICIENT_STOCK`).
+        //
+        // Esto VALIDA, no RESERVA. El esquema no tiene ninguna reserva de
+        // inventario, asi que entre esta lectura y el checkout las existencias
+        // pueden bajar; por eso `availability` sigue recalculandose en cada
+        // respuesta en vez de darse por buena la validacion.
+        if (target.stockQuantity !== null && !fitsStock(target.stockQuantity, body.quantity)) {
+          throw ApiErrors.insufficientStock(target.stockQuantity);
         }
 
         // La actualizacion lleva el `cart_id` del solicitante en el `WHERE`, no

@@ -635,24 +635,38 @@ describe("CartWithQuote: los cuatro campos de HO-017", () => {
     });
 
     it("la linea ya no cabe: OUT_OF_STOCK", async () => {
-      const app = await appWithPrincipal(PARTICIPANT);
-      const created = await addLine(app, VARIANT_ID, 1);
-      const itemId = created.lines[0]?.id ?? "";
+      /**
+       * EL INVENTARIO BAJA DESPUES DE ANADIR LA LINEA.
+       *
+       * Desde que `PATCH` comprueba existencias, ninguna ruta deja crear una
+       * linea que exceda el stock, asi que esta es la UNICA forma en que puede
+       * darse -y es la del mundo real: otra persona compro las ultimas
+       * unidades-. Que `availability` lo detecte en la siguiente lectura es
+       * justo lo que justifica recalcularlo en cada respuesta en vez de fiarse
+       * de la validacion del momento en que se anadio.
+       */
+      const scarce = {
+        id: VARIANT_ID,
+        sku: "FIXTURE-TEE-M",
+        status: "ACTIVE" as const,
+        priceAmountMinor: 2500n,
+        currency: "USD",
+        stockQuantity: 5 as number | null,
+        position: 0,
+      };
+      const app = await appWithPrincipal(PARTICIPANT, {
+        products: [{ ...FIXTURE_PRODUCT, variants: [scarce] }],
+      });
 
-      // Se llega por `PATCH`, que HOY no comprueba existencias aunque el
-      // contrato le atribuya `409 INSUFFICIENT_STOCK`. Esa divergencia es
-      // anterior a este cambio y no se corrige aqui: el test la fija tal como
-      // esta y deja constancia de que, mientras siga asi, `availability` es lo
-      // unico que delata una linea imposible de servir.
-      const patched = (
-        await app.inject({
-          method: "PATCH",
-          url: `/api/v1/cart/items/${itemId}`,
-          payload: { quantity: 11 },
-        })
-      ).json<CartBody>();
+      const created = await addLine(app, VARIANT_ID, 3);
+      expect(created.lines[0]?.availability).toEqual({ status: "IN_STOCK" });
 
-      expect(patched.lines[0]?.availability).toEqual({ status: "OUT_OF_STOCK" });
+      // El doble comparte la referencia de la variante, asi que esto es lo
+      // mismo que una venta ajena entre las dos lecturas.
+      scarce.stockQuantity = 2;
+
+      const reread = (await app.inject({ method: "GET", url: "/api/v1/cart" })).json<CartBody>();
+      expect(reread.lines[0]?.availability).toEqual({ status: "OUT_OF_STOCK" });
       await app.close();
     });
 
@@ -670,6 +684,96 @@ describe("CartWithQuote: los cuatro campos de HO-017", () => {
       // autoriza lo contrario: la cifra de existencias es dato de negocio.
       expect(response.body).not.toContain("quantity_available");
       expect(response.body).not.toContain("stock_quantity");
+      await app.close();
+    });
+  });
+
+  /**
+   * `PATCH` COMPRUEBA EXISTENCIAS, COMO YA DECIA EL CONTRATO.
+   *
+   * La seccion 5 le atribuye `409 INSUFFICIENT_STOCK` desde siempre; la ruta
+   * no lo comprobaba, y se podia subir una linea a 11 con stock 10 por un
+   * camino que `POST` rechazaba. Lo que se protege aqui no es solo que el 409
+   * exista, sino que salga del MISMO `fitsStock`: dos criterios harian que
+   * `POST` y `PATCH` discreparan sobre la misma variante.
+   */
+  describe("PATCH y las existencias", () => {
+    async function lineOf(app: FastifyInstance, variantId: string, quantity: number) {
+      const created = await addLine(app, variantId, quantity);
+      return created.lines[0]?.id ?? "";
+    }
+
+    it("subir la cantidad por encima del stock devuelve 409 con lo disponible", async () => {
+      const app = await appWithPrincipal(PARTICIPANT);
+      const itemId = await lineOf(app, VARIANT_ID, 1);
+
+      const response = await app.inject({
+        method: "PATCH",
+        url: `/api/v1/cart/items/${itemId}`,
+        payload: { quantity: 11 },
+      });
+
+      expect(response.statusCode).toBe(409);
+      const body = response.json<{ error: { code: string; details: { available: number } } }>();
+      expect(body.error.code).toBe("INSUFFICIENT_STOCK");
+      expect(body.error.details.available).toBe(10);
+
+      // Y la linea NO se movio: un 409 que ya hubiera escrito seria peor que
+      // no comprobar nada.
+      const after = (await app.inject({ method: "GET", url: "/api/v1/cart" })).json<CartBody>();
+      expect(after.lines[0]?.quantity).toBe(1);
+      await app.close();
+    });
+
+    it("la frontera: exactamente el stock disponible pasa, y queda LOW_STOCK", async () => {
+      const app = await appWithPrincipal(PARTICIPANT);
+      const itemId = await lineOf(app, VARIANT_ID, 1);
+
+      const response = await app.inject({
+        method: "PATCH",
+        url: `/api/v1/cart/items/${itemId}`,
+        payload: { quantity: 10 },
+      });
+
+      expect(response.statusCode).toBe(200);
+      // `fitsStock` compara con `>=`, no con `>`. Si comparara con `>`, este
+      // caso seria un 409 y nadie podria comprar la ultima unidad.
+      expect(response.json<CartBody>().lines[0]?.availability).toEqual({ status: "LOW_STOCK" });
+      await app.close();
+    });
+
+    it("existencias no gestionadas (`null`) NO bloquean el PATCH", async () => {
+      const app = await appWithPrincipal(PARTICIPANT);
+      const itemId = await lineOf(app, OTHER_VARIANT_ID, 1);
+
+      const response = await app.inject({
+        method: "PATCH",
+        url: `/api/v1/cart/items/${itemId}`,
+        payload: { quantity: 500 },
+      });
+
+      // `null` es "no se gestionan", que no es cero. El mismo criterio que en
+      // `POST`, donde 500 unidades de esta variante tambien pasan.
+      expect(response.statusCode).toBe(200);
+      expect(response.json<CartBody>().lines[0]?.quantity).toBe(500);
+      await app.close();
+    });
+
+    it("una linea ajena sigue dando 404 aunque la cantidad tambien excediera el stock", async () => {
+      const app = await appWithPrincipal(PARTICIPANT);
+      await lineOf(app, VARIANT_ID, 1);
+
+      const response = await app.inject({
+        method: "PATCH",
+        url: "/api/v1/cart/items/00000000-0000-4000-8000-000000000000",
+        payload: { quantity: 9999 },
+      });
+
+      // El orden importa: si el 409 se evaluara primero, la ruta seria un
+      // oraculo con el que distinguir "esa linea no existe" de "existe pero no
+      // hay stock", y con eso se enumeran lineas ajenas.
+      expect(response.statusCode).toBe(404);
+      expect(response.json<{ error: { code: string } }>().error.code).toBe("CART_ITEM_NOT_FOUND");
       await app.close();
     });
   });
