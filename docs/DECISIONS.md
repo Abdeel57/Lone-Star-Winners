@@ -2306,3 +2306,68 @@ sus cabeceras.
 
 Proposed by: frontend-ux (HO-034.3)
 Agreed by: Team Lead
+
+## DEC-050
+
+Status: Accepted
+
+Date: 2026-08-27
+
+Decision:
+**La API acepta la cabecera `Cookie` tal como la reenvía `apps/web` —con
+pseudo-cookies `Path=/` intercaladas y valores percent-encoded— y fija esa
+tolerancia con un test de contrato sobre la aplicación real
+(`apps/api/test/cookie-header-contract.test.ts`). La forma normativa sigue
+siendo la del navegador (`name=value; name=value`, sin atributos), cubierta
+por el mismo test con las mismas afirmaciones.** (HO-035, opción b.)
+
+Context:
+`apps/web` no es un navegador: es un segundo proceso (DEC-004) que reenvía la
+sesión del visitante a `apps/api` con `cookies().toString()` de Next, que no
+produce una cabecera `Cookie` de RFC 6265 sino algo con forma de
+`Set-Cookie`:
+
+```text
+lsw_session=<token>; Path=/; lsw_dev_staff_actor=compliance%40example.com; Path=/
+```
+
+Hoy funciona porque `@fastify/cookie` decodifica y tolera las pseudo-cookies,
+pero era un comportamiento heredado, no decidido. El riesgo se materializó una
+vez en el mock de desarrollo de `apps/web`: el parser no decodificaba, no
+encontraba el actor y caía a un respaldo en silencio — un panel válido con la
+persona equivocada, indistinguible de "esa persona no tiene ese permiso".
+
+Alternatives:
+A — `apps/web` construye la cabecera desde `cookies().getAll()` en
+`readSession` y la API deja de depender de la tolerancia del parser
+(descartada como única medida: no es verificable desde donde vive el riesgo
+—`apps/api`—, y no elimina la dependencia que importa, porque `getAll()`
+devuelve valores decodificados y reenviarlos exige `encodeURIComponent`, así
+que el percent-decoding se ejerce igual; además la API tiene más de un
+cliente —el navegador llama directo con CORS y `credentials`— y normalizar
+en `apps/web` no cubriría a los demás). B — la API declara lo que acepta y lo
+vigila (elegida). A sigue siendo válida como mejora de `apps/web` y no rompe
+B.
+
+Reason:
+No es que la API no pueda rechazar la forma —un 400 ante una `Cookie` que no
+cumple RFC 6265 sería legítimo—: es que rechazarla rompería a un cliente que
+controlamos, la forma es demostrablemente inocua, y declarar y vigilar lo que
+se acepta cuesta menos que obligar a cada cliente a normalizar. Es una
+tolerancia medida, con un test que la fija; no una renuncia a imponer
+(matiz aportado por la sesión paralela, propietaria de §10). El test levanta
+la app real y afirma, sobre la
+cabecera literal: que ambas cookies de sesión se encuentran entre las
+pseudo-cookies, que el token sobrevive intacto (`looksLikeSessionToken`), que
+los valores se decodifican, que las pseudo-cookies no desplazan a ninguna
+cookie real, que un `;` codificado no inyecta una cookie extra, y que la forma
+de navegador produce el mismo resultado. Sin él, una actualización de
+`@fastify/cookie` respondería 401 a una sesión válida o atendería a la
+persona equivocada sin aviso.
+
+Affected areas: `apps/api` (test de contrato), `docs/API_CONTRACT.md` §10
+(párrafo pendiente de la sesión paralela, propietaria de la sección; texto
+entregado en HO-035). Sin cambios en `apps/web`.
+
+Proposed by: backend-sweepstakes (HO-035)
+Agreed by: Team Lead

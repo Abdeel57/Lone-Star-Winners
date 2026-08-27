@@ -1396,6 +1396,44 @@ cookie presentada era válida.
 **Revoca en base de datos además de borrar la cookie.** Borrar solo la cookie
 dejaría el token vivo para quien lo hubiera copiado.
 
+### La cabecera `Cookie` que reenvía `apps/web`
+
+`apps/web` no es un navegador: es un segundo proceso (DEC-004) que reenvía la
+sesión del visitante. Lo hace con `cookies().toString()` de Next, que **no
+produce una cabecera `Cookie` de RFC 6265**, sino algo con forma de
+`Set-Cookie`:
+
+    lsw_session=<token>; Path=/; lsw_dev_staff_actor=compliance%40example.com; Path=/
+
+Dos rarezas: pseudo-cookies `Path=/` intercaladas —atributos que solo
+pertenecen a `Set-Cookie`— y valores percent-encoded.
+
+**La API acepta esa forma** (HO-035, opción b; DEC-050). No porque sea la
+preferida ni porque no pudiera rechazarla —un 400 ante una `Cookie` que no
+cumple RFC 6265 sería legítimo—, sino porque rechazarla rompería a un cliente
+que controlamos, la forma es demostrablemente inocua, y declarar y vigilar lo
+que se acepta cuesta menos que obligar a cada cliente a normalizar. Es una
+tolerancia medida, con un test que la fija; no una renuncia a imponer. Lo fija
+`apps/api/test/cookie-header-contract.test.ts`, que levanta la app real y
+comprueba, sobre la cabecera literal: que ambas cookies de sesión se encuentran
+entre las pseudo-cookies, que el token sobrevive intacto —lo exige
+`looksLikeSessionToken`—, que los valores se decodifican, que las
+pseudo-cookies no desplazan a ninguna cookie real y que un `;` codificado no
+inyecta una cookie extra. Sin ese test, una actualización de `@fastify/cookie`
+respondería 401 a una sesión válida, o peor, devolvería un valor a medio
+decodificar y atendería a la persona equivocada: ese segundo síntoma ya ocurrió
+una vez, en el mock de desarrollo de `apps/web`, y es indistinguible de "esa
+persona no tiene ese permiso".
+
+**La forma normativa sigue siendo la del navegador** —`name=value`, sin
+atributos— y está cubierta por el mismo test con las mismas afirmaciones. Si
+`apps/web` pasa a construir la cabecera desde `cookies().getAll()`, no rompe
+nada. Lo que **no** cambia con ello es la dependencia del decodificador:
+`getAll()` devuelve valores decodificados y reenviarlos exige
+`encodeURIComponent`, así que el percent-decoding se ejerce igual. Esa
+codificación en origen no es opcional: sin ella, un valor de cookie con `;`
+partiría la cabecera e inyectaría cookies que nadie envió.
+
 ### Lo que NO está aquí, y por qué
 
 - **Inscripción de MFA, registro, verificación de email y reset de

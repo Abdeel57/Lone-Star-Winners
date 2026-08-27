@@ -652,7 +652,7 @@ Blocking: YES para el siguiente hito de ambos.
 
 ## HO-017
 
-Status: OPEN
+Status: RESOLVED en backend (`62fc4d1`); consumo en `apps/web` en curso
 
 ## Handoff
 
@@ -691,6 +691,21 @@ Affected files: `apps/api/src/routes/{cart,storefront}.ts`,
 Blocking: NO hoy (todo va contra MSW), YES para conectar frontend con la API real.
 
 ---
+
+Resolution (2026-08-27, Team Lead):
+Backend publica en `GET /cart` y en las mutaciones (`62fc4d1`, contrato §5):
+`updated_at` del motor (migración `0025`: `carts.updated_at` no cambiaba al
+mutar líneas porque el trigger de 0009 solo disparaba con `UPDATE carts`),
+`item_count` (suma de `quantity`), `image_url` **siempre `null`** (no existe
+tabla de medios y no se inventa) y `availability: { status }` derivada del
+mismo predicado `fitsStock` que produce el `409 INSUFFICIENT_STOCK`.
+`quantity_available` NO se publica: no hay decisión sobre publicar inventario y
+`GET /products` sí publica `stock_quantity` en crudo — una de las dos rutas
+está mal y lo decide el usuario (punto abierto para el Team Lead).
+`is_purchasable` sigue pendiente (§4). Disponibilidad y elegibilidad de
+entries: TBD en `docs/LEGAL_PENDING.md`; mientras tanto `availability` es
+solo informativa. Hallazgo colateral en curso: `PATCH /cart/items/{id}` no
+comprobaba existencias pese al 409 que le atribuye §5.
 
 ## HO-018
 
@@ -1505,7 +1520,7 @@ Blocking para el push conjunto, a día de hoy: solo (1).
 
 ## HO-035
 
-Status: OPEN
+Status: RESOLVED — opción (b), DEC-050, `62fc4d1`
 
 ## Handoff
 
@@ -1547,3 +1562,13 @@ Aparte, sigue pendiente de backend lo que pide HO-017 para el carrito:
 
 Blocking: NO. No condiciona el push; sí conviene antes de dar por cerrada la
 identidad (HO-034.4).
+
+Resolution (2026-08-27, Team Lead):
+**Opción (b), registrada como DEC-050.** `apps/api/test/cookie-header-contract.test.ts`
+levanta la app real y fija siete casos sobre la cabecera literal
+(`62fc4d1`). El párrafo de §10 (Auth) lo aprobó la sesión paralela,
+propietaria de la sección, con un matiz de razonamiento —es una tolerancia
+medida, no una renuncia a imponer— y lo pegó el Team Lead en el punto exacto
+que ella indicó. Pasar `readSession` a `cookies().getAll()` queda como mejora
+opcional de `apps/web`: no rompe nada y no elimina la dependencia del
+decodificador. Lo demás que pedía HO-017 para el carrito: ver HO-017.
