@@ -203,3 +203,14 @@ No existe un default que no sea una decisión legal disfrazada, así que
 `order_qualification.qualifying_payment_state` en la configuración de la
 promoción **no tiene valor por defecto**: el pipeline falla si falta. Hasta
 que se decida, ninguna promoción puede otorgar participaciones por compra.
+
+## Visible entry numbers and export universe
+
+TBD
+
+¿Se numeran todas las participaciones aunque no se muestren al participante,
+y tienen esos números efecto legal (sorteo por ordinal)? Hoy la exportación
+al administrador externo solo puede finalizarse con la numeración visible
+encendida, y la política ante reversals es que los lotes más recientes
+pierden ordinales (HO-033). Ambas cosas dependen de lo que digan las
+Official Rules sobre cómo se identifica una participación en el sorteo.

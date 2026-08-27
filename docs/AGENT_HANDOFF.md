@@ -1368,3 +1368,48 @@ Affected files: `packages/security/src/env/**`, `.env.example`,
 `packages/sweepstakes/src/award/award-service.ts`.
 
 Blocking: NO para construir; SÍ antes de dar por auditado el award.
+
+---
+
+## HO-033
+
+Status: OPEN
+
+## Handoff
+
+Date: 2026-08-27
+From: backend-sweepstakes (cableado de export), vía Team Lead
+To: security-integration y abogado del cliente (`docs/LEGAL_PENDING.md`)
+
+Context:
+Dos consecuencias del propio dominio de `security` que hoy condicionan la
+exportación, señaladas al cablearla:
+
+1. **Finalizar un export exige la numeración visible encendida.**
+   `runReconciliationChecks` exige que los tramos del universo cubran el total,
+   y `export_snapshot_entry_ranges.entry_batch_id` es FK a `entry_batches`, que
+   **solo existen con `visible_entry_numbers_enabled`** (DEC-032, apagado por
+   defecto). Con el flag apagado el congelado produce cero tramos y la
+   finalización se bloquea (`EMPTY_UNIVERSE`). O el universo se numera siempre
+   (aunque no se muestre al participante), o la reconciliación admite un
+   universo por cantidades sin ordinales. Es decisión de `security`/legal: los
+   números visibles pueden tener efecto legal.
+2. **Política de ordinales tras un reversal.** Cuando un reversal deja al
+   participante con menos participaciones de las que otorgaron sus lotes, el
+   congelado debe decidir qué lotes conservan ordinales. Implementado: por
+   orden de asignación, **los lotes más recientes pierden** (la única política
+   que no cambia un número que un participante ya vio conservado en un corte
+   anterior). Justificado en la cabecera de
+   `export-reconciliation-repository.ts`, pero debe confirmarla quien decide si
+   los números visibles tienen efecto legal.
+
+What I need from you:
+Decidir (1) y confirmar o corregir (2), y reflejarlo en las Official Rules si
+los números visibles se usan. Hasta entonces, ningún export puede finalizarse
+con el flag apagado, y eso está bien: es el sistema negándose a inventar.
+
+Affected files: `packages/tpa/src/reconciliation-checks.ts`,
+`packages/database/src/repositories/export-reconciliation-repository.ts`,
+`docs/LEGAL_PENDING.md`.
+
+Blocking: SÍ para finalizar cualquier export real.
