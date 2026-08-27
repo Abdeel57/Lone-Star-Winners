@@ -161,12 +161,34 @@ export interface CartLineRecord {
   readonly quantity: number;
   readonly unitAmountMinor: bigint;
   readonly currency: string;
+  /**
+   * Existencias de la VARIANTE, tal cual estan en `product_variants`.
+   *
+   * `null` es "existencias no gestionadas", que no es cero. Es la MISMA
+   * columna con la que `POST /cart/items` decide el `409 INSUFFICIENT_STOCK`,
+   * y viaja hasta aqui precisamente para que `availability` no pueda salir de
+   * una segunda fuente: dos lecturas del inventario acabarian discrepando y el
+   * sintoma seria un carrito que dice "disponible" en la linea y responde 409
+   * al pulsar.
+   *
+   * NO se publica en crudo. La respuesta solo lleva el estado derivado;
+   * publicar el inventario exacto es informacion de negocio y HO-017 pide
+   * explicitamente no hacerlo.
+   */
+  readonly stockQuantity: number | null;
 }
 
 export interface CartRecord {
   readonly id: string;
   readonly promotionId: string | null;
   readonly currency: string | null;
+  /**
+   * Ultima mutacion del carrito, LINEAS INCLUIDAS (trigger de la migracion
+   * 0025). `null` solo en el carrito sintetico que se devuelve cuando el
+   * solicitante no tiene ninguno: ahi no hay fila, y un instante inventado
+   * seria peor que la ausencia.
+   */
+  readonly updatedAt: Date | null;
   readonly lines: readonly CartLineRecord[];
 }
 

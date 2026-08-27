@@ -475,3 +475,214 @@ describe("GET /api/v1/cart/entry-quote - DEC-023", () => {
     await app.close();
   });
 });
+
+/**
+ * LOS CUATRO CAMPOS DE HO-017.
+ *
+ * `frontend` los pidio con un argumento medible y `apps/web` DEGRADO su capa
+ * mientras no existieron, en vez de inventarlos. Lo que se protege aqui no es
+ * que los campos aparezcan -eso lo garantiza el esquema-, sino de DONDE sale
+ * cada uno:
+ *
+ *   - `updated_at` del carrito y no del reloj de la respuesta, porque su unico
+ *     uso es delatar una cotizacion de entries caducada;
+ *   - `item_count` como SUMA de cantidades y no como numero de lineas;
+ *   - `availability` de la MISMA columna que decide el 409, no de una segunda
+ *     lectura del inventario;
+ *   - `image_url` nulo y declarado, porque no hay tabla de medios que leer.
+ */
+describe("CartWithQuote: los cuatro campos de HO-017", () => {
+  interface CartBody {
+    updated_at: string | null;
+    item_count: number;
+    lines: {
+      id: string;
+      sku: string;
+      quantity: number;
+      image_url: string | null;
+      availability: { status: string };
+    }[];
+    entry_quote: { final_entries: number } | null;
+  }
+
+  async function addLine(
+    app: FastifyInstance,
+    variantId: string,
+    quantity: number,
+  ): Promise<CartBody> {
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/v1/cart/items",
+      payload: { variant_id: variantId, quantity },
+    });
+    return response.json<CartBody>();
+  }
+
+  it("sin carrito: `updated_at` es null y `item_count` es 0", async () => {
+    const app = await appWithPrincipal(PARTICIPANT);
+    const body = (await app.inject({ method: "GET", url: "/api/v1/cart" })).json<CartBody>();
+
+    // No hay fila, asi que no hay instante. Un `now()` aqui afirmaria que un
+    // carrito inexistente acaba de cambiar, que es exactamente la mentira que
+    // `updated_at` existe para evitar.
+    expect(body.updated_at).toBeNull();
+    // Y aun asi la cuenta es CERO, no null: contar cero cosas es cero.
+    expect(body.item_count).toBe(0);
+    await app.close();
+  });
+
+  it("`item_count` suma cantidades; NO cuenta lineas", async () => {
+    const app = await appWithPrincipal(PARTICIPANT);
+    await addLine(app, VARIANT_ID, 2);
+    const body = await addLine(app, OTHER_VARIANT_ID, 3);
+
+    expect(body.lines).toHaveLength(2);
+    expect(body.item_count).toBe(5);
+    await app.close();
+  });
+
+  it("`updated_at` avanza con CADA mutacion de lineas: anadir, cambiar y quitar", async () => {
+    const app = await appWithPrincipal(PARTICIPANT);
+
+    const created = await addLine(app, VARIANT_ID, 1);
+    const itemId = created.lines[0]?.id ?? "";
+    expect(created.updated_at).toMatch(/^\d{4}-\d{2}-\d{2}T.*Z$/u);
+
+    const patched = (
+      await app.inject({
+        method: "PATCH",
+        url: `/api/v1/cart/items/${itemId}`,
+        payload: { quantity: 4 },
+      })
+    ).json<CartBody>();
+
+    const removed = (
+      await app.inject({ method: "DELETE", url: `/api/v1/cart/items/${itemId}` })
+    ).json<CartBody>();
+
+    // Estrictamente creciente. Que el DELETE tambien mueva el instante es la
+    // mitad que una implementacion derivada -el maximo de `cart_items`- no
+    // puede dar: al quitar una linea no queda ninguna fila cuyo instante
+    // consultar, y el carrito pareceria fresco con una cotizacion vieja.
+    expect(typeof patched.updated_at).toBe("string");
+    expect(typeof removed.updated_at).toBe("string");
+    expect(new Date(patched.updated_at ?? 0).getTime()).toBeGreaterThan(
+      new Date(created.updated_at ?? 0).getTime(),
+    );
+    expect(new Date(removed.updated_at ?? 0).getTime()).toBeGreaterThan(
+      new Date(patched.updated_at ?? 0).getTime(),
+    );
+
+    await app.close();
+  });
+
+  it("LEER no mueve `updated_at`: es el instante del carrito, no el de la respuesta", async () => {
+    const app = await appWithPrincipal(PARTICIPANT);
+    const created = await addLine(app, VARIANT_ID, 1);
+
+    const first = (await app.inject({ method: "GET", url: "/api/v1/cart" })).json<CartBody>();
+    const second = (await app.inject({ method: "GET", url: "/api/v1/cart" })).json<CartBody>();
+
+    expect(first.updated_at).toBe(created.updated_at);
+    expect(second.updated_at).toBe(created.updated_at);
+    await app.close();
+  });
+
+  it("`image_url` se publica y vale null: no hay tabla de medios en el esquema", async () => {
+    const app = await appWithPrincipal(PARTICIPANT);
+    const body = await addLine(app, VARIANT_ID, 1);
+
+    // La CLAVE existe -`frontend` deja de degradar su tipo- y el VALOR es
+    // null, que es lo unico honesto mientras no exista de donde leerlo.
+    expect(body.lines[0]).toHaveProperty("image_url");
+    expect(body.lines[0]?.image_url).toBeNull();
+    await app.close();
+  });
+
+  describe("`availability` sale de la misma columna que el 409", () => {
+    it("existencias no gestionadas: IN_STOCK aunque se pidan 500", async () => {
+      const app = await appWithPrincipal(PARTICIPANT);
+      const body = await addLine(app, OTHER_VARIANT_ID, 500);
+
+      // `null` no es cero, ni aqui ni en el 409.
+      expect(body.lines[0]?.availability).toEqual({ status: "IN_STOCK" });
+      await app.close();
+    });
+
+    it("queda margen: IN_STOCK", async () => {
+      const app = await appWithPrincipal(PARTICIPANT);
+      const body = await addLine(app, VARIANT_ID, 2);
+
+      expect(body.lines[0]?.availability).toEqual({ status: "IN_STOCK" });
+      await app.close();
+    });
+
+    it("la linea se lleva exactamente lo que queda: LOW_STOCK", async () => {
+      const app = await appWithPrincipal(PARTICIPANT);
+      // La variante de prueba declara 10 existencias.
+      const body = await addLine(app, VARIANT_ID, 10);
+
+      expect(body.lines[0]?.availability).toEqual({ status: "LOW_STOCK" });
+
+      // Y una unidad mas ya no cabe: el mismo umbral, visto desde el 409.
+      const more = await app.inject({
+        method: "POST",
+        url: "/api/v1/cart/items",
+        payload: { variant_id: VARIANT_ID, quantity: 11 },
+      });
+      expect(more.statusCode).toBe(409);
+      await app.close();
+    });
+
+    it("la linea ya no cabe: OUT_OF_STOCK", async () => {
+      const app = await appWithPrincipal(PARTICIPANT);
+      const created = await addLine(app, VARIANT_ID, 1);
+      const itemId = created.lines[0]?.id ?? "";
+
+      // Se llega por `PATCH`, que HOY no comprueba existencias aunque el
+      // contrato le atribuya `409 INSUFFICIENT_STOCK`. Esa divergencia es
+      // anterior a este cambio y no se corrige aqui: el test la fija tal como
+      // esta y deja constancia de que, mientras siga asi, `availability` es lo
+      // unico que delata una linea imposible de servir.
+      const patched = (
+        await app.inject({
+          method: "PATCH",
+          url: `/api/v1/cart/items/${itemId}`,
+          payload: { quantity: 11 },
+        })
+      ).json<CartBody>();
+
+      expect(patched.lines[0]?.availability).toEqual({ status: "OUT_OF_STOCK" });
+      await app.close();
+    });
+
+    it("NO publica el inventario exacto: solo `status`", async () => {
+      const app = await appWithPrincipal(PARTICIPANT);
+      const response = await app.inject({
+        method: "POST",
+        url: "/api/v1/cart/items",
+        payload: { variant_id: VARIANT_ID, quantity: 2 },
+      });
+
+      const body = response.json<CartBody>();
+      expect(Object.keys(body.lines[0]?.availability ?? {})).toEqual(["status"]);
+      // HO-017 lo pide expresamente y ninguna decision de `docs/DECISIONS.md`
+      // autoriza lo contrario: la cifra de existencias es dato de negocio.
+      expect(response.body).not.toContain("quantity_available");
+      expect(response.body).not.toContain("stock_quantity");
+      await app.close();
+    });
+  });
+
+  it("los campos nuevos NO tocan la cotizacion de entries", async () => {
+    const app = await appWithPrincipal(PARTICIPANT);
+    const body = await addLine(app, VARIANT_ID, 2);
+
+    // 2 x 2500 unidades menores / 100 por entry = 50, igual que antes de
+    // HO-017. `item_count` es una cuenta de mercancia y no entra en ninguna
+    // aritmetica de participaciones.
+    expect(body.item_count).toBe(2);
+    expect(body.entry_quote?.final_entries).toBe(50);
+    await app.close();
+  });
+});

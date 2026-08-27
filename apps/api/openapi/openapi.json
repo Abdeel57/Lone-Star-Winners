@@ -12850,14 +12850,46 @@
                       "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
                       "type": "string"
                     },
+                    "item_count": {
+                      "maximum": 9007199254740991,
+                      "minimum": -9007199254740991,
+                      "type": "integer"
+                    },
                     "lines": {
                       "items": {
                         "additionalProperties": false,
                         "properties": {
+                          "availability": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "status": {
+                                "enum": [
+                                  "IN_STOCK",
+                                  "LOW_STOCK",
+                                  "OUT_OF_STOCK"
+                                ],
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "status"
+                            ],
+                            "type": "object"
+                          },
                           "id": {
                             "format": "uuid",
                             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
                             "type": "string"
+                          },
+                          "image_url": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
                           },
                           "line_subtotal": {
                             "additionalProperties": false,
@@ -12936,7 +12968,9 @@
                           "name",
                           "quantity",
                           "unit_price",
-                          "line_subtotal"
+                          "line_subtotal",
+                          "image_url",
+                          "availability"
                         ],
                         "type": "object"
                       },
@@ -12966,11 +13000,23 @@
                           "type": "null"
                         }
                       ]
+                    },
+                    "updated_at": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
                     }
                   },
                   "required": [
                     "id",
                     "currency",
+                    "updated_at",
+                    "item_count",
                     "lines",
                     "subtotal",
                     "entry_quote"
@@ -13585,14 +13631,46 @@
                       "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
                       "type": "string"
                     },
+                    "item_count": {
+                      "maximum": 9007199254740991,
+                      "minimum": -9007199254740991,
+                      "type": "integer"
+                    },
                     "lines": {
                       "items": {
                         "additionalProperties": false,
                         "properties": {
+                          "availability": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "status": {
+                                "enum": [
+                                  "IN_STOCK",
+                                  "LOW_STOCK",
+                                  "OUT_OF_STOCK"
+                                ],
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "status"
+                            ],
+                            "type": "object"
+                          },
                           "id": {
                             "format": "uuid",
                             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
                             "type": "string"
+                          },
+                          "image_url": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
                           },
                           "line_subtotal": {
                             "additionalProperties": false,
@@ -13671,7 +13749,9 @@
                           "name",
                           "quantity",
                           "unit_price",
-                          "line_subtotal"
+                          "line_subtotal",
+                          "image_url",
+                          "availability"
                         ],
                         "type": "object"
                       },
@@ -13701,11 +13781,23 @@
                           "type": "null"
                         }
                       ]
+                    },
+                    "updated_at": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
                     }
                   },
                   "required": [
                     "id",
                     "currency",
+                    "updated_at",
+                    "item_count",
                     "lines",
                     "subtotal",
                     "entry_quote"
@@ -14125,14 +14217,46 @@
                       "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
                       "type": "string"
                     },
+                    "item_count": {
+                      "maximum": 9007199254740991,
+                      "minimum": -9007199254740991,
+                      "type": "integer"
+                    },
                     "lines": {
                       "items": {
                         "additionalProperties": false,
                         "properties": {
+                          "availability": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "status": {
+                                "enum": [
+                                  "IN_STOCK",
+                                  "LOW_STOCK",
+                                  "OUT_OF_STOCK"
+                                ],
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "status"
+                            ],
+                            "type": "object"
+                          },
                           "id": {
                             "format": "uuid",
                             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
                             "type": "string"
+                          },
+                          "image_url": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
                           },
                           "line_subtotal": {
                             "additionalProperties": false,
@@ -14211,7 +14335,9 @@
                           "name",
                           "quantity",
                           "unit_price",
-                          "line_subtotal"
+                          "line_subtotal",
+                          "image_url",
+                          "availability"
                         ],
                         "type": "object"
                       },
@@ -14241,11 +14367,23 @@
                           "type": "null"
                         }
                       ]
+                    },
+                    "updated_at": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
                     }
                   },
                   "required": [
                     "id",
                     "currency",
+                    "updated_at",
+                    "item_count",
                     "lines",
                     "subtotal",
                     "entry_quote"
@@ -14605,14 +14743,46 @@
                       "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
                       "type": "string"
                     },
+                    "item_count": {
+                      "maximum": 9007199254740991,
+                      "minimum": -9007199254740991,
+                      "type": "integer"
+                    },
                     "lines": {
                       "items": {
                         "additionalProperties": false,
                         "properties": {
+                          "availability": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "status": {
+                                "enum": [
+                                  "IN_STOCK",
+                                  "LOW_STOCK",
+                                  "OUT_OF_STOCK"
+                                ],
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "status"
+                            ],
+                            "type": "object"
+                          },
                           "id": {
                             "format": "uuid",
                             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
                             "type": "string"
+                          },
+                          "image_url": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
                           },
                           "line_subtotal": {
                             "additionalProperties": false,
@@ -14691,7 +14861,9 @@
                           "name",
                           "quantity",
                           "unit_price",
-                          "line_subtotal"
+                          "line_subtotal",
+                          "image_url",
+                          "availability"
                         ],
                         "type": "object"
                       },
@@ -14721,11 +14893,23 @@
                           "type": "null"
                         }
                       ]
+                    },
+                    "updated_at": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
                     }
                   },
                   "required": [
                     "id",
                     "currency",
+                    "updated_at",
+                    "item_count",
                     "lines",
                     "subtotal",
                     "entry_quote"

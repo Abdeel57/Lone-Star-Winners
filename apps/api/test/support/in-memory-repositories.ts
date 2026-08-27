@@ -169,6 +169,17 @@ interface StoredCart {
   id: string;
   ownerKey: string;
   promotionId: string | null;
+  /**
+   * Lo que en PostgreSQL ponen `carts_set_updated_at` y el trigger
+   * `cart_items_touch_cart` de la migracion 0025.
+   *
+   * El doble lo mueve a mano en cada mutacion porque lo que se prueba aqui es
+   * que la RUTA publica el instante del carrito y no el del reloj del proceso.
+   * Que el trigger exista y dispare se comprueba contra PostgreSQL real en
+   * `packages/database/test/integration/cart.int.test.ts` (DEC-018): simular
+   * un trigger seria escribir un test que pasa siempre.
+   */
+  updatedAt: Date;
   lines: StoredLine[];
 }
 
@@ -190,6 +201,21 @@ export function createFakeRepositories(options: FakeOptions = {}): FakeRepositor
 
   const storedCarts = new Map<string, StoredCart>();
   let nextLineId = 0;
+
+  /**
+   * Reloj MONOTONO del doble, un segundo por mutacion.
+   *
+   * `new Date()` daria el mismo milisegundo a dos mutaciones seguidas en un
+   * test, y entonces "el instante cambia al mutar" pasaria por casualidad o
+   * fallaria por casualidad segun la maquina. Con un contador, la unica forma
+   * de que dos lecturas coincidan es que la ruta no haya publicado el instante
+   * del carrito.
+   */
+  let clockTicks = 0;
+  function tick(): Date {
+    clockTicks += 1;
+    return new Date(Date.parse("2026-09-15T12:00:00.000Z") + clockTicks * 1_000);
+  }
 
   const variantIndex = new Map(
     products.flatMap((product) =>
@@ -213,6 +239,7 @@ export function createFakeRepositories(options: FakeOptions = {}): FakeRepositor
           quantity: line.quantity,
           unitAmountMinor: found.variant.priceAmountMinor,
           currency: found.variant.currency,
+          stockQuantity: found.variant.stockQuantity,
         };
       })
       .sort((a, b) => a.sku.localeCompare(b.sku));
@@ -221,6 +248,7 @@ export function createFakeRepositories(options: FakeOptions = {}): FakeRepositor
       id: cart.id,
       promotionId: cart.promotionId,
       currency: lines[0]?.currency ?? null,
+      updatedAt: cart.updatedAt,
       lines,
     };
   }
@@ -282,6 +310,7 @@ export function createFakeRepositories(options: FakeOptions = {}): FakeRepositor
         id: CART_ID,
         ownerKey: ownerKey(owner),
         promotionId,
+        updatedAt: tick(),
         lines: [],
       };
       storedCarts.set(created.ownerKey, created);
@@ -303,6 +332,7 @@ export function createFakeRepositories(options: FakeOptions = {}): FakeRepositor
       } else {
         existing.quantity += quantity;
       }
+      cart.updatedAt = tick();
       return Promise.resolve(toCartRecord(cart));
     },
     setItemQuantity: (cartId: string, itemId: string, quantity: number) => {
@@ -312,6 +342,7 @@ export function createFakeRepositories(options: FakeOptions = {}): FakeRepositor
         return Promise.resolve(null);
       }
       line.quantity = quantity;
+      cart.updatedAt = tick();
       return Promise.resolve(toCartRecord(cart));
     },
     removeItem: (cartId: string, itemId: string) => {
@@ -321,9 +352,12 @@ export function createFakeRepositories(options: FakeOptions = {}): FakeRepositor
       }
       const index = cart.lines.findIndex((candidate) => candidate.id === itemId);
       if (index === -1) {
+        // Nada cambio, asi que el instante tampoco: una linea ajena no es una
+        // mutacion de este carrito.
         return Promise.resolve(null);
       }
       cart.lines.splice(index, 1);
+      cart.updatedAt = tick();
       return Promise.resolve(toCartRecord(cart));
     },
   };

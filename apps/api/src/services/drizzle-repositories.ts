@@ -356,6 +356,9 @@ function createCartRepository(db: Database): CartRepository {
         sku: productVariants.sku,
         unitAmountMinor: productVariants.priceAmountMinor,
         currency: productVariants.currency,
+        // La misma columna que decide el `409 INSUFFICIENT_STOCK`. No se
+        // publica en crudo: de ella sale `availability` y nada mas.
+        stockQuantity: productVariants.stockQuantity,
         productId: products.id,
         productSlug: products.slug,
       })
@@ -383,6 +386,11 @@ function createCartRepository(db: Database): CartRepository {
       id: cart.id,
       promotionId: cart.promotionId,
       currency: cart.currency,
+      // Lo pone el motor: `carts_set_updated_at` en la propia fila y
+      // `cart_items_touch_cart` (migracion 0025) cuando cambian las lineas.
+      // Aqui no se recalcula ni se sustituye por `new Date()`, que es lo que
+      // convertiria una cotizacion caducada en una que parece fresca.
+      updatedAt: cart.updatedAt,
       lines: lines.map((line) => ({
         id: line.id,
         productVariantId: line.productVariantId,
@@ -396,6 +404,7 @@ function createCartRepository(db: Database): CartRepository {
         quantity: line.quantity,
         unitAmountMinor: line.unitAmountMinor,
         currency: line.currency,
+        stockQuantity: line.stockQuantity,
       })),
     };
   }

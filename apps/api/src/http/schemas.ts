@@ -107,6 +107,25 @@ export const productSummarySchema = z.object({
   variants: z.array(variantSchema),
 });
 
+/**
+ * Disponibilidad de una LINEA del carrito (HO-017).
+ *
+ * ES UN OBJETO Y NO UNA CADENA porque el dia que se decida publicar la
+ * cantidad, el campo cabe dentro sin cambiar el tipo de lo ya publicado.
+ *
+ * SOLO `status`, DE MOMENTO. `quantity_available` NO se publica: HO-017 pide
+ * expresamente no revelar el inventario exacto y no hay ninguna decision en
+ * `docs/DECISIONS.md` que lo autorice. Un campo opcional que aparece "por si
+ * acaso" seria una decision de negocio tomada por el backend.
+ *
+ * LOS TRES ESTADOS SE DERIVAN DE `product_variants.stock_quantity`, la misma
+ * columna que decide el `409 INSUFFICIENT_STOCK`, y de la cantidad de ESTA
+ * linea. Ver `availabilityOf` en `routes/cart.ts` para la tabla exacta.
+ */
+export const cartLineAvailabilitySchema = z.object({
+  status: z.enum(["IN_STOCK", "LOW_STOCK", "OUT_OF_STOCK"]),
+});
+
 export const cartLineSchema = z.object({
   id: z.uuid(),
   variant_id: z.uuid(),
@@ -116,6 +135,20 @@ export const cartLineSchema = z.object({
   quantity: z.number().int(),
   unit_price: moneySchema,
   line_subtotal: moneySchema,
+  /**
+   * `null` SIEMPRE hoy, y el contrato lo dice: el esquema no tiene ninguna
+   * tabla de medios -no hay `media`, `product_media` ni `variant_media`- y
+   * `backend` no inventa una para rellenar un campo. Se publica igualmente,
+   * nulable, para que `frontend` deje de degradar su tipo y pinte su marcador
+   * de posicion sabiendo por que.
+   *
+   * `z.string()` y no `z.url()`: sin modelo de medios nadie ha decidido si la
+   * referencia sera absoluta, relativa o de un CDN. Fijar `z.url()` aqui seria
+   * tomar esa decision de pasada, y ademas haria fallar el serializador en
+   * produccion el dia que se sirviera una ruta relativa.
+   */
+  image_url: z.string().nullable(),
+  availability: cartLineAvailabilitySchema,
 });
 
 export const entryQuoteSchema = z.object({
@@ -163,6 +196,28 @@ export const entryQuoteSchema = z.object({
 export const cartWithQuoteSchema = z.object({
   id: z.uuid(),
   currency: z.string().length(3).nullable(),
+  /**
+   * Ultima mutacion del carrito, LINEAS INCLUIDAS. ISO-8601 UTC.
+   *
+   * Existe por una razon medible que dio `frontend` en HO-017: comparado con
+   * `entry_quote.evaluated_at` es lo que permite saber que la cifra de entries
+   * en pantalla ya no corresponde al carrito. Sin el, la interfaz no puede
+   * distinguir una cotizacion vigente de una caducada.
+   *
+   * `null` unicamente en el carrito vacio sintetico -el solicitante no tiene
+   * carrito, no hay fila y por tanto no hay instante-. Devolver `now()` ahi
+   * seria inventarse la frescura de algo que no existe.
+   */
+  updated_at: z.string().nullable(),
+  /**
+   * Suma de las cantidades de las lineas, entero. NO es el numero de lineas:
+   * dos unidades de la misma variante son una linea y cuentan dos.
+   *
+   * Vale `0` -nunca `null`- en un carrito vacio: contar cero cosas es cero, no
+   * ausencia de cuenta. La asimetria con `updated_at`, `currency` y `subtotal`
+   * es deliberada.
+   */
+  item_count: z.number().int(),
   lines: z.array(cartLineSchema),
   subtotal: moneySchema.nullable(),
   /**

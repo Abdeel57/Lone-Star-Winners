@@ -75,6 +75,63 @@ async function requirePrincipal(request: FastifyRequest): Promise<RequestPrincip
   return principal;
 }
 
+/**
+ * UNA sola pregunta sobre existencias, para los dos usos.
+ *
+ * `POST /cart/items` la usa para decidir el `409 INSUFFICIENT_STOCK` y
+ * `availabilityOf` la usa para decidir el estado que se publica. Estan
+ * escritas contra la misma funcion a proposito: si cada una leyera el stock a
+ * su manera, un carrito podria decir "disponible" en la linea y responder 409
+ * al pulsar, y ese sintoma es dificil de atribuir.
+ *
+ * `null` es "existencias no gestionadas", que NO es cero: no se comprueba nada
+ * y se deja pasar.
+ */
+function fitsStock(stockQuantity: number | null, quantity: number): boolean {
+  return stockQuantity === null || stockQuantity >= quantity;
+}
+
+/**
+ * Disponibilidad de una LINEA, derivada del stock y de la cantidad pedida.
+ *
+ * | stock                | estado         | significado                        |
+ * | -------------------- | -------------- | ---------------------------------- |
+ * | no gestionado (null) | IN_STOCK       | nada limita esta linea             |
+ * | menor que `quantity` | OUT_OF_STOCK   | la linea YA no cabe: pedir esta    |
+ * |                      |                | cantidad devolveria 409            |
+ * | igual a `quantity`   | LOW_STOCK      | se lleva exactamente lo que queda; |
+ * |                      |                | no cabe ni una unidad mas          |
+ * | mayor que `quantity` | IN_STOCK       | queda margen                       |
+ *
+ * POR QUE EL UMBRAL ES LA PROPIA LINEA Y NO UN NUMERO
+ *
+ *   Lo habitual seria "LOW_STOCK si quedan menos de N". Ese N es una constante
+ *   de negocio que nadie ha aprobado, y el principio 2 de `CLAUDE.md` prohibe
+ *   inventarla. La definicion de arriba no inventa nada: sale entera de la
+ *   misma comparacion que ya decide el 409.
+ *
+ *   El copy es de `frontend` (DEC-022). `OUT_OF_STOCK` significa "esta
+ *   cantidad no se puede servir hoy", que puede querer decir "quedan 3 y pediste
+ *   5"; la etiqueta que se muestre es decision suya, no de la API.
+ */
+function availabilityOf(line: {
+  readonly stockQuantity: number | null;
+  readonly quantity: number;
+}): { status: "IN_STOCK" | "LOW_STOCK" | "OUT_OF_STOCK" } {
+  if (!fitsStock(line.stockQuantity, line.quantity)) {
+    return { status: "OUT_OF_STOCK" };
+  }
+  if (line.stockQuantity === line.quantity) {
+    return { status: "LOW_STOCK" };
+  }
+  return { status: "IN_STOCK" };
+}
+
+/** Suma de cantidades, no numero de lineas. */
+function itemCountOf(cart: CartRecord): number {
+  return cart.lines.reduce((total, line) => total + line.quantity, 0);
+}
+
 function subtotalOf(cart: CartRecord): { amount_minor: string; currency: string } | null {
   if (cart.currency === null || cart.lines.length === 0) {
     return null;
@@ -119,6 +176,11 @@ export function buildCartRoutes(dependencies: AppDependencies): RouteDefinition[
     return {
       id: cart.id,
       currency: cart.currency,
+      // Sale del motor (`carts.updated_at`, migracion 0025), no del reloj de
+      // este proceso. Es lo que `frontend` compara con `evaluated_at` para
+      // saber que la cifra de entries en pantalla ya no vale.
+      updated_at: cart.updatedAt === null ? null : cart.updatedAt.toISOString(),
+      item_count: itemCountOf(cart),
       lines: cart.lines.map((line) => ({
         id: line.id,
         variant_id: line.productVariantId,
@@ -134,6 +196,10 @@ export function buildCartRoutes(dependencies: AppDependencies): RouteDefinition[
           amount_minor: (line.unitAmountMinor * BigInt(line.quantity)).toString(10),
           currency: line.currency,
         },
+        // Sin tabla de medios en el esquema no hay imagen que servir, y
+        // `backend` no crea una para rellenar el campo. Ver `schemas.ts`.
+        image_url: null,
+        availability: availabilityOf(line),
       })),
       subtotal: subtotalOf(cart),
       entry_quote: quote,
@@ -166,6 +232,11 @@ export function buildCartRoutes(dependencies: AppDependencies): RouteDefinition[
           return {
             id: "00000000-0000-0000-0000-000000000000",
             currency: null,
+            // No hay fila, asi que no hay instante. `now()` aqui seria
+            // afirmar que un carrito inexistente acaba de cambiar.
+            updated_at: null,
+            // Cero cosas son cero, no ausencia de cuenta.
+            item_count: 0,
             lines: [],
             subtotal: null,
             entry_quote: null,
@@ -210,10 +281,13 @@ export function buildCartRoutes(dependencies: AppDependencies): RouteDefinition[
           throw ApiErrors.variantNotPurchasable();
         }
 
-        // `null` es "existencias no gestionadas", que NO es cero: no se
-        // comprueba nada y se deja pasar.
-        if (found.variant.stockQuantity !== null && found.variant.stockQuantity < body.quantity) {
-          throw ApiErrors.insufficientStock(found.variant.stockQuantity);
+        // La MISMA comparacion de la que sale `availability` en la respuesta.
+        // `null` es "existencias no gestionadas", que NO es cero: `fitsStock`
+        // ya lo deja pasar, y el `!== null` esta solo para que TypeScript sepa
+        // que el detalle del error lleva un numero.
+        const stock = found.variant.stockQuantity;
+        if (stock !== null && !fitsStock(stock, body.quantity)) {
+          throw ApiErrors.insufficientStock(stock);
         }
 
         const cart = await openCart(principal);
@@ -334,6 +408,7 @@ export function buildCartRoutes(dependencies: AppDependencies): RouteDefinition[
           id: "00000000-0000-0000-0000-000000000000",
           promotionId: null,
           currency: null,
+          updatedAt: null,
           lines: [],
         };
 

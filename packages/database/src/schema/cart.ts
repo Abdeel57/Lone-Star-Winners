@@ -1,6 +1,18 @@
 /**
  * Carrito de servidor (DEC-023).
- * Espejo de `drizzle/0009_cart.sql`.
+ * Espejo de `drizzle/0009_cart.sql` y `drizzle/0025_cart_touch_on_item_change.sql`.
+ *
+ * `updated_at` DEL CARRITO CUBRE TAMBIEN SUS LINEAS
+ *
+ *   Un trigger de 0025 marca `carts.updated_at` cuando se inserta, se cambia o
+ *   se borra una fila de `cart_items`. Drizzle no sabe declarar triggers, asi
+ *   que esa garantia no se ve en este archivo: se lee en la migracion y se
+ *   comprueba en `test/integration/cart.int.test.ts`.
+ *
+ *   No es cosmetica. `CartWithQuote.updated_at` se compara contra
+ *   `entry_quote.evaluated_at` para saber que una cotizacion de entries
+ *   mostrada ya no corresponde al carrito; si el instante se quedara atras, la
+ *   pantalla presentaria una cifra caducada como vigente.
  *
  * A DIFERENCIA DEL LEDGER, ESTA TABLA SI SE MUTA
  *

@@ -645,6 +645,8 @@ Todas las rutas de esta sección devuelven **`CartWithQuote`**:
 {
   "id": "uuid",
   "currency": "USD",
+  "updated_at": "2026-09-15T12:00:00.000Z",
+  "item_count": 2,
   "lines": [
     {
       "id": "uuid",
@@ -654,7 +656,9 @@ Todas las rutas de esta sección devuelven **`CartWithQuote`**:
       "name": { "en-US": "...", "es-US": "..." },
       "quantity": 2,
       "unit_price": { "amount_minor": "2500", "currency": "USD" },
-      "line_subtotal": { "amount_minor": "5000", "currency": "USD" }
+      "line_subtotal": { "amount_minor": "5000", "currency": "USD" },
+      "image_url": null,
+      "availability": { "status": "IN_STOCK" }
     }
   ],
   "subtotal": { "amount_minor": "5000", "currency": "USD" },
@@ -672,6 +676,61 @@ Todas las rutas de esta sección devuelven **`CartWithQuote`**:
 - `id` es `00000000-0000-0000-0000-000000000000` cuando el solicitante no tiene
   carrito. **Leer no crea nada**: un `GET` que insertara una fila haría que cada
   rastreador dejara un carrito vacío en la base de datos.
+
+**`updated_at`, `item_count`, `image_url` y `availability` (HO-017).**
+
+- `updated_at` es el instante de la **última mutación del carrito, líneas
+  incluidas**. ISO-8601 UTC. Existe por el motivo que dio `frontend` y que no es
+  cosmético: comparado con `entry_quote.evaluated_at` es lo que permite saber
+  que la cifra de entries en pantalla **ya no corresponde al carrito**. Lo pone
+  el motor —`carts_set_updated_at` sobre la fila y `cart_items_touch_cart`
+  (migración `0025`) cuando cambian las líneas—, nunca el reloj del proceso que
+  responde. Vale `null` **sólo** en el carrito vacío sintético: ahí no existe
+  fila, y devolver `now()` sería afirmar que un carrito inexistente acaba de
+  cambiar.
+- `item_count` es la **suma de `quantity`** de las líneas, entero. No es el
+  número de líneas: dos unidades de la misma variante son una línea y cuentan
+  dos. Vale `0` —nunca `null`— en un carrito vacío: contar cero cosas es cero.
+  No entra en ninguna aritmética de entries; es una cuenta de mercancía.
+- `image_url` es hoy **siempre `null`**, y se publica igualmente. El esquema
+  **no tiene ninguna tabla de medios** —no existe `media`, `product_media` ni
+  `variant_media`, ni ninguna columna de imagen en `products` o
+  `product_variants`— y `backend` no inventa una para rellenar un campo. Se
+  declara nulable para que `frontend` deje de degradar su tipo y pinte su
+  marcador de posición sabiendo por qué. Su tipo es `string | null` y **no**
+  `url`: sin modelo de medios nadie ha decidido si la referencia será absoluta,
+  relativa o de un CDN, y fijarlo aquí sería tomar esa decisión de pasada.
+- `availability` es un **objeto**, no una cadena: `{ "status": ... }`. Hoy sólo
+  lleva `status`. **No publica la cantidad exacta de existencias**: HO-017 lo
+  pide expresamente y ninguna decisión de `docs/DECISIONS.md` autoriza lo
+  contrario. Que sea objeto y no cadena permite añadir el campo el día que se
+  decida, sin cambiar el tipo de lo ya publicado.
+
+`availability.status` sale de `product_variants.stock_quantity` —**la misma
+columna que decide el `409 INSUFFICIENT_STOCK`**, nunca de una segunda lectura
+del inventario— y de la cantidad de **esa** línea:
+
+| stock de la variante   | `status`       | significado                                               |
+| ---------------------- | -------------- | --------------------------------------------------------- |
+| no gestionado (`null`) | `IN_STOCK`     | nada limita esta línea; `null` no es cero                 |
+| menor que `quantity`   | `OUT_OF_STOCK` | la línea ya **no cabe**: pedir esa cantidad daría `409`   |
+| igual a `quantity`     | `LOW_STOCK`    | se lleva exactamente lo que queda; no cabe una unidad más |
+| mayor que `quantity`   | `IN_STOCK`     | queda margen                                              |
+
+El umbral de `LOW_STOCK` es **la propia línea** y no un número. Lo habitual
+sería "quedan menos de N", pero ese N es una constante de negocio que nadie ha
+aprobado, y el principio 2 de `CLAUDE.md` prohíbe inventarla. La definición de
+arriba no inventa nada: sale entera de la comparación que ya decide el `409`.
+
+`status` es un **enum estable**; el copy es de `frontend` (DEC-022).
+`OUT_OF_STOCK` significa "esta cantidad no se puede servir hoy", que puede
+querer decir "quedan 3 y pediste 5": la etiqueta que se enseñe es decisión de
+`frontend`, no de la API.
+
+`availability` **no** responde "¿está a la venta?". Una variante retirada o no
+publicada es otra pregunta —la que HO-017 llama `is_purchasable`—, sigue pedida
+para el catálogo (sección 4) y **no** se deduce de ésta.
+
 - Una variante aparece **como máximo una vez** por carrito. Añadir la misma
   variante dos veces **suma cantidad**; no duplica la línea.
 - Un carrito tiene **una sola moneda**. Mezclarlas devuelve

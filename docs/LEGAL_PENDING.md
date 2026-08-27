@@ -214,3 +214,26 @@ al administrador externo solo puede finalizarse con la numeración visible
 encendida, y la política ante reversals es que los lotes más recientes
 pierden ordinales (HO-033). Ambas cosas dependen de lo que digan las
 Official Rules sobre cómo se identifica una participación en el sorteo.
+
+## Merchandise availability and entry eligibility
+
+TBD
+
+Al publicar `availability` por línea de carrito (HO-017) apareció una pregunta
+que **backend no responde**: ¿la disponibilidad de la mercancía afecta a la
+elegibilidad de la participación?
+
+Hoy el motor de cálculo cotiza **todas** las líneas del carrito, agotadas o no,
+y las Official Rules no dicen nada sobre esto. Los tres casos concretos:
+
+1. Una compra elegible cuya mercancía **no puede entregarse** (agotada entre el
+   pago y la preparación del pedido): ¿genera participaciones igualmente?
+2. Si el pedido acaba **cancelado por falta de stock**, ¿la reversión usa el
+   mismo motivo que un refund o uno propio? (Hoy sería un `REFUND_REVERSAL`, y
+   el motivo forma parte del expediente auditable.)
+3. ¿Puede una promoción declarar mercancía elegible que **no está a la venta**?
+
+Mientras siga `TBD`, `availability` es **exclusivamente informativa**: no entra
+en ninguna aritmética de entries, ni en el carrito ni en el pedido, y ninguna
+línea deja de cotizarse por estar agotada. Cambiar eso sería decidir una regla
+legal desde el código.
