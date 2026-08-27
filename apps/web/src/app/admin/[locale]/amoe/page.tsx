@@ -7,7 +7,7 @@ import { AdminChrome } from "@/components/admin/admin-chrome";
 import { openAdminScreen } from "@/components/admin/admin-screen";
 import { AmoeDecisionPanel, AmoeSubmissionRow } from "@/components/admin/amoe-review";
 import { AdminPager } from "@/components/admin/admin-pager";
-import { ApiErrorState } from "@/components/api-error-state";
+import { AdminSectionError } from "@/components/admin/admin-section-error";
 import { adminHref } from "@/i18n/admin-routing";
 import { isLocale } from "@/i18n/locales";
 import { can } from "@/lib/admin/capabilities";
@@ -87,7 +87,7 @@ export default async function AdminAmoePage({
       description={t("description")}
     >
       {!result.ok ? (
-        <ApiErrorState failure={result.error} headingLevel="h2" />
+        <AdminSectionError failure={result.error} headingLevel="h2" />
       ) : (
         <div className="flex flex-col gap-s6">
           {/*

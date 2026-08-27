@@ -45,7 +45,6 @@ export type {
   AmoeSubmissionStatus,
   AmoeSubmissionWindow,
   ApiErrorEnvelope,
-  Cart,
   CartLine,
   CartWithQuote,
   CheckoutMode,

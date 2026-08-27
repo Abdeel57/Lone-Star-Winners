@@ -5,7 +5,7 @@ import { getTranslations, setRequestLocale } from "next-intl/server";
 import { AdminChrome } from "@/components/admin/admin-chrome";
 import { AdminPager } from "@/components/admin/admin-pager";
 import { openAdminScreen } from "@/components/admin/admin-screen";
-import { ApiErrorState } from "@/components/api-error-state";
+import { AdminSectionError } from "@/components/admin/admin-section-error";
 import { reasonLabeller } from "@/i18n/admin-labels";
 import { formatZonedDateTime } from "@/i18n/formatters";
 import { isLocale } from "@/i18n/locales";
@@ -73,7 +73,7 @@ export default async function AdminAuditPage({
       description={t("description")}
     >
       {!result.ok ? (
-        <ApiErrorState failure={result.error} headingLevel="h2" />
+        <AdminSectionError failure={result.error} headingLevel="h2" />
       ) : (
         <div className="flex flex-col gap-s6">
           <DataTable<AdminAuditEvent>
@@ -100,7 +100,19 @@ export default async function AdminAuditPage({
                     <Badge tone={row.actor_type === "SYSTEM" ? "neutral" : "brand"} size="sm">
                       {row.actor_type === "SYSTEM" ? t("actorSystem") : t("actorHuman")}
                     </Badge>
-                    <span>{row.actor_email ?? t("noActorEmail")}</span>
+                    {/*
+                     * SE PINTA `actor_id`, NO `actor_email`.
+                     *
+                     * `actor_email` llega SIEMPRE `null` (seccion 11.7): la
+                     * tabla de auditoria guarda identificadores internos y
+                     * "nunca un correo ni un nombre". Pintarlo dejaba una
+                     * columna con el mismo texto de relleno en todas las filas,
+                     * que ademas sugeria que faltaba un dato.
+                     *
+                     * El identificador SI sirve: es con lo que se filtra la
+                     * traza por actor, y es lo unico que la escritura guardo.
+                     */}
+                    <span className="font-mono text-caption">{row.actor_id ?? t("noActorId")}</span>
                   </span>
                 ),
               },

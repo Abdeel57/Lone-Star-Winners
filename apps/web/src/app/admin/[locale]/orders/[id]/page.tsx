@@ -5,7 +5,7 @@ import { getTranslations, setRequestLocale } from "next-intl/server";
 
 import { AdminChrome } from "@/components/admin/admin-chrome";
 import { openAdminScreen } from "@/components/admin/admin-screen";
-import { ApiErrorState } from "@/components/api-error-state";
+import { AdminSectionError } from "@/components/admin/admin-section-error";
 import { EntryCalculationTrace } from "@/components/entry-calculation-trace";
 import { OrderLineList } from "@/components/order-line-list";
 import { adminHref } from "@/i18n/admin-routing";
@@ -72,7 +72,7 @@ export default async function AdminOrderDetailPage({
       }
     >
       {!result.ok ? (
-        <ApiErrorState failure={result.error} headingLevel="h2" />
+        <AdminSectionError failure={result.error} headingLevel="h2" />
       ) : (
         <div className="flex flex-col gap-s8">
           <Card elevation="raised" padding="lg">

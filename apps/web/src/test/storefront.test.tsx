@@ -40,7 +40,7 @@ vi.mock("@/lib/cart-actions", () => ({
 }));
 
 import { CartLineRow } from "@/components/cart-line-row";
-import { EntryQuotePanel, isStale } from "@/components/entry-quote-panel";
+import { EntryQuotePanel } from "@/components/entry-quote-panel";
 import { ProductCard } from "@/components/product-card";
 import { ShopFilters } from "@/components/shop-filters";
 import type { Locale } from "@/i18n/locales";
@@ -48,10 +48,11 @@ import {
   baseQuote,
   cappedQuote,
   cartWithoutQuote,
-  cartWithStaleQuote,
-  emptyCart,
+  cartWithTwoVariantsOfSameProduct,
+  eligibleCartLine,
+  emptyCartWithQuote,
+  ineligibleCartLine,
   multipliedQuote,
-  populatedCart,
 } from "@/mocks/fixtures/cart";
 import {
   catalog,
@@ -189,13 +190,10 @@ describe("ShopFilters", () => {
 });
 
 describe("CartLineRow", () => {
-  const line = populatedCart.items[0];
-  const ineligibleLine = populatedCart.items[1];
+  const line = eligibleCartLine;
+  const ineligibleLine = ineligibleCartLine;
 
-  it("pinta el total de linea que manda el servidor, sin multiplicar", () => {
-    expect(line).toBeDefined();
-    if (line === undefined) return;
-
+  it("pinta el subtotal de linea que manda el servidor, sin multiplicar", () => {
     renderIn("en", <CartLineRow line={line} locale="en" ineligibleReasonKey={null} />);
 
     // 2 x 25,00 = 50,00, pero la cifra viene del backend. Si la interfaz
@@ -204,10 +202,31 @@ describe("CartLineRow", () => {
     expect(screen.getByText(/\$25\.00/)).toBeInTheDocument();
   });
 
-  it("dice QUE linea no cuenta, no que el carrito entero falle", () => {
-    expect(ineligibleLine).toBeDefined();
-    if (ineligibleLine === undefined) return;
+  it("ensena el SKU, que es lo unico que distingue dos variantes", () => {
+    // El contrato publica UN nombre por linea, el del producto. Dos tallas del
+    // mismo articulo llegan con el mismo `name`: sin el SKU en pantalla, quien
+    // mira su carrito no puede saber cual es cual.
+    const first = cartWithTwoVariantsOfSameProduct.lines[0];
+    const second = cartWithTwoVariantsOfSameProduct.lines[1];
+    expect(first).toBeDefined();
+    expect(second).toBeDefined();
+    if (first === undefined || second === undefined) return;
 
+    expect(first.name).toEqual(second.name);
+    expect(first.sku).not.toEqual(second.sku);
+
+    const view = renderIn(
+      "en",
+      <CartLineRow line={first} locale="en" ineligibleReasonKey={null} />,
+    );
+    expect(screen.getByText(first.sku)).toBeInTheDocument();
+    view.unmount();
+
+    renderIn("en", <CartLineRow line={second} locale="en" ineligibleReasonKey={null} />);
+    expect(screen.getByText(second.sku)).toBeInTheDocument();
+  });
+
+  it("dice QUE linea no cuenta, no que el carrito entero falle", () => {
     renderIn(
       "es",
       <CartLineRow line={ineligibleLine} locale="es" ineligibleReasonKey="PRODUCT_NOT_ELIGIBLE" />,
@@ -217,9 +236,6 @@ describe("CartLineRow", () => {
   });
 
   it("un motivo desconocido cae al texto generico y nunca sale en crudo", () => {
-    expect(line).toBeDefined();
-    if (line === undefined) return;
-
     renderIn(
       "en",
       <CartLineRow line={line} locale="en" ineligibleReasonKey="MOTIVO_QUE_NO_EXISTE" />,
@@ -229,17 +245,19 @@ describe("CartLineRow", () => {
     expect(screen.queryByText(/MOTIVO_QUE_NO_EXISTE/)).not.toBeInTheDocument();
   });
 
-  it("avisa cuando una linea dejo de estar disponible", () => {
-    const unavailable = { ...line, availability: "OUT_OF_STOCK" } as NonNullable<typeof line>;
-    renderIn("en", <CartLineRow line={unavailable} locale="en" ineligibleReasonKey={null} />);
+  it("no pinta imagen ni disponibilidad, que el contrato no publica", () => {
+    // No es una omision estetica: un marco de imagen permanentemente vacio se
+    // lee como una foto rota, y un aviso de existencias que nunca puede
+    // dispararse aparenta una garantia que la respuesta no da (HO-017).
+    const { container } = renderIn(
+      "en",
+      <CartLineRow line={line} locale="en" ineligibleReasonKey={null} />,
+    );
 
-    expect(screen.getByText(enMessages.cart.quantityUnavailable)).toBeInTheDocument();
+    expect(container.querySelector("img")).toBeNull();
   });
 
   it("quitar y cambiar cantidad son dos formularios distintos", () => {
-    expect(line).toBeDefined();
-    if (line === undefined) return;
-
     const { container } = renderIn(
       "en",
       <CartLineRow line={line} locale="en" ineligibleReasonKey={null} />,
@@ -249,23 +267,30 @@ describe("CartLineRow", () => {
     // el `name` del boton, que es lo que deja de funcionar al enviar con Enter.
     expect(container.querySelectorAll("form")).toHaveLength(2);
   });
+
+  it("manda al backend el `id` de la linea, que es la identidad del contrato", () => {
+    const { container } = renderIn(
+      "en",
+      <CartLineRow line={line} locale="en" ineligibleReasonKey={null} />,
+    );
+
+    const hidden = container.querySelectorAll('input[name="line_id"]');
+    expect(hidden).toHaveLength(2);
+    for (const input of hidden) {
+      expect(input.getAttribute("value")).toBe(line.id);
+    }
+  });
 });
 
 describe("EntryQuotePanel", () => {
   it("muestra la cifra final tal como llega del backend", () => {
-    renderIn(
-      "en",
-      <EntryQuotePanel quote={baseQuote} cart={populatedCart} locale="en" timeZone="UTC" />,
-    );
+    renderIn("en", <EntryQuotePanel quote={baseQuote} locale="en" timeZone="UTC" />);
 
     expect(screen.getByText(/250 entries/)).toBeInTheDocument();
   });
 
   it("cuando no hay tope no enseña dos cifras iguales", () => {
-    renderIn(
-      "en",
-      <EntryQuotePanel quote={baseQuote} cart={populatedCart} locale="en" timeZone="UTC" />,
-    );
+    renderIn("en", <EntryQuotePanel quote={baseQuote} locale="en" timeZone="UTC" />);
 
     expect(screen.queryByText(/Before limits/)).not.toBeInTheDocument();
   });
@@ -275,7 +300,7 @@ describe("EntryQuotePanel", () => {
     // forma mas rapida de generar una reclamacion.
     const { container } = renderIn(
       "en",
-      <EntryQuotePanel quote={cappedQuote} cart={populatedCart} locale="en" timeZone="UTC" />,
+      <EntryQuotePanel quote={cappedQuote} locale="en" timeZone="UTC" />,
     );
 
     // La cifra final aparece en el resumen Y dentro de la explicacion del tope:
@@ -290,45 +315,15 @@ describe("EntryQuotePanel", () => {
   });
 
   it("lista los multiplicadores aplicados como fraccion, sin dividir", () => {
-    renderIn(
-      "es",
-      <EntryQuotePanel quote={multipliedQuote} cart={populatedCart} locale="es" timeZone="UTC" />,
-    );
+    renderIn("es", <EntryQuotePanel quote={multipliedQuote} locale="es" timeZone="UTC" />);
 
     expect(screen.getByText("2×")).toBeInTheDocument();
-  });
-
-  it("avisa cuando la cotizacion es anterior al ultimo cambio del carrito", () => {
-    renderIn(
-      "en",
-      <EntryQuotePanel
-        quote={cartWithStaleQuote.entry_quote}
-        cart={populatedCart}
-        locale="en"
-        timeZone="UTC"
-      />,
-    );
-
-    expect(screen.getByText(enMessages.cart.quote.stale)).toBeInTheDocument();
-  });
-
-  it("no avisa de caducidad cuando la cotizacion esta al dia", () => {
-    renderIn(
-      "en",
-      <EntryQuotePanel quote={baseQuote} cart={populatedCart} locale="en" timeZone="UTC" />,
-    );
-    expect(screen.queryByText(enMessages.cart.quote.stale)).not.toBeInTheDocument();
   });
 
   it("sin promocion abierta lo dice, en vez de enseñar un cero sin contexto", () => {
     renderIn(
       "es",
-      <EntryQuotePanel
-        quote={cartWithoutQuote.entry_quote}
-        cart={populatedCart}
-        locale="es"
-        timeZone="UTC"
-      />,
+      <EntryQuotePanel quote={cartWithoutQuote.entry_quote} locale="es" timeZone="UTC" />,
     );
 
     expect(screen.getByText(esMessages.cart.quote.unavailable.title)).toBeInTheDocument();
@@ -340,7 +335,7 @@ describe("EntryQuotePanel", () => {
       const messages = locale === "en" ? enMessages : esMessages;
       const view = renderIn(
         locale,
-        <EntryQuotePanel quote={baseQuote} cart={populatedCart} locale={locale} timeZone="UTC" />,
+        <EntryQuotePanel quote={baseQuote} locale={locale} timeZone="UTC" />,
       );
 
       expect(screen.getByText(messages.cart.quote.disclaimer), locale).toBeInTheDocument();
@@ -353,24 +348,11 @@ describe("EntryQuotePanel", () => {
     // donde salio un numero concreto.
     const { container } = renderIn(
       "en",
-      <EntryQuotePanel quote={baseQuote} cart={populatedCart} locale="en" timeZone="UTC" />,
+      <EntryQuotePanel quote={baseQuote} locale="en" timeZone="UTC" />,
     );
 
     expect(container.textContent).toContain(baseQuote.rules_version_id);
     expect(container.textContent).toContain(String(baseQuote.engine_version));
-  });
-});
-
-describe("isStale", () => {
-  it("compara instantes del servidor, no el reloj del navegador", () => {
-    expect(isStale("2026-09-15T11:00:00.000Z", "2026-09-15T12:00:00.000Z")).toBe(true);
-    expect(isStale("2026-09-15T12:00:00.000Z", "2026-09-15T12:00:00.000Z")).toBe(false);
-    expect(isStale("2026-09-15T13:00:00.000Z", "2026-09-15T12:00:00.000Z")).toBe(false);
-  });
-
-  it("ante una fecha invalida no inventa una caducidad", () => {
-    expect(isStale("no-es-una-fecha", "2026-09-15T12:00:00.000Z")).toBe(false);
-    expect(isStale("2026-09-15T12:00:00.000Z", "")).toBe(false);
   });
 });
 
@@ -386,9 +368,14 @@ describe("fixtures del hito", () => {
     );
   });
 
-  it("el carrito vacio existe como fixture", () => {
-    expect(emptyCart.items).toHaveLength(0);
-    expect(emptyCart.item_count).toBe(0);
+  it("el carrito vacio existe como fixture, con la forma del contrato", () => {
+    expect(emptyCartWithQuote.lines).toHaveLength(0);
+    // `null`, no cero: sin lineas no hay moneda que declarar. La diferencia es
+    // del contrato y es la que impide que la pantalla imprima "0,00 USD" en un
+    // carrito donde no hay ningun importe.
+    expect(emptyCartWithQuote.currency).toBeNull();
+    expect(emptyCartWithQuote.subtotal).toBeNull();
+    expect(emptyCartWithQuote.entry_quote?.eligible_subtotal).toBeNull();
   });
 
   it("hay una variante con stock que aun asi no es comprable", () => {

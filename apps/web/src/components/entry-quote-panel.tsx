@@ -9,7 +9,7 @@ import {
 } from "@/i18n/formatters";
 import type { Locale } from "@/i18n/locales";
 import { useCapKindLabel, useIneligibilityReason } from "@/i18n/storefront-labels";
-import type { Cart, EntryQuote } from "@/lib/api";
+import type { EntryQuote } from "@/lib/api";
 
 /**
  * Cotizacion de participaciones del carrito.
@@ -36,19 +36,30 @@ import type { Cart, EntryQuote } from "@/lib/api";
  * POR QUE la cifra bajo en vez de enseñar un numero mas pequeño del esperado
  * sin justificacion. Cuando coinciden, enseñar las dos solo confundiria.
  *
- * LA COTIZACION PUEDE ESTAR CADUCADA
- * ----------------------------------
- * Si el carrito se modifico despues de calcular la cifra, se dice y se ofrece
- * recargar. Lo que NO se hace es corregirla: corregirla seria calcularla.
+ * NO SE AFIRMA NI SE NIEGA QUE LA CIFRA SIGA VIGENTE
+ * ---------------------------------------------------
+ * Este panel llego a comparar `evaluated_at` con un `updated_at` del carrito y
+ * a avisar de que la cotizacion estaba caducada. `updated_at` NO EXISTE en la
+ * respuesta que publica el contrato (HO-034 punto 2; sigue pedido en HO-017),
+ * asi que la comparacion se hacia contra un campo inventado.
+ *
+ * Se ha retirado sin sustituirla por una afirmacion en el otro sentido: decir
+ * "esta al dia" tampoco se puede demostrar. Lo que se publica es el INSTANTE de
+ * evaluacion, que es un dato del servidor y deja que quien mira saque su propia
+ * conclusion.
+ *
+ * Con el contrato en la mano ademas casi nunca hay nada que avisar: la
+ * cotizacion viaja DENTRO de la misma respuesta de `GET /cart` y el backend la
+ * calcula sobre ese mismo carrito, de modo que las dos cosas que la pantalla
+ * pinta salen de la misma lectura. La carrera solo existiria con la ruta
+ * separada `GET /cart/entry-quote`, que ninguna pantalla usa hoy.
  */
 export function EntryQuotePanel({
   quote,
-  cart,
   locale,
   timeZone,
 }: {
   readonly quote: EntryQuote | null;
-  readonly cart: Cart;
   readonly locale: Locale;
   /** Zona legal de la promocion (DEC-011). Nunca la del navegador. */
   readonly timeZone: string;
@@ -73,11 +84,11 @@ export function EntryQuotePanel({
     timeZone,
     showTimeZoneName: true,
   });
-  const eligibleSubtotal = formatMoney(quote.eligible_subtotal, locale);
-
-  // COMPARACION de instantes, no aritmetica sobre participaciones. Si el
-  // carrito cambio despues de cotizarlo, la cifra ya no describe este carrito.
-  const stale = isStale(quote.evaluated_at, cart.updated_at);
+  // `eligible_subtotal` es `null` con el carrito vacio: sin lineas no hay
+  // moneda que declarar. No es cero -cero seria "hay articulos y ninguno
+  // cuenta"-, asi que la linea del subtotal elegible simplemente no se pinta.
+  const eligibleSubtotal =
+    quote.eligible_subtotal === null ? null : formatMoney(quote.eligible_subtotal, locale);
 
   const cappedDown = quote.final_entries !== quote.entries_before_caps;
 
@@ -86,8 +97,6 @@ export function EntryQuotePanel({
       <CardTitle as="h2" size="sm">
         {t("heading")}
       </CardTitle>
-
-      {stale ? <Alert tone="warning">{t("stale")}</Alert> : null}
 
       {/*
        * LA CIFRA, CON EL PESO QUE LE CORRESPONDE (DEC-038).
@@ -205,21 +214,4 @@ export function EntryQuotePanel({
       <Alert tone="info">{t("disclaimer")}</Alert>
     </Card>
   );
-}
-
-/**
- * Si la cotizacion es anterior al ultimo cambio del carrito.
- *
- * Es una comparacion de dos instantes que manda el servidor. NO usa el reloj
- * del navegador (DEC-011) y no toca ninguna cifra de participaciones. Ante una
- * fecha invalida devuelve `false`: avisar de una caducidad que no se puede
- * comprobar seria inventarse un problema.
- */
-export function isStale(evaluatedAt: string, cartUpdatedAt: string): boolean {
-  const evaluated = new Date(evaluatedAt).getTime();
-  const updated = new Date(cartUpdatedAt).getTime();
-
-  if (Number.isNaN(evaluated) || Number.isNaN(updated)) return false;
-
-  return evaluated < updated;
 }

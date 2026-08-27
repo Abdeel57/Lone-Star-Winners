@@ -15,6 +15,7 @@ import {
 } from "@/lib/api";
 
 import { anonymousSession } from "./fixtures/account";
+import { cartWithQuote } from "./fixtures/cart";
 import { mockRoutes, MOCK_REQUEST_ID, type MockMethod } from "./routes";
 
 /**
@@ -144,6 +145,15 @@ export const scenarios = {
     http.post(url(API_PATHS.cartItems), () =>
       HttpResponse.json(errorEnvelope("UNAUTHENTICATED"), { status: 401 }),
     ),
+
+  /**
+   * Carrito CON lineas.
+   *
+   * El cuerpo por defecto de `GET /cart` en `routes.ts` es el carrito VACIO, y
+   * eso deja sin cubrir justo lo que HO-034 encontro roto: la forma de las
+   * lineas. Este escenario sirve el carrito lleno para poder comprobarla.
+   */
+  cartWithLines: () => http.get(url(API_PATHS.cart), () => HttpResponse.json(cartWithQuote)),
 
   entryQuote: (body: JsonBodyType) =>
     http.get(url(API_PATHS.cartEntryQuote), () => HttpResponse.json(body)),

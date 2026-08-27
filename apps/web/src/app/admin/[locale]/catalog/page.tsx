@@ -5,7 +5,7 @@ import { getTranslations, setRequestLocale } from "next-intl/server";
 import { AdminChrome } from "@/components/admin/admin-chrome";
 import { AdminPager } from "@/components/admin/admin-pager";
 import { openAdminScreen } from "@/components/admin/admin-screen";
-import { ApiErrorState } from "@/components/api-error-state";
+import { AdminSectionError } from "@/components/admin/admin-section-error";
 import { formatInteger, formatMoney, formatZonedDate } from "@/i18n/formatters";
 import { isLocale } from "@/i18n/locales";
 import { can } from "@/lib/admin/capabilities";
@@ -68,7 +68,7 @@ export default async function AdminCatalogPage({
       description={t("description")}
     >
       {!result.ok ? (
-        <ApiErrorState failure={result.error} headingLevel="h2" />
+        <AdminSectionError failure={result.error} headingLevel="h2" />
       ) : (
         <div className="flex flex-col gap-s6">
           {canWrite ? <Alert tone="info">{t("editingPending")}</Alert> : null}

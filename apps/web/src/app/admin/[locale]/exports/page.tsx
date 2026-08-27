@@ -5,7 +5,7 @@ import { getTranslations, setRequestLocale } from "next-intl/server";
 import { AdminChrome } from "@/components/admin/admin-chrome";
 import { AdminPager } from "@/components/admin/admin-pager";
 import { openAdminScreen } from "@/components/admin/admin-screen";
-import { ApiErrorState } from "@/components/api-error-state";
+import { AdminSectionError } from "@/components/admin/admin-section-error";
 import { exportStatusLabeller } from "@/i18n/admin-labels";
 import { formatInteger, formatZonedDateTime } from "@/i18n/formatters";
 import { isLocale } from "@/i18n/locales";
@@ -80,7 +80,7 @@ export default async function AdminExportsPage({
       description={t("description")}
     >
       {!result.ok ? (
-        <ApiErrorState failure={result.error} headingLevel="h2" />
+        <AdminSectionError failure={result.error} headingLevel="h2" />
       ) : (
         <div className="flex flex-col gap-s6">
           <Alert tone="info" title={t("stepUpTitle")}>

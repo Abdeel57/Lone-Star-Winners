@@ -78,6 +78,12 @@ export default async function CartPage({
       ? promotionResult.data.legal_timezone
       : null;
 
+  // El importe LLEGA CALCULADO. Aqui solo se formatea, y solo si existe.
+  const subtotal =
+    cartResult.ok && cartResult.data.subtotal !== null
+      ? formatMoney(cartResult.data.subtotal, locale)
+      : null;
+
   return (
     <div className="lsw-container py-s10 pb-s16">
       <h1 className="lsw-display text-display-md text-text">{t("cart.title")}</h1>
@@ -125,7 +131,7 @@ export default async function CartPage({
         <div className="mt-s8">
           <ApiErrorState failure={cartResult.error} headingLevel="h2" />
         </div>
-      ) : cartResult.data.cart.items.length === 0 ? (
+      ) : cartResult.data.lines.length === 0 ? (
         <div className="mt-s8">
           <EmptyState
             headingLevel="h2"
@@ -146,14 +152,14 @@ export default async function CartPage({
             </h2>
 
             <ul className="mt-s5 flex list-none flex-col gap-s4">
-              {cartResult.data.cart.items.map((line) => (
+              {cartResult.data.lines.map((line) => (
                 <CartLineRow
-                  key={line.line_id}
+                  key={line.id}
                   line={line}
                   locale={locale}
                   ineligibleReasonKey={
                     cartResult.data.entry_quote?.ineligible_items.find(
-                      (item) => item.line_id === line.line_id,
+                      (item) => item.line_id === line.id,
                     )?.reason_key ?? null
                   }
                 />
@@ -167,9 +173,18 @@ export default async function CartPage({
                 {t("cart.subtotal")}
               </CardTitle>
 
-              <p className="font-display mt-s2 text-display-md font-bold tabular-nums text-text">
-                {formatMoney(cartResult.data.cart.subtotal, locale)}
-              </p>
+              {/* `subtotal` es `null` en un carrito vacio -sin lineas no hay
+                  moneda que declarar- y esta rama solo se pinta con lineas. Aun
+                  asi se comprueba: un `null` inesperado imprimiria "null" donde
+                  va un importe, y ese es exactamente el sitio donde no se puede
+                  ensenar un texto sin sentido. */}
+              {subtotal === null ? (
+                <p className="mt-s2 text-body text-text-muted">{t("cart.subtotalUnavailable")}</p>
+              ) : (
+                <p className="font-display mt-s2 text-display-md font-bold tabular-nums text-text">
+                  {subtotal}
+                </p>
+              )}
 
               <p className="mt-s2 text-caption text-text-subtle">{t("cart.subtotalNote")}</p>
 
@@ -198,7 +213,6 @@ export default async function CartPage({
                 vez de caer en la del navegador (DEC-011). */}
             <EntryQuotePanel
               quote={cartResult.data.entry_quote}
-              cart={cartResult.data.cart}
               locale={locale}
               timeZone={timeZone ?? "UTC"}
             />

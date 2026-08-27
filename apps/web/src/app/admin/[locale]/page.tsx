@@ -4,7 +4,7 @@ import { getTranslations, setRequestLocale } from "next-intl/server";
 
 import { AdminChrome } from "@/components/admin/admin-chrome";
 import { openAdminScreen } from "@/components/admin/admin-screen";
-import { ApiErrorState } from "@/components/api-error-state";
+import { AdminSectionError } from "@/components/admin/admin-section-error";
 import { PromotionStatusBadge } from "@/components/promotion-status-badge";
 import { formatEntryCount, formatInteger, formatZonedDateTime } from "@/i18n/formatters";
 import { isLocale } from "@/i18n/locales";
@@ -57,7 +57,7 @@ export default async function AdminDashboardPage({
       description={t("description")}
     >
       {!result.ok ? (
-        <ApiErrorState failure={result.error} headingLevel="h2" />
+        <AdminSectionError failure={result.error} headingLevel="h2" />
       ) : (
         <div className="flex flex-col gap-s6">
           <div className="flex flex-wrap items-center gap-s3">

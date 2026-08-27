@@ -121,6 +121,43 @@ describe("ApiErrorState (DEC-022, DEC-031)", () => {
     expect(screen.getByRole("alert")).toHaveTextContent(esMessages.apiErrors.fallback);
   });
 
+  it("el 503 de pago SIN proveedor configurado tiene texto propio, no el generico", () => {
+    /*
+     * HO-034 punto 6. `POST /checkout/session` responde
+     * `PAYMENT_PROVIDER_NOT_CONFIGURED` -hoy, siempre: el proveedor sigue sin
+     * elegirse- y el diccionario solo traducia
+     * `PAYMENT_PROVIDER_UNAVAILABLE`. El codigo caia al generico "algo ha
+     * fallado", que ademas invita a reintentar algo que no puede funcionar.
+     *
+     * Los dos codigos existen y NO dicen lo mismo: uno es "no contesta" y el
+     * otro es "no hay a quien llamar".
+     */
+    for (const locale of ["en", "es"] as const) {
+      const messages = locale === "en" ? enMessages : esMessages;
+      const view = renderIn(
+        locale,
+        <ApiErrorState
+          failure={{
+            kind: "http",
+            status: 503,
+            code: "PAYMENT_PROVIDER_NOT_CONFIGURED",
+            requestId: null,
+            details: null,
+          }}
+        />,
+      );
+
+      const alert = screen.getByRole("alert");
+      expect(alert).toHaveTextContent(messages.apiErrors.PAYMENT_PROVIDER_NOT_CONFIGURED);
+      expect(alert).not.toHaveTextContent(messages.apiErrors.fallback);
+      expect(messages.apiErrors.PAYMENT_PROVIDER_NOT_CONFIGURED).not.toEqual(
+        messages.apiErrors.PAYMENT_PROVIDER_UNAVAILABLE,
+      );
+
+      view.unmount();
+    }
+  });
+
   it("un fallo de red tiene su propio mensaje", () => {
     renderIn(
       "en",

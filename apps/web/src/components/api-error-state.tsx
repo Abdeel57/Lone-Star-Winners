@@ -44,6 +44,19 @@ const TRANSLATED_CODES = [
   "CONSENT_REQUIRED",
   "CHECKOUT_MODE_UNSUPPORTED",
   "PAYMENT_PROVIDER_UNAVAILABLE",
+  /*
+   * DOS CODIGOS DE PAGO, Y NO SON EL MISMO FALLO.
+   *
+   * `PAYMENT_PROVIDER_UNAVAILABLE` es del frontend: se intento hablar con el
+   * proveedor y no contesto. Reintentar tiene sentido.
+   *
+   * `PAYMENT_PROVIDER_NOT_CONFIGURED` lo devuelve la API -503 en
+   * `POST /checkout/session`- y significa otra cosa: NO HAY proveedor elegido
+   * todavia (DEC-004 lo deja abierto). Reintentar no puede funcionar hoy, ni
+   * dentro de un minuto. Estaba sin traducir y caia al mensaje generico
+   * "algo ha fallado", que ademas invita a volver a intentarlo (HO-034 punto 6).
+   */
+  "PAYMENT_PROVIDER_NOT_CONFIGURED",
   // Transversales del contrato
   "UNAUTHENTICATED",
   "FORBIDDEN",
@@ -149,6 +162,8 @@ export function useApiErrorMessage(): (code: string | null) => string {
         return t("CHECKOUT_MODE_UNSUPPORTED");
       case "PAYMENT_PROVIDER_UNAVAILABLE":
         return t("PAYMENT_PROVIDER_UNAVAILABLE");
+      case "PAYMENT_PROVIDER_NOT_CONFIGURED":
+        return t("PAYMENT_PROVIDER_NOT_CONFIGURED");
       case "NOT_FOUND":
         return t("NOT_FOUND");
       case "ORDER_NOT_FOUND":

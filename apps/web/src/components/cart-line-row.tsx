@@ -1,24 +1,51 @@
-import { Alert, Badge, Button, Card, Input, MediaFrame, VisuallyHidden } from "@lsw/ui";
+import { Alert, Button, Card, Input, VisuallyHidden } from "@lsw/ui";
 import { useTranslations } from "next-intl";
 
 import { formatMoney } from "@/i18n/formatters";
 import type { Locale } from "@/i18n/locales";
 import { Link } from "@/i18n/navigation";
-import { useAvailabilityLabel, useIneligibilityReason } from "@/i18n/storefront-labels";
+import { useIneligibilityReason } from "@/i18n/storefront-labels";
 import { pickLocalized, type CartLine } from "@/lib/api";
 import { removeCartItemFormAction, updateCartItemFormAction } from "@/lib/cart-actions";
 
 /**
  * Una linea del carrito.
  *
+ * PINTA EXACTAMENTE LO QUE EL CONTRATO PUBLICA, NI UN CAMPO MAS
+ * ------------------------------------------------------------
+ * `docs/API_CONTRACT.md` seccion 5 publica por linea: `id`, `variant_id`,
+ * `product_slug`, `sku`, `name`, `quantity`, `unit_price` y `line_subtotal`.
+ * Esta fila llego a pintar una miniatura y un aviso de disponibilidad; ninguno
+ * de los dos campos existe en la respuesta (HO-034 punto 2). Se han retirado en
+ * vez de rellenarse con un hueco permanente:
+ *
+ *   - un marco de imagen SIEMPRE vacio se lee como una foto rota, no como una
+ *     linea sin foto;
+ *   - un aviso de disponibilidad que nunca puede dispararse es codigo muerto
+ *     que aparenta una garantia que no existe.
+ *
+ * La falta de existencias NO queda sin decirse: `PATCH /cart/items/{id}`
+ * responde `409 INSUFFICIENT_STOCK` y la pagina del carrito traduce ese codigo
+ * arriba del todo. El aviso llega cuando hay algo que avisar y viene del
+ * servidor, que es el unico que lo sabe.
+ *
+ * Los dos campos siguen pedidos a `backend` en HO-017.
+ *
  * TODAS LAS CIFRAS VIENEN DEL SERVIDOR
  * ------------------------------------
- * `unit_price`, `quantity` y `line_total` se PINTAN. El total de linea no se
- * calcula aqui multiplicando los dos primeros: si el backend aplicara un
+ * `unit_price`, `quantity` y `line_subtotal` se PINTAN. El subtotal de linea no
+ * se calcula aqui multiplicando los dos primeros: si el backend aplicara un
  * descuento, un redondeo o un precio distinto al de catalogo, una multiplicacion
  * hecha en el navegador mostraria una cifra que no coincide con la que se va a
  * cobrar. Y en un producto donde el subtotal elegible determina participaciones,
  * esa discrepancia no es cosmetica.
+ *
+ * EL SKU NO ES DECORACION
+ * -----------------------
+ * `name` es el nombre del PRODUCTO; el contrato no publica el de la variante.
+ * Dos lineas del mismo producto en tallas distintas se leerian identicas sin el
+ * SKU, que es lo unico que hoy las distingue. Es tambien lo que soporte necesita
+ * para casar una linea con un pedido.
  *
  * DOS FORMULARIOS, NO UNO
  * -----------------------
@@ -29,9 +56,9 @@ import { removeCartItemFormAction, updateCartItemFormAction } from "@/lib/cart-a
  *
  * LA NO ELEGIBILIDAD SE DICE EN LA LINEA
  * --------------------------------------
- * `line_id` es la misma identidad en el carrito y en la cotizacion, y eso
- * permite decir QUE articulo no cuenta en vez de dar el aviso a nivel de
- * carrito entero. El motivo llega como `reason_key` y el texto es del frontend.
+ * `id` es la misma identidad en el carrito y en la cotizacion, y eso permite
+ * decir QUE articulo no cuenta en vez de dar el aviso a nivel de carrito entero.
+ * El motivo llega como `reason_key` y el texto es del frontend.
  */
 export function CartLineRow({
   line,
@@ -48,34 +75,14 @@ export function CartLineRow({
   readonly ineligibleReasonKey: string | null;
 }) {
   const t = useTranslations("cart");
-  const availabilityLabel = useAvailabilityLabel();
   const ineligibilityReason = useIneligibilityReason();
 
-  const productName = pickLocalized(line.product_name, locale);
-  const variantName = pickLocalized(line.variant_name, locale);
+  const productName = pickLocalized(line.name, locale);
   const unitPrice = formatMoney(line.unit_price, locale);
-  const lineTotal = formatMoney(line.line_total, locale);
-
-  const unavailable = line.availability === "OUT_OF_STOCK" || line.availability === "UNAVAILABLE";
+  const lineSubtotal = formatMoney(line.line_subtotal, locale);
 
   return (
-    <Card as="li" elevation="flat" className="flex flex-col gap-4 sm:flex-row">
-      <div className="w-full shrink-0 sm:w-32">
-        {/* Miniatura CLARA dentro de una tarjeta oscura (DEC-039). La
-            fotografia de producto es de estudio claro en todo el sitio -hay un
-            solo `image_url` por articulo, no uno por color de fondo- y forzar
-            aqui un marco oscuro dejaria un halo blanco alrededor de la pieza.
-            Un recorte sobre blanco dentro de una tarjeta negra es ademas lo
-            normal en comercio electronico, y destaca. */}
-        <MediaFrame tone="light" className="lsw-studio-light border border-brand/40">
-          {line.image_url === null ? null : (
-            // Ver `product-card.tsx`: faltan dominios de imagen en `next.config`.
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={line.image_url} alt="" loading="lazy" />
-          )}
-        </MediaFrame>
-      </div>
-
+    <Card as="li" elevation="flat" className="flex flex-col gap-4">
       <div className="flex flex-1 flex-col gap-3">
         <div>
           <h3 className="lsw-display text-heading-sm text-text">
@@ -86,16 +93,8 @@ export function CartLineRow({
               {productName}
             </Link>
           </h3>
-          <p className="mt-1 text-body-sm text-text-muted">{variantName}</p>
+          <p className="mt-1 font-mono text-body-sm text-text-muted">{line.sku}</p>
         </div>
-
-        {unavailable ? (
-          <Alert tone="warning">{t("quantityUnavailable")}</Alert>
-        ) : line.availability === "LOW_STOCK" ? (
-          <Badge tone="warning" size="sm">
-            {availabilityLabel(line.availability)}
-          </Badge>
-        ) : null}
 
         {ineligibleReasonKey === null ? null : (
           <Alert tone="info">{ineligibilityReason(ineligibleReasonKey)}</Alert>
@@ -109,10 +108,10 @@ export function CartLineRow({
             </div>
           )}
 
-          {lineTotal === null ? null : (
+          {lineSubtotal === null ? null : (
             <div className="flex gap-2">
-              <dt className="text-text-muted">{t("lineTotal")}</dt>
-              <dd className="font-semibold text-text">{lineTotal}</dd>
+              <dt className="text-text-muted">{t("lineSubtotal")}</dt>
+              <dd className="font-semibold text-text">{lineSubtotal}</dd>
             </div>
           )}
         </dl>
@@ -120,18 +119,15 @@ export function CartLineRow({
         <div className="flex flex-wrap items-end gap-3">
           <form action={updateCartItemFormAction} className="flex items-end gap-2">
             <input type="hidden" name="locale" value={locale} />
-            <input type="hidden" name="line_id" value={line.line_id} />
+            <input type="hidden" name="line_id" value={line.id} />
 
             <div className="flex flex-col gap-1.5">
-              <label
-                htmlFor={`quantity-${line.line_id}`}
-                className="text-label font-medium text-text"
-              >
+              <label htmlFor={`quantity-${line.id}`} className="text-label font-medium text-text">
                 {t("quantityLabel")}
                 <VisuallyHidden> {productName}</VisuallyHidden>
               </label>
               <Input
-                id={`quantity-${line.line_id}`}
+                id={`quantity-${line.id}`}
                 name="quantity"
                 type="number"
                 inputMode="numeric"
@@ -149,7 +145,7 @@ export function CartLineRow({
 
           <form action={removeCartItemFormAction}>
             <input type="hidden" name="locale" value={locale} />
-            <input type="hidden" name="line_id" value={line.line_id} />
+            <input type="hidden" name="line_id" value={line.id} />
 
             <Button type="submit" variant="ghost">
               {t("remove")}

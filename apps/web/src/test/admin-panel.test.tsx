@@ -48,6 +48,7 @@ vi.mock("@/lib/admin/actions", () => ({
   staffLogoutAction: () => Promise.resolve(),
 }));
 
+import { AdminSectionError, isSectionNotConnected } from "@/components/admin/admin-section-error";
 import { SensitiveConfirmForm } from "@/components/admin/sensitive-confirm";
 import { StaffLoginForm, StaffMfaForm } from "@/components/admin/staff-auth-forms";
 import { formatEntryCount, formatZonedDateTime } from "@/i18n/formatters";
@@ -454,5 +455,100 @@ describe("acceso del personal", () => {
 
       view.unmount();
     }
+  });
+});
+
+/**
+ * UN ENDPOINT QUE AUN NO EXISTE NO ES UNA AVERIA (HO-034 puntos 4 y 5).
+ *
+ * El panel llama a rutas de administracion que el backend todavia no sirve.
+ * Mientras no existen, la API responde 404 y la pantalla pintaba
+ * "no hemos podido cargar esta seccion", con identificador de peticion incluido,
+ * como si algo se hubiera roto. Eso manda a quien opera a reintentar y a abrir
+ * un ticket por algo que no esta averiado.
+ *
+ * La distincion NO es una heuristica: `apps/api/src/http/errors.ts` da un codigo
+ * PROPIO a cada 404 de dominio -`ORDER_NOT_FOUND`, `PROMOTION_NOT_FOUND`, ...-
+ * precisamente para que el frontend no tenga que mirar la url. El `NOT_FOUND`
+ * pelado solo lo emite `app.setNotFoundHandler`, es decir: ruta no montada.
+ */
+describe("seccion del panel todavia no conectada", () => {
+  const routeMissing = {
+    kind: "http" as const,
+    status: 404,
+    code: "NOT_FOUND",
+    requestId: "req_0000000000000001",
+    details: null,
+  };
+
+  it("un 404 de ruta inexistente se dice como estado deliberado, no como error", () => {
+    renderIn("es", <AdminSectionError failure={routeMissing} headingLevel="h2" />);
+
+    expect(screen.getByText(esMessages.admin.notConnected.title)).toBeInTheDocument();
+    expect(screen.queryByText(esMessages.states.loadFailed.title)).not.toBeInTheDocument();
+  });
+
+  it("no ofrece un identificador de peticion para un fallo que no existe", () => {
+    // Es lo que convierte esto en un ticket. No hay nada que investigar: el
+    // endpoint no esta escrito.
+    const { container } = renderIn("es", <AdminSectionError failure={routeMissing} />);
+
+    expect(container.textContent).not.toContain(routeMissing.requestId);
+  });
+
+  it("lo dice en los dos idiomas", () => {
+    for (const locale of LOCALES) {
+      const messages = locale === "en" ? enMessages : esMessages;
+      const view = renderIn(locale, <AdminSectionError failure={routeMissing} />);
+
+      expect(screen.getByText(messages.admin.notConnected.title)).toBeInTheDocument();
+      view.unmount();
+    }
+  });
+
+  it("un 404 CON codigo de dominio sigue siendo el recurso, no la ruta", () => {
+    /*
+     * `ORDER_NOT_FOUND` significa "ese pedido no existe" y tiene su propio
+     * texto. Tratarlo como "seccion no conectada" diria que el panel esta a
+     * medias cuando lo unico que pasa es que el identificador esta mal.
+     */
+    renderIn(
+      "es",
+      <AdminSectionError
+        failure={{ ...routeMissing, code: "ORDER_NOT_FOUND" }}
+        headingLevel="h2"
+      />,
+    );
+
+    expect(screen.getByText(esMessages.apiErrors.ORDER_NOT_FOUND)).toBeInTheDocument();
+    expect(screen.queryByText(esMessages.admin.notConnected.title)).not.toBeInTheDocument();
+  });
+
+  it("un fallo de red o un 500 siguen siendo un error de verdad", () => {
+    for (const failure of [
+      { ...routeMissing, status: 500, code: "INTERNAL_ERROR" },
+      { kind: "network" as const, status: null, code: null, requestId: null, details: null },
+    ]) {
+      const view = renderIn("es", <AdminSectionError failure={failure} headingLevel="h2" />);
+
+      expect(screen.getByText(esMessages.states.loadFailed.title)).toBeInTheDocument();
+      expect(screen.queryByText(esMessages.admin.notConnected.title)).not.toBeInTheDocument();
+      view.unmount();
+    }
+  });
+
+  it("la clasificacion es una funcion, comprobable sin renderizar", () => {
+    expect(isSectionNotConnected(routeMissing)).toBe(true);
+    expect(isSectionNotConnected({ ...routeMissing, code: "PROMOTION_NOT_FOUND" })).toBe(false);
+    expect(isSectionNotConnected({ ...routeMissing, status: 403, code: "FORBIDDEN" })).toBe(false);
+    expect(
+      isSectionNotConnected({
+        kind: "malformed",
+        status: 404,
+        code: null,
+        requestId: null,
+        details: null,
+      }),
+    ).toBe(false);
   });
 });

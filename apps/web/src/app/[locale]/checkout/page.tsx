@@ -81,9 +81,9 @@ export default async function CheckoutPage({ params }: { params: Promise<{ local
     );
   }
 
-  const { cart, entry_quote: quote } = cartResult.data;
+  const { lines, entry_quote: quote } = cartResult.data;
 
-  if (cart.items.length === 0) {
+  if (lines.length === 0) {
     return (
       <CheckoutShell title={t("title")}>
         <EmptyState
@@ -105,7 +105,11 @@ export default async function CheckoutPage({ params }: { params: Promise<{ local
       ? promotionResult.data.legal_timezone
       : "UTC";
 
-  const subtotal = formatMoney(cart.subtotal, locale);
+  // `subtotal` es `null` en un carrito vacio, que aqui ya se descarto arriba.
+  // Se comprueba igualmente: imprimir "null" donde va el importe a pagar es el
+  // peor sitio posible para un texto sin sentido.
+  const subtotal =
+    cartResult.data.subtotal === null ? null : formatMoney(cartResult.data.subtotal, locale);
 
   return (
     <CheckoutShell title={t("title")} intro={t("intro")}>
@@ -127,18 +131,18 @@ export default async function CheckoutPage({ params }: { params: Promise<{ local
             </CardTitle>
 
             <ul className="mt-s4 flex list-none flex-col gap-s3">
-              {cart.items.map((line) => (
-                <li key={line.line_id} className="flex items-baseline justify-between gap-s3">
+              {lines.map((line) => (
+                <li key={line.id} className="flex items-baseline justify-between gap-s3">
                   <span className="min-w-0 text-body-sm text-text-muted">
-                    {pickLocalized(line.product_name, locale)}
+                    {pickLocalized(line.name, locale)}
                     {" · "}
                     <span className="tabular-nums">{line.quantity}</span>
                   </span>
 
-                  {/* El total de linea LLEGA CALCULADO. Aqui no se multiplica
+                  {/* El subtotal de linea LLEGA CALCULADO. Aqui no se multiplica
                       cantidad por precio, ni siquiera cuando parece trivial. */}
                   <span className="shrink-0 text-body-sm tabular-nums text-text">
-                    {formatMoney(line.line_total, locale)}
+                    {formatMoney(line.line_subtotal, locale)}
                   </span>
                 </li>
               ))}
@@ -163,7 +167,7 @@ export default async function CheckoutPage({ params }: { params: Promise<{ local
             </div>
           </Card>
 
-          <EntryQuotePanel quote={quote} cart={cart} locale={locale} timeZone={timeZone} />
+          <EntryQuotePanel quote={quote} locale={locale} timeZone={timeZone} />
 
           <p className="text-caption text-text-subtle">{t("entriesNote")}</p>
         </aside>

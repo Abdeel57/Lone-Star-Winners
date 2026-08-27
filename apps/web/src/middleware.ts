@@ -1,4 +1,4 @@
-import { NextResponse, type NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import createMiddleware from "next-intl/middleware";
 
 import {
@@ -9,6 +9,7 @@ import {
   negotiateAdminLocale,
 } from "./i18n/admin-routing";
 import { routing } from "./i18n/routing";
+import { apiConnectOrigins, contentSecurityPolicy, createNonce } from "./lib/security-headers";
 
 /**
  * Middleware de negociacion de locale (DEC-021, DEC-048).
@@ -37,16 +38,89 @@ import { routing } from "./i18n/routing";
  * `/admin/loquesea` sin idioma redirigen a `/admin/es/...` o `/admin/en/...`
  * conservando la ruta, y con idioma pasan de largo. Misma cookie: quien elige
  * espanol en la tienda encuentra el panel en espanol.
+ *
+ * ---------------------------------------------------------------------------
+ * Y ADEMAS: LA CONTENT-SECURITY-POLICY (HO-034 punto 3)
+ * ---------------------------------------------------------------------------
+ * Este middleware es tambien el unico sitio donde puede generarse un nonce por
+ * peticion, y por eso emite la CSP. El razonamiento completo -por que no vale
+ * una politica estatica en `next.config.mjs`, y por que `'unsafe-inline'` en
+ * `script-src` dejaria la politica decorativa- esta en
+ * `src/lib/security-headers.ts`.
+ *
+ * La cabecera se pone DOS veces y las dos hacen falta:
+ *
+ *   1. En la PETICION que se reenvia al render. Es de donde Next saca el nonce
+ *      para ponerselo a sus `<script>` en linea. Sin esto, los scripts salen sin
+ *      nonce, la propia politica los bloquea y la pagina no se hidrata.
+ *   2. En la RESPUESTA. Es la que lee el navegador y la que aplica la politica.
+ *
+ * Poner solo la segunda es el error facil de cometer: todo parece correcto en
+ * las cabeceras y la aplicacion queda muerta en el navegador.
  */
 const storefrontMiddleware = createMiddleware(routing);
 
+/**
+ * La politica de esta peticion, con su nonce recien generado.
+ *
+ * `NODE_ENV` lo sustituye el empaquetador por un literal, asi que la rama de
+ * desarrollo desaparece del bundle de produccion en vez de quedar como una
+ * condicion que alguien pudiera activar.
+ */
+function policyFor(request: NextRequest): { nonce: string; csp: string } {
+  const nonce = createNonce();
+  const isDevelopment = process.env.NODE_ENV !== "production";
+
+  return {
+    nonce,
+    csp: contentSecurityPolicy({
+      nonce,
+      isDevelopment,
+      connectOrigins: apiConnectOrigins(process.env, request.nextUrl.origin),
+    }),
+  };
+}
+
+/**
+ * Las cabeceras que se reenvian al render, con la CSP anadida.
+ *
+ * Se COPIAN las de la peticion en vez de construir un juego nuevo: lo que llegue
+ * aqui -cookies incluidas- tiene que seguir llegando al render. Perder la cookie
+ * de sesion en este punto desconectaria a todo el mundo.
+ */
+function requestHeadersWithCsp(request: NextRequest, csp: string): Headers {
+  const headers = new Headers(request.headers);
+  headers.set("content-security-policy", csp);
+  return headers;
+}
+
 export default function middleware(request: NextRequest): NextResponse {
   const { pathname } = request.nextUrl;
+  const { csp } = policyFor(request);
 
-  if (!isAdminPath(pathname)) return storefrontMiddleware(request);
+  if (!isAdminPath(pathname)) {
+    /*
+     * next-intl copia las cabeceras de la peticion que recibe a la respuesta
+     * que produce (`NextResponse.rewrite(url, { request: { headers } })`), asi
+     * que basta con entregarle una peticion que ya lleve la CSP para que llegue
+     * al render. Se construye una `NextRequest` nueva porque las cabeceras de
+     * la original no son modificables.
+     */
+    const response = storefrontMiddleware(
+      new NextRequest(request, { headers: requestHeadersWithCsp(request, csp) }),
+    );
+    response.headers.set("content-security-policy", csp);
+    return response;
+  }
 
   // Ya lleva idioma: el arbol de rutas del panel se encarga del resto.
-  if (adminLocaleOf(pathname) !== null) return NextResponse.next();
+  if (adminLocaleOf(pathname) !== null) {
+    const response = NextResponse.next({
+      request: { headers: requestHeadersWithCsp(request, csp) },
+    });
+    response.headers.set("content-security-policy", csp);
+    return response;
+  }
 
   const locale = negotiateAdminLocale({
     cookieLocale: request.cookies.get(LOCALE_COOKIE)?.value,
@@ -58,7 +132,13 @@ export default function middleware(request: NextRequest): NextResponse {
 
   // `search` y `hash` se conservan solos al clonar: un enlace con `?cursor=...`
   // no puede perder su cursor por pasar por la negociacion de idioma.
-  return NextResponse.redirect(destination);
+  //
+  // Una redireccion no renderiza nada, asi que no necesita nonce; la cabecera se
+  // pone igualmente para que NINGUNA respuesta de este middleware salga sin
+  // politica.
+  const redirect = NextResponse.redirect(destination);
+  redirect.headers.set("content-security-policy", csp);
+  return redirect;
 }
 
 export const config = {

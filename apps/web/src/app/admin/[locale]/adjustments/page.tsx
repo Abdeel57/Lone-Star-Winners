@@ -8,7 +8,7 @@ import { AdminChrome } from "@/components/admin/admin-chrome";
 import { AdminPager } from "@/components/admin/admin-pager";
 import { openAdminScreen } from "@/components/admin/admin-screen";
 import { SensitiveConfirmForm } from "@/components/admin/sensitive-confirm";
-import { ApiErrorState } from "@/components/api-error-state";
+import { AdminSectionError } from "@/components/admin/admin-section-error";
 import { adminHref } from "@/i18n/admin-routing";
 import {
   adjustmentStatusLabeller,
@@ -153,7 +153,7 @@ export default async function AdminAdjustmentsPage({
 
           <div className="mt-s4">
             {!queue.ok ? (
-              <ApiErrorState failure={queue.error} headingLevel="h3" />
+              <AdminSectionError failure={queue.error} headingLevel="h3" />
             ) : queue.data.items.length === 0 ? (
               <EmptyState
                 headingLevel="h3"
@@ -269,7 +269,7 @@ async function ProposalSection({
             {t("previewUnavailableBody")}
           </Alert>
         ) : (
-          <ApiErrorState failure={preview.error} headingLevel="h3" />
+          <AdminSectionError failure={preview.error} headingLevel="h3" />
         )
       ) : (
         <Card elevation="raised" padding="lg">

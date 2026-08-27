@@ -5,7 +5,7 @@ import { getTranslations, setRequestLocale } from "next-intl/server";
 
 import { AdminChrome } from "@/components/admin/admin-chrome";
 import { openAdminScreen } from "@/components/admin/admin-screen";
-import { ApiErrorState } from "@/components/api-error-state";
+import { AdminSectionError } from "@/components/admin/admin-section-error";
 import { PromotionStatusBadge } from "@/components/promotion-status-badge";
 import { adminHref } from "@/i18n/admin-routing";
 import { rulesKeyLabeller, rulesStatusLabeller } from "@/i18n/admin-labels";
@@ -84,7 +84,7 @@ export default async function AdminPromotionDetailPage({
       }
     >
       {!promotion.ok ? (
-        <ApiErrorState failure={promotion.error} headingLevel="h2" />
+        <AdminSectionError failure={promotion.error} headingLevel="h2" />
       ) : (
         <div className="flex flex-col gap-s8">
           <Card elevation="raised" padding="lg">
@@ -159,7 +159,7 @@ export default async function AdminPromotionDetailPage({
                   description={t("rulesNoCapabilityBody")}
                 />
               ) : !rulesVersions.ok ? (
-                <ApiErrorState failure={rulesVersions.error} headingLevel="h3" />
+                <AdminSectionError failure={rulesVersions.error} headingLevel="h3" />
               ) : rulesVersions.data.items.length === 0 ? (
                 <EmptyState
                   headingLevel="h3"

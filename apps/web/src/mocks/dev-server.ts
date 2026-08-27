@@ -603,7 +603,34 @@ function cookieValue(request: IncomingMessage, name: string): string | null {
     if (!trimmed.startsWith(`${name}=`)) continue;
 
     const value = trimmed.slice(name.length + 1);
-    return value.length === 0 ? null : value;
+    if (value.length === 0) return null;
+
+    /*
+     * SE DECODIFICA, y esto no era un detalle: sin ello, el cambio de actor de
+     * personal NO FUNCIONABA y no habia forma de notarlo.
+     *
+     * Lo que llega aqui no es la cabecera `Cookie` del navegador: es la que
+     * compone el servidor de Next con `cookies().toString()`, y ese metodo
+     * serializa cada cookie CON sus atributos y con el valor
+     * PERCENT-ENCODED. Es decir, lo que se recibe es literalmente
+     *
+     *   lsw_dev_session_staff=...; Path=/; lsw_dev_staff_actor=compliance%40example.com; Path=/
+     *
+     * El `@` se convierte en `%40`, la busqueda del actor por correo no
+     * encontraba a nadie, y el respaldo silencioso -quien opera la promocion-
+     * hacia que todo pareciera correcto: se veia un panel, con una sesion
+     * valida, simplemente con el actor equivocado. Es el peor tipo de fallo,
+     * porque no se distingue de "esa persona no tiene ese permiso".
+     *
+     * Un valor mal formado (`%` suelto) hace lanzar a `decodeURIComponent`. Se
+     * devuelve el valor crudo en ese caso: es un mock de desarrollo y tumbarlo
+     * por una cookie rara seria peor que servir el valor tal cual.
+     */
+    try {
+      return decodeURIComponent(value);
+    } catch {
+      return value;
+    }
   }
 
   return null;

@@ -113,6 +113,7 @@
     "CONSENT_REQUIRED": "Please accept what is required to continue.",
     "CHECKOUT_MODE_UNSUPPORTED": "This site does not present that way of paying yet. Nothing has been charged.",
     "PAYMENT_PROVIDER_UNAVAILABLE": "We could not reach the payment provider. Nothing has been charged.",
+    "PAYMENT_PROVIDER_NOT_CONFIGURED": "Payment is not available in this store yet, so this order cannot be completed. Nothing has been charged and your cart is unchanged.",
     "NOT_FOUND": "That is not available.",
     "ORDER_NOT_FOUND": "We could not find that order in your account.",
     "CART_EMPTY": "There is nothing in your cart.",
@@ -150,9 +151,8 @@
       "title": "Your cart is empty"
     },
     "itemsHeading": "Merchandise",
-    "lineTotal": "Line total",
+    "lineSubtotal": "Line subtotal",
     "quantityLabel": "Quantity",
-    "quantityUnavailable": "This item is no longer available in the quantity you asked for.",
     "quote": {
       "beforeCaps": "Before limits: {entries} entries",
       "capRow": "{kind}: {limit} entries. This cart went from {before} to {after}.",
@@ -166,8 +166,6 @@
       "statLabel": "Current quote",
       "ineligibleHeading": "Items that do not count toward entries",
       "multipliersHeading": "Applied entry multipliers",
-      "refresh": "Refresh the figure",
-      "stale": "Your cart changed after this figure was quoted. Reload the page to get the current figure.",
       "unavailable": {
         "body": "No promotion is open right now, so there is nothing to quote this cart against. Your merchandise is unaffected.",
         "title": "No entry figure is available"
@@ -181,6 +179,7 @@
     },
     "subtotal": "Subtotal",
     "subtotalNote": "Shipping and tax are calculated at checkout.",
+    "subtotalUnavailable": "We cannot show a subtotal for this cart right now.",
     "title": "Your cart",
     "unitPrice": "Unit price",
     "update": "Update"
@@ -956,6 +955,7 @@
       "tableCaption": "Orders",
       "columnOrder": "Order",
       "columnParticipant": "Buyer",
+      "anonymizedParticipant": "Anonymized account",
       "columnStatus": "Status",
       "columnEntryState": "Entries",
       "columnPlaced": "Placed",
@@ -981,10 +981,11 @@
       "noDisplayName": "Not given",
       "disqualified": "Disqualified",
       "masked": "Masked",
+      "anonymizedEmail": "Anonymized account",
       "emptyTitle": "There are no participants",
       "emptyBody": "Accounts created from the store will appear here.",
-      "fullPiiNotice": "You are seeing personal data in full. Every read is recorded in the audit trail.",
-      "maskedPiiNotice": "Personal data reaches this screen already masked by the backend."
+      "fullPiiNotice": "This list is masked for everyone, including you. Seeing an account in full is a separate request, one participant at a time, and it requires a reason and a recent second factor.",
+      "maskedPiiNotice": "Personal data reaches this screen already masked by the backend. Nothing here can be unmasked."
     },
     "amoeReview": {
       "title": "Free entry review",
@@ -1110,11 +1111,15 @@
       "columnRequestId": "Request",
       "actorSystem": "System",
       "actorHuman": "Person",
-      "noActorEmail": "No account",
+      "noActorId": "System, no actor recorded",
       "noReason": "None recorded",
       "noRequestId": "None",
       "emptyTitle": "There are no events",
       "emptyBody": "Every audited action will appear here."
+    },
+    "notConnected": {
+      "title": "This section is not connected yet",
+      "body": "The panel asks the API for this data and the API does not serve it yet. Nothing is broken and nothing was lost: that endpoint has not been built. There is nothing to retry here."
     },
     "notFound": {
       "title": "That admin page does not exist",

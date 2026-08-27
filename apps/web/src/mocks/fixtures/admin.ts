@@ -53,6 +53,23 @@ import { activePromotion, publicPromotions } from "./promotions";
 
 const PROMOTION_ID = activePromotion.id;
 
+/**
+ * Las dos formas en que un correo llega SIN PII al panel (seccion 11.7).
+ *
+ * No son la misma cosa y por eso son dos constantes:
+ *
+ *   - `MASKED_EMAIL`: hay correo y esta oculto. El backend conserva la inicial y
+ *     el dominio, y usa un numero FIJO de asteriscos -tres- para no publicar de
+ *     paso cuantos caracteres tiene la parte tapada, que en un correo corto es
+ *     casi el dato entero.
+ *   - `ANONYMIZED_EMAIL`: no hay correo. La cuenta esta anonimizada.
+ *
+ * Fundirlas en un solo caso dejaria a la interfaz sin poder distinguirlas, y una
+ * celda vacia se leeria como un fallo de la pantalla.
+ */
+const MASKED_EMAIL = "a***@example.test";
+const ANONYMIZED_EMAIL = "";
+
 // ---------------------------------------------------------------------------
 // Sesiones de personal
 // ---------------------------------------------------------------------------
@@ -124,16 +141,39 @@ export const adminDashboard: AdminDashboard = {
   as_of: "2026-09-15T12:00:00.000Z",
 };
 
-/** Sin promocion abierta: las cifras que dependen de ella llegan en `null`. */
+/**
+ * Sin promocion abierta.
+ *
+ * `promotion_id` y `promotion_status` son `null`, y los conteos SIGUEN
+ * llegando: el contrato dice que entonces no se acotan por promocion, no que
+ * desaparezcan.
+ */
 export const adminDashboardWithoutPromotion: AdminDashboard = {
   promotion_id: null,
   promotion_status: null,
-  active_entries: null,
+  active_entries: 1_284_500,
   participants: 3_412,
   orders_last_24h: 0,
   amoe_pending_review: 0,
   adjustments_pending_approval: 0,
   as_of: "2026-09-15T12:00:00.000Z",
+};
+
+/**
+ * El actor tiene `dashboard.read` pero NO `entry.ledger.read`.
+ *
+ * Es el SEGUNDO motivo de `null`, y no tiene nada que ver con el primero: las
+ * dos cifras del ledger llegan sin poblar porque esa capacidad no las cubre. El
+ * resto del panel se ve entero.
+ *
+ * Este fixture existe para que la pantalla no pueda pintar un `0` ahi sin que
+ * un test lo vea: "no hay participaciones activas" y "no puedo decirtelo" son
+ * afirmaciones distintas, y la segunda es la verdadera.
+ */
+export const adminDashboardWithoutLedgerCapability: AdminDashboard = {
+  ...adminDashboard,
+  active_entries: null,
+  participants: null,
 };
 
 // ---------------------------------------------------------------------------
@@ -238,10 +278,13 @@ export const adminProductPage: AdminProductPage = {
 /**
  * Pedidos del panel.
  *
- * El primero trae el correo COMPLETO y el segundo ENMASCARADO por el backend.
- * Los dos en la misma pagina, a proposito: es lo que ocurre cuando el actor
- * tiene `pii.view.masked` sobre unas filas y no sobre otras, y la interfaz no
- * puede pintar una de las dos formas de manera distinta.
+ * LOS DOS CORREOS LLEGAN SIN PII, Y NO DE LA MISMA MANERA (seccion 11.7).
+ * El primero esta ENMASCARADO -hay correo y esta oculto- y el segundo es CADENA
+ * VACIA -cuenta anonimizada, no hay correo-. Son dos afirmaciones distintas y la
+ * tabla tiene que pintarlas distinto; con un solo caso, el hueco de la segunda
+ * pasaria por un fallo de la pantalla.
+ *
+ * `order.read` NO es una capacidad de PII: el enmascarado no depende del actor.
  */
 export const adminOrders: readonly AdminOrderRow[] = [
   {
@@ -251,7 +294,7 @@ export const adminOrders: readonly AdminOrderRow[] = [
     entry_state: "GRANTED",
     placed_at: "2026-09-04T17:45:00.000Z",
     total: { amount_minor: "5000", currency: "USD" },
-    participant_email: participant.email,
+    participant_email: MASKED_EMAIL,
     participant_id: participant.id,
   },
   {
@@ -261,25 +304,35 @@ export const adminOrders: readonly AdminOrderRow[] = [
     entry_state: "PENDING_QUALIFICATION",
     placed_at: "2026-09-14T09:12:00.000Z",
     total: { amount_minor: "2500", currency: "USD" },
-    participant_email: "a****@example.com",
+    participant_email: ANONYMIZED_EMAIL,
     participant_id: "par_0000000000000002",
   },
 ];
 
 export const adminOrderPage: AdminOrderPage = { items: adminOrders, next_cursor: null };
 
+/**
+ * Participantes.
+ *
+ * `pii_masked` es `true` en LOS DOS, porque en esta ruta lo es siempre: la
+ * forma sin enmascarar vive detras de `pii.view.full`, en otra ruta.
+ *
+ * El segundo esta ANONIMIZADO y por eso su correo es cadena vacia. Es el caso
+ * que separa "hay correo y esta oculto" de "no hay correo", y sin el nadie
+ * notaria que la tabla pinta una celda en blanco.
+ */
 export const adminParticipants: readonly AdminParticipantRow[] = [
   {
     id: participant.id,
-    email: participant.email,
+    email: MASKED_EMAIL,
     display_name: participant.display_name,
     created_at: participant.created_at,
     disqualified: false,
-    pii_masked: false,
+    pii_masked: true,
   },
   {
     id: "par_0000000000000002",
-    email: "a****@example.com",
+    email: ANONYMIZED_EMAIL,
     display_name: null,
     created_at: "2026-08-19T09:15:00.000Z",
     disqualified: true,
@@ -551,6 +604,12 @@ export const adminDrawAuthorizationPage: AdminDrawAuthorizationPage = {
  * Hay uno de `SYSTEM` a proposito: distinguir un job de una persona es el punto
  * entero de la traza, y una lista solo con humanos dejaria ese camino sin
  * probar.
+ *
+ * `actor_email` es `null` EN TODOS, porque el contrato dice que lo es siempre:
+ * la tabla guarda `actor_id`, un identificador interno, y resolverlo en la
+ * lectura meteria en la traza justo el dato que la escritura decidio no guardar.
+ * Un fixture con correos habria dejado a la pantalla pintando una columna que en
+ * produccion sale vacia en todas las filas.
  */
 export const adminAuditEvents: readonly AdminAuditEvent[] = [
   {
@@ -558,11 +617,12 @@ export const adminAuditEvents: readonly AdminAuditEvent[] = [
     occurred_at: "2026-09-14T10:05:12.000Z",
     actor_type: "HUMAN",
     actor_id: "act_0000000000000001",
-    actor_email: promotionManagerSession.email,
+    actor_email: null,
     actor_roles: ["PROMOTION_MANAGER"],
     action: "entry.adjust.create",
     entity_type: "EntryAdjustment",
     entity_id: "adj_0000000000000001",
+    promotion_id: PROMOTION_ID,
     reason_key: "SYSTEM_ERROR_CORRECTION",
     request_id: "req_0000000000000001",
   },
@@ -576,6 +636,7 @@ export const adminAuditEvents: readonly AdminAuditEvent[] = [
     action: "payment.webhook.replay",
     entity_type: "PaymentWebhook",
     entity_id: "pwh_0000000000000009",
+    promotion_id: null,
     reason_key: null,
     request_id: "req_0000000000000002",
   },
@@ -584,11 +645,12 @@ export const adminAuditEvents: readonly AdminAuditEvent[] = [
     occurred_at: "2026-09-13T18:00:03.000Z",
     actor_type: "HUMAN",
     actor_id: "act_0000000000000002",
-    actor_email: complianceOfficerSession.email,
+    actor_email: null,
     actor_roles: ["COMPLIANCE_OFFICER"],
     action: "amoe.review.approve",
     entity_type: "AmoeSubmission",
     entity_id: "amo_0000000000000002",
+    promotion_id: PROMOTION_ID,
     reason_key: "MEETS_REQUIREMENTS",
     request_id: "req_0000000000000003",
   },

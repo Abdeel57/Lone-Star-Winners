@@ -6,7 +6,7 @@ import { getTranslations, setRequestLocale } from "next-intl/server";
 import { AdminChrome } from "@/components/admin/admin-chrome";
 import { AdminPager } from "@/components/admin/admin-pager";
 import { openAdminScreen } from "@/components/admin/admin-screen";
-import { ApiErrorState } from "@/components/api-error-state";
+import { AdminSectionError } from "@/components/admin/admin-section-error";
 import { adminHref } from "@/i18n/admin-routing";
 import { formatMoney, formatZonedDate } from "@/i18n/formatters";
 import { isLocale } from "@/i18n/locales";
@@ -69,7 +69,7 @@ export default async function AdminOrdersPage({
       description={t("description")}
     >
       {!result.ok ? (
-        <ApiErrorState failure={result.error} headingLevel="h2" />
+        <AdminSectionError failure={result.error} headingLevel="h2" />
       ) : (
         <div className="flex flex-col gap-s6">
           <DataTable<AdminOrderRow>
@@ -97,7 +97,17 @@ export default async function AdminOrdersPage({
               {
                 id: "participant",
                 header: t("columnParticipant"),
-                cell: (row) => row.participant_email,
+                /*
+                 * SIEMPRE enmascarado (`order.read` no es una capacidad de
+                 * PII), y CADENA VACIA cuando la cuenta esta anonimizada. Las
+                 * dos cosas se dicen distinto: un hueco se lee como un fallo.
+                 */
+                cell: (row) =>
+                  row.participant_email === "" ? (
+                    <span className="text-text-muted">{t("anonymizedParticipant")}</span>
+                  ) : (
+                    row.participant_email
+                  ),
               },
               {
                 id: "status",

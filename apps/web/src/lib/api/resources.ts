@@ -1024,11 +1024,16 @@ export function fetchAdminOrders(
 /**
  * Participantes del panel.
  *
- * EL ENMASCARADO DEL PII LO HACE EL BACKEND, segun tenga el actor
- * `pii.view.masked` o `pii.view.full`. Aqui no hay ningun parametro para
- * pedirlo: si la interfaz pudiera elegir, el correo completo viajaria en la
- * respuesta y estaria en el HTML y en la pestana de red aunque la pantalla lo
- * tapara al pintarlo.
+ * ESTA RUTA ENMASCARA SIEMPRE, tenga el actor la capacidad que tenga (seccion
+ * 11.7). No hay ningun parametro para pedir el correo completo, y no es una
+ * omision: la forma sin enmascarar vive en OTRA RUTA
+ * (`/admin/participants/{id}/pii`, capacidad `pii.view.full`), porque un
+ * `?pii=full` dejaria al cliente elegir con que permiso se le juzga -el
+ * autorizador decide por metodo y camino, antes del handler-.
+ *
+ * Y el enmascarado lo hace el BACKEND: si el correo completo viajara y la
+ * pantalla lo tapara al pintarlo, el dato estaria en el HTML y en la pestana de
+ * red de todos modos.
  */
 export function fetchAdminParticipants(
   query: AdminPageQuery,

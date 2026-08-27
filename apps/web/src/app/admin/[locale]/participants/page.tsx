@@ -5,7 +5,7 @@ import { getTranslations, setRequestLocale } from "next-intl/server";
 import { AdminChrome } from "@/components/admin/admin-chrome";
 import { AdminPager } from "@/components/admin/admin-pager";
 import { openAdminScreen } from "@/components/admin/admin-screen";
-import { ApiErrorState } from "@/components/api-error-state";
+import { AdminSectionError } from "@/components/admin/admin-section-error";
 import { formatZonedDate } from "@/i18n/formatters";
 import { isLocale } from "@/i18n/locales";
 import { can } from "@/lib/admin/capabilities";
@@ -62,6 +62,19 @@ export default async function AdminParticipantsPage({
     screen.session,
   );
 
+  /*
+   * SE PREGUNTA POR LA CAPACIDAD PARA DECIR ALGO DISTINTO, NO PARA ENSENAR ALGO
+   * DISTINTO.
+   *
+   * Esta ruta enmascara SIEMPRE (seccion 11.7): quien tiene `pii.view.full` ve
+   * exactamente lo mismo que quien no la tiene. Sin este aviso, esa persona
+   * concluiria que su permiso no funciona; con el, sabe que el dato completo se
+   * pide por otra via, una ficha cada vez, con motivo y segundo factor.
+   *
+   * La pantalla llego a decir lo contrario -"estas viendo datos personales
+   * completos"- sobre una tabla enmascarada. Un aviso falso sobre PII es peor
+   * que no tener aviso.
+   */
   const hasFullPii = can(screen.actor, "pii.view.full");
 
   return (
@@ -73,14 +86,10 @@ export default async function AdminParticipantsPage({
       description={t("description")}
     >
       {!result.ok ? (
-        <ApiErrorState failure={result.error} headingLevel="h2" />
+        <AdminSectionError failure={result.error} headingLevel="h2" />
       ) : (
         <div className="flex flex-col gap-s6">
-          {hasFullPii ? (
-            <Alert tone="warning">{t("fullPiiNotice")}</Alert>
-          ) : (
-            <Alert tone="info">{t("maskedPiiNotice")}</Alert>
-          )}
+          <Alert tone="info">{hasFullPii ? t("fullPiiNotice") : t("maskedPiiNotice")}</Alert>
 
           <DataTable<AdminParticipantRow>
             caption={t("tableCaption")}
@@ -95,7 +104,18 @@ export default async function AdminParticipantsPage({
                 id: "email",
                 header: t("columnEmail"),
                 isRowHeader: true,
-                cell: (row) => row.email,
+                /*
+                 * CADENA VACIA NO ES UN HUECO: es una cuenta anonimizada, es
+                 * decir "no hay correo". `a***@dominio` es "hay correo y esta
+                 * oculto". Pintar las dos igual -o pintar la primera como una
+                 * celda en blanco- convierte un dato en un fallo aparente.
+                 */
+                cell: (row) =>
+                  row.email === "" ? (
+                    <span className="text-text-muted">{t("anonymizedEmail")}</span>
+                  ) : (
+                    row.email
+                  ),
               },
               {
                 id: "name",

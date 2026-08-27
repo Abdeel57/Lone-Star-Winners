@@ -113,6 +113,7 @@
     "CONSENT_REQUIRED": "Acepta lo que se pide para poder continuar.",
     "CHECKOUT_MODE_UNSUPPORTED": "Este sitio todavía no presenta esa forma de pagar. No se ha cobrado nada.",
     "PAYMENT_PROVIDER_UNAVAILABLE": "No hemos podido comunicarnos con el proveedor de pago. No se ha cobrado nada.",
+    "PAYMENT_PROVIDER_NOT_CONFIGURED": "El pago aún no está disponible en esta tienda, así que este pedido no puede completarse. No se ha cobrado nada y tu carrito no ha cambiado.",
     "NOT_FOUND": "Eso no está disponible.",
     "ORDER_NOT_FOUND": "No hemos encontrado ese pedido en tu cuenta.",
     "CART_EMPTY": "No hay nada en tu carrito.",
@@ -150,9 +151,8 @@
       "title": "Tu carrito está vacío"
     },
     "itemsHeading": "Mercancía",
-    "lineTotal": "Total de la línea",
+    "lineSubtotal": "Subtotal de la línea",
     "quantityLabel": "Cantidad",
-    "quantityUnavailable": "Este artículo ya no está disponible en la cantidad que has pedido.",
     "quote": {
       "beforeCaps": "Antes de los límites: {entries} participaciones",
       "capRow": "{kind}: {limit} participaciones. Este carrito pasó de {before} a {after}.",
@@ -166,8 +166,6 @@
       "statLabel": "Cotización vigente",
       "ineligibleHeading": "Artículos que no cuentan para las participaciones",
       "multipliersHeading": "Multiplicadores de participaciones aplicados",
-      "refresh": "Actualizar la cifra",
-      "stale": "Tu carrito cambió después de calcular esta cifra. Recarga la página para obtener la cifra vigente.",
       "unavailable": {
         "body": "Ahora mismo no hay ninguna promoción abierta, así que no hay nada contra lo que cotizar este carrito. Tu mercancía no se ve afectada.",
         "title": "No hay ninguna cifra de participaciones disponible"
@@ -181,6 +179,7 @@
     },
     "subtotal": "Subtotal",
     "subtotalNote": "El envío y los impuestos se calculan al finalizar el pedido.",
+    "subtotalUnavailable": "Ahora mismo no podemos mostrar un subtotal de este carrito.",
     "title": "Tu carrito",
     "unitPrice": "Precio unitario",
     "update": "Actualizar"
@@ -956,6 +955,7 @@
       "tableCaption": "Pedidos",
       "columnOrder": "Pedido",
       "columnParticipant": "Comprador",
+      "anonymizedParticipant": "Cuenta anonimizada",
       "columnStatus": "Estado",
       "columnEntryState": "Participaciones",
       "columnPlaced": "Fecha",
@@ -981,10 +981,11 @@
       "noDisplayName": "Sin indicar",
       "disqualified": "Descalificado",
       "masked": "Enmascarado",
+      "anonymizedEmail": "Cuenta anonimizada",
       "emptyTitle": "No hay participantes",
       "emptyBody": "Las cuentas creadas desde la tienda aparecerán aquí.",
-      "fullPiiNotice": "Estás viendo datos personales completos. Cada lectura queda registrada en la auditoría.",
-      "maskedPiiNotice": "Los datos personales llegan a esta pantalla ya enmascarados por el backend."
+      "fullPiiNotice": "Esta lista está enmascarada para todo el mundo, tú incluido. Ver una cuenta completa es una petición aparte, de un participante cada vez, y exige un motivo y un segundo factor reciente.",
+      "maskedPiiNotice": "Los datos personales llegan a esta pantalla ya enmascarados por el backend. Aquí no se puede desenmascarar nada."
     },
     "amoeReview": {
       "title": "Revisión gratuita",
@@ -1110,11 +1111,15 @@
       "columnRequestId": "Petición",
       "actorSystem": "Sistema",
       "actorHuman": "Persona",
-      "noActorEmail": "Sin cuenta",
+      "noActorId": "Sistema, sin actor registrado",
       "noReason": "Sin registrar",
       "noRequestId": "Ninguna",
       "emptyTitle": "No hay eventos",
       "emptyBody": "Cada acción auditada aparecerá aquí."
+    },
+    "notConnected": {
+      "title": "Esta sección aún no está conectada",
+      "body": "El panel pide estos datos a la API y la API todavía no los sirve. No hay nada roto ni nada perdido: ese endpoint aún no existe. Aquí no hay nada que reintentar."
     },
     "notFound": {
       "title": "Esa página de administración no existe",

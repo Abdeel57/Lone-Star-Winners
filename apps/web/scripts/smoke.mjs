@@ -438,6 +438,46 @@ const CHECKS = [
     headers: { cookie: STAFF_COOKIE },
     expect: ["Sorteo promocional GMC Denali 2025"],
   },
+
+  /*
+   * LAS TRES LECTURAS DE LA SECCION 11.7, con lo que cada una tiene que poder
+   * decir SIN publicar PII.
+   *
+   * Lo que se busca en el HTML no es "que salga algo": es el numero de pedido,
+   * el correo ENMASCARADO, la cuenta ANONIMIZADA y el identificador del actor de
+   * la traza. Son justo los cuatro sitios donde una interfaz descuidada pinta un
+   * hueco, un correo entero o un texto de relleno.
+   */
+  {
+    path: "/admin/es/orders",
+    headers: { cookie: STAFF_COOKIE },
+    // El numero de pedido, y el correo del comprador SIEMPRE enmascarado.
+    expect: ["LSW-10524", "a***@example.test"],
+  },
+  {
+    path: "/admin/es/participants",
+    headers: { cookie: STAFF_COOKIE },
+    // Los dos casos que no son el mismo: correo oculto y cuenta sin correo.
+    expect: ["a***@example.test", "Cuenta anonimizada"],
+  },
+  {
+    path: "/admin/es/audit",
+    /*
+     * CON EL ACTOR QUE PUEDE VERLA. La traza exige `audit.read`, que el personal
+     * por defecto -quien opera la promocion- NO tiene: con la cookie sola, esta
+     * ruta responde 200 con su 403 deliberado y el humo estaria comprobando la
+     * pantalla equivocada. La segunda cookie cambia de actor (ver
+     * `DEV_STAFF_ACTOR_COOKIE` en `src/mocks/dev-server.ts`), que es la unica
+     * forma de recorrer la separacion de funciones desde fuera.
+     */
+    headers: { cookie: `${STAFF_COOKIE}; lsw_dev_staff_actor=compliance@example.com` },
+    /*
+     * La accion auditada y el IDENTIFICADOR del actor. El correo del actor no
+     * se busca a proposito: viaja siempre `null` y la columna pinta el
+     * identificador, que es lo unico que la traza guarda.
+     */
+    expect: ["entry.adjust.create", "act_0000000000000001"],
+  },
   {
     // SIN idioma: lo pone la negociacion propia del panel (DEC-048).
     path: "/admin",
@@ -621,6 +661,107 @@ function restoreNextManagedFiles(snapshot) {
 
 /* eslint-enable security/detect-non-literal-fs-filename */
 
+/**
+ * CABECERAS DE SEGURIDAD, contra el servidor de verdad (HO-034 punto 3).
+ *
+ * POR QUE VIVE AQUI Y NO EN UN TEST UNITARIO
+ * ------------------------------------------
+ * Los tests unitarios comprueban lo que devuelven `headers()` y el constructor
+ * de la politica. Lo que NO pueden ver -ni hoy ni nunca, porque no arrancan
+ * Next- es lo unico que de verdad importa: que el NONCE de la cabecera es el
+ * mismo que Next pone en sus `<script>`.
+ *
+ * Y ese es justo el fallo silencioso de este diseno. La cadena tiene cuatro
+ * eslabones -el middleware genera el nonce, lo pone en la peticion reenviada,
+ * next-intl la propaga al render, y Next lo lee de ahi- y si cualquiera se
+ * rompe, el servidor sigue respondiendo 200 con el HTML completo. La pagina se
+ * VE bien. Lo que no hace es funcionar: el navegador bloquea los ciento y pico
+ * scripts en linea que llevan el payload de React y nada se hidrata.
+ *
+ * Un fallo que no se distingue del exito mirando el HTML es exactamente el que
+ * hay que comprobar con una maquina.
+ */
+async function checkSecurityHeaders() {
+  const problems = [];
+
+  const response = await fetch(`${BASE}/es`);
+  const html = await response.text();
+
+  const requeridas = {
+    "x-content-type-options": "nosniff",
+    "referrer-policy": "strict-origin-when-cross-origin",
+    "x-frame-options": "DENY",
+  };
+
+  for (const [name, expected] of Object.entries(requeridas)) {
+    const actual = response.headers.get(name);
+    if (actual !== expected) {
+      problems.push(`${name}: "${actual ?? "ausente"}", se esperaba "${expected}"`);
+    }
+  }
+
+  if (response.headers.get("permissions-policy") === null) {
+    problems.push("permissions-policy ausente");
+  }
+
+  // HSTS en desarrollo dejaria el `localhost` del navegador inservible para
+  // HTTP -en cualquier puerto y para cualquier proyecto- hasta limpiarlo a mano.
+  if (response.headers.get("strict-transport-security") !== null) {
+    problems.push("strict-transport-security emitida en desarrollo");
+  }
+
+  const csp = response.headers.get("content-security-policy");
+
+  if (csp === null) {
+    problems.push("content-security-policy ausente");
+  } else {
+    if (!csp.includes("frame-ancestors 'none'")) {
+      problems.push("la CSP no prohibe el enmarcado");
+    }
+
+    const scriptSrc = csp
+      .split(";")
+      .map((directive) => directive.trim())
+      .find((directive) => directive.startsWith("script-src"));
+
+    if (scriptSrc === undefined) {
+      problems.push("la CSP no declara script-src");
+    } else if (scriptSrc.includes("'unsafe-inline'")) {
+      // Con `'unsafe-inline'` la politica autoriza tambien al script inyectado:
+      // queda decorativa. Es la decision central de HO-034 punto 3.
+      problems.push("script-src admite 'unsafe-inline'");
+    }
+
+    const nonce = /'nonce-([^']+)'/.exec(csp)?.[1] ?? null;
+
+    if (nonce === null) {
+      problems.push("la CSP no lleva nonce");
+    } else {
+      const scripts = html.match(/<script[^>]*>/g) ?? [];
+      const sinNonce = scripts.filter((tag) => !tag.includes(`nonce="${nonce}"`));
+
+      if (scripts.length === 0) {
+        problems.push("no se encontro ningun <script> que comprobar");
+      }
+      if (sinNonce.length > 0) {
+        problems.push(
+          `${sinNonce.length} de ${scripts.length} <script> sin el nonce de la cabecera: ` +
+            `el navegador los bloquearia y la pagina no se hidrataria. Primero: ${sinNonce[0]}`,
+        );
+      }
+    }
+  }
+
+  // La sonda de liveness no puede cachearse: un intermediario que la guarde
+  // seguiria devolviendo `ok` con el proceso ya caido (DEC-043).
+  const health = await fetch(`${BASE}/healthz`);
+  if ((health.headers.get("cache-control") ?? "").includes("no-store") === false) {
+    problems.push(`/healthz sin no-store: "${health.headers.get("cache-control") ?? "ausente"}"`);
+  }
+
+  return problems;
+}
+
 async function main() {
   const nextBin = require.resolve("next/dist/bin/next");
 
@@ -699,6 +840,16 @@ async function main() {
         failures.push(check.path);
       }
     }
+
+    const headerProblems = await checkSecurityHeaders();
+
+    if (headerProblems.length === 0) {
+      log("  ok    cabeceras de seguridad (CSP con nonce, nosniff, sin HSTS en desarrollo)");
+    } else {
+      log("  FALLA cabeceras de seguridad");
+      for (const problem of headerProblems) log(`          ${problem}`);
+      failures.push("cabeceras de seguridad");
+    }
   } finally {
     killTree(child);
     restoreNextManagedFiles(managedBefore);
@@ -707,7 +858,7 @@ async function main() {
   log("");
 
   if (failures.length > 0) {
-    log(`[smoke] ${failures.length} ruta(s) sin datos: ${failures.join(", ")}`);
+    log(`[smoke] ${failures.length} comprobacion(es) fallidas: ${failures.join(", ")}`);
     log("[smoke] salida del servidor:");
     log(serverOutput.join("").split("\n").slice(-40).join("\n"));
     process.exitCode = 1;

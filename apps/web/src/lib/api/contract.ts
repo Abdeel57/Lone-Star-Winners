@@ -521,36 +521,39 @@ export interface ProductListQuery {
 // ---------------------------------------------------------------------------
 
 /**
- * [PROVISIONAL] Linea del carrito.
+ * [CONTRATO] Linea del carrito de servidor.
  *
- * `line_id` es la MISMA identidad que `line_id` en la cotizacion de entries.
- * Sin esa correspondencia, la interfaz no podria decir que linea concreta no es
- * elegible y tendria que dar el aviso a nivel de carrito entero.
+ * COPIA LITERAL de `CartWithQuote.lines[]` tal como lo publica
+ * `docs/API_CONTRACT.md` seccion 5. Esta interfaz llego a describir otra forma
+ * -`line_id`, `product_name` + `variant_name`, `line_total`, `image_url`,
+ * `availability`- que era la PETICION del frontend y nunca fue lo que devuelve
+ * la ruta: la pantalla del carrito no podia pintar ni una linea contra la API
+ * real (HO-034 punto 2, ya senalado en HO-017).
+ *
+ * La regla que resuelve el desacuerdo es la 1 del contrato: GANA LO QUE EL
+ * DOCUMENTO PUBLICA. Lo que el frontend habia pedido y el documento no publica
+ * sigue pedido en HO-017; hasta que llegue, la interfaz DEGRADA de forma
+ * deliberada en vez de inventarse el campo.
+ *
+ * `id` es la MISMA identidad que `line_id` en la cotizacion de entries -el
+ * contrato lo dice explicitamente-. Sin esa correspondencia la interfaz no
+ * podria decir QUE linea no es elegible y tendria que dar el aviso a nivel de
+ * carrito entero.
+ *
+ * `name` es EL NOMBRE DEL PRODUCTO, no el de la variante: el backend lo compone
+ * desde las traducciones del producto. La variante se distingue por `sku`, que
+ * es lo unico que el contrato publica para diferenciarlas.
  */
 export interface CartLine {
-  readonly line_id: string;
+  readonly id: string;
   readonly variant_id: string;
   readonly product_slug: string;
   readonly sku: string;
-  readonly product_name: LocalizedText;
-  readonly variant_name: LocalizedText;
-  readonly image_url: string | null;
-  readonly unit_price: MoneyMinor;
+  readonly name: LocalizedText;
   readonly quantity: number;
-  /** Total de linea CALCULADO POR EL BACKEND. El frontend no multiplica. */
-  readonly line_total: MoneyMinor;
-  readonly availability: VariantAvailability;
-}
-
-/** [PROVISIONAL] Carrito de servidor. */
-export interface Cart {
-  readonly id: string;
-  /** Ultima modificacion del carrito. ISO-8601 UTC. */
-  readonly updated_at: string;
-  readonly items: readonly CartLine[];
-  /** Subtotal CALCULADO POR EL BACKEND. */
-  readonly subtotal: MoneyMinor;
-  readonly item_count: number;
+  readonly unit_price: MoneyMinor;
+  /** Subtotal de linea CALCULADO POR EL BACKEND. El frontend no multiplica. */
+  readonly line_subtotal: MoneyMinor;
 }
 
 /** [CONTRATO] Linea elegible de la cotizacion. */
@@ -612,7 +615,7 @@ export interface EntryQuote {
   readonly engine_version: number;
   /** Instante de evaluacion. ISO-8601 UTC. */
   readonly evaluated_at: string;
-  readonly eligible_subtotal: MoneyMinor;
+  readonly eligible_subtotal: MoneyMinor | null;
   readonly entries_before_caps: number;
   readonly final_entries: number;
   readonly eligible_items: readonly EntryQuoteEligibleItem[];
@@ -622,18 +625,37 @@ export interface EntryQuote {
 }
 
 /**
- * [PROVISIONAL] Carrito con su cotizacion.
+ * [CONTRATO] Carrito de servidor CON su cotizacion.
  *
- * `docs/API_CONTRACT.md` nombra `CartWithQuote` como respuesta de las cinco
- * rutas de carrito pero no publica su forma. Esta es la peticion del frontend.
+ * Respuesta de las CINCO rutas de carrito, y es PLANA: el carrito no viaja
+ * anidado bajo una clave `cart`. `docs/API_CONTRACT.md` seccion 5 publica la
+ * forma completa.
  *
- * `entry_quote` es `null` cuando no hay promocion activa contra la que cotizar
- * -que es el mismo caso que devuelve `409 NO_ACTIVE_PROMOTION` en la ruta
- * dedicada-. Que sea nulable y no ausente es deliberado: obliga a cada pantalla
- * a decidir que dice cuando no hay cotizacion, en vez de dejar el hueco.
+ * TRES CAMPOS SON NULABLES Y CADA UNO DICE ALGO DISTINTO
+ * -----------------------------------------------------
+ * - `currency` y `subtotal` son `null` en un carrito VACIO: sin lineas no hay
+ *   moneda que declarar. No son cero; son ausencia de importe.
+ * - `entry_quote` es `null` cuando no hay promocion activa contra la que
+ *   cotizar. Un carrito sigue siendo valido en el periodo entre promociones, y
+ *   hacer fallar la lectura impediria hasta vaciarlo. Que sea nulable y no
+ *   ausente es deliberado: obliga a cada pantalla a decidir que dice cuando no
+ *   hay cotizacion, en vez de dejar el hueco.
+ *
+ * `id` vale `00000000-0000-0000-0000-000000000000` cuando el solicitante aun no
+ * tiene carrito: leer no crea nada.
+ *
+ * LO QUE EL CONTRATO NO PUBLICA, Y POR TANTO NO ESTA AQUI
+ * ------------------------------------------------------
+ * `updated_at`, `item_count`, y `image_url` y `availability` por linea. Los
+ * cuatro siguen pedidos en HO-017. Ninguno se deduce ni se inventa.
  */
 export interface CartWithQuote {
-  readonly cart: Cart;
+  readonly id: string;
+  /** ISO-4217. `null` en un carrito vacio. */
+  readonly currency: string | null;
+  readonly lines: readonly CartLine[];
+  /** Subtotal CALCULADO POR EL BACKEND. `null` en un carrito vacio. */
+  readonly subtotal: MoneyMinor | null;
   readonly entry_quote: EntryQuote | null;
 }
 
@@ -1643,12 +1665,31 @@ export const ADMIN_CAPABILITIES: readonly AdminCapability[] = [
 ];
 
 /**
- * [PROVISIONAL] Cifras de cabecera del panel (`GET /admin/dashboard`).
+ * [CONTRATO] Cifras de cabecera del panel (`GET /admin/dashboard`, seccion 11.7).
  *
  * NINGUNA SE CALCULA AQUI. Son lecturas: el saldo vivo del ledger, cuantos
  * envios AMOE esperan revision, cuantos ajustes esperan segunda aprobacion.
  * Que la suma de dos de ellas de una tercera es coincidencia del fixture, no
  * una relacion que la interfaz pueda usar (DEC-023, requisito R13).
+ *
+ * TODAS SE REFIEREN AL MISMO INSTANTE, `as_of`. No son seis lecturas tomadas a
+ * ratos, y por eso el instante es un campo y se pinta.
+ *
+ * `null` NO ES CERO, Y HAY DOS MOTIVOS DISTINTOS PARA UN `null`
+ * ------------------------------------------------------------
+ * 1. `promotion_id` y `promotion_status` son `null` cuando no hay ninguna
+ *    promocion `ACTIVE`. Los conteos entonces no se acotan por promocion.
+ * 2. `active_entries` y `participants` son cifras DEL LEDGER, y
+ *    `dashboard.read` no las cubre: se pueblan solo si el actor tiene ADEMAS
+ *    `entry.ledger.read`. Sin esa capacidad llegan `null`, que significa "no
+ *    publicado" y no "cero".
+ *
+ * Pintar un `0` en cualquiera de los dos casos seria una afirmacion distinta y
+ * falsa: "no hay participaciones activas" en vez de "no puedo decirtelo".
+ *
+ * `participants` cuenta participantes CON SALDO ACTIVO distinto de cero en la
+ * promocion. No es el censo de cuentas registradas, y la etiqueta de la pantalla
+ * tiene que decirlo.
  */
 export interface AdminDashboard {
   readonly promotion_id: string | null;
@@ -1743,7 +1784,13 @@ export interface AdminProductRow {
 
 export type AdminProductPage = CursorPage<AdminProductRow>;
 
-/** [PROVISIONAL] Fila del listado de pedidos en el panel. */
+/**
+ * [CONTRATO] Fila del listado de pedidos en el panel (seccion 11.7).
+ *
+ * La fila NO publica lineas ni direccion de envio, y no es que la pantalla no
+ * las pinte: no viajan. Repartir PII a granel para una tabla que no la usa no es
+ * aceptable, y el esquema de la respuesta lo impide por construccion.
+ */
 export interface AdminOrderRow {
   readonly id: string;
   readonly order_number: string;
@@ -1752,10 +1799,16 @@ export interface AdminOrderRow {
   readonly placed_at: string;
   readonly total: MoneyMinor;
   /**
-   * Correo del comprador, ENMASCARADO O COMPLETO SEGUN LA CAPACIDAD del actor
-   * (`pii.view.masked` / `pii.view.full`). El enmascarado LO HACE EL BACKEND:
-   * si el correo completo viajara siempre y el frontend lo tapara al pintarlo,
-   * el dato estaria en el HTML y en la respuesta de red de todos modos.
+   * Correo del comprador, SIEMPRE ENMASCARADO (`a***@dominio`).
+   *
+   * No depende de la capacidad del actor: `order.read` es "ver pedidos", no una
+   * capacidad de PII. El enmascarado lo hace el BACKEND -si el correo completo
+   * viajara y el frontend lo tapara al pintarlo, el dato estaria en el HTML y en
+   * la pestana de red de todos modos-.
+   *
+   * CADENA VACIA significa cuenta ANONIMIZADA: no hay correo. Es una afirmacion
+   * distinta de `a***@dominio` -hay correo y esta oculto- y la pantalla tiene
+   * que distinguirlas, o un hueco se leera como un dato corrupto.
    */
   readonly participant_email: string;
   readonly participant_id: string;
@@ -1763,18 +1816,38 @@ export interface AdminOrderRow {
 
 export type AdminOrderPage = CursorPage<AdminOrderRow>;
 
-/** [PROVISIONAL] Fila del listado de participantes en el panel. */
+/**
+ * [CONTRATO] Fila del listado de participantes en el panel (seccion 11.7).
+ *
+ * `disqualified` lo resuelve el backend con un `EXISTS` sobre las
+ * descalificaciones, no con una columna: una columna seria una segunda fuente de
+ * verdad sobre un hecho que ya esta registrado con su motivo, su actor y su
+ * instante.
+ */
 export interface AdminParticipantRow {
   readonly id: string;
+  /**
+   * Correo, SIEMPRE ENMASCARADO en esta ruta (`a***@dominio`).
+   *
+   * CADENA VACIA significa cuenta ANONIMIZADA: no hay correo que ocultar. Las
+   * dos cosas se pintan distinto a proposito.
+   */
   readonly email: string;
   readonly display_name: string | null;
   readonly created_at: string;
   readonly disqualified: boolean;
   /**
-   * `true` cuando el backend ha enmascarado el PII de esta fila porque el actor
-   * solo tiene `pii.view.masked`. Es un DATO y no una deduccion de la interfaz:
-   * asi la pantalla puede decir por que ve un correo a medias en vez de parecer
-   * que el dato esta corrupto.
+   * `true` cuando el backend ha ocultado el PII de esta fila.
+   *
+   * EN ESTA RUTA ES SIEMPRE `true`, tenga el actor la capacidad que tenga: la
+   * forma sin enmascarar vive detras de `pii.view.full`, en una RUTA APARTE
+   * (`/admin/participants/{id}/pii`) que exige segundo factor reciente y motivo.
+   * Que sea otra ruta y no un parametro es deliberado: un `?pii=full` dejaria al
+   * cliente elegir con que permiso se le juzga.
+   *
+   * Se publica como DATO y no se deduce en la interfaz: asi la pantalla puede
+   * decir por que ve un correo a medias en vez de parecer que el dato esta
+   * corrupto. Que hoy sea constante no autoriza a darlo por supuesto.
    */
   readonly pii_masked: boolean;
 }
@@ -2050,12 +2123,23 @@ export interface AdminDrawAuthorization {
 export type AdminDrawAuthorizationPage = CursorPage<AdminDrawAuthorization>;
 
 /**
- * [PROVISIONAL] Evento de auditoria (DEC-007).
+ * [CONTRATO] Evento de auditoria (DEC-007, seccion 11.7).
  *
  * SOLO LECTURA, y no por convencion: no existe endpoint que edite o borre una
  * fila de auditoria, el rol de base de datos de la aplicacion no tiene el
  * privilegio, y un trigger lanza excepcion aunque lo tuviera. La interfaz no
  * ofrece ninguna accion sobre una fila.
+ *
+ * LO QUE NO VIENE, Y NO ES UN OLVIDO
+ * ----------------------------------
+ * `before`, `after`, `reason_text`, `source_ip` y `user_agent` ni siquiera se
+ * seleccionan en la consulta: los tres primeros son material interno y los dos
+ * ultimos huella de conexion. Ninguna pantalla puede pedirlos.
+ *
+ * El orden y el cursor van por `sequence_no` -el orden TOTAL de escritura- y no
+ * por `occurred_at`: con empates, la paginacion se saltaria uno de los dos
+ * hechos, y en una traza de auditoria un hecho que nadie llega a ver es
+ * exactamente el fallo que la traza existe para impedir.
  */
 export interface AdminAuditEvent {
   readonly id: string;
@@ -2063,13 +2147,24 @@ export interface AdminAuditEvent {
   readonly occurred_at: string;
   /** `HUMAN` o `SYSTEM`. Distinguirlos es el punto de la traza. */
   readonly actor_type: string;
+  /** Identificador INTERNO del actor. Es lo unico que la tabla guarda de el. */
   readonly actor_id: string | null;
+  /**
+   * SIEMPRE `null`, y por eso ninguna pantalla lo pinta.
+   *
+   * La tabla de auditoria guarda `actor_id`, y su propia documentacion dice
+   * "nunca un correo ni un nombre"; resolverlo en la lectura meteria en la traza
+   * justo el dato que la escritura decidio no guardar. El campo existe en la
+   * respuesta -esta en el esquema- y se declara aqui para que nadie lo
+   * reintroduzca creyendo que falta.
+   */
   readonly actor_email: string | null;
   readonly actor_roles: readonly string[];
   /** Capacidad ejercida, como clave estable. */
   readonly action: string;
   readonly entity_type: string;
   readonly entity_id: string | null;
+  readonly promotion_id: string | null;
   readonly reason_key: string | null;
   readonly request_id: string | null;
 }

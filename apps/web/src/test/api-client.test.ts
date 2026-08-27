@@ -168,13 +168,48 @@ describe("carrito sin sesion", () => {
     expect(result.error.code).toBe("UNAUTHENTICATED");
   });
 
-  it("con sesion devuelve carrito y cotizacion en la misma respuesta", async () => {
+  it("con sesion devuelve el carrito PLANO y su cotizacion en la misma respuesta", async () => {
     const result = await fetchCart("en", { cookie: "lsw_session=example" });
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
-    expect(result.data).toHaveProperty("cart");
+    // LA FORMA IMPORTA, y este test existe porque llego a no importar: la capa
+    // esperaba `{ cart: {...}, entry_quote }` y la ruta devuelve el carrito
+    // PLANO (`docs/API_CONTRACT.md` seccion 5). La pantalla no podia pintar ni
+    // una linea contra la API real y ningun test lo veia, porque el fixture
+    // tenia la forma equivocada tambien (HO-034 punto 2).
+    expect(result.data).not.toHaveProperty("cart");
+    expect(result.data).toHaveProperty("id");
+    expect(result.data).toHaveProperty("currency");
+    expect(result.data).toHaveProperty("lines");
+    expect(result.data).toHaveProperty("subtotal");
     expect(result.data).toHaveProperty("entry_quote");
+  });
+
+  it("las lineas traen los campos que el contrato publica, con `id` y `line_subtotal`", async () => {
+    mockApiServer.use(scenarios.cartWithLines());
+
+    const result = await fetchCart("en", { cookie: "lsw_session=example" });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const line = result.data.lines[0];
+    expect(line).toBeDefined();
+    if (line === undefined) return;
+
+    // `id`, no `line_id`: es la misma identidad que usa la cotizacion en
+    // `ineligible_items[].line_id`, y es lo que permite decir QUE linea no
+    // cuenta.
+    expect(line.id).toEqual(expect.any(String));
+    expect(result.data.entry_quote?.ineligible_items.map((item) => item.line_id)).toContain(
+      result.data.lines[1]?.id,
+    );
+
+    expect(line).toHaveProperty("line_subtotal");
+    expect(line).toHaveProperty("name");
+    expect(line).not.toHaveProperty("line_total");
+    expect(line).not.toHaveProperty("product_name");
   });
 });
