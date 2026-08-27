@@ -1418,7 +1418,7 @@ Blocking: SÍ para finalizar cualquier export real.
 
 ## HO-034
 
-Status: OPEN
+Status: PARTIALLY RESOLVED — abiertos (1) y (4), sesión paralela
 
 ## Handoff
 
@@ -1478,3 +1478,72 @@ config propia o registre sus plugins, y `lint:root` en verde.
 
 Blocking: (1) y (7) SÍ antes de cualquier push; el resto para dar por
 integrado el flujo.
+
+Resolution (2026-08-27, Team Lead):
+
+- (2) carrito, (3) cabeceras y (6) copy: **cerrados** en `c90c732`.
+  `CartWithQuote` plano según §5 del contrato; `image_url`, `availability`,
+  `updated_at` e `item_count` **no se inventaron**: siguen pedidos a backend en
+  HO-017. CSP con nonce por petición: DEC-049. `PAYMENT_PROVIDER_NOT_CONFIGURED`
+  traducido en los dos idiomas, distinto de `PAYMENT_PROVIDER_UNAVAILABLE`.
+- (5) endpoints de admin: **dashboard, pedidos, participantes y auditoría
+  cerrados** en `ed777b4` (contrato §11.7; PII enmascarada en la frontera, ruta
+  de PII completa aparte bajo `pii.view.full`, que responde 403 hasta (1)). El
+  panel los consume ya con su forma real (`c90c732`). **Catálogo y promociones
+  de admin siguen abiertos**: §12, sesión paralela, después de (1).
+- (7) `lint:root`: **cerrado** en `ed777b4` (la raíz ignora los workspaces con
+  config propia; `turbo run lint` sigue entrando en cada uno).
+- (1) autorizador y (4) `POST /auth/register`: **abiertos, sesión paralela**,
+  con el plan de (1) sin condicionantes (flag desde `ConfigRepository`, motivo
+  no vacío persistido en `audit_events`, segunda aprobación verificada contra
+  `draw_approvals`/`adjustments` con actor distinto y TTL vivo). Los 11
+  `test.fixme` de `tests/e2e/lib/blockers.mjs` los retira
+  **security-integration contra CI** cuando la sesión paralela entregue el
+  hash, no antes: verificación independiente, no verde autodeclarado.
+
+Blocking para el push conjunto, a día de hoy: solo (1).
+
+## HO-035
+
+Status: OPEN
+
+## Handoff
+
+Date: 2026-08-27
+From: frontend-ux (HO-034.3), vía Team Lead
+To: backend-sweepstakes (decisión), frontend-ux (si el arreglo va en `apps/web`)
+
+Context:
+Al añadir `/admin/es/audit` al humo apareció que **el cambio de actor de
+personal en desarrollo nunca funcionó**: `cookies().toString()` de Next
+serializa la cabecera `Cookie` que `apps/web` reenvía a la API como
+
+```text
+lsw_dev_session_staff=…; Path=/; lsw_dev_staff_actor=compliance%40example.com; Path=/
+```
+
+con pseudo-cookies `Path=/` intercaladas y los valores percent-encoded. El
+mock de desarrollo no decodificaba, no encontraba el correo y caía a un actor
+de respaldo **en silencio**: un panel válido con la persona equivocada,
+indistinguible de "esa persona no tiene ese permiso". Arreglado en
+`src/mocks/dev-server.ts` (`c90c732`).
+
+**Lo mismo llega hoy a `apps/api`** desde `apps/web` en cualquier entorno.
+Funciona porque `@fastify/cookie` decodifica y tolera las pseudo-cookies, y
+el e2e de HO-030 lo cubre, pero **no es la cabecera que manda un navegador**
+y hoy es un comportamiento heredado, no decidido.
+
+What I need from you:
+Decidir explícitamente una de dos y dejarla escrita en `docs/API_CONTRACT.md`
+§10 (Auth):
+(a) `apps/web` construye la cabecera `Cookie` desde `cookies().getAll()` en
+`readSession` (`name=value; name=value`, sin atributos) y la API deja de
+depender de la tolerancia del parser; o
+(b) la API declara que acepta esa forma, con un test de contrato que fije la
+cabecera exacta que reenvía Next, para que un cambio de `@fastify/cookie` no
+la rompa sin aviso.
+Aparte, sigue pendiente de backend lo que pide HO-017 para el carrito:
+`updated_at` e `item_count`, e `image_url` y `availability` por línea.
+
+Blocking: NO. No condiciona el push; sí conviene antes de dar por cerrada la
+identidad (HO-034.4).

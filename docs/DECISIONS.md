@@ -2232,3 +2232,77 @@ Affected areas: `apps/web` (middleware, árbol de rutas de admin, i18n),
 
 Proposed by: sesión paralela (lone-star-c4)
 Agreed by: Team Lead
+
+## DEC-049
+
+Status: Accepted
+
+Date: 2026-08-27
+
+Decision:
+**La Content-Security-Policy de `apps/web` se emite por petición desde el
+middleware, con un nonce nuevo por petición; no existe —ni puede existir— una
+CSP estática en `headers()` de `next.config.mjs`.** Las demás cabeceras de
+seguridad sí son estáticas en `headers()`: `X-Content-Type-Options: nosniff`,
+`Referrer-Policy: strict-origin-when-cross-origin`, `X-Frame-Options: DENY`,
+`Permissions-Policy` restrictiva, `Cache-Control: no-store` en `/healthz` y
+HSTS (`max-age=63072000; includeSubDomains`, sin `preload`) **solo en
+producción**.
+
+La política emitida es:
+
+```text
+default-src 'self'; script-src 'self' 'nonce-<16 bytes base64>' [+ 'unsafe-eval' solo fuera de producción];
+style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self';
+connect-src 'self' [+ origen de NEXT_PUBLIC_API_BASE_URL si existe] [+ ws: solo fuera de producción];
+frame-ancestors 'none'; form-action 'self'; object-src 'none'; base-uri 'self'
+```
+
+Context:
+Next 15.5 emite el payload RSC como `<script>` en línea (153 en la portada).
+Con `script-src 'self'` el navegador los bloquea todos y la página **se ve pero
+no se hidrata**, sin un solo error en el servidor: un fallo indistinguible del
+éxito mirando el HTML o el código de estado. Next lee el nonce de la cabecera
+de la petición (`app-render/get-script-nonce-from-header`), así que el
+middleware puede generarlo y Next lo estampa en cada script. Tres restricciones
+que condicionan la forma:
+
+- **Dos cabeceras CSP se aplican por intersección.** Una estática en
+  `headers()` con `script-src 'self'` volvería a bloquear los scripts con
+  nonce. Hay un test que falla si alguien añade una segunda CSP a
+  `next.config.mjs`.
+- **`style-src 'unsafe-inline'` hace falta de verdad**, y no por Tailwind: son
+  atributos `style` en línea (`next/image` emite `style="color:transparent"`;
+  la barra de la línea de tiempo lleva su anchura). Un atributo no admite
+  nonce.
+- **`connect-src` no lleva el origen de `API_BASE_URL`**, solo el de
+  `NEXT_PUBLIC_API_BASE_URL`. `API_BASE_URL` es deliberadamente no pública
+  (`src/lib/api/http.ts`); escribirla en una cabecera servida al navegador
+  publicaría lo que esa decisión mantiene privado, a cambio de nada, porque
+  ninguna petición de cliente va ahí. Hay test.
+
+Alternatives:
+A — `'unsafe-inline'` en `script-src` (descartado: autoriza cualquier script
+en línea, la CSP queda como decoración). B — CSP estática en `headers()` más
+nonce (descartado: intersección; aplicación muerta en el navegador). C —
+hashes de los scripts (descartado: el payload RSC cambia por petición y por
+render; los hashes no son estables). D — nonce por petición desde el
+middleware (elegida).
+
+Reason:
+D es la única que mantiene la CSP como control real y la aplicación
+funcionando tanto en rutas dinámicas como en las que salen como SSG del
+build. Verificado con build de producción aislado servido con `next start`
+(HSTS presente, `sin_nonce=0` en `/es/faq`, `/es/shop`, `/es/official-rules`,
+`/es/promotions`) y con el humo, que comprueba contra el servidor real que el
+nonce de la cabecera coincide con el de **cada** `<script>` del HTML en 54
+rutas. Esa comprobación es la red: la cadena tiene cuatro eslabones y, si se
+rompe cualquiera, el servidor sigue respondiendo 200 con el HTML completo.
+
+Affected areas: `apps/web` (`src/middleware.ts`,
+`src/lib/security-headers.ts`, `next.config.mjs`, `scripts/smoke.mjs`,
+`src/test/security-headers.test.ts`). Sin cambios en `apps/api`, que ya emitía
+sus cabeceras.
+
+Proposed by: frontend-ux (HO-034.3)
+Agreed by: Team Lead
