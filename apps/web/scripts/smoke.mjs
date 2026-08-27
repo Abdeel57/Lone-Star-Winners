@@ -109,6 +109,25 @@ const ERROR_STATE_TEXTS = ["No hemos podido cargar esta sección", "We could not
 const SESSION_COOKIE = "lsw_dev_session=Zk3TQ8pR2mVxL7bN4yH1sD6gJ0wC5fA9eU-tKiO_qXz";
 
 /**
+ * Cookie de sesion de PERSONAL (DEC-006, DEC-048).
+ *
+ * Es la que emite la API simulada al superar el segundo factor. Se repite aqui
+ * por el mismo motivo que la de participante: si alguien cambia el nombre o el
+ * valor en `src/mocks/dev-server.ts` sin actualizar esta linea, el humo dejaria
+ * de probar el panel CON sesion y seguiria en verde probando la pantalla de
+ * acceso.
+ *
+ * SU NOMBRE LLEVA EL SUFIJO `_staff` Y SU `Path` REAL ES `/admin`. Aqui el
+ * `Path` no interviene -este cliente manda la cabecera a mano- pero es
+ * exactamente la razon de que el panel viva en `/admin/[locale]`: desde
+ * `/es/admin` un navegador de verdad no la enviaria y el panel quedaria
+ * permanentemente deslogueado.
+ *
+ * Token de MENTIRA con la FORMA del real: 43 caracteres base64url, opaco.
+ */
+const STAFF_COOKIE = "lsw_dev_session_staff=Bd4kM9tXr6ZaP1wQ7nJc2sF5hL8gV3eY-uRiO_pCz0T";
+
+/**
  * Rutas y lo que tiene que aparecer en cada una.
  *
  * `expect` son cadenas que SOLO pueden venir de un fixture servido por la API:
@@ -310,6 +329,122 @@ const CHECKS = [
     // tiene que decirlo sin prometer nada.
     expect: ["LSW-10608"],
   },
+
+  // --- Via gratuita de participacion (FE-M6) ------------------------------
+  //
+  // El fixture por defecto es `amoe_enabled: false`, que es el estado real hoy.
+  // Lo que se comprueba es que la ruta responde 200 con su estado DELIBERADO y
+  // no con el estado de error: la funcion no existe, y eso no es un fallo.
+  { path: "/es/amoe", expect: [] },
+  { path: "/en/amoe", expect: [] },
+  {
+    // Con sesion y la via apagada, el portal tampoco se rompe: alguien puede
+    // tener envios de una promocion anterior y llegar aqui desde un marcador.
+    path: "/es/account/amoe",
+    headers: { cookie: SESSION_COOKIE },
+    expect: [],
+  },
+
+  /*
+   * LAS CUATRO MODALIDADES NO SE PRUEBAN AQUI, Y CONVIENE SABER POR QUE.
+   *
+   * Se intento y no puede funcionar con un servidor solo: el escenario de la
+   * API simulada se elige con `LSW_DEV_AMOE`, una variable de entorno del
+   * proceso, porque `GET /config` y `GET /promotions/:slug/amoe-config` son
+   * rutas PUBLICAS y la interfaz las pide sin sesion, de modo que ninguna
+   * cookie llega hasta ellas. Eso es correcto -la configuracion publica no
+   * viaja con credenciales- y no se cambia por comodidad de una red.
+   *
+   * Probar las cuatro exigiria arrancar cuatro servidores, que es mucho coste
+   * para lo que ya cubren `src/test/amoe.test.tsx` (las cuatro modalidades, la
+   * apagada, la encendida sin modalidad y la de formulario sin campos) y
+   * `src/test/amoe-actions.test.ts` (que el payload lleva SOLO los campos
+   * declarados). Lo que esta red aporta y ninguna otra puede es que la ruta
+   * exista y responda con su estado deliberado, que es lo de arriba.
+   *
+   * Para verlas en el navegador:
+   *   LSW_DEV_AMOE=ONLINE_FORM pnpm --filter @lsw/web dev
+   */
+
+  // --- Panel de administracion (FE-M7, DEC-048) ---------------------------
+  //
+  // ESTAS RUTAS SON LA RED DE DEC-048. Si el panel acabara colgando de
+  // `/[locale]/admin`, estas comprobaciones darian 404 aqui mismo, que es
+  // muchisimo mejor que descubrirlo cuando la cookie de personal deja de viajar
+  // y el sintoma es "inicio sesion y me devuelve al login".
+  { path: "/admin/es/login", expect: [] },
+  { path: "/admin/en/login", expect: [] },
+  {
+    // Sin sesion, el panel NO es un error: pide iniciar sesion. Si esta ruta
+    // pintara el estado de error, el humo fallaria aunque respondiera 200.
+    path: "/admin/es",
+    expect: [],
+  },
+  {
+    // La portada del panel CON sesion de personal. El correo sale de la sesion
+    // y la cifra del cuadro de mando, que son dos lecturas distintas: si una
+    // fallara, la otra seguiria apareciendo.
+    path: "/admin/es",
+    headers: { cookie: STAFF_COOKIE },
+    expect: ["promotions@example.com", "PROMOTION_MANAGER", "1,284,500"],
+  },
+  {
+    path: "/admin/en",
+    headers: { cookie: STAFF_COOKIE },
+    expect: ["promotions@example.com", "1,284,500"],
+  },
+  {
+    // Cola de revision AMOE: el envio de un participante y el codigo del otro.
+    path: "/admin/es/amoe",
+    headers: { cookie: STAFF_COOKIE },
+    expect: ["participant@example.com", "LSW-FREE-4821"],
+  },
+  {
+    // Promociones, con la version de reglas vigente en el listado.
+    path: "/admin/es/promotions",
+    headers: { cookie: STAFF_COOKIE },
+    expect: ["Sorteo promocional GMC Denali 2025"],
+  },
+  {
+    // SIN idioma: lo pone la negociacion propia del panel (DEC-048).
+    path: "/admin",
+    expect: [],
+  },
+  {
+    /*
+     * LA COMPROBACION QUE RESUME DEC-048 ENTERA.
+     *
+     * Se pide `/admin/amoe` -sin idioma- con la cookie de personal. Para que
+     * esto sirva datos tienen que cumplirse las tres cosas a la vez: que el
+     * middleware redirija conservando la ruta, que el idioma acabe DENTRO de
+     * `/admin`, y que la cookie de personal siga viajando despues de la
+     * redireccion. Si el panel colgara de `/[locale]/admin`, la ultima fallaria.
+     */
+    path: "/admin/amoe",
+    headers: { cookie: STAFF_COOKIE },
+    expect: ["participant@example.com"],
+  },
+  {
+    /*
+     * Sesion de PARTICIPANTE en el panel. Ocurre a diario: la cookie del
+     * escaparate tiene `Path=/` y viaja tambien a `/admin`. Tiene que verse el
+     * 403 deliberado, NO el estado de error y NO el formulario de personal.
+     */
+    path: "/admin/es",
+    headers: { cookie: SESSION_COOKIE },
+    expect: [],
+  },
+  {
+    /*
+     * EL PANEL NO EXISTE BAJO EL ESCAPARATE, y esta es la red que lo prueba.
+     * Si algun dia alguien crea `app/[locale]/admin`, esta comprobacion pasa a
+     * responder 200 y el humo falla, que es exactamente lo que tiene que pasar:
+     * ahi la cookie de personal no viaja.
+     */
+    path: "/es/admin",
+    status: 404,
+    expect: [],
+  },
 ];
 
 function log(message) {
@@ -504,7 +639,16 @@ async function main() {
       const text = visibleText(html);
       const problems = [];
 
-      if (response.status !== 200) problems.push(`HTTP ${response.status}`);
+      /*
+       * `status` es opcional y por defecto 200. Existe para poder comprobar una
+       * AUSENCIA: que el panel NO se sirve bajo el prefijo del escaparate. Sin
+       * el, una ruta que empezara a responder 200 donde no debe pasaria
+       * desapercibida, porque el humo solo sabria buscar datos en ella.
+       */
+      const expectedStatus = check.status ?? 200;
+      if (response.status !== expectedStatus) {
+        problems.push(`HTTP ${response.status}, se esperaba ${expectedStatus}`);
+      }
 
       for (const needle of check.expect) {
         if (!html.includes(needle)) problems.push(`falta el dato del fixture: ${needle}`);

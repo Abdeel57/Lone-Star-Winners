@@ -1,6 +1,9 @@
 import { http, HttpResponse, type JsonBodyType, type RequestHandler } from "msw";
 
 import {
+  adminRulesVersionsPath,
+  amoeConfigPath,
+  amoeSubmissionsPath,
   API_PATHS,
   apiBaseUrl,
   checkoutSessionPath,
@@ -283,4 +286,96 @@ export const scenarios = {
 
   checkoutState: (orderDraftId: string, body: JsonBodyType) =>
     http.get(url(checkoutSessionPath(orderDraftId)), () => HttpResponse.json(body)),
+
+  // -------------------------------------------------------------------------
+  // AMOE (seccion 7)
+  // -------------------------------------------------------------------------
+
+  /**
+   * Configuracion AMOE de una promocion.
+   *
+   * Es el escenario que decide QUE PANTALLA se prueba: las cuatro modalidades
+   * de DEC-032 exigen interfaces distintas, y la quinta situacion -la via
+   * apagada- es la que sirve la tabla por defecto. Pedir un escenario aqui es
+   * la unica forma de encender la via en un test, que es como tiene que ser:
+   * un flag legalmente material no se enciende por descuido.
+   */
+  amoeConfig: (slug: string, body: JsonBodyType) =>
+    http.get(url(amoeConfigPath(slug)), () => HttpResponse.json(body)),
+
+  /**
+   * La via apagada, dicha con un 404.
+   *
+   * El contrato publica las dos formas de decir que no: `200` con
+   * `enabled: false` y `404` cuando el flag esta apagado. La interfaz trata las
+   * dos igual -la funcion no existe- y este escenario cubre la segunda.
+   */
+  amoeConfigNotFound: (slug: string) =>
+    http.get(url(amoeConfigPath(slug)), () =>
+      HttpResponse.json(errorEnvelope("NOT_FOUND"), { status: 404 }),
+    ),
+
+  amoeSubmit: (promotionId: string, body: JsonBodyType) =>
+    http.post(url(amoeSubmissionsPath(promotionId)), () =>
+      HttpResponse.json(body, { status: 201 }),
+    ),
+
+  /**
+   * Envio rechazado.
+   *
+   * Los codigos son los del contrato mas los que pidio la revision de este
+   * hito. Se aceptan los dos juegos de nombres a proposito: el documento
+   * publica `AMOE_LIMIT_REACHED` y `VALIDATION_FAILED`, y la revision pidio
+   * `AMOE_PERIOD_LIMIT_REACHED` y `AMOE_PAYLOAD_INVALID`. Mientras no se cierre
+   * cual es, la interfaz tiene que sobrevivir a los dos.
+   */
+  amoeSubmitRejected: (promotionId: string, code: string, status = 409) =>
+    http.post(url(amoeSubmissionsPath(promotionId)), () =>
+      HttpResponse.json(errorEnvelope(code), { status }),
+    ),
+
+  amoeSubmissions: (body: JsonBodyType) =>
+    http.get(url(API_PATHS.accountAmoeSubmissions), () => HttpResponse.json(body)),
+
+  // -------------------------------------------------------------------------
+  // Panel de administracion (seccion 8, DEC-048)
+  // -------------------------------------------------------------------------
+
+  /** Lectura del panel que responde 403: falta la capacidad. */
+  adminForbidden: (path: string) =>
+    http.get(url(path), () => HttpResponse.json(errorEnvelope("FORBIDDEN"), { status: 403 })),
+
+  adminDashboard: (body: JsonBodyType) =>
+    http.get(url(API_PATHS.adminDashboard), () => HttpResponse.json(body)),
+
+  adminPromotions: (body: JsonBodyType) =>
+    http.get(url(API_PATHS.adminPromotions), () => HttpResponse.json(body)),
+
+  adminRulesVersions: (promotionId: string, body: JsonBodyType) =>
+    http.get(url(adminRulesVersionsPath(promotionId)), () => HttpResponse.json(body)),
+
+  adminAmoeSubmissions: (body: JsonBodyType) =>
+    http.get(url(API_PATHS.adminAmoeSubmissions), () => HttpResponse.json(body)),
+
+  adminAdjustments: (body: JsonBodyType) =>
+    http.get(url(API_PATHS.adminAdjustments), () => HttpResponse.json(body)),
+
+  /**
+   * Previsualizacion de un ajuste.
+   *
+   * Es el escenario mas importante del panel: sin el, la confirmacion no puede
+   * ensenar el saldo resultante, y la interfaz NO puede calcularlo (DEC-023,
+   * requisito R13).
+   */
+  adjustmentPreview: (body: JsonBodyType) =>
+    http.post(url(API_PATHS.adminAdjustmentPreview), () => HttpResponse.json(body)),
+
+  adminExports: (body: JsonBodyType) =>
+    http.get(url(API_PATHS.adminExportSnapshots), () => HttpResponse.json(body)),
+
+  adminDraw: (body: JsonBodyType) =>
+    http.get(url(API_PATHS.adminDrawAuthorizations), () => HttpResponse.json(body)),
+
+  adminAudit: (body: JsonBodyType) =>
+    http.get(url(API_PATHS.adminAuditEvents), () => HttpResponse.json(body)),
 };

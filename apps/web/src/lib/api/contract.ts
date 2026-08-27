@@ -838,6 +838,32 @@ export interface SessionState {
   readonly email_verified: boolean;
   /** Roles del contrato. Vacio para un participante sin rol de personal. */
   readonly roles: readonly string[];
+  /**
+   * [PROVISIONAL] Capacidades EFECTIVAS del actor (DEC-048).
+   *
+   * PETICION ADITIVA a `backend`, no una reescritura: el campo es OPCIONAL, de
+   * modo que la respuesta que la seccion 10 publica hoy -sin el- sigue siendo
+   * valida y el panel sigue funcionando.
+   *
+   * POR QUE SE PIDE. El mapa rol -> capacidad ya existe y es autoritativo:
+   * `ROLE_CAPABILITIES` en `packages/security/src/permissions.ts`. Que el
+   * frontend lo reimplemente es crear una segunda fuente de verdad de una
+   * politica de AUTORIZACION, que es justo lo que prohibe `CLAUDE.md` seccion 4.
+   * Resolverlo en el backend -donde ya esta- y publicar el resultado cuesta un
+   * campo y elimina la divergencia por construccion.
+   *
+   * MIENTRAS NO EXISTA, el panel cae a un espejo local de esa matriz, marcado
+   * como provisional en `src/lib/admin/capabilities.ts`. Ese espejo decide
+   * unicamente QUE ENLACES SE PINTAN; quien decide que se puede hacer sigue
+   * siendo el backend, que responde 403 y la interfaz lo pinta como estado
+   * deliberado.
+   *
+   * Los valores son capacidades del contrato. Se tipa `string[]` y no
+   * `AdminCapability[]` a proposito: el backend puede publicar una capacidad
+   * que la interfaz todavia no conozca, y eso tiene que poder ignorarse en vez
+   * de dejar de compilar contra una respuesta legitima.
+   */
+  readonly capabilities?: readonly string[];
 }
 
 /**
@@ -1257,3 +1283,668 @@ export interface CheckoutSessionState {
    */
   readonly order_id: string | null;
 }
+
+// ---------------------------------------------------------------------------
+// AMOE - via gratuita de participacion (seccion 7 de docs/API_CONTRACT.md)
+// ---------------------------------------------------------------------------
+
+/**
+ * [CONTRATO parcial] Ventana de envio de participaciones gratuitas.
+ *
+ * Las dos fechas son ISO-8601 UTC y pueden ser `null`: una modalidad puede no
+ * declarar apertura, cierre, o ninguna de las dos. La interfaz NO deduce de
+ * ellas si la ventana esta abierta -eso lo decide el backend y lo dice
+ * rechazando el envio con `AMOE_WINDOW_CLOSED`-; solo las muestra.
+ *
+ * Que el reloj del navegador no decida esto es DEC-011 aplicado al caso mas
+ * caro: una ventana que el navegador cree abierta y el backend cerrada produce
+ * un formulario que se rellena entero para acabar rechazado.
+ */
+export interface AmoeSubmissionWindow {
+  readonly opens_at: string | null;
+  readonly closes_at: string | null;
+}
+
+/**
+ * [PROVISIONAL] Tipo de un campo del formulario AMOE.
+ *
+ * Gobierna QUE control se pinta y que teclado abre un telefono. No gobierna
+ * ninguna validacion legal: no hay aqui longitudes minimas, ni formatos de
+ * codigo postal, ni edades. El backend revalida y es quien decide.
+ */
+export type AmoeFieldKind = "text" | "email" | "tel" | "textarea" | "date" | "code";
+
+export const AMOE_FIELD_KINDS: readonly AmoeFieldKind[] = [
+  "text",
+  "email",
+  "tel",
+  "textarea",
+  "date",
+  "code",
+];
+
+/**
+ * [PROVISIONAL] Campo que el formulario AMOE tiene que pedir.
+ *
+ * ES LA PIEZA QUE IMPIDE QUE EL FRONTEND INVENTE EL FORMULARIO. Que datos se
+ * piden para participar sin comprar es materia de las Official Rules
+ * (CLAUDE.md #1 y #2): la interfaz pinta EXACTAMENTE los campos que llegan en
+ * `required_fields`, en el orden que llegan, y ni uno mas. Un formulario con un
+ * campo de mas es recogida de datos personales que nadie autorizo; con uno de
+ * menos, un envio que el backend rechazara.
+ *
+ * `label_key` es una CLAVE DE COPY DEL FRONTEND (DEC-022), no prosa del
+ * backend, exactamente igual que `ConsentRequirement.text_key`. Si el backend
+ * manda una clave que la interfaz no conoce, el campo se pinta con una etiqueta
+ * generica -nunca con la clave en crudo- y se sigue enviando: perder el campo
+ * seria peor que etiquetarlo mal.
+ */
+export interface AmoeFieldSpec {
+  /** Nombre del campo tal como viaja en el `payload`. */
+  readonly name: string;
+  readonly kind: AmoeFieldKind;
+  /** Clave de copy del frontend (DEC-022). */
+  readonly label_key: string;
+  /** El backend REVALIDA: que aqui llegue `false` no decide nada. */
+  readonly required: boolean;
+  /**
+   * Tope de caracteres, si el backend declara uno. Se traslada al control como
+   * `maxLength` para que el navegador ayude, nunca como validacion propia.
+   */
+  readonly max_length?: number;
+}
+
+/**
+ * [CONTRATO parcial] Configuracion AMOE vigente
+ * (`GET /promotions/{slug}/amoe-config`).
+ *
+ * DOS INTERRUPTORES, Y NO SON EL MISMO:
+ *
+ * - `enabled` dice si la via gratuita EXISTE. Es el reflejo de `amoe_enabled`
+ *   (DEC-032). Apagado, TODO lo demas llega en `null` y la interfaz muestra un
+ *   estado deliberado -"esta promocion no ofrece via gratuita"- que remite a
+ *   las Reglas Oficiales. No es un error y no es una pantalla a medias.
+ * - `mode` dice QUE interfaz renderizar. Es enum y no booleano precisamente
+ *   porque las cuatro modalidades exigen pantallas distintas (DEC-032).
+ *
+ * EL CASO INTERMEDIO ES REAL: `enabled: true` con `mode: null` significa que
+ * alguien encendio la funcion antes de que se publicara la modalidad. La
+ * interfaz lo dice y no elige una por su cuenta.
+ *
+ * `instructions` ES CONTENIDO LEGALMENTE CONTROLANTE y se renderiza TAL CUAL,
+ * como las Official Rules: es la excepcion de DEC-022. El frontend no redacta
+ * ni una linea de las instrucciones postales, del formato del sobre, de los
+ * limites por periodo ni de la direccion. Si el backend calla, la pantalla
+ * remite al documento en vez de rellenar el hueco.
+ */
+export interface AmoeConfig {
+  readonly enabled: boolean;
+  readonly mode: AmoeMode | null;
+  /** Promocion a la que pertenece. `null` con la via apagada. */
+  readonly promotion_id: string | null;
+  readonly submission_window: AmoeSubmissionWindow;
+  /** Texto controlante en los dos idiomas, o `null`. */
+  readonly instructions: LocalizedText | null;
+  /** Campos del formulario. Solo con `mode: "ONLINE_FORM"`. */
+  readonly required_fields: readonly AmoeFieldSpec[] | null;
+  /**
+   * Destino externo. Solo con `mode: "EXTERNAL_INSTRUCTIONS"`.
+   *
+   * Se valida antes de pintarlo como enlace: solo `https:`. Un destino que
+   * llegue con otro esquema se muestra como texto y no como enlace, porque un
+   * `javascript:` renderizado como `href` es ejecucion de codigo de terceros en
+   * la pagina.
+   */
+  readonly external_url: string | null;
+}
+
+/**
+ * [PROVISIONAL] Estado de un envio AMOE.
+ *
+ * CINCO ESTADOS, y la lista incluye a proposito los dos nombres que hoy conviven
+ * en la documentacion: `docs/API_CONTRACT.md` publica `SUBMITTED` como respuesta
+ * de creacion, y la revision de este hito pidio `PENDING_REVIEW`. Aceptar los
+ * dos cuesta una entrada de union y evita que un cambio de nombre en el backend
+ * deje la pantalla sin saber que pintar. Cuando el backend cierre cual es, se
+ * borra el otro.
+ */
+export type AmoeSubmissionStatus =
+  "SUBMITTED" | "PENDING_REVIEW" | "APPROVED" | "REJECTED" | "CANCELLED";
+
+export const AMOE_SUBMISSION_STATUSES: readonly AmoeSubmissionStatus[] = [
+  "SUBMITTED",
+  "PENDING_REVIEW",
+  "APPROVED",
+  "REJECTED",
+  "CANCELLED",
+];
+
+/**
+ * [PROVISIONAL] Respuesta a un envio AMOE
+ * (`POST /promotions/{promotion_id}/amoe-submissions`).
+ *
+ * `entries` puede ser `null` y ESO NO ES UN OLVIDO: una modalidad con revision
+ * manual no otorga participaciones en el momento del envio, y prometer una
+ * cifra que todavia no existe seria afirmar algo sobre el resultado de una
+ * revision que no ha ocurrido. Solo se muestra cuando el backend la manda.
+ *
+ * La aprobacion crea una TRANSACCION DEL LEDGER con `source_type: "AMOE"`.
+ * Nunca incrementa un contador (DEC-007, principio #9).
+ */
+export interface AmoeSubmissionResponse {
+  readonly submission_id: string;
+  readonly status: AmoeSubmissionStatus;
+  /** Participaciones otorgadas, cuando la modalidad las otorga al instante. */
+  readonly entries: number | null;
+}
+
+/**
+ * [PROVISIONAL] Envio AMOE del propio participante
+ * (`GET /account/amoe-submissions`).
+ *
+ * `reason_key` es un ENUM ESTABLE cuyo copy es del frontend (DEC-022). Se tipa
+ * `string` porque la lista no esta cerrada: un motivo nuevo tiene que producir
+ * una frase util, jamas una clave tecnica en pantalla.
+ *
+ * `cancellable` LO DECIDE EL BACKEND. La interfaz no deduce de un estado si un
+ * envio se puede retirar -eso depende de la ventana, de la modalidad y de las
+ * Official Rules- y por eso el dato viaja explicito.
+ */
+export interface AmoeSubmission {
+  readonly id: string;
+  readonly promotion_id: string;
+  readonly status: AmoeSubmissionStatus;
+  /** ISO-8601 UTC. */
+  readonly submitted_at: string;
+  /** Instante de la decision, o `null` si sigue en revision. */
+  readonly decided_at: string | null;
+  /** Motivo del rechazo, como clave estable. `null` si no lo hubo. */
+  readonly reason_key: string | null;
+  /** Participaciones otorgadas por este envio, o `null`. */
+  readonly entries_granted: number | null;
+  readonly cancellable: boolean;
+}
+
+export type AmoeSubmissionPage = CursorPage<AmoeSubmission>;
+
+// ---------------------------------------------------------------------------
+// Panel de administracion (seccion 8 de docs/API_CONTRACT.md, DEC-048)
+// ---------------------------------------------------------------------------
+
+/**
+ * [CONTRATO] Capacidades del panel.
+ *
+ * LAS CAPACIDADES SON DATOS, NO RAMAS DE CODIGO. En todo el panel la pregunta
+ * es "este actor tiene esta capacidad", jamas "este actor es administrador":
+ * no existe un rol que pueda todo, y `packages/security` lo dice con esas
+ * palabras (deny-by-default, sin comodines).
+ *
+ * Esta union es la de la columna `Authorization` de la seccion 8 del contrato,
+ * mas el dominio de exportacion y sorteo, que es de `security-integration` y
+ * todavia no tiene seccion propia. Al ser cerrada, una capacidad que el backend
+ * invente y el frontend no conozca deja de compilar en vez de pintar un enlace
+ * a una pantalla que nadie puede abrir.
+ *
+ * LO QUE ESTA LISTA NO ES: una politica de autorizacion. Decide QUE SE PINTA,
+ * no QUE SE PUEDE HACER. El backend revalida cada peticion y responde 403; la
+ * interfaz pinta ese 403 como un estado deliberado, no como un fallo.
+ */
+export type AdminCapability =
+  | "dashboard.read"
+  | "promotion.read"
+  | "promotion.create"
+  | "promotion.update"
+  | "promotion.activate"
+  | "promotion.close"
+  | "rules.version.read"
+  | "rules.version.create"
+  | "rules.version.activate"
+  | "product.read"
+  | "product.write"
+  | "product.publish"
+  | "participant.list"
+  | "participant.read"
+  | "participant.disqualify"
+  | "pii.view.masked"
+  | "pii.view.full"
+  | "order.read"
+  | "order.refund.initiate"
+  | "entry.ledger.read"
+  | "entry.adjust.create"
+  | "entry.adjust.approve"
+  | "amoe.review.read"
+  | "amoe.review.approve"
+  | "amoe.review.reject"
+  | "payment.webhook.read"
+  | "reconciliation.read"
+  | "flag.read"
+  | "flag.update"
+  | "flag.update.legally_material"
+  | "audit.read"
+  | "audit.integrity.verify"
+  | "export.snapshot.read"
+  | "export.snapshot.create"
+  | "export.snapshot.validate"
+  | "export.finalize"
+  | "export.download"
+  | "export.deliver"
+  | "draw.authorization.create"
+  | "draw.initiate"
+  | "draw.result.read"
+  | "winner.workflow.read"
+  | "rbac.admin.read";
+
+export const ADMIN_CAPABILITIES: readonly AdminCapability[] = [
+  "dashboard.read",
+  "promotion.read",
+  "promotion.create",
+  "promotion.update",
+  "promotion.activate",
+  "promotion.close",
+  "rules.version.read",
+  "rules.version.create",
+  "rules.version.activate",
+  "product.read",
+  "product.write",
+  "product.publish",
+  "participant.list",
+  "participant.read",
+  "participant.disqualify",
+  "pii.view.masked",
+  "pii.view.full",
+  "order.read",
+  "order.refund.initiate",
+  "entry.ledger.read",
+  "entry.adjust.create",
+  "entry.adjust.approve",
+  "amoe.review.read",
+  "amoe.review.approve",
+  "amoe.review.reject",
+  "payment.webhook.read",
+  "reconciliation.read",
+  "flag.read",
+  "flag.update",
+  "flag.update.legally_material",
+  "audit.read",
+  "audit.integrity.verify",
+  "export.snapshot.read",
+  "export.snapshot.create",
+  "export.snapshot.validate",
+  "export.finalize",
+  "export.download",
+  "export.deliver",
+  "draw.authorization.create",
+  "draw.initiate",
+  "draw.result.read",
+  "winner.workflow.read",
+  "rbac.admin.read",
+];
+
+/**
+ * [PROVISIONAL] Cifras de cabecera del panel (`GET /admin/dashboard`).
+ *
+ * NINGUNA SE CALCULA AQUI. Son lecturas: el saldo vivo del ledger, cuantos
+ * envios AMOE esperan revision, cuantos ajustes esperan segunda aprobacion.
+ * Que la suma de dos de ellas de una tercera es coincidencia del fixture, no
+ * una relacion que la interfaz pueda usar (DEC-023, requisito R13).
+ */
+export interface AdminDashboard {
+  readonly promotion_id: string | null;
+  readonly promotion_status: PromotionStatus | null;
+  /** Participaciones activas de la promocion. Entero (DEC-010). */
+  readonly active_entries: number | null;
+  readonly participants: number | null;
+  readonly orders_last_24h: number | null;
+  readonly amoe_pending_review: number | null;
+  readonly adjustments_pending_approval: number | null;
+  /** Instante al que corresponden las cifras. ISO-8601 UTC. */
+  readonly as_of: string;
+}
+
+/**
+ * [PROVISIONAL] Estado de una version de reglas (DEC-012).
+ *
+ * Tres estados y una transicion con cerrojo. `DRAFT` a `ACTIVE` es la unica que
+ * importa aqui, y esta bloqueada mientras quede una clave requerida en estado
+ * provisional o `TBD`.
+ */
+export type RulesVersionStatus = "DRAFT" | "ACTIVE" | "ARCHIVED";
+
+export const RULES_VERSION_STATUSES: readonly RulesVersionStatus[] = [
+  "DRAFT",
+  "ACTIVE",
+  "ARCHIVED",
+];
+
+/**
+ * [PROVISIONAL] Version de reglas con el VEREDICTO DEL VALIDADOR DE ACTIVACION
+ * (DEC-012).
+ *
+ * `missing_keys` ES LA PIEZA IMPORTANTE DE TODO ESTE OBJETO. DEC-012 dice que
+ * una promocion no transiciona a `ACTIVE` mientras exista una clave requerida
+ * en estado provisional o `TBD`, y que el validador "devuelve la lista de claves
+ * faltantes". Esa lista se pinta: sin ella, el boton de activar estaria gris
+ * sin decir por que, y la respuesta a "por que no puedo activar" seria mirar
+ * logs.
+ *
+ * `activatable` lo decide EL BACKEND y no se deriva de `missing_keys.length`.
+ * Puede haber mas condiciones que las claves -una promocion ya activa, una
+ * ventana cerrada- y deducirlo aqui seria reimplementar el cerrojo en el
+ * frontend, que es exactamente lo que DEC-012 quiere que viva en un solo sitio.
+ *
+ * Las claves son IDENTIFICADORES ESTABLES (`minimum_age`, `eligible_states`,
+ * ...), no prosa: el copy es del frontend (DEC-022) y una clave sin traducir se
+ * muestra con una etiqueta generica mas su identificador tecnico, porque aqui
+ * el identificador SI le sirve a quien opera.
+ */
+export interface AdminRulesVersion {
+  readonly id: string;
+  readonly version: number;
+  readonly status: RulesVersionStatus;
+  /** ISO-8601 UTC, o `null` mientras siga en borrador. */
+  readonly effective_at: string | null;
+  readonly created_at: string;
+  /** Claves requeridas que siguen provisionales o en `TBD` (DEC-012). */
+  readonly missing_keys: readonly string[];
+  /** Veredicto del validador de activacion. Lo decide el backend. */
+  readonly activatable: boolean;
+}
+
+export type AdminRulesVersionPage = CursorPage<AdminRulesVersion>;
+
+/** [PROVISIONAL] Fila del listado de promociones del panel. */
+export interface AdminPromotionRow {
+  readonly id: string;
+  readonly slug: string;
+  readonly status: PromotionStatus;
+  readonly title: LocalizedText;
+  readonly legal_timezone: string;
+  readonly starts_at: string;
+  readonly ends_at: string;
+  readonly rules_version_id: string | null;
+  /** Version de reglas vigente, ya resuelta. `null` si no hay ninguna. */
+  readonly active_rules_version: number | null;
+}
+
+export type AdminPromotionPage = CursorPage<AdminPromotionRow>;
+
+/** [PROVISIONAL] Fila del catalogo en el panel. */
+export interface AdminProductRow {
+  readonly id: string;
+  readonly slug: string;
+  readonly title: LocalizedText;
+  readonly published: boolean;
+  readonly variant_count: number;
+  readonly price: MoneyMinor;
+  readonly updated_at: string;
+}
+
+export type AdminProductPage = CursorPage<AdminProductRow>;
+
+/** [PROVISIONAL] Fila del listado de pedidos en el panel. */
+export interface AdminOrderRow {
+  readonly id: string;
+  readonly order_number: string;
+  readonly status: OrderStatus;
+  readonly entry_state: OrderEntryState;
+  readonly placed_at: string;
+  readonly total: MoneyMinor;
+  /**
+   * Correo del comprador, ENMASCARADO O COMPLETO SEGUN LA CAPACIDAD del actor
+   * (`pii.view.masked` / `pii.view.full`). El enmascarado LO HACE EL BACKEND:
+   * si el correo completo viajara siempre y el frontend lo tapara al pintarlo,
+   * el dato estaria en el HTML y en la respuesta de red de todos modos.
+   */
+  readonly participant_email: string;
+  readonly participant_id: string;
+}
+
+export type AdminOrderPage = CursorPage<AdminOrderRow>;
+
+/** [PROVISIONAL] Fila del listado de participantes en el panel. */
+export interface AdminParticipantRow {
+  readonly id: string;
+  readonly email: string;
+  readonly display_name: string | null;
+  readonly created_at: string;
+  readonly disqualified: boolean;
+  /**
+   * `true` cuando el backend ha enmascarado el PII de esta fila porque el actor
+   * solo tiene `pii.view.masked`. Es un DATO y no una deduccion de la interfaz:
+   * asi la pantalla puede decir por que ve un correo a medias en vez de parecer
+   * que el dato esta corrupto.
+   */
+  readonly pii_masked: boolean;
+}
+
+export type AdminParticipantPage = CursorPage<AdminParticipantRow>;
+
+/** [PROVISIONAL] Envio AMOE en la cola de revision del panel. */
+export interface AdminAmoeSubmission {
+  readonly id: string;
+  readonly promotion_id: string;
+  readonly participant_id: string;
+  readonly participant_email: string;
+  readonly status: AmoeSubmissionStatus;
+  readonly submitted_at: string;
+  /**
+   * Datos enviados, TAL COMO LLEGAN. Es un mapa opaco porque su forma la fija
+   * `required_fields` de la modalidad vigente, que decide el abogado del
+   * cliente: tiparlo aqui seria fijar en el frontend que se pide para
+   * participar gratis (CLAUDE.md #2).
+   *
+   * Se renderiza como TEXTO, nunca como marcado: lo escribio un desconocido.
+   */
+  readonly payload: Readonly<Record<string, string>>;
+  /** Participaciones que otorgaria la aprobacion, calculadas por el backend. */
+  readonly entries_if_approved: number | null;
+  /**
+   * [PROVISIONAL, ADITIVO] Saldo del participante ANTES de la decision.
+   *
+   * Peticion abierta a `backend`, opcional para no invalidar la forma de hoy.
+   * La confirmacion de una accion sensible tiene que ensenar antes, cambio y
+   * despues, y de los tres el frontend no puede producir ninguno: el saldo lo
+   * tiene el ledger y el resultado lo calcula el motor. Sin estos dos campos, la
+   * fila de participaciones se pinta con el despues marcado como no publicado,
+   * que es correcto pero deja a quien aprueba sin la mitad de la informacion.
+   */
+  readonly entries_before?: number | null;
+  /** [PROVISIONAL, ADITIVO] Saldo resultante si se aprueba. Lo calcula el motor. */
+  readonly entries_after_if_approved?: number | null;
+}
+
+export type AdminAmoeSubmissionPage = CursorPage<AdminAmoeSubmission>;
+
+/**
+ * [PROVISIONAL] Estado de un ajuste manual de participaciones.
+ *
+ * `PENDING_APPROVAL` es el estado normal recien creado, no una excepcion:
+ * `entry.adjust.create` y `entry.adjust.approve` son capacidades DISTINTAS a
+ * proposito, y el contrato lo razona en una linea que conviene no perder: un
+ * ajuste que se aprueba a si mismo es una edicion del ledger con otro nombre.
+ */
+export type AdjustmentStatus = "PENDING_APPROVAL" | "APPROVED" | "REJECTED" | "APPLIED";
+
+export const ADJUSTMENT_STATUSES: readonly AdjustmentStatus[] = [
+  "PENDING_APPROVAL",
+  "APPROVED",
+  "REJECTED",
+  "APPLIED",
+];
+
+/**
+ * [PROVISIONAL] Ajuste manual de participaciones.
+ *
+ * `created_by_actor_id` y `approved_by_actor_id` viajan los dos porque la
+ * segunda aprobacion tiene que poder COMPROBARSE en pantalla: sin los dos
+ * identificadores, "lo aprobo otra persona" es una promesa y no un hecho
+ * verificable por quien mira la cola.
+ */
+export interface AdminAdjustment {
+  readonly id: string;
+  readonly promotion_id: string;
+  readonly participant_id: string;
+  readonly participant_email: string;
+  readonly status: AdjustmentStatus;
+  /** Entero CON SIGNO (DEC-010). Negativo en las correcciones a la baja. */
+  readonly quantity_delta: number;
+  readonly reason_key: string;
+  /** Nota libre de quien lo propuso. Se renderiza como texto plano. */
+  readonly reason_note: string | null;
+  readonly created_at: string;
+  readonly created_by_actor_id: string;
+  readonly created_by_actor_email: string;
+  readonly approved_at: string | null;
+  readonly approved_by_actor_id: string | null;
+  readonly approved_by_actor_email: string | null;
+}
+
+export type AdminAdjustmentPage = CursorPage<AdminAdjustment>;
+
+/**
+ * [PROVISIONAL] Previsualizacion de un ajuste
+ * (`POST /admin/entry-adjustments/preview`).
+ *
+ * ES LA PETICION MAS IMPORTANTE DE TODO EL PANEL, y la razon es concreta: la
+ * confirmacion de una mutacion sensible tiene que ensenar antes, delta y
+ * despues, y EL FRONTEND NO PUEDE CALCULAR EL DESPUES. Sumar `entries_before` y
+ * `proposed_delta` seria una segunda implementacion del motor de participaciones
+ * viviendo en la interfaz, que es lo que prohiben DEC-023 y el requisito R13 de
+ * `security`, y lo que la red `no-client-entry-math.test.ts` detecta y hace
+ * fallar.
+ *
+ * Asi que el despues lo publica quien sabe calcularlo. La ruta es de SOLO
+ * LECTURA pese a ser `POST`: no crea nada, no asienta nada y se puede llamar
+ * mil veces. Es `POST` unicamente porque el cuerpo lleva participante,
+ * promocion y delta, que no caben comodos en una query.
+ */
+export interface AdjustmentPreview {
+  readonly participant_id: string;
+  readonly promotion_id: string;
+  /** Saldo actual. Entero (DEC-010). */
+  readonly entries_before: number;
+  /** Delta propuesto, con signo. */
+  readonly proposed_delta: number;
+  /** Saldo resultante, CALCULADO POR EL BACKEND. */
+  readonly entries_after: number;
+  /**
+   * Advertencias del motor: tope alcanzado, promocion cerrada, participante
+   * descalificado. Claves estables (DEC-022); el copy es del frontend.
+   */
+  readonly warnings: readonly string[];
+  /** Si el backend exige segunda aprobacion para este ajuste (DEC-032). */
+  readonly requires_second_approval: boolean;
+}
+
+/**
+ * [PROVISIONAL] Estado de un snapshot de exportacion (DEC-016).
+ *
+ * `FINALIZED` es el punto sin retorno: a partir de ahi el contenido no cambia y
+ * es lo que se le entrega al third-party administrator. Quien lo finaliza y
+ * quien se lo lleva son personas distintas (`export.finalize` frente a
+ * `export.download`), y por eso son dos capacidades.
+ */
+export type ExportSnapshotStatus =
+  "DRAFT" | "VALIDATING" | "VALIDATED" | "FINALIZED" | "DELIVERED" | "FAILED";
+
+export const EXPORT_SNAPSHOT_STATUSES: readonly ExportSnapshotStatus[] = [
+  "DRAFT",
+  "VALIDATING",
+  "VALIDATED",
+  "FINALIZED",
+  "DELIVERED",
+  "FAILED",
+];
+
+/** [PROVISIONAL] Snapshot de exportacion al administrador independiente. */
+export interface AdminExportSnapshot {
+  readonly id: string;
+  readonly promotion_id: string;
+  readonly status: ExportSnapshotStatus;
+  readonly created_at: string;
+  readonly finalized_at: string | null;
+  /** Filas del dataset. No es una cifra de participaciones. */
+  readonly row_count: number | null;
+  /**
+   * Huella del contenido finalizado. Se muestra ENTERA y monoespaciada: sirve
+   * para que un tercero compare lo que recibio con lo que se genero, y una
+   * huella truncada no sirve para eso.
+   */
+  readonly checksum: string | null;
+  /** Version de reglas bajo la que se corto el dataset (DEC-012). */
+  readonly rules_version_id: string | null;
+}
+
+export type AdminExportSnapshotPage = CursorPage<AdminExportSnapshot>;
+
+/**
+ * [PROVISIONAL] Aprobacion individual de una autorizacion de sorteo.
+ *
+ * `approvals` es una LISTA y no un contador porque la segunda aprobacion tiene
+ * que ser de OTRO ACTOR, y eso solo se puede comprobar viendo quienes
+ * aprobaron. Un contador diria "2 de 2" sin decir si son dos personas.
+ */
+export interface DrawApproval {
+  readonly actor_id: string;
+  readonly actor_email: string;
+  readonly approved_at: string;
+}
+
+export type DrawAuthorizationStatus = "PENDING_APPROVAL" | "AUTHORIZED" | "REVOKED" | "CONSUMED";
+
+export const DRAW_AUTHORIZATION_STATUSES: readonly DrawAuthorizationStatus[] = [
+  "PENDING_APPROVAL",
+  "AUTHORIZED",
+  "REVOKED",
+  "CONSUMED",
+];
+
+/** [PROVISIONAL] Autorizacion de sorteo (DEC-017, principio #11). */
+export interface AdminDrawAuthorization {
+  readonly id: string;
+  readonly promotion_id: string;
+  readonly status: DrawAuthorizationStatus;
+  readonly created_at: string;
+  readonly created_by_actor_id: string;
+  readonly created_by_actor_email: string;
+  readonly approvals: readonly DrawApproval[];
+  /** Aprobaciones que exige el backend. Dato, no constante del frontend. */
+  readonly required_approvals: number;
+  /** Snapshot finalizado sobre el que se sortearia. `null` si no hay. */
+  readonly export_snapshot_id: string | null;
+  /**
+   * Condiciones de DEC-017 que todavia no se cumplen, como claves estables. Se
+   * pintan igual que `missing_keys` de una version de reglas: quien opera tiene
+   * que poder leer POR QUE no se puede sortear.
+   */
+  readonly blocking_conditions: readonly string[];
+}
+
+export type AdminDrawAuthorizationPage = CursorPage<AdminDrawAuthorization>;
+
+/**
+ * [PROVISIONAL] Evento de auditoria (DEC-007).
+ *
+ * SOLO LECTURA, y no por convencion: no existe endpoint que edite o borre una
+ * fila de auditoria, el rol de base de datos de la aplicacion no tiene el
+ * privilegio, y un trigger lanza excepcion aunque lo tuviera. La interfaz no
+ * ofrece ninguna accion sobre una fila.
+ */
+export interface AdminAuditEvent {
+  readonly id: string;
+  /** ISO-8601 UTC. */
+  readonly occurred_at: string;
+  /** `HUMAN` o `SYSTEM`. Distinguirlos es el punto de la traza. */
+  readonly actor_type: string;
+  readonly actor_id: string | null;
+  readonly actor_email: string | null;
+  readonly actor_roles: readonly string[];
+  /** Capacidad ejercida, como clave estable. */
+  readonly action: string;
+  readonly entity_type: string;
+  readonly entity_id: string | null;
+  readonly reason_key: string | null;
+  readonly request_id: string | null;
+}
+
+export type AdminAuditEventPage = CursorPage<AdminAuditEvent>;

@@ -1,4 +1,7 @@
 import {
+  adminOrderPath,
+  adminPromotionPath,
+  adminRulesVersionsPath,
   API_PATHS,
   checkoutSessionPath,
   officialRulesPath,
@@ -24,6 +27,27 @@ import {
   ORDER_DRAFT_ID,
   pendingCheckout,
 } from "./fixtures/checkout";
+import {
+  adjustmentPreview,
+  adminAdjustmentPage,
+  adminAmoeSubmissionPage,
+  adminAuditEventPage,
+  adminDashboard,
+  adminDrawAuthorizationPage,
+  adminExportSnapshotPage,
+  adminOrderPage,
+  adminParticipantPage,
+  adminProductPage,
+  adminPromotionPage,
+  adminPromotions,
+  adminRulesVersionPage,
+} from "./fixtures/admin";
+import {
+  amoeDisabledConfig,
+  amoePendingSubmissionResponse,
+  amoeSubmissionPage,
+  amoeSubmissions,
+} from "./fixtures/amoe";
 import { defaultConfig } from "./fixtures/config";
 import { officialRules } from "./fixtures/official-rules";
 import { activePromotion, publicPromotionDetails, publicPromotions } from "./fixtures/promotions";
@@ -178,6 +202,91 @@ export const mockRoutes: readonly MockRoute[] = [
    */
   { method: "GET", path: checkoutSessionPath(ORDER_DRAFT_ID), body: completedCheckout },
   { method: "GET", path: `${API_PATHS.checkoutSessions}/:draftId`, body: pendingCheckout },
+
+  /*
+   * --- AMOE (seccion 7).
+   *
+   * El fixture POR DEFECTO es la via APAGADA (`enabled: false`, todo en
+   * `null`), que es el estado real hoy y el valor por defecto de DEC-032. Que
+   * exista la ruta no enciende nada: las cuatro modalidades viven en
+   * `scenarios.amoeConfig(...)` y hay que pedirlas explicitamente en el test
+   * que las necesite.
+   *
+   * La ruta de configuracion cuelga del `slug` y la de envio del identificador
+   * de promocion, que es como las publica el contrato. Aqui casan las dos con
+   * un comodin porque la tabla no distingue uno de otro.
+   */
+  /*
+   * OJO: estas dos rutas NO se componen con `amoeConfigPath()` ni con
+   * `amoeSubmissionsPath()`. Esos ayudantes hacen `encodeURIComponent` del
+   * identificador -que es lo correcto para una ruta de verdad- y convierten el
+   * comodin `:slug` en `%3Aslug`, de modo que el patron solo casaria con la
+   * cadena literal "%3Aslug" y NUNCA con una promocion real. El sintoma seria
+   * un 404 en `/amoe-config` que la interfaz pinta -correctamente- como "esta
+   * promocion no ofrece via gratuita": es decir, la via encendida se veria
+   * apagada, sin ningun error a la vista. Lo detecto el test del conmutador de
+   * escenario.
+   */
+  { method: "GET", path: "/promotions/:slug/amoe-config", body: amoeDisabledConfig },
+  {
+    method: "POST",
+    path: "/promotions/:promotionId/amoe-submissions",
+    body: amoePendingSubmissionResponse,
+  },
+  { method: "GET", path: API_PATHS.accountAmoeSubmissions, body: amoeSubmissionPage },
+  ...amoeSubmissions.map((submission): MockRoute => ({
+    method: "POST",
+    path: `${API_PATHS.accountAmoeSubmissions}/${submission.id}/cancel`,
+    body: { ...submission, status: "CANCELLED", cancellable: false },
+  })),
+
+  /*
+   * --- Panel de administracion (seccion 8, DEC-048).
+   *
+   * Todas estas rutas estan en `PROPOSED`. Que respondan aqui no significa que
+   * existan: sirven para que el armazon del panel se pueda ver, probar y
+   * conectar sin esperar al backend.
+   *
+   * La previsualizacion de ajuste va ANTES que el listado de ajustes porque
+   * `/entry-adjustments/preview` es una ruta mas especifica y las dos tablas
+   * -MSW y el servidor de desarrollo- resuelven por orden de declaracion.
+   */
+  { method: "GET", path: API_PATHS.adminDashboard, body: adminDashboard },
+  { method: "GET", path: API_PATHS.adminPromotions, body: adminPromotionPage },
+  ...adminPromotions.flatMap((promotion): readonly MockRoute[] => [
+    { method: "GET", path: adminPromotionPath(promotion.id), body: promotion },
+    { method: "GET", path: adminRulesVersionsPath(promotion.id), body: adminRulesVersionPage },
+  ]),
+  { method: "GET", path: API_PATHS.adminProducts, body: adminProductPage },
+  { method: "GET", path: API_PATHS.adminOrders, body: adminOrderPage },
+  ...orderDetails.map((order): MockRoute => ({
+    method: "GET",
+    path: adminOrderPath(order.id),
+    body: order,
+  })),
+  { method: "GET", path: API_PATHS.adminParticipants, body: adminParticipantPage },
+  { method: "GET", path: API_PATHS.adminAmoeSubmissions, body: adminAmoeSubmissionPage },
+  {
+    method: "POST",
+    path: `${API_PATHS.adminAmoeSubmissions}/:id/approve`,
+    body: adminAmoeSubmissionPage.items[0],
+  },
+  {
+    method: "POST",
+    path: `${API_PATHS.adminAmoeSubmissions}/:id/reject`,
+    body: adminAmoeSubmissionPage.items[0],
+  },
+  { method: "POST", path: API_PATHS.adminAdjustmentPreview, body: adjustmentPreview },
+  { method: "GET", path: API_PATHS.adminAdjustments, body: adminAdjustmentPage },
+  { method: "POST", path: API_PATHS.adminAdjustments, body: adminAdjustmentPage.items[0] },
+  {
+    method: "POST",
+    path: `${API_PATHS.adminAdjustments}/:id/approve`,
+    body: adminAdjustmentPage.items[0],
+  },
+  { method: "GET", path: API_PATHS.adminExportSnapshots, body: adminExportSnapshotPage },
+  { method: "GET", path: API_PATHS.adminDrawAuthorizations, body: adminDrawAuthorizationPage },
+  { method: "GET", path: API_PATHS.adminAuditEvents, body: adminAuditEventPage },
 ];
 
 /**

@@ -1,0 +1,121 @@
+"use client";
+
+import { Alert, Button, FormField, Input, Textarea } from "@lsw/ui";
+import { useTranslations } from "next-intl";
+import { useActionState } from "react";
+
+import { FormError, LocaleField, useFieldError } from "@/components/auth-form-shell";
+import type { Locale } from "@/i18n/locales";
+import { useAmoeFieldLabel } from "@/i18n/amoe-labels";
+import { IDLE } from "@/lib/action-result";
+import { submitAmoeAction } from "@/lib/amoe-actions";
+import type { AmoeFieldSpec } from "@/lib/api";
+
+/**
+ * Formulario de participacion gratuita.
+ *
+ * NO DECIDE NI UN CAMPO. Pinta EXACTAMENTE los que llegan en `required_fields`,
+ * en el orden en que llegan, y ni uno mas. Que datos se piden para participar
+ * sin comprar es materia de las Official Rules (CLAUDE.md #1 y #2): un campo de
+ * mas seria recogida de datos personales que nadie autorizo.
+ *
+ * LAS ETIQUETAS SON CLAVES DE COPY DEL FRONTEND (DEC-022), igual que en los
+ * consentimientos del alta. Si el backend manda una clave que la interfaz no
+ * conoce, el campo se pinta con una etiqueta generica -nunca con la clave en
+ * crudo- y SE SIGUE ENVIANDO: perder el campo seria peor que etiquetarlo mal.
+ *
+ * SIN VALIDACION PROPIA. `maxLength` se traslada solo si el backend lo declara,
+ * y no hay `pattern`, ni longitud minima, ni comprobacion de formato mas alla
+ * de la que el navegador hace por el tipo de campo. Una restriccion del cliente
+ * que no coincida exactamente con la del backend rechaza envios validos, y en
+ * la unica via que no exige comprar nada eso es especialmente caro.
+ *
+ * EL ENVIO NO SE PUEDE REPETIR POR ACCIDENTE: mientras la accion esta en curso
+ * el boton queda deshabilitado. No es el control -el backend responde
+ * `AMOE_DUPLICATE_SUBMISSION`- pero evita el doble clic, que es de donde salen
+ * casi todos los duplicados.
+ */
+export function AmoeForm({
+  locale,
+  promotionSlug,
+  promotionId,
+  fields,
+}: {
+  readonly locale: Locale;
+  readonly promotionSlug: string;
+  readonly promotionId: string;
+  readonly fields: readonly AmoeFieldSpec[];
+}) {
+  const t = useTranslations("amoe.form");
+  const fieldLabel = useAmoeFieldLabel();
+  const [state, formAction, pending] = useActionState(submitAmoeAction, IDLE);
+  const fieldError = useFieldError(state);
+
+  return (
+    <form action={formAction} className="flex flex-col gap-s5">
+      <LocaleField locale={locale} />
+      <input type="hidden" name="promotion_slug" value={promotionSlug} />
+      <input type="hidden" name="promotion_id" value={promotionId} />
+
+      <FormError result={state} />
+
+      {state.status === "ok" ? <Alert tone="success">{t("submitted")}</Alert> : null}
+
+      {fields.map((field) => (
+        <FormField
+          key={field.name}
+          label={fieldLabel(field.label_key)}
+          required={field.required}
+          error={fieldError(field.name)}
+        >
+          {field.kind === "textarea" ? (
+            <Textarea
+              name={field.name}
+              rows={4}
+              {...(field.max_length === undefined ? {} : { maxLength: field.max_length })}
+            />
+          ) : (
+            <Input
+              name={field.name}
+              type={inputTypeFor(field.kind)}
+              {...(field.kind === "email" ? { inputMode: "email" as const } : {})}
+              {...(field.kind === "tel" ? { inputMode: "tel" as const } : {})}
+              {...(field.kind === "code" ? { autoCapitalize: "characters" as const } : {})}
+              autoComplete="off"
+              spellCheck={false}
+              {...(field.max_length === undefined ? {} : { maxLength: field.max_length })}
+            />
+          )}
+        </FormField>
+      ))}
+
+      <Button type="submit" variant="accent" size="lg" fullWidth loading={pending}>
+        {t("submit")}
+      </Button>
+
+      <p className="text-caption text-text-subtle">{t("rulesNote")}</p>
+    </form>
+  );
+}
+
+/**
+ * Tipo de `input` para cada clase de campo.
+ *
+ * `date` usa el selector nativo y `email`/`tel` cambian el teclado del telefono.
+ * `code` es `text` a proposito: `type="number"` incrementaria con la rueda del
+ * raton y admitiria notacion cientifica, y un codigo no es una cifra.
+ */
+function inputTypeFor(kind: AmoeFieldSpec["kind"]): string {
+  switch (kind) {
+    case "email":
+      return "email";
+    case "tel":
+      return "tel";
+    case "date":
+      return "date";
+    case "text":
+    case "code":
+    case "textarea":
+      return "text";
+  }
+}

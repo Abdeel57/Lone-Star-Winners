@@ -1,0 +1,573 @@
+import type {
+  AdjustmentPreview,
+  AdminAdjustment,
+  AdminAdjustmentPage,
+  AdminAmoeSubmission,
+  AdminAmoeSubmissionPage,
+  AdminAuditEvent,
+  AdminAuditEventPage,
+  AdminDashboard,
+  AdminDrawAuthorization,
+  AdminDrawAuthorizationPage,
+  AdminExportSnapshot,
+  AdminExportSnapshotPage,
+  AdminOrderPage,
+  AdminOrderRow,
+  AdminParticipantPage,
+  AdminParticipantRow,
+  AdminProductPage,
+  AdminProductRow,
+  AdminPromotionPage,
+  AdminPromotionRow,
+  AdminRulesVersion,
+  AdminRulesVersionPage,
+  SessionState,
+} from "@/lib/api";
+
+import { participant } from "./account";
+import { activePromotion, publicPromotions } from "./promotions";
+
+/**
+ * Fixtures del panel de administracion.
+ *
+ * TODAS LAS CIFRAS ESTAN ESCRITAS A MANO, igual que en el portal. Ni un saldo,
+ * ni un total, ni una participacion se derivan aqui de nada, y el fixture de
+ * previsualizacion de ajuste es el que mas cuidado tiene: su `entries_after` es
+ * un numero TECLEADO y no la suma de los otros dos. Si sumara, existiria en el
+ * repositorio una segunda implementacion del motor de participaciones -viviendo
+ * en el frontend- y los tests comprobarian que esa copia coincide consigo misma
+ * (DEC-023, requisito R13 de `security`).
+ *
+ * LAS SESIONES DE PERSONAL USAN ROLES REALES
+ * ------------------------------------------
+ * `PROMOTION_MANAGER` y `COMPLIANCE_OFFICER` son identificadores de
+ * `ROLE_IDS` en `packages/security/src/roles.ts`. El fixture antiguo
+ * (`staffSession`) usa `CATALOG_MANAGER`, que es el nombre que aparece en el
+ * EJEMPLO de la seccion 10 del contrato y que NO existe en el catalogo de
+ * roles. No se toca -hay tests que dependen de el- y la divergencia queda
+ * anotada para el informe del hito.
+ *
+ * Los dos roles elegidos no son intercambiables: uno PROPONE ajustes y el otro
+ * los APRUEBA, que es la separacion que el panel tiene que poder demostrar.
+ */
+
+const PROMOTION_ID = activePromotion.id;
+
+// ---------------------------------------------------------------------------
+// Sesiones de personal
+// ---------------------------------------------------------------------------
+
+/** Personal que opera la promocion. Propone ajustes; no los aprueba. */
+export const promotionManagerSession: SessionState = {
+  authenticated: true,
+  state: "ACTIVE",
+  scope: "STAFF",
+  email: "promotions@example.com",
+  email_verified: true,
+  roles: ["PROMOTION_MANAGER"],
+};
+
+/** Personal de cumplimiento. Aprueba ajustes; no los propone. */
+export const complianceOfficerSession: SessionState = {
+  authenticated: true,
+  state: "ACTIVE",
+  scope: "STAFF",
+  email: "compliance@example.com",
+  email_verified: true,
+  roles: ["COMPLIANCE_OFFICER"],
+};
+
+/** Personal a la espera del segundo factor. No da acceso a nada. */
+export const staffMfaPendingSession: SessionState = {
+  ...promotionManagerSession,
+  authenticated: false,
+  state: "MFA_PENDING",
+};
+
+/**
+ * Sesion de personal con las capacidades PUBLICADAS por el backend.
+ *
+ * Es el escenario que hay que poder probar hoy aunque el backend todavia no lo
+ * sirva: cuando publique `capabilities`, el espejo local de la matriz deja de
+ * usarse y el panel tiene que seguir pintando lo mismo.
+ */
+export const staffSessionWithPublishedCapabilities: SessionState = {
+  ...promotionManagerSession,
+  capabilities: [
+    "dashboard.read",
+    "promotion.read",
+    "amoe.review.read",
+    "amoe.review.approve",
+    "amoe.review.reject",
+  ],
+};
+
+/** Sesion de personal SIN ninguna capacidad de panel. Ve el 403 deliberado. */
+export const staffSessionWithoutCapabilities: SessionState = {
+  ...promotionManagerSession,
+  roles: [],
+  capabilities: [],
+};
+
+// ---------------------------------------------------------------------------
+// Dashboard
+// ---------------------------------------------------------------------------
+
+export const adminDashboard: AdminDashboard = {
+  promotion_id: PROMOTION_ID,
+  promotion_status: "ACTIVE",
+  active_entries: 1_284_500,
+  participants: 3_412,
+  orders_last_24h: 87,
+  amoe_pending_review: 4,
+  adjustments_pending_approval: 2,
+  as_of: "2026-09-15T12:00:00.000Z",
+};
+
+/** Sin promocion abierta: las cifras que dependen de ella llegan en `null`. */
+export const adminDashboardWithoutPromotion: AdminDashboard = {
+  promotion_id: null,
+  promotion_status: null,
+  active_entries: null,
+  participants: 3_412,
+  orders_last_24h: 0,
+  amoe_pending_review: 0,
+  adjustments_pending_approval: 0,
+  as_of: "2026-09-15T12:00:00.000Z",
+};
+
+// ---------------------------------------------------------------------------
+// Promociones y versiones de reglas
+// ---------------------------------------------------------------------------
+
+export const adminPromotions: readonly AdminPromotionRow[] = publicPromotions.map(
+  (promotion): AdminPromotionRow => ({
+    id: promotion.id,
+    slug: promotion.slug,
+    status: promotion.status,
+    title: promotion.title,
+    legal_timezone: promotion.legal_timezone,
+    starts_at: promotion.starts_at,
+    ends_at: promotion.ends_at,
+    rules_version_id: promotion.rules_version_id,
+    active_rules_version: promotion.rules_version_id === null ? null : 3,
+  }),
+);
+
+export const adminPromotionPage: AdminPromotionPage = {
+  items: adminPromotions,
+  next_cursor: null,
+};
+
+/**
+ * Versiones de reglas, con el veredicto del validador de activacion (DEC-012).
+ *
+ * EL BORRADOR TRAE CLAVES FALTANTES A PROPOSITO, y son las que hoy siguen en
+ * `docs/LEGAL_PENDING.md`. Es el fixture que hace visible el cerrojo: sin el,
+ * la pantalla se probaria solo en el caso feliz, que es justo el que no importa.
+ *
+ * `activatable` NO se deriva de que `missing_keys` este vacio, ni siquiera
+ * aqui: el borrador tiene claves y no es activable, y la archivada no tiene
+ * ninguna y tampoco lo es. Deducirlo seria reimplementar el cerrojo.
+ */
+export const adminRulesVersions: readonly AdminRulesVersion[] = [
+  {
+    id: "prv_0000000000000003",
+    version: 3,
+    status: "ACTIVE",
+    effective_at: "2026-09-01T05:00:00.000Z",
+    created_at: "2026-08-20T10:00:00.000Z",
+    missing_keys: [],
+    activatable: false,
+  },
+  {
+    id: "prv_0000000000000004",
+    version: 4,
+    status: "DRAFT",
+    effective_at: null,
+    created_at: "2026-09-10T16:30:00.000Z",
+    missing_keys: ["minimum_age", "eligible_states", "amoe_mechanism", "odds_statement"],
+    activatable: false,
+  },
+  {
+    id: "prv_0000000000000002",
+    version: 2,
+    status: "ARCHIVED",
+    effective_at: "2026-06-01T05:00:00.000Z",
+    created_at: "2026-05-15T09:00:00.000Z",
+    missing_keys: [],
+    activatable: false,
+  },
+];
+
+export const adminRulesVersionPage: AdminRulesVersionPage = {
+  items: adminRulesVersions,
+  next_cursor: null,
+};
+
+// ---------------------------------------------------------------------------
+// Catalogo, pedidos y participantes
+// ---------------------------------------------------------------------------
+
+export const adminProducts: readonly AdminProductRow[] = [
+  {
+    id: "prd_0000000000000001",
+    slug: "heavyweight-tee",
+    title: { "en-US": "Heavyweight Cotton Tee", "es-US": "Camiseta de algodón grueso" },
+    published: true,
+    variant_count: 6,
+    price: { amount_minor: "2500", currency: "USD" },
+    updated_at: "2026-09-10T08:00:00.000Z",
+  },
+  {
+    id: "prd_0000000000000002",
+    slug: "enamel-mug",
+    title: { "en-US": "Enamel Camp Mug", "es-US": "Taza esmaltada de campamento" },
+    published: false,
+    variant_count: 1,
+    price: { amount_minor: "1800", currency: "USD" },
+    updated_at: "2026-09-08T08:00:00.000Z",
+  },
+];
+
+export const adminProductPage: AdminProductPage = {
+  items: adminProducts,
+  next_cursor: null,
+};
+
+/**
+ * Pedidos del panel.
+ *
+ * El primero trae el correo COMPLETO y el segundo ENMASCARADO por el backend.
+ * Los dos en la misma pagina, a proposito: es lo que ocurre cuando el actor
+ * tiene `pii.view.masked` sobre unas filas y no sobre otras, y la interfaz no
+ * puede pintar una de las dos formas de manera distinta.
+ */
+export const adminOrders: readonly AdminOrderRow[] = [
+  {
+    id: "ord_0000000000000001",
+    order_number: "LSW-10524",
+    status: "FULFILLED",
+    entry_state: "GRANTED",
+    placed_at: "2026-09-04T17:45:00.000Z",
+    total: { amount_minor: "5000", currency: "USD" },
+    participant_email: participant.email,
+    participant_id: participant.id,
+  },
+  {
+    id: "ord_0000000000000002",
+    order_number: "LSW-10608",
+    status: "PAID",
+    entry_state: "PENDING_QUALIFICATION",
+    placed_at: "2026-09-14T09:12:00.000Z",
+    total: { amount_minor: "2500", currency: "USD" },
+    participant_email: "a****@example.com",
+    participant_id: "par_0000000000000002",
+  },
+];
+
+export const adminOrderPage: AdminOrderPage = { items: adminOrders, next_cursor: null };
+
+export const adminParticipants: readonly AdminParticipantRow[] = [
+  {
+    id: participant.id,
+    email: participant.email,
+    display_name: participant.display_name,
+    created_at: participant.created_at,
+    disqualified: false,
+    pii_masked: false,
+  },
+  {
+    id: "par_0000000000000002",
+    email: "a****@example.com",
+    display_name: null,
+    created_at: "2026-08-19T09:15:00.000Z",
+    disqualified: true,
+    pii_masked: true,
+  },
+];
+
+export const adminParticipantPage: AdminParticipantPage = {
+  items: adminParticipants,
+  next_cursor: null,
+};
+
+// ---------------------------------------------------------------------------
+// Cola de revision AMOE
+// ---------------------------------------------------------------------------
+
+/**
+ * Envios pendientes de decision.
+ *
+ * El primero trae `entries_before` y `entries_after_if_approved` -la peticion
+ * aditiva- y el segundo NO. Es deliberado: la confirmacion tiene que saber
+ * pintar las tres columnas cuando el backend las publica y marcar el "despues"
+ * como no publicado cuando no, en vez de calcularlo.
+ */
+export const adminAmoeSubmissions: readonly AdminAmoeSubmission[] = [
+  {
+    id: "amo_0000000000000001",
+    promotion_id: PROMOTION_ID,
+    participant_id: participant.id,
+    participant_email: participant.email,
+    status: "PENDING_REVIEW",
+    submitted_at: "2026-09-12T15:04:00.000Z",
+    payload: {
+      full_name: "Alex Rivera",
+      email: "participant@example.com",
+      postal_code: "78701",
+    },
+    entries_if_approved: 200,
+    entries_before: 11_450,
+    entries_after_if_approved: 11_650,
+  },
+  {
+    id: "amo_0000000000000007",
+    promotion_id: PROMOTION_ID,
+    participant_id: "par_0000000000000002",
+    participant_email: "a****@example.com",
+    status: "PENDING_REVIEW",
+    submitted_at: "2026-09-13T08:31:00.000Z",
+    payload: { code: "LSW-FREE-4821" },
+    entries_if_approved: 200,
+  },
+];
+
+export const adminAmoeSubmissionPage: AdminAmoeSubmissionPage = {
+  items: adminAmoeSubmissions,
+  next_cursor: null,
+};
+
+export const emptyAdminAmoePage: AdminAmoeSubmissionPage = { items: [], next_cursor: null };
+
+// ---------------------------------------------------------------------------
+// Ajustes
+// ---------------------------------------------------------------------------
+
+/**
+ * Cola de ajustes pendientes de segunda aprobacion.
+ *
+ * El primero lo propuso `promotions@example.com` y el segundo
+ * `compliance@example.com`: con esos dos, cualquiera de las dos sesiones de
+ * personal ve un ajuste que puede aprobar y otro que no, que es lo que hace
+ * comprobable la prohibicion de autoaprobarse.
+ */
+export const adminAdjustments: readonly AdminAdjustment[] = [
+  {
+    id: "adj_0000000000000001",
+    promotion_id: PROMOTION_ID,
+    participant_id: participant.id,
+    participant_email: participant.email,
+    status: "PENDING_APPROVAL",
+    quantity_delta: 500,
+    reason_key: "SYSTEM_ERROR_CORRECTION",
+    reason_note: "Duplicated webhook left the order short.",
+    created_at: "2026-09-14T10:05:00.000Z",
+    created_by_actor_id: "act_0000000000000001",
+    created_by_actor_email: promotionManagerSession.email,
+    approved_at: null,
+    approved_by_actor_id: null,
+    approved_by_actor_email: null,
+  },
+  {
+    id: "adj_0000000000000002",
+    promotion_id: PROMOTION_ID,
+    participant_id: "par_0000000000000002",
+    participant_email: "a****@example.com",
+    status: "PENDING_APPROVAL",
+    quantity_delta: -250,
+    reason_key: "OTHER",
+    reason_note: "Reversal requested by the payment provider.",
+    created_at: "2026-09-14T11:20:00.000Z",
+    created_by_actor_id: "act_0000000000000002",
+    created_by_actor_email: complianceOfficerSession.email,
+    approved_at: null,
+    approved_by_actor_id: null,
+    approved_by_actor_email: null,
+  },
+];
+
+export const adminAdjustmentPage: AdminAdjustmentPage = {
+  items: adminAdjustments,
+  next_cursor: null,
+};
+
+export const emptyAdjustmentPage: AdminAdjustmentPage = { items: [], next_cursor: null };
+
+/**
+ * Previsualizacion de un ajuste.
+ *
+ * `entries_after` ES UN NUMERO TECLEADO. No es `entries_before` mas
+ * `proposed_delta` calculado aqui, aunque lo parezca: el dia que exista un tope
+ * o una regla de caducidad dejaria de coincidir, y ese es exactamente el caso
+ * que este fixture tiene que poder representar.
+ */
+export const adjustmentPreview: AdjustmentPreview = {
+  participant_id: participant.id,
+  promotion_id: PROMOTION_ID,
+  entries_before: 11_450,
+  proposed_delta: 500,
+  entries_after: 11_950,
+  warnings: [],
+  requires_second_approval: true,
+};
+
+/** Previsualizacion con advertencias del motor. */
+export const adjustmentPreviewWithWarnings: AdjustmentPreview = {
+  ...adjustmentPreview,
+  proposed_delta: -12_000,
+  entries_after: 0,
+  warnings: ["BALANCE_WOULD_GO_NEGATIVE", "ENTRY_CAP_REACHED"],
+};
+
+// ---------------------------------------------------------------------------
+// Exportaciones y sorteo
+// ---------------------------------------------------------------------------
+
+export const adminExportSnapshots: readonly AdminExportSnapshot[] = [
+  {
+    id: "exp_0000000000000001",
+    promotion_id: PROMOTION_ID,
+    status: "FINALIZED",
+    created_at: "2026-09-14T20:00:00.000Z",
+    finalized_at: "2026-09-14T20:40:00.000Z",
+    row_count: 1_284_500,
+    checksum: "9f2c4a1de5b7c3a086f41d2e7b9c05a3d8e6f10b24c7593ae1f0b8d6c42a7e935",
+    rules_version_id: "prv_0000000000000003",
+  },
+  {
+    id: "exp_0000000000000002",
+    promotion_id: PROMOTION_ID,
+    status: "DRAFT",
+    created_at: "2026-09-15T06:00:00.000Z",
+    finalized_at: null,
+    row_count: null,
+    checksum: null,
+    rules_version_id: null,
+  },
+];
+
+export const adminExportSnapshotPage: AdminExportSnapshotPage = {
+  items: adminExportSnapshots,
+  next_cursor: null,
+};
+
+/**
+ * Autorizaciones de sorteo.
+ *
+ * La primera tiene UNA aprobacion de DOS y sus condiciones sin cumplir: es el
+ * estado normal mientras `internal_draw_enabled` sigue apagado (DEC-032) y
+ * DEC-017 sin satisfacer. La segunda esta autorizada con dos aprobaciones de
+ * PERSONAS DISTINTAS, que es lo que hay que poder comprobar en pantalla.
+ */
+export const adminDrawAuthorizations: readonly AdminDrawAuthorization[] = [
+  {
+    id: "dra_0000000000000001",
+    promotion_id: PROMOTION_ID,
+    status: "PENDING_APPROVAL",
+    created_at: "2026-09-15T07:00:00.000Z",
+    created_by_actor_id: "act_0000000000000002",
+    created_by_actor_email: complianceOfficerSession.email,
+    approvals: [
+      {
+        actor_id: "act_0000000000000002",
+        actor_email: complianceOfficerSession.email,
+        approved_at: "2026-09-15T07:00:00.000Z",
+      },
+    ],
+    required_approvals: 2,
+    export_snapshot_id: null,
+    blocking_conditions: [
+      "INTERNAL_DRAW_DISABLED",
+      "NO_FINALIZED_SNAPSHOT",
+      "PROMOTION_NOT_CLOSED",
+      "SECOND_APPROVAL_MISSING",
+    ],
+  },
+  {
+    id: "dra_0000000000000002",
+    promotion_id: PROMOTION_ID,
+    status: "AUTHORIZED",
+    created_at: "2026-09-15T07:30:00.000Z",
+    created_by_actor_id: "act_0000000000000002",
+    created_by_actor_email: complianceOfficerSession.email,
+    approvals: [
+      {
+        actor_id: "act_0000000000000002",
+        actor_email: complianceOfficerSession.email,
+        approved_at: "2026-09-15T07:30:00.000Z",
+      },
+      {
+        actor_id: "act_0000000000000003",
+        actor_email: "draw@example.com",
+        approved_at: "2026-09-15T08:05:00.000Z",
+      },
+    ],
+    required_approvals: 2,
+    export_snapshot_id: "exp_0000000000000001",
+    blocking_conditions: ["INTERNAL_DRAW_DISABLED"],
+  },
+];
+
+export const adminDrawAuthorizationPage: AdminDrawAuthorizationPage = {
+  items: adminDrawAuthorizations,
+  next_cursor: null,
+};
+
+// ---------------------------------------------------------------------------
+// Auditoria
+// ---------------------------------------------------------------------------
+
+/**
+ * Eventos de auditoria.
+ *
+ * Hay uno de `SYSTEM` a proposito: distinguir un job de una persona es el punto
+ * entero de la traza, y una lista solo con humanos dejaria ese camino sin
+ * probar.
+ */
+export const adminAuditEvents: readonly AdminAuditEvent[] = [
+  {
+    id: "aud_0000000000000001",
+    occurred_at: "2026-09-14T10:05:12.000Z",
+    actor_type: "HUMAN",
+    actor_id: "act_0000000000000001",
+    actor_email: promotionManagerSession.email,
+    actor_roles: ["PROMOTION_MANAGER"],
+    action: "entry.adjust.create",
+    entity_type: "EntryAdjustment",
+    entity_id: "adj_0000000000000001",
+    reason_key: "SYSTEM_ERROR_CORRECTION",
+    request_id: "req_0000000000000001",
+  },
+  {
+    id: "aud_0000000000000002",
+    occurred_at: "2026-09-14T09:12:44.000Z",
+    actor_type: "SYSTEM",
+    actor_id: null,
+    actor_email: null,
+    actor_roles: ["SYSTEM"],
+    action: "payment.webhook.replay",
+    entity_type: "PaymentWebhook",
+    entity_id: "pwh_0000000000000009",
+    reason_key: null,
+    request_id: "req_0000000000000002",
+  },
+  {
+    id: "aud_0000000000000003",
+    occurred_at: "2026-09-13T18:00:03.000Z",
+    actor_type: "HUMAN",
+    actor_id: "act_0000000000000002",
+    actor_email: complianceOfficerSession.email,
+    actor_roles: ["COMPLIANCE_OFFICER"],
+    action: "amoe.review.approve",
+    entity_type: "AmoeSubmission",
+    entity_id: "amo_0000000000000002",
+    reason_key: "MEETS_REQUIREMENTS",
+    request_id: "req_0000000000000003",
+  },
+];
+
+export const adminAuditEventPage: AdminAuditEventPage = {
+  items: adminAuditEvents,
+  next_cursor: null,
+};

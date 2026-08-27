@@ -2,6 +2,25 @@ import type { Locale } from "@/i18n/locales";
 
 import type {
   AcknowledgedResponse,
+  AdjustmentPreview,
+  AdminAdjustment,
+  AdminAdjustmentPage,
+  AdminAmoeSubmission,
+  AdminAmoeSubmissionPage,
+  AdminAuditEventPage,
+  AdminDashboard,
+  AdminDrawAuthorizationPage,
+  AdminExportSnapshotPage,
+  AdminOrderPage,
+  AdminParticipantPage,
+  AdminProductPage,
+  AdminPromotionPage,
+  AdminPromotionRow,
+  AdminRulesVersionPage,
+  AmoeConfig,
+  AmoeSubmission,
+  AmoeSubmissionPage,
+  AmoeSubmissionResponse,
   CartWithQuote,
   CheckoutSessionResponse,
   CheckoutSessionState,
@@ -106,7 +125,76 @@ export const API_PATHS = {
   checkoutSession: "/checkout/session",
   /** Estado de una sesion de pago. */
   checkoutSessions: "/checkout/sessions",
+
+  /*
+   * --- AMOE (seccion 7).
+   *
+   * La seccion entera esta detras de `amoe_enabled`, apagado, y de una
+   * modalidad que sigue sin elegir. Con el flag apagado el contrato dice que
+   * estos endpoints responden 404: no es un fallo, es la ausencia deliberada de
+   * la funcion, y la interfaz lo pinta como estado y no como error.
+   */
+  /** [PROVISIONAL] Envios AMOE del propio participante. No esta en el contrato. */
+  accountAmoeSubmissions: "/account/amoe-submissions",
+
+  /*
+   * --- Panel de administracion (seccion 8, DEC-048).
+   *
+   * Las 28 filas de la tabla de la seccion 8 estan en `PROPOSED`: acordadas en
+   * papel, no implementadas. Las de exportacion y sorteo ni siquiera eso -son
+   * de `security-integration` y todavia no tienen seccion propia-, y aqui van
+   * marcadas como lo que son.
+   */
+  adminDashboard: "/admin/dashboard",
+  adminPromotions: "/admin/promotions",
+  adminProducts: "/admin/products",
+  adminParticipants: "/admin/participants",
+  adminOrders: "/admin/orders",
+  adminEntryTransactions: "/admin/entry-transactions",
+  adminAmoeSubmissions: "/admin/amoe-submissions",
+  adminAdjustments: "/admin/entry-adjustments",
+  /**
+   * [PROVISIONAL] Previsualizacion de un ajuste. NO esta en el contrato.
+   *
+   * Es la peticion mas importante del panel: sin ella la confirmacion de un
+   * ajuste no puede ensenar el saldo resultante, porque el frontend no puede
+   * calcularlo (DEC-023, requisito R13).
+   */
+  adminAdjustmentPreview: "/admin/entry-adjustments/preview",
+  /** [PROVISIONAL] Dominio de `security-integration` (DEC-016). */
+  adminExportSnapshots: "/admin/export-snapshots",
+  /** [PROVISIONAL] Dominio de `security-integration` (DEC-017). */
+  adminDrawAuthorizations: "/admin/draw-authorizations",
+  /** [PROVISIONAL] Traza de auditoria. Solo lectura (DEC-007). */
+  adminAuditEvents: "/admin/audit-events",
 } as const;
+
+/**
+ * Query comun de los listados del panel.
+ *
+ * SOBRE EL NOMBRE DEL PARAMETRO DE CURSOR. Se usa `cursor`, que es el que
+ * publica `docs/API_CONTRACT.md` en su seccion de paginacion
+ * (`?cursor=<opaque>&limit=<1..100>`), y no `after`. El encargo de este hito
+ * mencionaba `after`; el documento manda (CLAUDE.md #16) y esto queda anotado
+ * para el informe. Si el contrato cambia, cambia una linea de `adminSearch`.
+ *
+ * El cursor es OPACO en las dos direcciones: llega en `next_cursor` y se
+ * devuelve tal cual. La interfaz no lo interpreta, no lo decodifica y no
+ * construye uno.
+ */
+export interface AdminPageQuery {
+  readonly cursor?: string;
+  readonly limit?: number;
+  readonly promotion_id?: string;
+}
+
+function adminSearch(query: AdminPageQuery): string {
+  return queryString({
+    cursor: query.cursor,
+    limit: query.limit,
+    promotion_id: query.promotion_id,
+  });
+}
 
 /** Ruta del detalle de una promocion. */
 export function promotionPath(slug: string): string {
@@ -143,6 +231,66 @@ export function orderPath(orderId: string): string {
 /** Ruta del estado de una sesion de pago. */
 export function checkoutSessionPath(orderDraftId: string): string {
   return `${API_PATHS.checkoutSessions}/${encodeURIComponent(orderDraftId)}`;
+}
+
+/**
+ * Ruta de la configuracion AMOE de una promocion.
+ *
+ * CUELGA DE LA PROMOCION Y POR `slug`, que es como la publica el contrato. No
+ * existe una configuracion AMOE "del sitio": la modalidad, la ventana y las
+ * instrucciones pertenecen a una promocion concreta y a su version de reglas
+ * (DEC-012).
+ */
+export function amoeConfigPath(slug: string): string {
+  return `${promotionPath(slug)}/amoe-config`;
+}
+
+/**
+ * Ruta de envio de una participacion gratuita.
+ *
+ * POR `promotion_id` Y NO POR `slug`, y no es una incoherencia con la ruta de
+ * arriba: es lo que publica el contrato, y tiene sentido. Leer la configuracion
+ * es una navegacion -se llega por una URL con `slug`- y enviar es una mutacion
+ * sobre una entidad concreta, que se identifica por su identificador estable.
+ * Un `slug` puede cambiar; un envio no puede quedar colgado de un nombre.
+ */
+export function amoeSubmissionsPath(promotionId: string): string {
+  return `${promotionPath(promotionId)}/amoe-submissions`;
+}
+
+/** Ruta para retirar un envio propio. */
+export function amoeCancelPath(submissionId: string): string {
+  return `${API_PATHS.accountAmoeSubmissions}/${encodeURIComponent(submissionId)}/cancel`;
+}
+
+/** Ruta de las versiones de reglas de una promocion en el panel (DEC-012). */
+export function adminRulesVersionsPath(promotionId: string): string {
+  return `${API_PATHS.adminPromotions}/${encodeURIComponent(promotionId)}/rules-versions`;
+}
+
+/** Ruta del detalle de una promocion en el panel. */
+export function adminPromotionPath(promotionId: string): string {
+  return `${API_PATHS.adminPromotions}/${encodeURIComponent(promotionId)}`;
+}
+
+/** Ruta del detalle de un pedido en el panel. */
+export function adminOrderPath(orderId: string): string {
+  return `${API_PATHS.adminOrders}/${encodeURIComponent(orderId)}`;
+}
+
+/** Ruta de aprobacion de un envio AMOE. */
+export function adminAmoeApprovePath(submissionId: string): string {
+  return `${API_PATHS.adminAmoeSubmissions}/${encodeURIComponent(submissionId)}/approve`;
+}
+
+/** Ruta de rechazo de un envio AMOE. */
+export function adminAmoeRejectPath(submissionId: string): string {
+  return `${API_PATHS.adminAmoeSubmissions}/${encodeURIComponent(submissionId)}/reject`;
+}
+
+/** Ruta de la SEGUNDA aprobacion de un ajuste manual. */
+export function adminAdjustmentApprovePath(adjustmentId: string): string {
+  return `${API_PATHS.adminAdjustments}/${encodeURIComponent(adjustmentId)}/approve`;
 }
 
 /**
@@ -700,4 +848,413 @@ export function fetchCheckoutSession(
     locale,
     ...sessionOptions(session),
   });
+}
+
+// ---------------------------------------------------------------------------
+// AMOE (seccion 7 del contrato)
+// ---------------------------------------------------------------------------
+
+/**
+ * Configuracion AMOE de una promocion.
+ *
+ * SIN CACHE, por el mismo motivo que la configuracion publica: `amoe_enabled`
+ * es un flag legalmente material (DEC-013) y una modalidad servida desde cache
+ * seria una via de participacion que ya no existe -o una que ya existe y no se
+ * anuncia-. Ninguna de las dos cosas es un problema de frescura de contenido.
+ *
+ * UN 404 NO SE TRADUCE A `null` AQUI. El contrato dice que con `amoe_enabled`
+ * apagado estos endpoints responden 404, y tambien que un `slug` inexistente
+ * responde 404: son dos cosas distintas y la pantalla necesita poder
+ * distinguirlas. Lo hace el `code` del envelope, no el estado HTTP.
+ */
+export function fetchAmoeConfig(slug: string, locale: Locale): Promise<ApiResult<AmoeConfig>> {
+  return apiGet<AmoeConfig>(amoeConfigPath(slug), { locale });
+}
+
+/**
+ * Envio de una participacion gratuita.
+ *
+ * EL `payload` ES OPACO A PROPOSITO. Su forma la fija `required_fields` de la
+ * modalidad vigente, que decide el abogado del cliente: tipar aqui los campos
+ * seria fijar en el frontend que se pide para participar sin comprar, que es
+ * exactamente lo que prohibe el principio #2.
+ *
+ * La accion recoge del formulario UNICAMENTE los campos que el backend declaro
+ * y los manda tal cual. Ni uno mas -seria recogida de datos que nadie autorizo-
+ * ni uno menos.
+ */
+export function submitAmoe(
+  promotionId: string,
+  input: { readonly payload: Readonly<Record<string, string>> },
+  locale: Locale,
+  session: SessionContext,
+): Promise<ApiResult<AmoeSubmissionResponse>> {
+  return apiRequest<AmoeSubmissionResponse>("POST", amoeSubmissionsPath(promotionId), {
+    locale,
+    body: input,
+    ...sessionOptions(session),
+  });
+}
+
+/** Envios AMOE del propio participante, paginados por cursor. */
+export function fetchAmoeSubmissions(
+  query: { readonly cursor?: string; readonly limit?: number },
+  locale: Locale,
+  session: SessionContext,
+): Promise<ApiResult<AmoeSubmissionPage>> {
+  const search = queryString({ cursor: query.cursor, limit: query.limit });
+  return apiGet<AmoeSubmissionPage>(`${API_PATHS.accountAmoeSubmissions}${search}`, {
+    locale,
+    ...sessionOptions(session),
+  });
+}
+
+/**
+ * Retirada de un envio propio.
+ *
+ * NO ES UN BORRADO. Un envio retirado pasa a `CANCELLED` y sigue en la lista:
+ * los principios #6 y #7 valen igual para la procedencia de una participacion
+ * que para el ledger que la contiene. Si el backend lo borrase, dejaria de
+ * poder explicarse por que un saldo bajo.
+ */
+export function cancelAmoeSubmission(
+  submissionId: string,
+  locale: Locale,
+  session: SessionContext,
+): Promise<ApiResult<AmoeSubmission>> {
+  return apiRequest<AmoeSubmission>("POST", amoeCancelPath(submissionId), {
+    locale,
+    body: {},
+    ...sessionOptions(session),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Panel de administracion (seccion 8 del contrato, DEC-048)
+// ---------------------------------------------------------------------------
+
+/**
+ * Lecturas y mutaciones del panel.
+ *
+ * TRES COSAS QUE VALEN PARA TODAS ELLAS
+ * -------------------------------------
+ * 1. **Todas exigen sesion de personal con MFA** (DEC-006). La cookie de esa
+ *    sesion tiene `Path=/admin`, y por eso el panel vive en `/admin/[locale]`
+ *    y no en `/[locale]/admin` (DEC-048): desde `/es/admin` el navegador no la
+ *    enviaria y el panel quedaria permanentemente deslogueado.
+ * 2. **La autorizacion la decide el backend.** Estas funciones no comprueban
+ *    ninguna capacidad. Un 403 es una respuesta legitima que la pantalla pinta
+ *    como estado deliberado; comprobarlo antes aqui daria la impresion de que
+ *    la interfaz autoriza, y no autoriza.
+ * 3. **Ninguna edita ni borra una transaccion del ledger.** No existe tal
+ *    endpoint y no puede existir (DEC-007): una correccion es siempre una fila
+ *    nueva. Si algun dia apareciera una funcion `deleteEntryTransaction` en
+ *    este archivo, seria un defecto, no una funcionalidad.
+ */
+
+/** Cifras de cabecera del panel. */
+export function fetchAdminDashboard(
+  locale: Locale,
+  session: SessionContext,
+): Promise<ApiResult<AdminDashboard>> {
+  return apiGet<AdminDashboard>(API_PATHS.adminDashboard, { locale, ...sessionOptions(session) });
+}
+
+/** Listado de promociones del panel. */
+export function fetchAdminPromotions(
+  query: AdminPageQuery,
+  locale: Locale,
+  session: SessionContext,
+): Promise<ApiResult<AdminPromotionPage>> {
+  return apiGet<AdminPromotionPage>(`${API_PATHS.adminPromotions}${adminSearch(query)}`, {
+    locale,
+    ...sessionOptions(session),
+  });
+}
+
+/**
+ * Versiones de reglas de una promocion, con el veredicto del validador de
+ * activacion (DEC-012).
+ *
+ * La lista de claves faltantes viaja DENTRO de cada version y no en una llamada
+ * aparte: si estuvieran separadas, existiria un instante en el que la pantalla
+ * sabe que no se puede activar y todavia no sabe por que, y ese instante es
+ * justo el que la persona que opera esta mirando.
+ */
+export function fetchAdminRulesVersions(
+  promotionId: string,
+  query: AdminPageQuery,
+  locale: Locale,
+  session: SessionContext,
+): Promise<ApiResult<AdminRulesVersionPage>> {
+  return apiGet<AdminRulesVersionPage>(
+    `${adminRulesVersionsPath(promotionId)}${adminSearch(query)}`,
+    { locale, ...sessionOptions(session) },
+  );
+}
+
+/** Catalogo del panel. */
+export function fetchAdminProducts(
+  query: AdminPageQuery,
+  locale: Locale,
+  session: SessionContext,
+): Promise<ApiResult<AdminProductPage>> {
+  return apiGet<AdminProductPage>(`${API_PATHS.adminProducts}${adminSearch(query)}`, {
+    locale,
+    ...sessionOptions(session),
+  });
+}
+
+/** Pedidos del panel. */
+export function fetchAdminOrders(
+  query: AdminPageQuery,
+  locale: Locale,
+  session: SessionContext,
+): Promise<ApiResult<AdminOrderPage>> {
+  return apiGet<AdminOrderPage>(`${API_PATHS.adminOrders}${adminSearch(query)}`, {
+    locale,
+    ...sessionOptions(session),
+  });
+}
+
+/**
+ * Participantes del panel.
+ *
+ * EL ENMASCARADO DEL PII LO HACE EL BACKEND, segun tenga el actor
+ * `pii.view.masked` o `pii.view.full`. Aqui no hay ningun parametro para
+ * pedirlo: si la interfaz pudiera elegir, el correo completo viajaria en la
+ * respuesta y estaria en el HTML y en la pestana de red aunque la pantalla lo
+ * tapara al pintarlo.
+ */
+export function fetchAdminParticipants(
+  query: AdminPageQuery,
+  locale: Locale,
+  session: SessionContext,
+): Promise<ApiResult<AdminParticipantPage>> {
+  return apiGet<AdminParticipantPage>(`${API_PATHS.adminParticipants}${adminSearch(query)}`, {
+    locale,
+    ...sessionOptions(session),
+  });
+}
+
+/** Cola de revision AMOE. */
+export function fetchAdminAmoeSubmissions(
+  query: AdminPageQuery & { readonly status?: string },
+  locale: Locale,
+  session: SessionContext,
+): Promise<ApiResult<AdminAmoeSubmissionPage>> {
+  const search = queryString({
+    cursor: query.cursor,
+    limit: query.limit,
+    promotion_id: query.promotion_id,
+    status: query.status,
+  });
+
+  return apiGet<AdminAmoeSubmissionPage>(`${API_PATHS.adminAmoeSubmissions}${search}`, {
+    locale,
+    ...sessionOptions(session),
+  });
+}
+
+/**
+ * Aprobacion de un envio AMOE.
+ *
+ * `reason_key` ES OBLIGATORIO tambien al aprobar, no solo al rechazar. Una
+ * aprobacion sin motivo registrado es indistinguible de un clic por inercia
+ * seis meses despues, que es cuando alguien pregunta por que esa participacion
+ * existe.
+ */
+export function approveAmoeSubmission(
+  submissionId: string,
+  input: { readonly reason_key: string; readonly note?: string },
+  locale: Locale,
+  session: SessionContext,
+): Promise<ApiResult<AdminAmoeSubmission>> {
+  return apiRequest<AdminAmoeSubmission>("POST", adminAmoeApprovePath(submissionId), {
+    locale,
+    body: input,
+    ...sessionOptions(session),
+  });
+}
+
+/** Rechazo de un envio AMOE. */
+export function rejectAmoeSubmission(
+  submissionId: string,
+  input: { readonly reason_key: string; readonly note?: string },
+  locale: Locale,
+  session: SessionContext,
+): Promise<ApiResult<AdminAmoeSubmission>> {
+  return apiRequest<AdminAmoeSubmission>("POST", adminAmoeRejectPath(submissionId), {
+    locale,
+    body: input,
+    ...sessionOptions(session),
+  });
+}
+
+/** Cola de ajustes manuales. */
+export function fetchAdminAdjustments(
+  query: AdminPageQuery & { readonly status?: string },
+  locale: Locale,
+  session: SessionContext,
+): Promise<ApiResult<AdminAdjustmentPage>> {
+  const search = queryString({
+    cursor: query.cursor,
+    limit: query.limit,
+    promotion_id: query.promotion_id,
+    status: query.status,
+  });
+
+  return apiGet<AdminAdjustmentPage>(`${API_PATHS.adminAdjustments}${search}`, {
+    locale,
+    ...sessionOptions(session),
+  });
+}
+
+/**
+ * Previsualizacion de un ajuste: antes, delta y despues.
+ *
+ * NO MUTA NADA pese a ser `POST`. Existe porque la confirmacion de una mutacion
+ * sensible tiene que ensenar el saldo resultante y EL FRONTEND NO PUEDE
+ * CALCULARLO: sumar el delta al saldo seria una segunda implementacion del
+ * motor de participaciones viviendo en la interfaz (DEC-023, requisito R13).
+ */
+export function previewAdjustment(
+  input: {
+    readonly participant_id: string;
+    readonly promotion_id: string;
+    readonly quantity_delta: number;
+  },
+  locale: Locale,
+  session: SessionContext,
+): Promise<ApiResult<AdjustmentPreview>> {
+  return apiRequest<AdjustmentPreview>("POST", API_PATHS.adminAdjustmentPreview, {
+    locale,
+    body: input,
+    ...sessionOptions(session),
+  });
+}
+
+/**
+ * Creacion de un ajuste manual.
+ *
+ * CREA, NO APLICA. Nace en `PENDING_APPROVAL` y necesita la aprobacion de OTRO
+ * actor: `entry.adjust.create` y `entry.adjust.approve` son capacidades
+ * distintas porque un ajuste que se aprueba a si mismo es una edicion del
+ * ledger con otro nombre.
+ */
+export function createAdjustment(
+  input: {
+    readonly participant_id: string;
+    readonly promotion_id: string;
+    readonly quantity_delta: number;
+    readonly reason_key: string;
+    readonly reason_note: string | null;
+  },
+  locale: Locale,
+  session: SessionContext,
+): Promise<ApiResult<AdminAdjustment>> {
+  return apiRequest<AdminAdjustment>("POST", API_PATHS.adminAdjustments, {
+    locale,
+    body: input,
+    ...sessionOptions(session),
+  });
+}
+
+/**
+ * Segunda aprobacion de un ajuste.
+ *
+ * QUE LA INTERFAZ NO OFREZCA EL BOTON A QUIEN LO PROPUSO NO ES EL CONTROL: es
+ * cortesia. El control lo aplica el backend comparando actores, y ademas exige
+ * step-up (DEC-006). Si esta funcion se llamara igualmente, la respuesta seria
+ * un 403 y eso es lo correcto.
+ */
+export function approveAdjustment(
+  adjustmentId: string,
+  input: { readonly reason_key: string; readonly note?: string },
+  locale: Locale,
+  session: SessionContext,
+): Promise<ApiResult<AdminAdjustment>> {
+  return apiRequest<AdminAdjustment>("POST", adminAdjustmentApprovePath(adjustmentId), {
+    locale,
+    body: input,
+    ...sessionOptions(session),
+  });
+}
+
+/** Snapshots de exportacion (DEC-016). */
+export function fetchAdminExportSnapshots(
+  query: AdminPageQuery,
+  locale: Locale,
+  session: SessionContext,
+): Promise<ApiResult<AdminExportSnapshotPage>> {
+  return apiGet<AdminExportSnapshotPage>(`${API_PATHS.adminExportSnapshots}${adminSearch(query)}`, {
+    locale,
+    ...sessionOptions(session),
+  });
+}
+
+/** Autorizaciones de sorteo (DEC-017). */
+export function fetchAdminDrawAuthorizations(
+  query: AdminPageQuery,
+  locale: Locale,
+  session: SessionContext,
+): Promise<ApiResult<AdminDrawAuthorizationPage>> {
+  return apiGet<AdminDrawAuthorizationPage>(
+    `${API_PATHS.adminDrawAuthorizations}${adminSearch(query)}`,
+    { locale, ...sessionOptions(session) },
+  );
+}
+
+/**
+ * Traza de auditoria.
+ *
+ * SOLO LECTURA. No hay `createAuditEvent`, ni `updateAuditEvent`, ni
+ * `deleteAuditEvent`, y no es un olvido: la auditoria la escribe el sistema al
+ * ejecutar la accion auditada, y una traza que la interfaz pudiera escribir a
+ * mano dejaria de ser evidencia.
+ */
+export function fetchAdminAuditEvents(
+  query: AdminPageQuery & { readonly action?: string },
+  locale: Locale,
+  session: SessionContext,
+): Promise<ApiResult<AdminAuditEventPage>> {
+  const search = queryString({
+    cursor: query.cursor,
+    limit: query.limit,
+    promotion_id: query.promotion_id,
+    action: query.action,
+  });
+
+  return apiGet<AdminAuditEventPage>(`${API_PATHS.adminAuditEvents}${search}`, {
+    locale,
+    ...sessionOptions(session),
+  });
+}
+
+/**
+ * Detalle de una promocion en el panel.
+ *
+ * Se pide aparte del listado en vez de buscarla entre las filas ya cargadas:
+ * el listado esta paginado, asi que una promocion de la pagina tres
+ * sencillamente no estaria, y el sintoma seria un 404 que aparece o no segun
+ * por donde se haya llegado.
+ */
+export function fetchAdminPromotion(
+  promotionId: string,
+  locale: Locale,
+  session: SessionContext,
+): Promise<ApiResult<AdminPromotionRow>> {
+  return apiGet<AdminPromotionRow>(adminPromotionPath(promotionId), {
+    locale,
+    ...sessionOptions(session),
+  });
+}
+
+/** Detalle de un pedido en el panel, con su traza de calculo. */
+export function fetchAdminOrder(
+  orderId: string,
+  locale: Locale,
+  session: SessionContext,
+): Promise<ApiResult<OrderDetail>> {
+  return apiGet<OrderDetail>(adminOrderPath(orderId), { locale, ...sessionOptions(session) });
 }

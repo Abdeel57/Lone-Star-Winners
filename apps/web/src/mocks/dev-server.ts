@@ -1,8 +1,20 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 
-import { apiBaseUrl, API_PATHS } from "@/lib/api";
+import { apiBaseUrl, API_PATHS, type SessionState } from "@/lib/api";
 
 import { activeSession, anonymousSession, MOCK_SESSION_TOKEN } from "./fixtures/account";
+import {
+  complianceOfficerSession,
+  promotionManagerSession,
+  staffMfaPendingSession,
+} from "./fixtures/admin";
+import {
+  amoeCodeConfig,
+  amoeEnabledWithoutModeConfig,
+  amoeExternalConfig,
+  amoeMailInConfig,
+  amoeOnlineFormConfig,
+} from "./fixtures/amoe";
 import { cartWithQuote, emptyCartWithQuote } from "./fixtures/cart";
 import {
   cancelledCheckout,
@@ -11,6 +23,13 @@ import {
   ORDER_DRAFT_ID,
   pendingCheckout,
 } from "./fixtures/checkout";
+import {
+  amoeCode,
+  amoeEnabledWithoutMode,
+  amoeExternal,
+  amoeMailIn,
+  amoeOnlineForm,
+} from "./fixtures/config";
 import { mockRoutes, MOCK_REQUEST_ID, type MockRoute } from "./routes";
 
 /**
@@ -119,7 +138,7 @@ function sendJson(
   response: ServerResponse,
   status: number,
   body: unknown,
-  setCookie?: string,
+  setCookie?: string | readonly string[],
 ): void {
   const payload = JSON.stringify(body);
 
@@ -129,10 +148,17 @@ function sendJson(
     "x-request-id": MOCK_REQUEST_ID,
     // Nada de lo que sale de aqui es real; que no acabe en ninguna cache.
     "cache-control": "no-store",
-    ...(setCookie === undefined ? {} : { "set-cookie": setCookie }),
+    // Varias cookies viajan como ARRAY y no concatenadas: una cabecera
+    // `Set-Cookie` con varias cookies separadas por comas no se puede volver a
+    // partir sin adivinar, porque un `Expires` ya contiene comas.
+    ...(setCookie === undefined ? {} : { "set-cookie": [...toCookieList(setCookie)] }),
   });
 
   response.end(payload);
+}
+
+function toCookieList(value: string | readonly string[]): readonly string[] {
+  return typeof value === "string" ? [value] : value;
 }
 
 /**
@@ -195,10 +221,13 @@ export function createMockApiHandler(
       return;
     }
 
-    // Tres familias dependen de la SESION -identidad, portal y checkout- y el
-    // carrito depende de su propia cookie. El resto sirve su fixture fijo.
+    // Cuatro familias dependen de la SESION -identidad, panel, portal y
+    // checkout- y el carrito depende de su propia cookie. El resto sirve su
+    // fixture fijo.
     const outcome =
-      resolveIdentity(request, method, pathname) ??
+      resolveIdentity(request, method, pathname, rawBody) ??
+      resolveAmoeScenario(method, pathname) ??
+      resolveAdmin(request, pathname, matched.body) ??
       resolveAccount(request, method, pathname, matched.body) ??
       resolveCheckout(request, method, pathname, rawBody, prefix, base) ??
       resolveCart(request, method, pathname);
@@ -298,7 +327,8 @@ interface MockOutcome {
   /** Codigo HTTP. Ausente significa 200. */
   readonly status?: number;
   readonly body: unknown;
-  readonly setCookie?: string;
+  /** Una cookie, o varias. Cerrar sesion retira las tres a la vez. */
+  readonly setCookie?: string | readonly string[];
 }
 
 /**
@@ -464,6 +494,247 @@ const UNAUTHENTICATED: MockOutcome = {
   body: { error: { code: "UNAUTHENTICATED", request_id: MOCK_REQUEST_ID } },
 };
 
+const FORBIDDEN: MockOutcome = {
+  status: 403,
+  body: { error: { code: "FORBIDDEN", request_id: MOCK_REQUEST_ID } },
+};
+
+// ---------------------------------------------------------------------------
+// Sesion de PERSONAL (DEC-006, DEC-048)
+// ---------------------------------------------------------------------------
+
+/**
+ * La cookie de personal, con el alcance que la hace especial.
+ *
+ * `Path=/admin` ES EL PUNTO ENTERO. La seccion 10 del contrato lo publica:
+ * participante y personal usan las mismas rutas de identidad, y lo que cambia
+ * es la politica -nombre de cookie con sufijo `_staff`, `SameSite=Strict`,
+ * `Path=/admin`, TTL de 8 horas, inactividad de 15 minutos y MFA obligatorio-.
+ * Ese `Path` es la razon de que el panel viva en `/admin/[locale]` y no en
+ * `/[locale]/admin` (DEC-048): desde `/es/admin` el navegador no enviaria esta
+ * cookie y el panel quedaria permanentemente deslogueado.
+ *
+ * ESTOS ATRIBUTOS LOS ESCRIBE ESTE SERVIDOR PORQUE AQUI HACE DE BACKEND. El
+ * frontend NO rellena ni un atributo de cookie: `session-server.ts` propaga lo
+ * que llegue en la `Set-Cookie`, y esa asimetria es deliberada (DEC-006).
+ *
+ * `SameSite=Strict` y no `Lax`: es el scope de personal. Sin `Secure` porque en
+ * desarrollo se sirve por `http` y con `Secure` la cookie no volveria.
+ *
+ * DOS TOKENS, NO UNO. La sesion a la espera del segundo factor y la ya
+ * autenticada son dos estados distintos, y el contrato es explicito en que
+ * `MFA_PENDING` "todavia no vale para nada". Con un solo valor no se podria
+ * distinguir en el navegador una sesion a medias de una completa, que es justo
+ * lo que hay que poder ver.
+ */
+const DEV_STAFF_COOKIE = "lsw_dev_session_staff";
+
+/** 43 caracteres base64url, opacos, con la FORMA del token real y nada mas. */
+const STAFF_PENDING_TOKEN = "Qw7pN2vRt5YbL0xJ8mHc3sD6gK1fA4eU-zTiO_qXn9W"; // gitleaks:allow — token FICTICIO de desarrollo, no es un secreto
+const STAFF_ACTIVE_TOKEN = "Bd4kM9tXr6ZaP1wQ7nJc2sF5hL8gV3eY-uRiO_pCz0T"; // gitleaks:allow — token FICTICIO de desarrollo, no es un secreto
+
+const STAFF_COOKIE_ATTRIBUTES = "Path=/admin; Max-Age=28800; HttpOnly; SameSite=Strict";
+
+const STAFF_PENDING_COOKIE_SET = `${DEV_STAFF_COOKIE}=${STAFF_PENDING_TOKEN}; ${STAFF_COOKIE_ATTRIBUTES}`;
+const STAFF_ACTIVE_COOKIE_SET = `${DEV_STAFF_COOKIE}=${STAFF_ACTIVE_TOKEN}; ${STAFF_COOKIE_ATTRIBUTES}`;
+const STAFF_PENDING_COOKIE_CLEAR = `${DEV_STAFF_COOKIE}=; Path=/admin; Max-Age=0; HttpOnly; SameSite=Strict`;
+const STAFF_ACTIVE_COOKIE_CLEAR = STAFF_PENDING_COOKIE_CLEAR;
+
+/**
+ * Correos que este servidor trata como personal.
+ *
+ * Salen de los fixtures de `admin.ts` y son dos porque el panel tiene que poder
+ * demostrar la separacion de funciones: uno PROPONE ajustes y el otro los
+ * APRUEBA. Con un solo correo de personal, la prohibicion de autoaprobarse no
+ * se podria ver en el navegador.
+ */
+const STAFF_SESSIONS = new Map([
+  [promotionManagerSession.email, promotionManagerSession],
+  [complianceOfficerSession.email, complianceOfficerSession],
+]);
+
+function hasStaffCookie(request: IncomingMessage, token: string): boolean {
+  const header = request.headers.cookie;
+  if (header === undefined) return false;
+
+  return header.split(";").some((pair) => pair.trim() === `${DEV_STAFF_COOKIE}=${token}`);
+}
+
+/** Correo del cuerpo de un inicio de sesion, o `null` si no lo trae. */
+function emailFrom(rawBody: string): string | null {
+  if (rawBody.length === 0) return null;
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(rawBody);
+  } catch {
+    return null;
+  }
+
+  if (typeof parsed !== "object" || parsed === null) return null;
+  if (!("email" in parsed)) return null;
+
+  const { email: value } = parsed;
+  return typeof value === "string" && value.length > 0 ? value.toLowerCase() : null;
+}
+
+function staffSessionForEmail(email: string | null): SessionState | null {
+  if (email === null) return null;
+  return STAFF_SESSIONS.get(email) ?? null;
+}
+
+/**
+ * Valor de una cookie de la peticion, o `null`.
+ *
+ * Se lee la COOKIE y no una cabecera propia, y el motivo es concreto: quien
+ * llama a esta API es el servidor de Next, y lo unico que reenvia del navegador
+ * es la cabecera `Cookie` (`apiRequest` manda `accept`, `accept-language`,
+ * `cookie` y `content-type`, y nada mas). Una cabecera `x-lsw-dev-*` puesta en
+ * el navegador no llegaria nunca hasta aqui, asi que seria codigo muerto con
+ * aspecto de funcionar.
+ */
+function cookieValue(request: IncomingMessage, name: string): string | null {
+  const header = request.headers.cookie;
+  if (header === undefined) return null;
+
+  for (const pair of header.split(";")) {
+    const trimmed = pair.trim();
+    if (!trimmed.startsWith(`${name}=`)) continue;
+
+    const value = trimmed.slice(name.length + 1);
+    return value.length === 0 ? null : value;
+  }
+
+  return null;
+}
+
+/**
+ * Quien de las dos personas de personal es esta sesion.
+ *
+ * Con una sola cookie de sesion no se puede saber a QUIEN pertenece, asi que en
+ * desarrollo se elige con una cookie aparte. No es un mecanismo de
+ * autenticacion -este servidor ni siquiera comprueba contrasenas- sino la unica
+ * forma de recorrer en el navegador las dos mitades de la separacion de
+ * funciones: quien PROPONE un ajuste y quien lo APRUEBA no pueden ser el mismo,
+ * y sin poder cambiar de actor eso no se puede ver.
+ *
+ * Sin la cookie, el personal por defecto es quien opera la promocion.
+ */
+const DEV_STAFF_ACTOR_COOKIE = "lsw_dev_staff_actor";
+
+function staffActiveSession(request: IncomingMessage): SessionState {
+  const requested = cookieValue(request, DEV_STAFF_ACTOR_COOKIE);
+  const email = requested === null ? null : requested.toLowerCase();
+
+  return staffSessionForEmail(email) ?? promotionManagerSession;
+}
+
+/** Estado de sesion de personal que corresponde a las cookies presentadas. */
+function staffSessionFor(request: IncomingMessage): SessionState | null {
+  if (hasStaffCookie(request, STAFF_ACTIVE_TOKEN)) return staffActiveSession(request);
+  if (hasStaffCookie(request, STAFF_PENDING_TOKEN)) return staffMfaPendingSession;
+
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// Escenario AMOE de desarrollo (DEC-032)
+// ---------------------------------------------------------------------------
+
+/**
+ * Modalidad AMOE que sirve este servidor, elegida con una VARIABLE DE ENTORNO.
+ *
+ * POR QUE HACE FALTA
+ * ------------------
+ * El fixture por defecto es la via APAGADA, que es el estado real hoy y el
+ * valor por defecto de DEC-032. Eso es correcto y ademas deseable -cada
+ * pantalla se disena primero en su estado no disponible- pero deja las cuatro
+ * modalidades sin poderse VER en el navegador, y son cuatro interfaces
+ * distintas.
+ *
+ * POR QUE UNA VARIABLE DE ENTORNO Y NO UNA COOKIE
+ * -----------------------------------------------
+ * Se intento con una cookie y NO PUEDE FUNCIONAR, por una razon que conviene
+ * dejar escrita para que nadie lo vuelva a intentar: `GET /config` y
+ * `GET /promotions/:slug/amoe-config` son rutas PUBLICAS, y la interfaz las
+ * pide sin contexto de sesion, asi que `apiRequest` no reenvia ninguna cookie.
+ * Eso es correcto -la configuracion publica no debe viajar con credenciales- y
+ * no se va a cambiar por comodidad de un mock. Una cookie ahi seria un
+ * interruptor que parece funcionar y no llega nunca.
+ *
+ * Uso: `LSW_DEV_AMOE=ONLINE_FORM pnpm --filter @lsw/web dev`.
+ *
+ * ESTO NO ENCIENDE NADA EN PRODUCCION. Vive en el servidor simulado, que
+ * `instrumentation.ts` no arranca fuera de desarrollo. El flag de verdad lo
+ * sirve el backend desde base de datos (DEC-013).
+ *
+ * Afecta a DOS respuestas a la vez -`/config` y `/promotions/:slug/amoe-config`-
+ * porque la interfaz las lee juntas: encender el flag sin decir que modalidad
+ * es dejaria a la pantalla sabiendo que existe una via gratuita y sin saber cual
+ * renderizar, que es justo el estado a medias que DEC-032 evita.
+ */
+
+const AMOE_SCENARIOS = new Map(
+  Object.entries({
+    ONLINE_FORM: { config: amoeOnlineFormConfig, site: amoeOnlineForm },
+    MAIL_IN_REVIEW: { config: amoeMailInConfig, site: amoeMailIn },
+    CODE: { config: amoeCodeConfig, site: amoeCode },
+    EXTERNAL_INSTRUCTIONS: { config: amoeExternalConfig, site: amoeExternal },
+    ENABLED_NO_MODE: { config: amoeEnabledWithoutModeConfig, site: amoeEnabledWithoutMode },
+  }),
+);
+
+/**
+ * Sirve la configuracion publica y la AMOE segun el escenario elegido.
+ *
+ * Sin variable devuelve `null` y la tabla sirve sus fixtures por defecto: la
+ * via apagada. Ese es el camino normal y el unico que existe hoy en produccion.
+ */
+function resolveAmoeScenario(method: string, pathname: string): MockOutcome | null {
+  if (method !== "GET") return null;
+
+  const requested = process.env.LSW_DEV_AMOE;
+  if (requested === undefined || requested.length === 0) return null;
+
+  const scenario = AMOE_SCENARIOS.get(requested);
+
+  if (scenario === undefined) {
+    console.warn(
+      `[lsw] LSW_DEV_AMOE="${requested}" no es un escenario conocido. Se sirve la via apagada.`,
+    );
+    return null;
+  }
+
+  if (pathname === API_PATHS.siteConfig) return { body: scenario.site };
+  if (pathname.endsWith("/amoe-config")) return { body: scenario.config };
+
+  return null;
+}
+
+/**
+ * Rutas del panel: exigen sesion de PERSONAL con el segundo factor superado.
+ *
+ * Los tres codigos que devuelve son los tres estados reales, y distinguirlos
+ * importa: sin cookie de personal es 401 -no hay sesion-, con la sesion a la
+ * espera del segundo factor tambien es 401 -la sesion existe y todavia no
+ * autentica-, y con una sesion de participante es 403 -hay sesion valida y no
+ * tiene acceso-. Colapsarlos haria imposible ver en el navegador que la
+ * interfaz pinta tres pantallas distintas para tres situaciones distintas.
+ */
+function resolveAdmin(
+  request: IncomingMessage,
+  pathname: string,
+  body: unknown,
+): MockOutcome | null {
+  if (!pathname.startsWith("/admin/")) return null;
+
+  if (hasStaffCookie(request, STAFF_ACTIVE_TOKEN)) return { body };
+  if (hasStaffCookie(request, STAFF_PENDING_TOKEN)) return UNAUTHENTICATED;
+  if (hasSessionCookie(request)) return FORBIDDEN;
+
+  return UNAUTHENTICATED;
+}
+
 /**
  * Rutas de identidad.
  *
@@ -476,30 +747,66 @@ function resolveIdentity(
   request: IncomingMessage,
   method: string,
   pathname: string,
+  rawBody: string,
 ): MockOutcome | null {
   if (method === "GET" && pathname === API_PATHS.authSession) {
+    /*
+     * EL PERSONAL GANA CUANDO SU COOKIE VIAJA, y eso no es una preferencia: la
+     * cookie de personal tiene `Path=/admin` (DEC-006), asi que el navegador
+     * solo la manda en peticiones del panel. En el escaparate no llega y gana
+     * la de participante; en el panel llegan las dos y la correcta es la de
+     * personal. Es exactamente el comportamiento del backend real.
+     */
+    const staff = staffSessionFor(request);
+    if (staff !== null) return { body: staff };
+
     return { body: hasSessionCookie(request) ? activeSession : anonymousSession };
   }
 
-  if (
-    method === "POST" &&
-    (pathname === API_PATHS.authLogin ||
-      pathname === API_PATHS.authRegister ||
-      pathname === API_PATHS.authMfaVerify)
-  ) {
+  if (method === "POST" && pathname === API_PATHS.authLogin) {
     /*
-     * Las tres abren sesion de PARTICIPANTE, y para esa audiencia el MFA no es
-     * obligatorio (seccion 10): por eso ninguna devuelve `MFA_PENDING` aqui.
-     * Ese estado es de personal, y quien lo necesite lo tiene en
-     * `scenarios.session(mfaPendingSession)` dentro de un test, que es donde un
-     * escenario tiene que ser explicito.
+     * Una cuenta de PERSONAL responde `MFA_PENDING` y emite la cookie de
+     * personal. No se comprueba ninguna contrasena: se elige entre fixtures
+     * escritos a mano segun el correo, exactamente igual que el resto de este
+     * servidor. Que exista el camino importa porque es el unico que permite
+     * ver en el navegador que `MFA_PENDING` NO da acceso a nada.
      */
+    const staffLogin = staffSessionForEmail(emailFrom(rawBody));
+    if (staffLogin !== null) {
+      return { body: staffMfaPendingSession, setCookie: STAFF_PENDING_COOKIE_SET };
+    }
+
+    return { body: activeSession, setCookie: SESSION_COOKIE_SET };
+  }
+
+  if (method === "POST" && pathname === API_PATHS.authMfaVerify) {
+    // Con una sesion de personal a la espera, el segundo factor la completa.
+    if (hasStaffCookie(request, STAFF_PENDING_TOKEN)) {
+      return { body: staffActiveSession(request), setCookie: STAFF_ACTIVE_COOKIE_SET };
+    }
+
+    // Para un participante el MFA no es obligatorio (seccion 10): la sesion ya
+    // estaba abierta y verificar no cambia nada.
+    return { body: activeSession, setCookie: SESSION_COOKIE_SET };
+  }
+
+  if (method === "POST" && pathname === API_PATHS.authRegister) {
+    // El alta es de participante siempre. No existe alta de personal por aqui:
+    // el primer administrador se crea por CLI (DEC-045).
     return { body: activeSession, setCookie: SESSION_COOKIE_SET };
   }
 
   if (method === "POST" && pathname === API_PATHS.authLogout) {
-    // Idempotente y siempre 200, con o sin sesion (seccion 10).
-    return { body: { ok: true }, setCookie: SESSION_COOKIE_CLEAR };
+    /*
+     * Idempotente y siempre 200, con o sin sesion (seccion 10). Se retiran LAS
+     * DOS cookies: si solo se retirara la del escaparate, cerrar sesion en el
+     * panel dejaria la sesion de personal viva, que es el error mas caro
+     * posible en esta pantalla.
+     */
+    return {
+      body: { ok: true },
+      setCookie: [SESSION_COOKIE_CLEAR, STAFF_PENDING_COOKIE_CLEAR, STAFF_ACTIVE_COOKIE_CLEAR],
+    };
   }
 
   /*

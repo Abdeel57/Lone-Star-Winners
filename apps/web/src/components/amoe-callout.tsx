@@ -1,6 +1,7 @@
-import { Card, CardTitle } from "@lsw/ui";
+import { buttonVariants, Card, CardTitle } from "@lsw/ui";
 import { useTranslations } from "next-intl";
 
+import { Link } from "@/i18n/navigation";
 import type { AmoeMode } from "@/lib/api";
 
 /**
@@ -82,6 +83,19 @@ export function AmoeCallout({
       </CardTitle>
 
       <p className="mt-s3 text-body-md text-text-muted">{modeText()}</p>
+
+      {/*
+       * El enlace a la pagina completa vive DENTRO del bloque que ya esta detras
+       * de `amoe_enabled`: si la via no existe, no existe ni el aviso ni el
+       * enlace. Un enlace a `/amoe` fuera de esta guarda llevaria al estado
+       * "esta promocion no ofrece via gratuita", que en la portada leeria como
+       * una promesa incumplida en vez de como una funcion desactivada.
+       */}
+      <div className="mt-s4">
+        <Link href="/amoe" className={buttonVariants({ variant: "secondary", size: "sm" })}>
+          {t("learnMore")}
+        </Link>
+      </div>
     </Card>
   );
 }

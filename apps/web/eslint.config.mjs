@@ -114,6 +114,38 @@ export default tseslint.config(
     },
   },
 
+  // -------------------------------------------------------------------------
+  // El PANEL usa `next/link` y `next/navigation` a proposito (DEC-048).
+  //
+  // La restriccion de arriba existe por DEC-021: en el ESCAPARATE, un
+  // `<Link href="/shop">` de Next perderia el prefijo de idioma y sacaria al
+  // usuario de su idioma a mitad de sesion. Los envoltorios de
+  // `@/i18n/navigation` lo evitan porque conocen el router de next-intl.
+  //
+  // El panel NO esta en ese router. Su prefijo es `/admin/<locale>` y lo
+  // resuelve su propia negociacion en el middleware, porque la cookie de
+  // personal tiene `Path=/admin` (DEC-006) y bajo `/es/admin` el navegador no
+  // la enviaria. Usar aqui el `Link` de next-intl produciria exactamente
+  // `/es/admin/...`, es decir, la ruta en la que el panel queda deslogueado:
+  // la regla, aplicada aqui, causaria el fallo que en el escaparate previene.
+  //
+  // ESTO NO RELAJA LA REGLA, LA ACOTA. Sigue vigente en todo el escaparate, y
+  // el panel tiene su propia garantia equivalente: cada enlace pasa por
+  // `adminHref(locale, path)`, que es el unico sitio donde se compone la ruta
+  // con su idioma. Un `href` escrito a mano en el panel seria igual de
+  // incorrecto que un `next/link` en la tienda.
+  //
+  // El alcance es EXACTAMENTE el subarbol del panel. Si alguien mueve un
+  // componente de admin fuera de estas dos carpetas, la regla vuelve a
+  // aplicarse y el error reaparece, que es lo que se quiere.
+  // -------------------------------------------------------------------------
+  {
+    files: ["src/app/admin/**/*.tsx", "src/components/admin/**/*.tsx", "src/lib/admin/**/*.ts"],
+    rules: {
+      "no-restricted-imports": "off",
+    },
+  },
+
   // Los tests montan componentes con dobles y fixtures; no aplican las reglas
   // de Next, que solo tienen sentido dentro del arbol de rutas.
   {

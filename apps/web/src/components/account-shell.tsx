@@ -1,8 +1,11 @@
 import { buttonVariants, cn, EmptyState } from "@lsw/ui";
-import { getTranslations } from "next-intl/server";
+import { getLocale, getTranslations } from "next-intl/server";
 import type { ReactNode } from "react";
 
+import { isLocale } from "@/i18n/locales";
 import { Link } from "@/i18n/navigation";
+import { isFeatureEnabled } from "@/lib/flags";
+import { loadFeatureFlags } from "@/lib/flags-server";
 
 /**
  * Cromo comun del portal del participante.
@@ -20,6 +23,21 @@ const ACCOUNT_ROUTES = [
 ] as const;
 
 /**
+ * La entrada de la via gratuita, DETRAS DE `amoe_enabled` (DEC-032).
+ *
+ * Se declara aparte y no dentro de `ACCOUNT_ROUTES` porque no es una seccion
+ * mas: es una funcion que puede no existir. Con el flag apagado no se pinta -ni
+ * como enlace gris, ni como "proximamente"-, porque anunciar un metodo gratuito
+ * que no esta configurado es afirmar algo sobre las condiciones de
+ * participacion (CLAUDE.md #1 y #2). Ocultar es aqui el estado deliberado.
+ *
+ * El flag se lee EN SERVIDOR, en la misma peticion que el render, que es lo que
+ * DEC-013 exige. Es una lectura mas por pantalla del portal, y es el precio de
+ * que la navegacion no anuncie lo que no existe.
+ */
+const AMOE_ROUTE = { href: "/account/amoe", key: "amoe" } as const;
+
+/**
  * Navegacion del portal.
  *
  * `aria-current="page"` lo marca la pagina activa pasando su `href`. Se pasa en
@@ -33,10 +51,23 @@ const ACCOUNT_ROUTES = [
 export async function AccountNav({ current }: { readonly current: string }) {
   const t = await getTranslations("account.nav");
 
+  /*
+   * El locale sale de la peticion y no de una prop, para no tener que tocar las
+   * seis pantallas del portal por anadir una entrada. `getLocale()` devuelve el
+   * que resolvio el middleware de i18n; si algun dia devolviera algo que no es
+   * un locale soportado -no deberia-, se cae del lado seguro: sin flags leidos,
+   * `amoe_enabled` toma su valor seguro, que es apagado.
+   */
+  const locale = await getLocale();
+  const flags = isLocale(locale) ? await loadFeatureFlags(locale) : undefined;
+  const showAmoe = flags !== undefined && isFeatureEnabled(flags, "amoe_enabled");
+
+  const routes = showAmoe ? [...ACCOUNT_ROUTES, AMOE_ROUTE] : ACCOUNT_ROUTES;
+
   return (
     <nav aria-label={t("overview")} className="-mx-4 overflow-x-auto px-4 md:mx-0 md:px-0">
       <ul className="flex min-w-max list-none items-center gap-1 border-b border-border pb-s2">
-        {ACCOUNT_ROUTES.map((route) => (
+        {routes.map((route) => (
           <li key={route.href}>
             <Link
               href={route.href}
