@@ -33,7 +33,10 @@ import { describe, expect, it, vi } from "vitest";
  * `vi.hoisted` porque el estado lo lee una factoria de `vi.mock`, y esas se
  * elevan por encima de los `import` de este fichero.
  */
-const current = vi.hoisted((): { locale: Locale } => ({ locale: "en" }));
+const current = vi.hoisted((): { locale: Locale; activeSlug: string } => ({
+  locale: "en",
+  activeSlug: "",
+}));
 
 vi.mock("@/i18n/navigation", async () => {
   const { createElement } = await import("react");
@@ -84,6 +87,18 @@ vi.mock("next-intl/server", async () => {
 });
 
 /**
+ * La cinta de marca, fuera del arbol de la portada.
+ *
+ * Es un Server Component ASINCRONO -devuelve una promesa- y el renderizador de
+ * cliente de React no sabe resolverlo: suspende el arbol ENTERO y la portada se
+ * renderiza vacia, sin que nada falle de forma visible. Se sustituye por un
+ * componente que no pinta nada porque no dice absolutamente nada sobre la
+ * promocion vigente: sus tres frases son copy permanente del sitio y no leen
+ * ningun dato. Lo que se simula es el mecanismo de render, nunca una afirmacion.
+ */
+vi.mock("@/components/marquee-band", () => ({ MarqueeBand: () => null }));
+
+/**
  * Configuracion de servidor, con TODOS los flags en su valor seguro.
  *
  * Lo que se prueba aqui no depende de ningun flag, y dejar que la pagina
@@ -102,10 +117,15 @@ vi.mock("@/lib/flags-server", async () => {
  */
 vi.mock("@/lib/api", async (importOriginal) => {
   const actual = await importOriginal<typeof ApiModule>();
-  const { activePromotionDetail, activePromotionWithoutRulesDetail } =
-    await import("@/mocks/fixtures/promotions");
+  const {
+    activePromotion: active,
+    activePromotionDetail,
+    activePromotionWithoutRules: activeWithoutRules,
+    activePromotionWithoutRulesDetail,
+  } = await import("@/mocks/fixtures/promotions");
 
   const details = [activePromotionDetail, activePromotionWithoutRulesDetail];
+  const summaries = [active, activeWithoutRules];
 
   return {
     ...actual,
@@ -121,18 +141,50 @@ vi.mock("@/lib/api", async (importOriginal) => {
           : { ok: true, data: detail },
       );
     },
+
+    /**
+     * La promocion vigente que ve la PORTADA, elegida por el test en curso.
+     *
+     * Es un RESUMEN y no un detalle, igual que en produccion: la portada lee la
+     * senal de reglas del resumen -que es lo que `GET /promotions/active`
+     * devuelve- y pide el detalle aparte. Servir aqui el detalle disimularia esa
+     * diferencia, que es justo la que el panel tiene que respetar.
+     */
+    fetchActivePromotion: () =>
+      Promise.resolve({
+        ok: true,
+        data: summaries.find((candidate) => candidate.slug === current.activeSlug) ?? null,
+      }),
+
+    /**
+     * El catalogo NO contesta, a proposito.
+     *
+     * La mercancia destacada es informacion ADICIONAL de la portada: si falla,
+     * la seccion no se renderiza y el resto de la pagina sigue igual. Fabricar
+     * un catalogo entero para una pregunta que no va de productos solo anadiria
+     * superficie que se puede romper sola.
+     */
+    fetchProducts: () =>
+      Promise.resolve({
+        ok: false,
+        error: { kind: "http", status: 503, code: null, requestId: null, details: null },
+      }),
   };
 });
 
+import HomePage from "@/app/[locale]/page";
 import PromotionDetailPage from "@/app/[locale]/promotions/[slug]/page";
 import { AnnouncementBand } from "@/components/announcement-bar";
+import { EntryOfferPanel } from "@/components/entry-offer-panel";
 import type { Locale } from "@/i18n/locales";
 import type * as ApiModule from "@/lib/api";
+import { presentPromotion } from "@/lib/promotion-state";
 import {
   activePromotion,
   activePromotionDetail,
   activePromotionWithoutRules,
   activePromotionWithoutRulesDetail,
+  multipliedEntryOffer,
 } from "@/mocks/fixtures/promotions";
 
 import enMessages from "../../messages/en-US.json";
@@ -300,6 +352,103 @@ describe("detalle de promocion sin Reglas Oficiales publicadas (DEC-044)", () =>
     view.unmount();
   });
 });
+
+/**
+ * El importe unitario del ratio, tal como lo escribe el panel.
+ *
+ * Se busca la CIFRA y no la frase, por el mismo motivo que con el universo: la
+ * frase se puede reescribir sin que el problema desaparezca. Lo que no puede
+ * aparecer es el numero por el que un visitante multiplica su carrito.
+ */
+const ENTRY_RATIO_UNIT = /\$1\.00/;
+
+describe("oferta de participaciones sin Reglas Oficiales publicadas (DEC-044)", () => {
+  it("el fixture declara oferta, o el resto de este bloque no prueba nada", () => {
+    // Sin esta comprobacion, un fixture que dejara de traer oferta haria pasar
+    // en verde todas las ausencias de mas abajo sin retirar nada.
+    expect(activePromotionWithoutRulesDetail.entry_offer).not.toBeNull();
+    expect(activePromotionDetail.entry_offer).not.toBeNull();
+  });
+
+  it("el detalle conserva el titulo del panel y retira el ratio, en los dos idiomas", async () => {
+    for (const locale of LOCALES) {
+      const messages = messagesFor(locale);
+      const view = await renderPage(locale, activePromotionWithoutRules.slug);
+
+      expect(screen.queryByText(ENTRY_RATIO_UNIT), `ratio en ${locale}`).toBeNull();
+      // La nota informativa tampoco: dice que "las cifras que se muestran aqui
+      // son informativas", y ya no se muestra ninguna.
+      expect(screen.queryByText(messages.entryOffer.governedNote), `nota en ${locale}`).toBeNull();
+
+      // El panel NO se enmudece: conserva su titulo y dice que falta.
+      expect(screen.getByText(messages.entryOffer.heading)).toBeInTheDocument();
+      expect(screen.getByText(messages.entryOffer.rulesPending)).toBeInTheDocument();
+
+      view.unmount();
+    }
+  });
+
+  it("la portada aplica la misma senal, en los dos idiomas", async () => {
+    for (const locale of LOCALES) {
+      const messages = messagesFor(locale);
+      const view = await renderHome(locale, activePromotionWithoutRules.slug);
+
+      expect(screen.queryByText(ENTRY_RATIO_UNIT), `ratio en ${locale}`).toBeNull();
+      expect(screen.getByText(messages.entryOffer.heading)).toBeInTheDocument();
+      expect(screen.getByText(messages.entryOffer.rulesPending)).toBeInTheDocument();
+
+      view.unmount();
+    }
+  });
+
+  it("tampoco anuncia el multiplicador, aunque el flag este encendido", () => {
+    // El multiplicador es el ratio AMPLIFICADO: si el ratio no se publica, un
+    // "2x" suelto seria la misma afirmacion sin el numero al que se aplica.
+    renderIn(
+      "en",
+      <EntryOfferPanel
+        offer={multipliedEntryOffer}
+        presentation={presentPromotion("ACTIVE")}
+        multipliersEnabled
+        rulesPublished={false}
+        locale="en"
+        timeZone="America/Chicago"
+      />,
+    );
+
+    expect(screen.queryByText(/2×/)).toBeNull();
+    expect(screen.queryByText(ENTRY_RATIO_UNIT)).toBeNull();
+    expect(screen.getByText(enMessages.entryOffer.rulesPending)).toBeInTheDocument();
+  });
+
+  it("con la version de reglas declarada, el detalle publica el ratio", async () => {
+    const view = await renderPage("es", activePromotion.slug);
+
+    expect(screen.getByText(ENTRY_RATIO_UNIT)).toBeInTheDocument();
+    expect(screen.getByText(esMessages.entryOffer.governedNote)).toBeInTheDocument();
+    expect(screen.queryByText(esMessages.entryOffer.rulesPending)).toBeNull();
+
+    view.unmount();
+  });
+
+  it("con la version de reglas declarada, la portada publica el ratio", async () => {
+    const view = await renderHome("es", activePromotion.slug);
+
+    expect(screen.getByText(ENTRY_RATIO_UNIT)).toBeInTheDocument();
+    expect(screen.queryByText(esMessages.entryOffer.rulesPending)).toBeNull();
+
+    view.unmount();
+  });
+});
+
+async function renderHome(locale: Locale, slug: string) {
+  current.locale = locale;
+  current.activeSlug = slug;
+
+  const ui = await HomePage({ params: Promise.resolve({ locale }) });
+
+  return renderIn(locale, ui);
+}
 
 async function renderPage(locale: Locale, slug: string) {
   current.locale = locale;

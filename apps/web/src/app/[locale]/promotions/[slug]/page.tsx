@@ -211,10 +211,14 @@ export default async function PromotionDetailPage({
         </section>
 
         <div className="mt-s10 grid gap-s5 lg:grid-cols-2">
+          {/* `rulesPublished` es la MISMA senal que retira la cuenta atras
+              arriba (DEC-044): sin documento que fije el ratio, el panel
+              conserva el titulo y dice que falta, pero no publica la cifra. */}
           <EntryOfferPanel
             offer={promotion.entry_offer}
             presentation={presentation}
             multipliersEnabled={isFeatureEnabled(uiConfig.flags, "entry_multipliers_enabled")}
+            rulesPublished={hasRules}
             locale={locale}
             timeZone={promotion.legal_timezone}
           />

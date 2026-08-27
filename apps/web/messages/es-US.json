@@ -125,7 +125,8 @@
     "multiplierFractionBadge": "Periodo de {numerator}/{denominator}× participaciones activo",
     "multiplierUntil": "Activo hasta el {until}.",
     "ratio": "Esta promoción otorga {entries} participaciones por cada {amount} de mercancía elegible.",
-    "ratioUnavailable": "Esta promoción no declara ninguna oferta de participaciones."
+    "ratioUnavailable": "Esta promoción no declara ninguna oferta de participaciones.",
+    "rulesPending": "La oferta de participaciones de esta promoción la fijan sus Reglas Oficiales, que todavía no se han publicado."
   },
   "error": {
     "body": "No hemos podido mostrar la página. Puedes intentar cargarla de nuevo.",

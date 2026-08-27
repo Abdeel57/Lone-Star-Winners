@@ -239,10 +239,16 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
               como una tarjeta de cuatro lineas acaba pareciendo un error de
               maquetacion. */}
           <div className={`grid gap-s5 ${amoeEnabled ? "lg:grid-cols-2" : "max-w-narrow"}`}>
+            {/* La MISMA senal que contiene el hero y la banda de anuncio
+                (DEC-044). Se lee del resumen -no del detalle- porque el hero ya
+                la lee de ahi: si el detalle fallara, el hero seguiria contenido
+                y este panel publicaria el ratio, que es exactamente la
+                contradiccion que DEC-044 vino a cerrar. */}
             <EntryOfferPanel
               offer={detail?.entry_offer ?? null}
               presentation={presentation}
               multipliersEnabled={isFeatureEnabled(uiConfig.flags, "entry_multipliers_enabled")}
+              rulesPublished={promotion.rules_version_id !== null}
               locale={locale}
               timeZone={promotion.legal_timezone}
             />

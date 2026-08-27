@@ -35,11 +35,33 @@ import { shouldShowMultiplier, type PromotionPresentation } from "@/lib/promotio
  * para convertirlo en "1.5": se imprimen los dos numeros. Un multiplicador
  * fraccionario redondeado a decimal es una cifra distinta de la que aplico el
  * motor, y en esta pantalla eso seria decir algo falso sobre la promocion.
+ *
+ * SIN REGLAS PUBLICADAS NO SE PUBLICA LA OFERTA (DEC-044)
+ * -------------------------------------------------------
+ * El ratio -"5 participaciones por cada $1 de mercancia elegible"- es una
+ * afirmacion sobre COMO FUNCIONA la promocion, de la misma clase que las que
+ * DEC-044 retiro del hero y de la banda de anuncio. Y es la mas concreta de
+ * todas: un numero que el participante puede multiplicar por su carrito. Ese
+ * numero no lo fija este panel ni el catalogo, lo fija la version de reglas
+ * (DEC-012); mientras no exista documento que lo gobierne, no hay nada que
+ * publicar. El multiplicador cae con el, y por el mismo motivo: es el ratio
+ * amplificado.
+ *
+ * El panel NO desaparece. Es la misma linea que se trazo en la banda de
+ * anuncio: conserva su titulo y dice exactamente que falta. Enmudecerlo dejaria
+ * un hueco sin explicacion justo donde el visitante viene a buscar la cifra.
+ *
+ * La senal es `rules_version_id`, leida por la pagina y pasada como prop. Es la
+ * misma que consultan el hero y la banda, y llega ya resuelta por el mismo
+ * motivo que `multipliersEnabled`: la decision se toma en SERVIDOR, en la misma
+ * peticion que el render, y este componente no vuelve a preguntar por su
+ * cuenta.
  */
 export function EntryOfferPanel({
   offer,
   presentation,
   multipliersEnabled,
+  rulesPublished,
   locale,
   timeZone,
 }: {
@@ -47,12 +69,44 @@ export function EntryOfferPanel({
   readonly presentation: PromotionPresentation;
   /** Valor de `entry_multipliers_enabled`, leido en servidor (DEC-013). */
   readonly multipliersEnabled: boolean;
+  /**
+   * Si la promocion tiene version de Reglas Oficiales publicada (DEC-044).
+   *
+   * OBLIGATORIA A PROPOSITO, sin valor por defecto: un `true` implicito haria
+   * que quien anadiera un tercer sitio de uso publicara el ratio por olvido, y
+   * el olvido caeria del lado inseguro.
+   */
+  readonly rulesPublished: boolean;
   readonly locale: Locale;
   readonly timeZone: string;
 }) {
   const t = useTranslations("entryOffer");
 
+  // Sin oferta declarada no hay nada que publicar NI que retener: el panel no
+  // se renderiza, con reglas o sin ellas.
   if (offer === null) return null;
+
+  if (!rulesPublished) {
+    return (
+      <Card as="section" elevation="flat" padding="md">
+        <CardTitle as="h2" size="sm">
+          {t("heading")}
+        </CardTitle>
+
+        {/*
+         * En tono de dato y no de alarma: el aviso fuerte -`home.rulesNotPublished`
+         * en `Alert tone="warning"`- ya esta en el hero de la portada y en la
+         * banda de avisos del detalle. Repetir aqui la misma alerta seria decir
+         * dos veces lo mismo en la misma pantalla; lo que este panel aporta es
+         * por que ESTA seccion se ha quedado sin cifra.
+         *
+         * Tampoco se pinta `governedNote`: dice que "las cifras que se muestran
+         * aqui son informativas", y aqui ya no se muestra ninguna.
+         */}
+        <p className="mt-s3 text-body-md text-text-muted">{t("rulesPending")}</p>
+      </Card>
+    );
+  }
 
   const showMultiplier = shouldShowMultiplier(multipliersEnabled, offer.multiplier, presentation);
 

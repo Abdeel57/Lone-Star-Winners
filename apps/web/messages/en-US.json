@@ -125,7 +125,8 @@
     "multiplierFractionBadge": "{numerator}/{denominator}× entry period active",
     "multiplierUntil": "Active until {until}.",
     "ratio": "This promotion awards {entries} entries per {amount} of eligible merchandise.",
-    "ratioUnavailable": "This promotion does not state an entry offer."
+    "ratioUnavailable": "This promotion does not state an entry offer.",
+    "rulesPending": "The entry offer for this promotion is set by its Official Rules, which have not been published yet."
   },
   "error": {
     "body": "The page could not be displayed. You can try loading it again.",

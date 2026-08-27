@@ -701,6 +701,7 @@ describe("EntryOfferPanel (DEC-013 y DEC-032)", () => {
         offer={baseEntryOffer}
         presentation={activePresentation}
         multipliersEnabled={false}
+        rulesPublished
         locale="en"
         timeZone="America/Chicago"
       />,
@@ -716,6 +717,7 @@ describe("EntryOfferPanel (DEC-013 y DEC-032)", () => {
         offer={multipliedEntryOffer}
         presentation={activePresentation}
         multipliersEnabled={false}
+        rulesPublished
         locale="en"
         timeZone="America/Chicago"
       />,
@@ -734,6 +736,7 @@ describe("EntryOfferPanel (DEC-013 y DEC-032)", () => {
         offer={multipliedEntryOffer}
         presentation={activePresentation}
         multipliersEnabled
+        rulesPublished
         locale="es"
         timeZone="America/Chicago"
       />,
@@ -751,6 +754,7 @@ describe("EntryOfferPanel (DEC-013 y DEC-032)", () => {
         offer={fractionalEntryOffer}
         presentation={activePresentation}
         multipliersEnabled
+        rulesPublished
         locale="en"
         timeZone="America/Chicago"
       />,
@@ -767,6 +771,7 @@ describe("EntryOfferPanel (DEC-013 y DEC-032)", () => {
         offer={multipliedEntryOffer}
         presentation={presentPromotion("CLOSED")}
         multipliersEnabled
+        rulesPublished
         locale="en"
         timeZone="America/Chicago"
       />,
@@ -782,6 +787,7 @@ describe("EntryOfferPanel (DEC-013 y DEC-032)", () => {
         offer={null}
         presentation={activePresentation}
         multipliersEnabled
+        rulesPublished
         locale="en"
         timeZone="America/Chicago"
       />,
@@ -797,6 +803,7 @@ describe("EntryOfferPanel (DEC-013 y DEC-032)", () => {
         offer={{ ...baseEntryOffer, unit_amount: { amount_minor: "no", currency: "USD" } }}
         presentation={activePresentation}
         multipliersEnabled={false}
+        rulesPublished
         locale="en"
         timeZone="America/Chicago"
       />,
