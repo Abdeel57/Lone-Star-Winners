@@ -1,0 +1,13 @@
+# Falsos positivos de gitleaks en el HISTORIAL, identificados por huella
+# (commit:fichero:regla:linea). Se ignoran aqui y no con `gitleaks:allow`
+# porque los commits ya estan empujados y la constitucion prohibe reescribir
+# el historial (CLAUDE.md, principio 18). Cada linea debe decir que valor es y
+# por que no es un secreto; una huella sin explicacion no se acepta.
+#
+# Detectados por gitleaks v8.18.4 (version fijada en .github/workflows/security.yml)
+# con la regla `generic-api-key`; 8.30.1 no los marca. Las dos son la MISMA
+# cadena de fixture: `authorizationReference: "APROBACION-LEGAL-2026-014"`, la
+# referencia documental ficticia de una autorizacion de sorteo (DEC-017), sin
+# entropia de clave y sin ningun uso como credencial.
+5e10dd3ee505124fa505ab2aa2625b8f5ba701a0:apps/api/test/draw-export.test.ts:generic-api-key:240
+0a1a2c616687412e9dfb73095ba31c99936ab12c:tests/security/src/helpers/draw-fixtures.ts:generic-api-key:337
