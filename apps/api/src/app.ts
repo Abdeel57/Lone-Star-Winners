@@ -6,8 +6,8 @@
  *   1. Se instala la guardia de rutas ANTES que nada. Si se instalara despues,
  *      cualquier ruta registrada por un plugin anterior escaparia al control
  *      deny-by-default de DEC-015.
- *   2. Se decora el autorizador con la version que DENIEGA todo. Si
- *      `packages/security` no lo sustituye, el sistema falla cerrado.
+ *   2. Se decora el autorizador. Desde DEC-045 es el real, respaldado por la
+ *      tabla de sesiones; antes era uno que denegaba todo lo no publico.
  *   3. Se registran los plugins de seguridad de transporte.
  *   4. Al final, las rutas.
  */
@@ -21,12 +21,7 @@ import { fastify, type FastifyInstance } from "fastify";
 
 import type { ApiConfig } from "./config/env.js";
 import { ApiError, ApiErrors } from "./http/errors.js";
-import {
-  denyAllAuthorizer,
-  installRouteGuard,
-  registerRoutes,
-  type RouteDefinition,
-} from "./http/route-registry.js";
+import { installRouteGuard, registerRoutes, type RouteDefinition } from "./http/route-registry.js";
 import { zodSerializerCompiler, zodValidatorCompiler } from "./http/zod-compilers.js";
 import { createLogger } from "./observability/logger.js";
 import {
@@ -35,6 +30,7 @@ import {
 } from "./observability/request-context.js";
 import cookie from "@fastify/cookie";
 
+import { createSessionAuthorizer } from "./http/session-authorizer.js";
 import { buildAuthRoutes } from "./routes/auth.js";
 import { buildCartRoutes } from "./routes/cart.js";
 import { buildHealthRoutes } from "./routes/health.js";
@@ -143,13 +139,25 @@ export async function createApp(dependencies: AppDependencies): Promise<FastifyI
   // ---- 1. Guardia deny-by-default, antes de cualquier ruta (DEC-015) ----
   installRouteGuard(app);
 
-  // ---- 2. Autorizador y resolutor de identidad, ambos fallando cerrados ----
+  // ---- 2. Autorizador y resolutor de identidad ----
   //
   //        Dos puertos y no uno: el primero responde "puede pasar?" antes del
   //        handler; el segundo, "quien es?", y solo lo necesitan las rutas que
-  //        leen datos de alguien. Los dos los sustituira `packages/security`
-  //        (DEC-006); hasta entonces uno deniega y el otro no conoce a nadie.
-  app.decorate("lswAuthorizer", denyAllAuthorizer);
+  //        leen datos de alguien.
+  //
+  //        DEC-045 sustituye aqui el autorizador que denegaba TODO lo no
+  //        publico por uno real, respaldado por la tabla de sesiones. Es el
+  //        momento en que las rutas con permiso dejan de ser inalcanzables.
+  //
+  //        El resolutor de principal sigue sin conocer a nadie, y no es un
+  //        descuido: las rutas de carrito admiten ademas SESIONES ANONIMAS
+  //        (DEC-023), que no existen todavia. Un participante autenticado ya
+  //        se autoriza; un visitante sin cuenta sigue sin carrito, y eso se
+  //        cierra cuando exista el registro.
+  app.decorate(
+    "lswAuthorizer",
+    createSessionAuthorizer({ identity: dependencies.identity, config }),
+  );
   installPrincipalResolver(app, noPrincipalResolver);
 
   // ---- 3. Zod como unico lenguaje de esquemas (DEC-014) ----
