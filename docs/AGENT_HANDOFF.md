@@ -1413,3 +1413,58 @@ Affected files: `packages/tpa/src/reconciliation-checks.ts`,
 `docs/LEGAL_PENDING.md`.
 
 Blocking: SÍ para finalizar cualquier export real.
+
+---
+
+## HO-034
+
+Status: OPEN
+
+## Handoff
+
+Date: 2026-08-27
+From: security-integration (HO-030), vía Team Lead
+To: sesión paralela (1, 4), frontend-ux (2, 3, 6), backend-sweepstakes (5, 7)
+
+Context:
+Al mapear el recorrido de punta a punta aparecieron defectos que hoy hacen
+imposible completar la mitad del flujo. Las pruebas afirman lo correcto y
+están en `test.fixme` con su motivo (`tests/e2e/lib/blockers.mjs`).
+
+1. **BLOQUEANTE — el autorizador no evalúa los feature flags.**
+   `apps/api/src/http/session-authorizer.ts` pasa `featureFlagEnabled: null`,
+   `reasonProvided: false` y `secondApprovalGranted: false` a `authorize()`,
+   que deniega con `FEATURE_FLAG_NOT_EVALUATED`. Sembrar el flag encendido no
+   desbloquea nada: el autorizador no lo lee. Afecta a `amoe.self.submit`,
+   `amoe.review.approve/reject`, `entry.adjust.create/approve` → **403
+   siempre**. Sin esto, AMOE y ajustes no funcionan contra la API real.
+2. **Carrito: web y API no coinciden.** `cart/page.tsx:128` lee
+   `cartResult.data.cart.items`; `GET /cart` devuelve `{ id, currency, lines,
+subtotal, entry_quote }` (ya señalado en HO-017). La pantalla no puede
+   pintar líneas.
+3. **`apps/web` no emite ninguna cabecera de seguridad** (ni CSP, ni HSTS, ni
+   `nosniff`) en ningún entorno: `next.config.mjs` no define `headers()`.
+   `apps/api` sí las emite.
+4. **No existe `POST /auth/register`** (fase siguiente de identidad). El e2e
+   siembra el participante por SQL.
+5. **El panel llama a ocho endpoints inexistentes** (`/admin/dashboard`,
+   `/admin/promotions`, `/admin/orders`, `/admin/audit-events`, …). Solo AMOE y
+   ajustes tienen backend. Catálogo y promociones de admin son de la sesión
+   paralela (fase 3); dashboard, pedidos, participantes y auditoría de esta.
+6. Menor: la API responde `PAYMENT_PROVIDER_NOT_CONFIGURED` y el diccionario
+   solo traduce `PAYMENT_PROVIDER_UNAVAILABLE`.
+7. **`pnpm run lint:root` está ROJO en `main`** (6 errores: definiciones de
+   reglas `@next/next/*` y `jsx-a11y/*` no encontradas en `apps/web` y
+   `packages/ui`, más un `eslint-disable` inútil en `checkout-actions.ts:15`).
+   El gate `lint` de CI ejecuta `lint:root`: **fallará en el primer push**.
+   `turbo run lint` (por paquete) sí está en verde.
+
+What I need from you:
+(1) evaluar flags, `reason` y segunda aprobación en el autorizador desde los
+repositorios y la petición; (2) alinear el carrito con el contrato; (3)
+`headers()` con CSP, HSTS en producción y `nosniff`; (5) endpoints de admin
+que faltan; (6) copy; (7) que la configuración raíz ignore los paquetes con
+config propia o registre sus plugins, y `lint:root` en verde.
+
+Blocking: (1) y (7) SÍ antes de cualquier push; el resto para dar por
+integrado el flujo.
