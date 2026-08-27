@@ -15,7 +15,7 @@ import {
 } from "@/lib/api";
 
 import { anonymousSession } from "./fixtures/account";
-import { cartWithQuote } from "./fixtures/cart";
+import { cartWithAvailabilityStates, cartWithQuote } from "./fixtures/cart";
 import { mockRoutes, MOCK_REQUEST_ID, type MockMethod } from "./routes";
 
 /**
@@ -154,6 +154,17 @@ export const scenarios = {
    * lineas. Este escenario sirve el carrito lleno para poder comprobarla.
    */
   cartWithLines: () => http.get(url(API_PATHS.cart), () => HttpResponse.json(cartWithQuote)),
+
+  /**
+   * Carrito con los TRES estados de `availability`.
+   *
+   * `cartWithLines` sirve dos lineas `IN_STOCK`, que es el caso comodo. Sin
+   * este escenario, `LOW_STOCK` y `OUT_OF_STOCK` no se recorrerian nunca contra
+   * la capa de API y solo existirian en los tests de componente, donde la forma
+   * de la respuesta no se comprueba.
+   */
+  cartWithAvailability: () =>
+    http.get(url(API_PATHS.cart), () => HttpResponse.json(cartWithAvailabilityStates)),
 
   entryQuote: (body: JsonBodyType) =>
     http.get(url(API_PATHS.cartEntryQuote), () => HttpResponse.json(body)),

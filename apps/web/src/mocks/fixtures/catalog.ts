@@ -1,4 +1,5 @@
 import type {
+  AvailabilityStatus,
   ProductDetail,
   ProductEntryEligibility,
   ProductSummary,
@@ -19,10 +20,13 @@ import { activePromotion } from "./promotions";
  *   interfaz que asuma "si esta en la tienda, da participaciones".
  * - **Sin promocion contra la que evaluar** ... `entry_eligibility: null`. Pasa
  *   entre promociones y la tienda sigue abierta.
- * - **Agotado** .......................... variantes sin existencias, y el
- *   producto entero agotado.
- * - **Variante no comprable con stock** .. `is_purchasable: false` con
- *   `IN_STOCK`. Existe para que nadie deduzca una cosa de la otra.
+ * - **Agotado** .......................... todas las variantes sin
+ *   existencias. Es el unico caso en el que la tarjeta marca el articulo, y
+ *   por eso hace falta un producto entero asi.
+ * - **Estados mezclados** ................ un articulo con tallas
+ *   `IN_STOCK`, `LOW_STOCK` y `OUT_OF_STOCK` a la vez. Es lo normal en una
+ *   tienda con tallas, y es lo que impide que la agregacion del producto se
+ *   escriba como "la primera variante que haya".
  * - **Sin imagen** ....................... `image_url: null` e `images: []`. En
  *   un catalogo real hay articulos sin foto y la rejilla no puede descuadrarse
  *   por eso.
@@ -34,6 +38,19 @@ import { activePromotion } from "./promotions";
  * respira, si el nombre cabe en dos lineas o si el precio se lee. Siguen siendo
  * datos inventados de desarrollo -el pie de pagina lo dice en cada pantalla- y
  * ninguno afirma nada legal: no hay edades, ni estados, ni plazos, ni ratios.
+ *
+ * LA DISPONIBILIDAD ES POR VARIANTE, Y ES UN OBJETO
+ * -------------------------------------------------
+ * Ningun producto de este archivo declara un `availability` propio: la API no
+ * publica ninguno (`docs/API_CONTRACT.md` seccion 4). El estado del articulo se
+ * DERIVA de sus variantes en la vista (`@/lib/product-availability`).
+ *
+ * Tampoco hay `is_purchasable` ni `stock_quantity`. El primero sigue pendiente
+ * de decision (HO-017) y el segundo dejo de publicarse: el catalogo es anonimo
+ * y publicaba el inventario exacto en crudo mientras el carrito, que va con
+ * sesion, deliberadamente no lo hacia. Un fixture que los trajera volveria a
+ * dejar los tests en verde mientras la pantalla consume campos que la respuesta
+ * real no tiene, que es exactamente lo que HO-034 encontro en el carrito.
  *
  * NINGUN producto declara cuantas participaciones da. La seccion 4 de
  * `docs/API_CONTRACT.md` lo prohibe expresamente: la formula pertenece a la
@@ -63,16 +80,17 @@ function variant(
   sku: string,
   name: { readonly en: string; readonly es: string },
   amountMinor: string,
-  availability: ProductVariant["availability"],
-  isPurchasable = availability === "IN_STOCK" || availability === "LOW_STOCK",
+  status: AvailabilityStatus,
 ): ProductVariant {
   return {
     id,
     sku,
     name: { "en-US": name.en, "es-US": name.es },
     price: { amount_minor: amountMinor, currency: "USD" },
-    availability,
-    is_purchasable: isPurchasable,
+    // OBJETO, no cadena: es la forma que publica el contrato en las dos
+    // superficies, y lo que permite anadir un campo el dia que se decida sin
+    // cambiar el tipo. `quantity_available` NO se publica y aqui no se inventa.
+    availability: { status },
   };
 }
 
@@ -80,7 +98,7 @@ function variant(
 function sizes(
   prefix: string,
   amountMinor: string,
-  availabilityBySize: readonly ProductVariant["availability"][],
+  availabilityBySize: readonly AvailabilityStatus[],
 ): readonly ProductVariant[] {
   const labels = [
     { key: "s", en: "Small", es: "Pequeña" },
@@ -122,7 +140,6 @@ export const eligibleProduct: ProductDetail = {
   image_url: teeImage,
   images: [teeImage, teeImageAlt],
   price_from: { amount_minor: "2500", currency: "USD" },
-  availability: "IN_STOCK",
   entry_eligibility: eligibility(true),
   shipping_note: {
     "en-US": "Ships in 2-4 business days. Free shipping on orders over $75.",
@@ -153,7 +170,6 @@ export const hoodieProduct: ProductDetail = {
   image_url: hoodieImage,
   images: [hoodieImage],
   price_from: { amount_minor: "5800", currency: "USD" },
-  availability: "IN_STOCK",
   entry_eligibility: eligibility(true),
   shipping_note: {
     "en-US": "Ships in 2-4 business days. Free shipping on orders over $75.",
@@ -189,7 +205,6 @@ export const ineligibleProduct: ProductDetail = {
   image_url: mugImage,
   images: [mugImage],
   price_from: { amount_minor: "1800", currency: "USD" },
-  availability: "IN_STOCK",
   entry_eligibility: eligibility(false, "PRODUCT_NOT_ELIGIBLE"),
   shipping_note: null,
   variants: [
@@ -219,7 +234,6 @@ export const soldOutProduct: ProductDetail = {
   image_url: capImage,
   images: [capImage],
   price_from: { amount_minor: "2400", currency: "USD" },
-  availability: "OUT_OF_STOCK",
   entry_eligibility: eligibility(true),
   shipping_note: null,
   variants: [
@@ -234,13 +248,19 @@ export const soldOutProduct: ProductDetail = {
 };
 
 /**
- * Producto con stock pero NO comprable.
+ * Articulo de hogar, con una sola variante disponible.
  *
- * `IN_STOCK` y `is_purchasable: false` a la vez. No es una contradiccion: hay
- * mercancia y aun asi no se puede pedir (retirada, restringida, no publicada).
- * Existe para que ninguna pantalla deduzca una cosa de la otra.
+ * MODELABA `is_purchasable: false` CON `IN_STOCK` y ya no: ese campo no lo
+ * publica ninguna ruta y sigue pendiente de decision (HO-017). Un fixture no
+ * puede seguir describiendo un campo que la API no manda -era justo el defecto
+ * que HO-034 encontro en el carrito-, asi que el caso se retira hasta que exista
+ * el dato. Lo que NO se hace es sustituirlo por `OUT_OF_STOCK`: eso diria que
+ * no hay existencias, que es otra cosa.
+ *
+ * El producto se queda porque la rejilla necesita mercancia normal entre los
+ * casos raros.
  */
-export const notPurchasableProduct: ProductDetail = {
+export const homeThrowProduct: ProductDetail = {
   id: "prd_0000000000000004",
   slug: "woven-cotton-throw",
   name: {
@@ -261,18 +281,10 @@ export const notPurchasableProduct: ProductDetail = {
   image_url: throwImage,
   images: [throwImage],
   price_from: { amount_minor: "6400", currency: "USD" },
-  availability: "UNAVAILABLE",
   entry_eligibility: eligibility(true),
   shipping_note: null,
   variants: [
-    variant(
-      "var_throw_default",
-      "THR-STD",
-      { en: "Standard", es: "Estándar" },
-      "6400",
-      "IN_STOCK",
-      false,
-    ),
+    variant("var_throw_default", "THR-STD", { en: "Standard", es: "Estándar" }, "6400", "IN_STOCK"),
   ],
 };
 
@@ -304,7 +316,6 @@ export const productWithoutImages: ProductDetail = {
   image_url: null,
   images: [],
   price_from: { amount_minor: "600", currency: "USD" },
-  availability: "IN_STOCK",
   entry_eligibility: eligibility(true),
   shipping_note: {
     "en-US": "Ships in a flat envelope, 2-4 business days.",
@@ -334,16 +345,22 @@ export const productDetails: readonly ProductDetail[] = [
   hoodieProduct,
   ineligibleProduct,
   soldOutProduct,
-  notPurchasableProduct,
+  homeThrowProduct,
   productWithoutImages,
   productWithoutPromotion,
 ];
 
-/** Un `ProductSummary` es un `ProductDetail` sin los campos de ficha. */
+/**
+ * Un `ProductSummary` es un `ProductDetail` sin los campos de ficha.
+ *
+ * `variants` SE QUEDA. La API devuelve la misma forma en el listado y en la
+ * ficha -la seccion 4 del contrato lo dice con esas palabras- y ademas la
+ * tarjeta las necesita: sin ellas no puede derivar si queda algo que pedir, que
+ * es lo unico que ensena sobre existencias.
+ */
 export function summaryOf(product: ProductDetail): ProductSummary {
-  const { description, variants, shipping_note, images, ...summary } = product;
+  const { description, shipping_note, images, ...summary } = product;
   void description;
-  void variants;
   void shipping_note;
   void images;
 
@@ -367,7 +384,7 @@ export const catalog: readonly ProductSummary[] = [
   ineligibleProduct,
   productWithoutImages,
   soldOutProduct,
-  notPurchasableProduct,
+  homeThrowProduct,
 ].map(summaryOf);
 
 /** Catalogo tal como se ve cuando no hay ninguna promocion abierta. */

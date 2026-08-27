@@ -133,8 +133,7 @@
   "availability": {
     "IN_STOCK": "In stock",
     "LOW_STOCK": "Low stock",
-    "OUT_OF_STOCK": "Out of stock",
-    "UNAVAILABLE": "Not available"
+    "OUT_OF_STOCK": "Not enough stock"
   },
   "brand": {
     "name": "Lone Star Winners",
@@ -150,8 +149,10 @@
       "body": "Browse the eligible merchandise to add something to it.",
       "title": "Your cart is empty"
     },
+    "itemCount": "{count, plural, one {# item} other {# items}}",
     "itemsHeading": "Merchandise",
     "lineSubtotal": "Line subtotal",
+    "outOfStockNote": "We cannot fulfil this quantity today.",
     "quantityLabel": "Quantity",
     "quote": {
       "beforeCaps": "Before limits: {entries} entries",
@@ -182,7 +183,8 @@
     "subtotalUnavailable": "We cannot show a subtotal for this cart right now.",
     "title": "Your cart",
     "unitPrice": "Unit price",
-    "update": "Update"
+    "update": "Update",
+    "updatedAt": "Last updated {when}"
   },
   "category": {
     "ACCESSORIES": "Accessories",

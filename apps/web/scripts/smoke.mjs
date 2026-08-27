@@ -228,6 +228,25 @@ const CHECKS = [
     headers: { cookie: "lsw_dev_cart=1" },
     expect: ["Camiseta de algodón grueso", "$50.00", "250"],
   },
+  {
+    /*
+     * El carrito con los TRES estados de `availability` (HO-017).
+     *
+     * `lsw_dev_cart=stock` elige el fixture que los trae (ver
+     * `src/mocks/dev-server.ts`). Sin este caso, la unica linea que se renderiza
+     * de verdad es una `IN_STOCK`: una fila que fallara al pintar `LOW_STOCK` o
+     * `OUT_OF_STOCK` -o que tropezara con `availability` ausente- no se veria
+     * hasta tener el backend delante.
+     *
+     * Lo que se comprueba son datos del fixture y no copy del diccionario: los
+     * SKU de las dos lineas nuevas, el subtotal de la que no se puede servir hoy
+     * y el del carrito entero. La linea `OUT_OF_STOCK` sigue contando en el
+     * subtotal y en la cotizacion, que es justo lo que no debe cambiar.
+     */
+    path: "/es/cart",
+    headers: { cookie: "lsw_dev_cart=stock" },
+    expect: ["TEE-M", "TEE-XL", "$100.00", "$175.00", "875"],
+  },
   { path: "/es/faq", expect: [] },
 
   // --- Identidad -----------------------------------------------------------

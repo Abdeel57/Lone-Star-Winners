@@ -39,12 +39,15 @@ import type { EntryQuote } from "@/lib/api";
  * NO SE AFIRMA NI SE NIEGA QUE LA CIFRA SIGA VIGENTE
  * ---------------------------------------------------
  * Este panel llego a comparar `evaluated_at` con un `updated_at` del carrito y
- * a avisar de que la cotizacion estaba caducada. `updated_at` NO EXISTE en la
- * respuesta que publica el contrato (HO-034 punto 2; sigue pedido en HO-017),
- * asi que la comparacion se hacia contra un campo inventado.
+ * a avisar de que la cotizacion estaba caducada. Aquella comparacion se hacia
+ * contra un campo que la respuesta no traia (HO-034 punto 2), y se retiro.
  *
- * Se ha retirado sin sustituirla por una afirmacion en el otro sentido: decir
- * "esta al dia" tampoco se puede demostrar. Lo que se publica es el INSTANTE de
+ * `updated_at` YA EXISTE -lo publica HO-017 y la cabecera del carrito lo pinta-
+ * y el aviso SIGUE SIN VOLVER. Ver abajo: no es que faltara el dato, es que no
+ * hay carrera que avisar.
+ *
+ * Tampoco se sustituye por una afirmacion en el otro sentido: decir "esta al
+ * dia" tampoco se puede demostrar. Lo que se publica es el INSTANTE de
  * evaluacion, que es un dato del servidor y deja que quien mira saque su propia
  * conclusion.
  *

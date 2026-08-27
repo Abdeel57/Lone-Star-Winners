@@ -6,6 +6,7 @@ import type { Locale } from "@/i18n/locales";
 import { Link } from "@/i18n/navigation";
 import { useAvailabilityLabel } from "@/i18n/storefront-labels";
 import { pickLocalized, type ProductSummary } from "@/lib/api";
+import { isProductSoldOut } from "@/lib/product-availability";
 
 /**
  * Tarjeta de producto del catalogo.
@@ -129,7 +130,21 @@ export function ProductCard({
 
   const price = formatMoney(product.price_from, locale);
   const name = pickLocalized(product.name, locale);
-  const soldOut = product.availability === "OUT_OF_STOCK" || product.availability === "UNAVAILABLE";
+
+  /*
+   * EL ESTADO DEL PRODUCTO ES DERIVADO, NO UN CAMPO DE LA RESPUESTA.
+   *
+   * La API publica `availability` POR VARIANTE y ningun estado agregado
+   * (`docs/API_CONTRACT.md` seccion 4). Esta tarjeta tenia un `product.
+   * availability` que la respuesta real no trae.
+   *
+   * La agregacion vive en `@/lib/product-availability` -no aqui- para que la
+   * tarjeta y la ficha del producto no puedan responder distinto a la misma
+   * pregunta. Solo se marca el articulo cuando NINGUNA variante se puede pedir:
+   * marcarlo por su peor talla mandaria a otra tienda a quien tiene la suya
+   * disponible.
+   */
+  const soldOut = isProductSoldOut(product.variants);
 
   return (
     <Card
@@ -190,8 +205,15 @@ export function ProductCard({
             // TINTA, el espejo del relleno claro que esta misma insignia lleva
             // sobre negro. Va encima de una fotografia de estudio claro, asi que
             // un relleno palido no recortaria nada.
+            //
+            // No usa `AvailabilityBadge` -la insignia compartida- porque esa
+            // vive sobre banda OSCURA y su escala de ambar no existe en la
+            // paleta clara: `Badge` solo publica `neutral`, `brand` y `accent`
+            // con tinta medida sobre blanco (DEC-039/040). Lo que si se comparte
+            // es lo que importa que no discrepe: el COPY, que sale del mismo
+            // diccionario, y la agregacion que decide cuando aparece.
             <Badge tone="neutral" emphasis="solid" surface="light" shape="square" size="sm">
-              {availabilityLabel(product.availability)}
+              {availabilityLabel("OUT_OF_STOCK")}
             </Badge>
           ) : null}
         </div>

@@ -405,45 +405,92 @@ export interface OfficialRulesResponse {
 }
 
 // ---------------------------------------------------------------------------
+// Disponibilidad (catalogo y carrito)
+// ---------------------------------------------------------------------------
+
+/**
+ * [CONTRATO] Estado de existencias, en las DOS superficies que lo publican.
+ *
+ * UN SOLO TIPO PORQUE ES UN SOLO DATO
+ * -----------------------------------
+ * `docs/API_CONTRACT.md` publica el mismo objeto en la seccion 4 (variante del
+ * catalogo) y en la seccion 5 (linea del carrito): el mismo enum estable de
+ * tres valores, la misma columna `product_variants.stock_quantity` y **el mismo
+ * predicado**, el que decide el `409 INSUFFICIENT_STOCK`. Declararlo dos veces
+ * en el frontend invitaria a que las dos copias se separaran.
+ *
+ * LO QUE CAMBIA ES LA CANTIDAD POR LA QUE SE PREGUNTA
+ * --------------------------------------------------
+ * En el carrito, la de la linea; en el catalogo, UNA unidad, porque en la ficha
+ * nadie ha elegido todavia cuantas quiere. De ahi que `OUT_OF_STOCK` signifique
+ * cosas distintas de grado en cada sitio -"no caben las cinco que pediste" y
+ * "no cabe ni una"- y que el copy tenga que ser cierto en los dos: por eso NO
+ * dice "agotado".
+ *
+ * El umbral de `LOW_STOCK` no es un numero de negocio -nadie ha aprobado
+ * ninguno y el principio 2 de `CLAUDE.md` prohibe inventarlo-: es la cantidad
+ * preguntada. `null` en la columna significa existencias NO GESTIONADAS y da
+ * `IN_STOCK`; `null` no es cero.
+ *
+ * NO responde "¿esta a la venta?". Esa es `is_purchasable`, sigue pendiente
+ * (HO-017) y el contrato dice expresamente que no se deduce de esta.
+ */
+export type AvailabilityStatus = "IN_STOCK" | "LOW_STOCK" | "OUT_OF_STOCK";
+
+export const AVAILABILITY_STATUSES: readonly AvailabilityStatus[] = [
+  "IN_STOCK",
+  "LOW_STOCK",
+  "OUT_OF_STOCK",
+];
+
+/**
+ * [CONTRATO] Disponibilidad publicada. Hoy solo lleva `status`.
+ *
+ * Es un OBJETO y no una cadena a proposito: el dia que se decida publicar la
+ * cantidad, el campo cabe dentro sin cambiar el tipo de lo ya publicado. Hoy
+ * `quantity_available` NO EXISTE en ninguna de las dos superficies -HO-017
+ * pidio expresamente que no se publicara- y por eso este tipo no lo declara ni
+ * como opcional: un campo opcional aqui invitaria a escribir copy que promete
+ * un numero que nunca llega.
+ */
+export interface Availability {
+  readonly status: AvailabilityStatus;
+}
+
+// ---------------------------------------------------------------------------
 // Catalogo
 // ---------------------------------------------------------------------------
 
 /**
- * [PROVISIONAL] Disponibilidad de una variante.
+ * [CONTRATO] Variante de un producto.
  *
- * Enum estable del backend; el copy es del frontend (DEC-022). `LOW_STOCK`
- * existe separado de `IN_STOCK` porque la interfaz avisa distinto, y
- * `UNAVAILABLE` separado de `OUT_OF_STOCK` porque "agotado" y "retirado de la
- * venta" no son lo mismo para quien mira la ficha.
+ * LO QUE LA API PUBLICA HOY son `id`, `sku`, `price` y `availability`
+ * (`docs/API_CONTRACT.md` seccion 4). `name` sigue siendo una PETICION del
+ * frontend -el selector de talla necesita una etiqueta y el contrato no publica
+ * ninguna- y esta pedida en HO-019.
  *
- * Aqui NO hay cantidad exacta de existencias a proposito: publicar el inventario
- * exacto es informacion de negocio que la ficha no necesita.
+ * LO QUE YA NO ESTA AQUI, Y POR QUE
+ * ---------------------------------
+ * - `is_purchasable`. "¿Esta a la venta?" NO es la misma pregunta que "¿hay
+ *   existencias?", y por eso el contrato dice que **no se deduce** de
+ *   `availability`. Pero tampoco esta implementado ni decidido: sigue pendiente
+ *   en HO-017. Declararlo obligatorio hacia que la interfaz consumiera un campo
+ *   que la respuesta real no trae, que es exactamente el defecto que HO-034
+ *   encontro en el carrito. Mientras no se decida, la unica senal que la
+ *   interfaz tiene es `availability.status`, y lo que dice es que no hay
+ *   existencias, NO que el articulo este retirado.
+ * - `stock_quantity`. El catalogo lo publicaba en crudo -y es anonimo- mientras
+ *   el carrito, que va con sesion, deliberadamente no lo hacia. Se resolvio
+ *   hacia la superficie que no filtra: hoy ninguna de las dos lo publica.
  */
-export type VariantAvailability = "IN_STOCK" | "LOW_STOCK" | "OUT_OF_STOCK" | "UNAVAILABLE";
-
-export const VARIANT_AVAILABILITIES: readonly VariantAvailability[] = [
-  "IN_STOCK",
-  "LOW_STOCK",
-  "OUT_OF_STOCK",
-  "UNAVAILABLE",
-];
-
-/** [PROVISIONAL] Variante comprable de un producto. */
 export interface ProductVariant {
   readonly id: string;
   readonly sku: string;
-  /** Nombre de la variante ("Talla M", "Size M"). Localizado (DEC-030). */
+  /** [PROVISIONAL] Nombre de la variante ("Talla M"). Pedido en HO-019. */
   readonly name: LocalizedText;
   readonly price: MoneyMinor;
-  readonly availability: VariantAvailability;
-  /**
-   * Si la variante puede anadirse al carrito AHORA.
-   *
-   * Se manda aparte de `availability` porque no son la misma pregunta: una
-   * variante puede estar en stock y no ser comprable (retirada, no publicada,
-   * restringida). La interfaz no deduce una de la otra.
-   */
-  readonly is_purchasable: boolean;
+  /** El MISMO objeto que la linea del carrito. Ver `Availability`. */
+  readonly availability: Availability;
 }
 
 /**
@@ -474,28 +521,56 @@ export interface ProductEntryEligibility {
   readonly reason_key: string | null;
 }
 
-/** [PROVISIONAL] Producto en el listado del catalogo. */
+/**
+ * Producto en el listado del catalogo.
+ *
+ * NO HAY DISPONIBILIDAD A NIVEL DE PRODUCTO, Y NO ES UN OLVIDO
+ * -----------------------------------------------------------
+ * La API publica `availability` POR VARIANTE y no publica ningun estado
+ * agregado del producto (`docs/API_CONTRACT.md` seccion 4). Este tipo tenia uno
+ * y la interfaz lo pintaba: era un campo que la respuesta real no trae.
+ *
+ * Un producto con cuatro tallas no tiene UN estado; tiene cuatro. Lo que la
+ * interfaz necesita para la tarjeta -"¿se puede comprar algo de esto hoy?"- es
+ * una AGREGACION DE PRESENTACION sobre las variantes que ya vienen en la
+ * respuesta, y por eso vive en `@/lib/product-availability` y no aqui: es una
+ * decision de como se ensena, no un dato del contrato.
+ *
+ * `variants` esta en el RESUMEN porque la API devuelve la misma forma en el
+ * listado y en la ficha. La ficha no trae nada que el listado no traiga.
+ *
+ * Los campos marcados abajo siguen siendo PETICIONES del frontend (HO-019) y no
+ * los publica ninguna ruta todavia.
+ */
 export interface ProductSummary {
   readonly id: string;
   readonly slug: string;
   readonly name: LocalizedText;
+  /** [PROVISIONAL] Resumen corto para la tarjeta. Pedido en HO-019. */
   readonly summary: LocalizedText;
-  /** Clave estable de categoria; el copy es del frontend (DEC-022). */
+  /** [PROVISIONAL] Clave estable de categoria; el copy es del frontend. */
   readonly category_key: string;
+  /** [PROVISIONAL] Sin modelo de medios, como en el carrito. Pedido en HO-019. */
   readonly image_url: string | null;
-  /** Precio de la variante mas barata. */
+  /** [PROVISIONAL] Precio de la variante mas barata. Pedido en HO-019. */
   readonly price_from: MoneyMinor;
-  /** Disponibilidad agregada del producto. */
-  readonly availability: VariantAvailability;
+  readonly variants: readonly ProductVariant[];
+  /** [PROVISIONAL] Elegibilidad ya evaluada. Pedida en HO-019. */
   readonly entry_eligibility: ProductEntryEligibility | null;
 }
 
-/** [PROVISIONAL] Ficha completa de producto. */
+/**
+ * Ficha completa de producto.
+ *
+ * Misma forma que el resumen mas lo que solo se lee en la ficha. `description`
+ * la publica la API en las dos rutas; `shipping_note` e `images` siguen siendo
+ * peticiones del frontend (HO-019).
+ */
 export interface ProductDetail extends ProductSummary {
   readonly description: LocalizedText;
-  readonly variants: readonly ProductVariant[];
-  /** Informacion de envio, localizada. `null` si no esta configurada. */
+  /** [PROVISIONAL] Informacion de envio, localizada. Pedida en HO-019. */
   readonly shipping_note: LocalizedText | null;
+  /** [PROVISIONAL] Galeria. Sin modelo de medios no hay fuente. */
   readonly images: readonly string[];
 }
 
@@ -525,15 +600,17 @@ export interface ProductListQuery {
  *
  * COPIA LITERAL de `CartWithQuote.lines[]` tal como lo publica
  * `docs/API_CONTRACT.md` seccion 5. Esta interfaz llego a describir otra forma
- * -`line_id`, `product_name` + `variant_name`, `line_total`, `image_url`,
- * `availability`- que era la PETICION del frontend y nunca fue lo que devuelve
- * la ruta: la pantalla del carrito no podia pintar ni una linea contra la API
- * real (HO-034 punto 2, ya senalado en HO-017).
+ * -`line_id`, `product_name` + `variant_name`, `line_total`- que era la
+ * PETICION del frontend y nunca fue lo que devuelve la ruta: la pantalla del
+ * carrito no podia pintar ni una linea contra la API real (HO-034 punto 2, ya
+ * senalado en HO-017).
  *
  * La regla que resuelve el desacuerdo es la 1 del contrato: GANA LO QUE EL
- * DOCUMENTO PUBLICA. Lo que el frontend habia pedido y el documento no publica
- * sigue pedido en HO-017; hasta que llegue, la interfaz DEGRADA de forma
- * deliberada en vez de inventarse el campo.
+ * DOCUMENTO PUBLICA. `image_url` y `availability` estaban entre lo que el
+ * frontend habia pedido y el documento no publicaba; la interfaz los degrado en
+ * vez de inventarlos, y ahora que HO-017 los publica se declaran CON LA FORMA
+ * QUE TIENEN -`availability` es un objeto, no una cadena- y no con la que el
+ * frontend habia propuesto.
  *
  * `id` es la MISMA identidad que `line_id` en la cotizacion de entries -el
  * contrato lo dice explicitamente-. Sin esa correspondencia la interfaz no
@@ -554,6 +631,24 @@ export interface CartLine {
   readonly unit_price: MoneyMinor;
   /** Subtotal de linea CALCULADO POR EL BACKEND. El frontend no multiplica. */
   readonly line_subtotal: MoneyMinor;
+  /**
+   * Imagen de la linea. HOY ES SIEMPRE `null`, y el contrato lo dice: el
+   * esquema no tiene ninguna tabla de medios y `backend` no inventa una para
+   * rellenar el campo.
+   *
+   * El tipo es `string | null` y NO una URL absoluta: sin modelo de medios
+   * nadie ha decidido si la referencia sera absoluta, relativa o de un CDN, y
+   * declararlo aqui seria tomar esa decision de pasada.
+   */
+  readonly image_url: string | null;
+  /**
+   * Disponibilidad de ESTA CANTIDAD, no del articulo.
+   *
+   * Mismo tipo que la variante del catalogo (`Availability`), porque es el
+   * mismo dato calculado con el mismo predicado. Lo que cambia es la cantidad
+   * por la que se pregunta: aqui, la de la linea.
+   */
+  readonly availability: Availability;
 }
 
 /** [CONTRATO] Linea elegible de la cotizacion. */
@@ -644,15 +739,39 @@ export interface EntryQuote {
  * `id` vale `00000000-0000-0000-0000-000000000000` cuando el solicitante aun no
  * tiene carrito: leer no crea nada.
  *
- * LO QUE EL CONTRATO NO PUBLICA, Y POR TANTO NO ESTA AQUI
- * ------------------------------------------------------
- * `updated_at`, `item_count`, y `image_url` y `availability` por linea. Los
- * cuatro siguen pedidos en HO-017. Ninguno se deduce ni se inventa.
+ * `updated_at` es el CUARTO nulable y dice una tercera cosa: no hay fila de
+ * carrito. Ver su campo.
+ *
+ * LO QUE SIGUE SIN PUBLICARSE
+ * ---------------------------
+ * `is_purchasable` por variante, que HO-017 pidio junto a estos y sigue
+ * pendiente para el CATALOGO (seccion 4 del contrato). No se deduce de
+ * `availability`: un articulo retirado de la venta es otra pregunta.
  */
 export interface CartWithQuote {
   readonly id: string;
   /** ISO-4217. `null` en un carrito vacio. */
   readonly currency: string | null;
+  /**
+   * Instante de la ULTIMA MUTACION del carrito, lineas incluidas. ISO-8601 UTC.
+   *
+   * Lo pone el motor, no el reloj del proceso que responde. Vale `null` SOLO en
+   * el carrito vacio sintetico: ahi no existe fila, y devolver `now()` seria
+   * afirmar que un carrito inexistente acaba de cambiar. La interfaz lo pinta
+   * como AUSENCIA -no como el 1 de enero de 1970, que es lo que produce
+   * `new Date(null)`-.
+   */
+  readonly updated_at: string | null;
+  /**
+   * Suma de `quantity` de las lineas. Entero, `0` -nunca `null`- en un carrito
+   * vacio.
+   *
+   * NO es el numero de lineas: dos unidades de la misma variante son una linea
+   * y cuentan dos. Y no entra en ninguna aritmetica de participaciones; es una
+   * cuenta de mercancia. La interfaz lo PINTA: contarlo en el cliente a partir
+   * de `lines` daria otra cifra en cuanto el backend pagine las lineas.
+   */
+  readonly item_count: number;
   readonly lines: readonly CartLine[];
   /** Subtotal CALCULADO POR EL BACKEND. `null` en un carrito vacio. */
   readonly subtotal: MoneyMinor | null;

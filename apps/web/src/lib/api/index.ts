@@ -45,6 +45,8 @@ export type {
   AmoeSubmissionStatus,
   AmoeSubmissionWindow,
   ApiErrorEnvelope,
+  Availability,
+  AvailabilityStatus,
   CartLine,
   CartWithQuote,
   CheckoutMode,
@@ -102,7 +104,6 @@ export type {
   SessionScope,
   SessionState,
   SiteConfigResponse,
-  VariantAvailability,
 } from "./contract";
 export {
   ADJUSTMENT_DIRECTIONS,
@@ -111,6 +112,7 @@ export {
   AMOE_FIELD_TYPES,
   AMOE_MODES,
   AMOE_SUBMISSION_STATUSES,
+  AVAILABILITY_STATUSES,
   CHECKOUT_MODES,
   CHECKOUT_SESSION_STATUSES,
   DRAW_AUTHORIZATION_STATUSES,
@@ -123,7 +125,6 @@ export {
   RULES_VERSION_STATUSES,
   SESSION_LIFECYCLES,
   SESSION_SCOPES,
-  VARIANT_AVAILABILITIES,
 } from "./contract";
 export { apiBaseUrl } from "./http";
 export { isCompleteLocalizedText, pickLocalized } from "./localized";

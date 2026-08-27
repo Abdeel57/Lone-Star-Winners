@@ -9,11 +9,11 @@ import { activePromotion } from "./promotions";
  * TIENEN LA FORMA QUE PUBLICA EL CONTRATO, NO LA QUE LE VENDRIA BIEN A LA UI
  * --------------------------------------------------------------------------
  * `docs/API_CONTRACT.md` seccion 5 publica `CartWithQuote` PLANO -`id`,
- * `currency`, `lines`, `subtotal`, `entry_quote`- y una linea con `id`, `name`,
- * `line_subtotal`. Estos fixtures llegaron a tener otra forma, anidada bajo
- * `cart` y con campos que la ruta no devuelve, y por eso los tests seguian en
- * verde mientras la pantalla no podia pintar ni una linea contra la API real
- * (HO-034 punto 2).
+ * `currency`, `updated_at`, `item_count`, `lines`, `subtotal`, `entry_quote`- y
+ * una linea con `id`, `name`, `line_subtotal`, `image_url` y `availability`.
+ * Estos fixtures llegaron a tener otra forma, anidada bajo `cart` y con campos
+ * que la ruta no devuelve, y por eso los tests seguian en verde mientras la
+ * pantalla no podia pintar ni una linea contra la API real (HO-034 punto 2).
  *
  * De ahi la regla que este archivo hace cumplir: **un fixture que no coincide
  * con la respuesta real convierte a los tests en un espejo**. Si el contrato
@@ -32,15 +32,40 @@ import { activePromotion } from "./promotions";
  *
  * Los casos dificiles que cubre
  * -----------------------------
- * - carrito vacio, con `currency` y `subtotal` a `null` como manda el contrato;
+ * - carrito vacio, con `currency`, `subtotal` y `updated_at` a `null` e
+ *   `item_count` a CERO, como manda el contrato;
  * - carrito con una linea NO elegible;
+ * - los tres estados de `availability`, incluido `OUT_OF_STOCK`, que no bloquea
+ *   la linea ni la cotizacion;
  * - multiplicador aplicado;
  * - tope aplicado (`final_entries` menor que `entries_before_caps`);
  * - carrito sin promocion contra la que cotizar (`entry_quote: null`).
+ *
+ * `item_count` VA ESCRITO A MANO, como todo lo demas. Es la suma de las
+ * cantidades de las lineas y aqui no se suma: el contrato dice que lo publica
+ * el backend, y un fixture que lo calculara comprobaria que la suma del
+ * fixture coincide consigo misma en vez de que la pantalla pinta lo que le
+ * mandan.
+ *
+ * `image_url` va a `null` en TODAS las lineas, y no es una omision: el contrato
+ * dice que hoy es siempre `null` porque el esquema no tiene tabla de medios. Un
+ * fixture con una URL inventada haria pasar un test de una rama que contra la
+ * API real no se recorre nunca.
  */
 
 const CART_ID = "crt_0000000000000001";
 const RULES_VERSION_ID = "prv_0000000000000001";
+
+/**
+ * Instante de la ultima mutacion del carrito.
+ *
+ * ANTERIOR a `evaluated_at` de la cotizacion (12:00), que es el orden natural:
+ * primero se cambia el carrito y despues se cotiza lo que hay dentro. No se
+ * comparan en pantalla -la cotizacion viaja en la misma respuesta- pero un
+ * fixture con el orden invertido describiria una respuesta que el motor no
+ * produce.
+ */
+const CART_UPDATED_AT = "2026-09-15T11:58:30.000Z";
 
 const ELIGIBLE_VARIANT = eligibleProduct.variants[0];
 const INELIGIBLE_VARIANT = ineligibleProduct.variants[0];
@@ -63,6 +88,8 @@ const ELIGIBLE_LINE: CartLine = {
   quantity: 2,
   unit_price: { amount_minor: "2500", currency: "USD" },
   line_subtotal: { amount_minor: "5000", currency: "USD" },
+  image_url: null,
+  availability: { status: "IN_STOCK" },
 };
 
 const INELIGIBLE_LINE: CartLine = {
@@ -74,6 +101,49 @@ const INELIGIBLE_LINE: CartLine = {
   quantity: 1,
   unit_price: { amount_minor: "1800", currency: "USD" },
   line_subtotal: { amount_minor: "1800", currency: "USD" },
+  image_url: null,
+  availability: { status: "IN_STOCK" },
+};
+
+/**
+ * Linea que se lleva EXACTAMENTE lo que queda (`LOW_STOCK`).
+ *
+ * El umbral no es un numero de negocio: el contrato define `LOW_STOCK` como
+ * "el stock de la variante es igual a la cantidad de esta linea". Por eso el
+ * copy no puede prometer unidades -"quedan pocas" si, "quedan tres" no-: la
+ * cantidad exacta no viaja.
+ */
+const LOW_STOCK_LINE: CartLine = {
+  ...ELIGIBLE_LINE,
+  id: "cli_0000000000000004",
+  variant_id: "var_tee_m",
+  sku: "TEE-M",
+  quantity: 1,
+  line_subtotal: { amount_minor: "2500", currency: "USD" },
+  availability: { status: "LOW_STOCK" },
+};
+
+/**
+ * Linea cuya cantidad NO se puede servir hoy (`OUT_OF_STOCK`).
+ *
+ * Sigue siendo una linea normal: cuenta en `item_count`, tiene subtotal y la
+ * cotizacion la incluye entre las elegibles. `OUT_OF_STOCK` es informativo y no
+ * bloquea nada en la interfaz; lo unico que bloquea es un `PATCH` que pida esa
+ * cantidad, y eso lo dice el backend con `409 INSUFFICIENT_STOCK`.
+ *
+ * Que este dentro de `eligible_items` de `outOfStockQuote` es deliberado: si la
+ * pantalla dejara de contarla por su disponibilidad estaria afirmando algo
+ * sobre las participaciones que da la mercancia no entregable, y eso es una
+ * pregunta legal abierta (`docs/LEGAL_PENDING.md`).
+ */
+const OUT_OF_STOCK_LINE: CartLine = {
+  ...ELIGIBLE_LINE,
+  id: "cli_0000000000000005",
+  variant_id: "var_tee_xl",
+  sku: "TEE-XL",
+  quantity: 4,
+  line_subtotal: { amount_minor: "10000", currency: "USD" },
+  availability: { status: "OUT_OF_STOCK" },
 };
 
 /**
@@ -161,6 +231,11 @@ export const cappedQuote: EntryQuote = {
 export const emptyCartWithQuote: CartWithQuote = {
   id: CART_ID,
   currency: null,
+  // `null` porque NO EXISTE FILA de carrito: el vacio es sintetico. Devolver
+  // aqui un instante afirmaria que un carrito inexistente acaba de cambiar.
+  updated_at: null,
+  // Cero, nunca `null`: contar cero cosas es cero.
+  item_count: 0,
   lines: [],
   subtotal: null,
   entry_quote: {
@@ -177,6 +252,10 @@ export const emptyCartWithQuote: CartWithQuote = {
 export const cartWithQuote: CartWithQuote = {
   id: CART_ID,
   currency: "USD",
+  updated_at: CART_UPDATED_AT,
+  // Dos unidades de la camiseta y una de la taza. Es la CUENTA DE UNIDADES y no
+  // el numero de lineas, que serian dos.
+  item_count: 3,
   lines: [ELIGIBLE_LINE, INELIGIBLE_LINE],
   subtotal: { amount_minor: "6800", currency: "USD" },
   entry_quote: baseQuote,
@@ -186,9 +265,66 @@ export const cartWithQuote: CartWithQuote = {
 export const cartWithTwoVariantsOfSameProduct: CartWithQuote = {
   id: CART_ID,
   currency: "USD",
+  updated_at: CART_UPDATED_AT,
+  item_count: 3,
   lines: [ELIGIBLE_LINE, SECOND_ELIGIBLE_LINE],
   subtotal: { amount_minor: "7500", currency: "USD" },
   entry_quote: baseQuote,
+};
+
+/**
+ * Cotizacion del carrito con los tres estados de disponibilidad.
+ *
+ * Las TRES lineas son elegibles, incluida la que no se puede servir hoy. Las
+ * cifras son datos fijos escritos a mano, como en el resto del archivo: no
+ * salen de multiplicar el subtotal por ningun ratio, porque la formula la fija
+ * la version de reglas y hoy sigue en `TBD`.
+ */
+export const availabilityQuote: EntryQuote = {
+  ...baseQuote,
+  eligible_subtotal: { amount_minor: "17500", currency: "USD" },
+  entries_before_caps: 875,
+  final_entries: 875,
+  eligible_items: [
+    {
+      line_id: ELIGIBLE_LINE.id,
+      sku: ELIGIBLE_LINE.sku,
+      quantity: ELIGIBLE_LINE.quantity,
+      multiplier_ids: [],
+    },
+    {
+      line_id: LOW_STOCK_LINE.id,
+      sku: LOW_STOCK_LINE.sku,
+      quantity: LOW_STOCK_LINE.quantity,
+      multiplier_ids: [],
+    },
+    {
+      line_id: OUT_OF_STOCK_LINE.id,
+      sku: OUT_OF_STOCK_LINE.sku,
+      quantity: OUT_OF_STOCK_LINE.quantity,
+      multiplier_ids: [],
+    },
+  ],
+  ineligible_items: [],
+};
+
+/**
+ * Carrito con los TRES estados de `availability` a la vez.
+ *
+ * Existe para que la pantalla se pueda comprobar entera en una sola lectura:
+ * los tres estados conviven en un carrito real en cuanto hay tres tallas del
+ * mismo articulo con distinto stock.
+ */
+export const cartWithAvailabilityStates: CartWithQuote = {
+  id: CART_ID,
+  currency: "USD",
+  updated_at: CART_UPDATED_AT,
+  // Dos + una + cuatro unidades. La cifra la publica el backend; aqui es un
+  // dato escrito, no una suma.
+  item_count: 7,
+  lines: [ELIGIBLE_LINE, LOW_STOCK_LINE, OUT_OF_STOCK_LINE],
+  subtotal: { amount_minor: "17500", currency: "USD" },
+  entry_quote: availabilityQuote,
 };
 
 export const cartWithMultipliedQuote: CartWithQuote = {
@@ -210,3 +346,5 @@ export const cartWithoutQuote: CartWithQuote = {
 /** Las lineas sueltas, para los tests de fila. */
 export const eligibleCartLine = ELIGIBLE_LINE;
 export const ineligibleCartLine = INELIGIBLE_LINE;
+export const lowStockCartLine = LOW_STOCK_LINE;
+export const outOfStockCartLine = OUT_OF_STOCK_LINE;

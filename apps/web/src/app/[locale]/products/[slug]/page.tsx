@@ -1,20 +1,18 @@
-import { Alert, Badge, Card, CardTitle, MediaFrame } from "@lsw/ui";
+import { Alert, Card, CardTitle, MediaFrame } from "@lsw/ui";
 import { notFound } from "next/navigation";
 import { hasLocale, useTranslations } from "next-intl";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 
 import { AddToCartForm } from "@/components/add-to-cart-form";
 import { ApiErrorState } from "@/components/api-error-state";
+import { AvailabilityBadge } from "@/components/availability-badge";
 import { formatMoney } from "@/i18n/formatters";
 import type { Locale } from "@/i18n/locales";
 import { Link } from "@/i18n/navigation";
 import { routing } from "@/i18n/routing";
-import {
-  useAvailabilityLabel,
-  useCategoryLabel,
-  useIneligibilityReason,
-} from "@/i18n/storefront-labels";
+import { useCategoryLabel, useIneligibilityReason } from "@/i18n/storefront-labels";
 import { fetchProduct, pickLocalized, type ProductDetail } from "@/lib/api";
+import { productAvailabilityStatus } from "@/lib/product-availability";
 
 /**
  * Render por peticion, siempre (DEC-013).
@@ -239,21 +237,29 @@ function ProductCategory({ categoryKey }: { readonly categoryKey: string }) {
   return <p className="text-overline uppercase text-text-subtle">{categoryLabel(categoryKey)}</p>;
 }
 
+/**
+ * Disponibilidad del articulo, DERIVADA de sus variantes.
+ *
+ * La API no publica un estado por producto: publica uno por variante
+ * (`docs/API_CONTRACT.md` seccion 4). Esta pagina pintaba un
+ * `product.availability` que la respuesta real no trae.
+ *
+ * La agregacion es la misma que usa la tarjeta del catalogo -vive en
+ * `@/lib/product-availability`- para que las dos pantallas no puedan decir
+ * cosas distintas del mismo articulo. Y la insignia es la compartida: un solo
+ * copy y una sola escala de tonos para un solo enum.
+ *
+ * Sin variantes no se pinta nada. `null` ahi no es "agotado" -no hay nada que
+ * agotar- y el formulario de compra ya dice, con sus palabras, que este
+ * articulo no tiene opciones que pedir.
+ */
 function ProductAvailability({ product }: { readonly product: ProductDetail }) {
-  const availabilityLabel = useAvailabilityLabel();
-
-  const tone =
-    product.availability === "IN_STOCK"
-      ? "success"
-      : product.availability === "LOW_STOCK"
-        ? "warning"
-        : "neutral";
+  const status = productAvailabilityStatus(product.variants);
+  if (status === null) return null;
 
   return (
     <div>
-      <Badge tone={tone} size="sm">
-        {availabilityLabel(product.availability)}
-      </Badge>
+      <AvailabilityBadge status={status} />
     </div>
   );
 }

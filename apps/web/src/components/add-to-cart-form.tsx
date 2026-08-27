@@ -33,11 +33,28 @@ import { addToCartAction, type CartActionResult } from "@/lib/cart-actions";
  * (DEC-023, requisito R13 de `security`), y aparece en `/cart`. El texto lo
  * dice con esas palabras en vez de dejar al participante suponer.
  *
- * EL SELECTOR LISTA TAMBIEN LAS VARIANTES NO COMPRABLES
- * -----------------------------------------------------
- * Deshabilitadas y con su motivo en la etiqueta. Ocultarlas haria que una talla
- * agotada pareciera no existir, y quien la busca acabaria pensando que se
- * equivoco de producto.
+ * EL SELECTOR LISTA TAMBIEN LAS VARIANTES QUE HOY NO SE PUEDEN PEDIR
+ * ------------------------------------------------------------------
+ * Deshabilitadas y con su estado en la etiqueta. Ocultarlas haria que una talla
+ * sin existencias pareciera no existir, y quien la busca acabaria pensando que
+ * se equivoco de producto.
+ *
+ * LA UNICA SENAL QUE HAY ES `availability.status`
+ * -----------------------------------------------
+ * Este formulario deshabilitaba por `is_purchasable`, un campo que la API NO
+ * publica y que sigue pendiente de decision (HO-017). Mientras no exista, la
+ * variante se deshabilita por FALTA DE EXISTENCIAS y la etiqueta dice
+ * exactamente eso.
+ *
+ * Lo que NO se hace es afirmar que el articulo esta retirado de la venta:
+ * `docs/API_CONTRACT.md` seccion 4 dice que esa pregunta -"¿esta a la venta?"-
+ * no se deduce de esta, porque una variante retirada puede tener existencias de
+ * sobra. Deducirla seria inventar un estado que nadie ha publicado.
+ *
+ * Y deshabilitar no es la ultima palabra: el backend vuelve a comprobar
+ * existencias y puede responder `409 INSUFFICIENT_STOCK` o
+ * `409 VARIANT_NOT_PURCHASABLE`, que esta pantalla traduce. El selector evita
+ * el intento inutil; la decision sigue siendo del servidor.
  */
 
 const INITIAL: CartActionResult = { ok: false, code: null, requestId: null };
@@ -64,7 +81,9 @@ export function AddToCartForm({
   const availabilityLabel = useAvailabilityLabel();
   const [state, formAction, pending] = useActionState(submit, INITIAL);
 
-  const purchasable = product.variants.filter((variant) => variant.is_purchasable);
+  const purchasable = product.variants.filter(
+    (variant) => variant.availability.status !== "OUT_OF_STOCK",
+  );
 
   if (product.variants.length === 0) {
     return <Alert tone="info">{t("noVariants")}</Alert>;
@@ -89,10 +108,15 @@ export function AddToCartForm({
           {product.variants.map((variant) => {
             const price = formatMoney(variant.price, locale);
             const name = pickLocalized(variant.name, locale);
-            const suffix = variant.is_purchasable ? null : availabilityLabel(variant.availability);
+            const status = variant.availability.status;
+
+            // El estado se dice tambien cuando la talla SI se puede pedir pero
+            // queda justo lo preguntado: es informacion util antes de elegir, y
+            // el diccionario es el mismo que usa el carrito.
+            const suffix = status === "IN_STOCK" ? null : availabilityLabel(status);
 
             return (
-              <option key={variant.id} value={variant.id} disabled={!variant.is_purchasable}>
+              <option key={variant.id} value={variant.id} disabled={status === "OUT_OF_STOCK"}>
                 {[name, price, suffix].filter((part) => part !== null).join(" · ")}
               </option>
             );

@@ -40,25 +40,32 @@ vi.mock("@/lib/cart-actions", () => ({
 }));
 
 import { CartLineRow } from "@/components/cart-line-row";
+import { CartSummaryMeta } from "@/components/cart-summary-meta";
 import { EntryQuotePanel } from "@/components/entry-quote-panel";
 import { ProductCard } from "@/components/product-card";
 import { ShopFilters } from "@/components/shop-filters";
 import type { Locale } from "@/i18n/locales";
+import { isProductSoldOut, productAvailabilityStatus } from "@/lib/product-availability";
 import {
   baseQuote,
   cappedQuote,
+  cartWithAvailabilityStates,
   cartWithoutQuote,
+  cartWithQuote,
   cartWithTwoVariantsOfSameProduct,
   eligibleCartLine,
   emptyCartWithQuote,
   ineligibleCartLine,
+  lowStockCartLine,
   multipliedQuote,
+  outOfStockCartLine,
 } from "@/mocks/fixtures/cart";
 import {
   catalog,
   catalogWithoutPromotion,
   eligibleProduct,
   ineligibleProduct,
+  productDetails,
   soldOutProduct,
   summaryOf,
 } from "@/mocks/fixtures/catalog";
@@ -245,16 +252,104 @@ describe("CartLineRow", () => {
     expect(screen.queryByText(/MOTIVO_QUE_NO_EXISTE/)).not.toBeInTheDocument();
   });
 
-  it("no pinta imagen ni disponibilidad, que el contrato no publica", () => {
-    // No es una omision estetica: un marco de imagen permanentemente vacio se
-    // lee como una foto rota, y un aviso de existencias que nunca puede
-    // dispararse aparenta una garantia que la respuesta no da (HO-017).
+  it("no pinta imagen mientras `image_url` sea siempre `null`", () => {
+    // El campo YA existe en la respuesta (HO-017) y sigue sin pintarse: el
+    // contrato dice que hoy vale `null` siempre porque no hay tabla de medios.
+    // Un marco permanentemente vacio en cada linea de cada carrito no es un
+    // hueco a la espera de una foto, es el aspecto definitivo del carrito.
+    expect(line.image_url).toBeNull();
+
     const { container } = renderIn(
       "en",
       <CartLineRow line={line} locale="en" ineligibleReasonKey={null} />,
     );
 
     expect(container.querySelector("img")).toBeNull();
+  });
+
+  it("cada linea dice su disponibilidad, en los dos idiomas", () => {
+    // Los tres estados, con el diccionario COMPARTIDO: el catalogo y el carrito
+    // publican el mismo enum calculado con el mismo predicado, y dos copys para
+    // el mismo dato acabarian diciendo cosas distintas.
+    const cases = [
+      {
+        line,
+        en: enMessages.availability.IN_STOCK,
+        es: esMessages.availability.IN_STOCK,
+      },
+      {
+        line: lowStockCartLine,
+        en: enMessages.availability.LOW_STOCK,
+        es: esMessages.availability.LOW_STOCK,
+      },
+      {
+        line: outOfStockCartLine,
+        en: enMessages.availability.OUT_OF_STOCK,
+        es: esMessages.availability.OUT_OF_STOCK,
+      },
+    ] as const;
+
+    for (const locale of ["en", "es"] as const) {
+      for (const expected of cases) {
+        const view = renderIn(
+          locale,
+          <CartLineRow line={expected.line} locale={locale} ineligibleReasonKey={null} />,
+        );
+
+        expect(screen.getByText(locale === "en" ? expected.en : expected.es)).toBeInTheDocument();
+        view.unmount();
+      }
+    }
+  });
+
+  it("`OUT_OF_STOCK` explica que es LA CANTIDAD, y no dice 'agotado'", () => {
+    // La insignia sola se leeria como "se acabo". El contrato dice otra cosa:
+    // esta cantidad no se puede servir hoy, que puede ser "quedan tres y
+    // pediste cinco". De ahi la frase que acompana a la insignia.
+    renderIn(
+      "es",
+      <CartLineRow line={outOfStockCartLine} locale="es" ineligibleReasonKey={null} />,
+    );
+
+    expect(screen.getByText(esMessages.cart.outOfStockNote)).toBeInTheDocument();
+  });
+
+  it("el copy compartido de `OUT_OF_STOCK` no afirma que el articulo se acabo", () => {
+    // El mismo texto se ensena en el catalogo -donde se pregunta por UNA unidad
+    // y si no cabe es que no queda nada- y en el carrito, donde puede significar
+    // "quedan tres y pediste cinco". "Agotado" seria falso en el segundo caso,
+    // asi que no puede estar en el texto compartido.
+    expect(enMessages.availability.OUT_OF_STOCK).not.toMatch(/sold ?out/i);
+    expect(esMessages.availability.OUT_OF_STOCK).not.toMatch(/agotad/i);
+  });
+
+  it("ningun texto de disponibilidad promete un numero de unidades", () => {
+    // La cantidad exacta de existencias NO viaja en ninguna de las dos
+    // superficies (HO-017 pidio expresamente que no se publicara). Un copy como
+    // "quedan 3" seria una cifra inventada, y esta red es lo que impide que
+    // alguien la escriba creyendo que el dato esta ahi.
+    for (const messages of [enMessages, esMessages]) {
+      for (const text of Object.values(messages.availability)) {
+        expect(text).not.toMatch(/\d/);
+      }
+
+      expect(messages.cart.outOfStockNote).not.toMatch(/\d/);
+    }
+  });
+
+  it("`OUT_OF_STOCK` NO bloquea la linea: se puede cambiar y quitar igual", () => {
+    // La elegibilidad de la mercancia no entregable es una pregunta legal
+    // abierta (`docs/LEGAL_PENDING.md`). Una fila que se desactivara sola
+    // estaria respondiendola.
+    const { container } = renderIn(
+      "en",
+      <CartLineRow line={outOfStockCartLine} locale="en" ineligibleReasonKey={null} />,
+    );
+
+    expect(container.querySelectorAll("form")).toHaveLength(2);
+    for (const control of container.querySelectorAll("button, input")) {
+      expect(control.hasAttribute("disabled")).toBe(false);
+    }
   });
 
   it("quitar y cambiar cantidad son dos formularios distintos", () => {
@@ -279,6 +374,144 @@ describe("CartLineRow", () => {
     for (const input of hidden) {
       expect(input.getAttribute("value")).toBe(line.id);
     }
+  });
+});
+
+describe("CartSummaryMeta", () => {
+  /** Prefijo del mensaje de fecha, sin el argumento ICU. */
+  function updatedLabel(messages: typeof enMessages | typeof esMessages): string {
+    const [prefix] = messages.cart.updatedAt.split("{when}");
+    return (prefix ?? "").trim();
+  }
+
+  it("pinta las UNIDADES que publica el servidor, en los dos idiomas", () => {
+    // Tres unidades en dos lineas: la cifra no es `lines.length` y no se cuenta
+    // aqui. Llega de `item_count`.
+    expect(cartWithQuote.item_count).toBe(3);
+    expect(cartWithQuote.lines).toHaveLength(2);
+
+    const view = renderIn(
+      "en",
+      <CartSummaryMeta
+        itemCount={cartWithQuote.item_count}
+        updatedAt={cartWithQuote.updated_at}
+        locale="en"
+        timeZone="UTC"
+      />,
+    );
+    expect(screen.getByText("3 items")).toBeInTheDocument();
+    view.unmount();
+
+    renderIn(
+      "es",
+      <CartSummaryMeta
+        itemCount={cartWithQuote.item_count}
+        updatedAt={cartWithQuote.updated_at}
+        locale="es"
+        timeZone="UTC"
+      />,
+    );
+    expect(screen.getByText("3 artículos")).toBeInTheDocument();
+  });
+
+  it("una sola unidad se dice en singular en los dos idiomas", () => {
+    // "1 items" es el defecto que aparece en cuanto alguien concatena una `s`.
+    // El plural lo resuelve el diccionario, no el componente.
+    const view = renderIn(
+      "en",
+      <CartSummaryMeta itemCount={1} updatedAt={null} locale="en" timeZone="UTC" />,
+    );
+    expect(screen.getByText("1 item")).toBeInTheDocument();
+    view.unmount();
+
+    renderIn("es", <CartSummaryMeta itemCount={1} updatedAt={null} locale="es" timeZone="UTC" />);
+    expect(screen.getByText("1 artículo")).toBeInTheDocument();
+  });
+
+  it("`updated_at` a `null` es AUSENCIA, no el 1 de enero de 1970", () => {
+    // `new Date(null)` devuelve la epoca, que es una fecha valida para `Date` y
+    // que `Number.isNaN` no detecta. Sin esta red, un carrito sin fila anunciaria
+    // que se actualizo hace medio siglo.
+    const { container } = renderIn(
+      "en",
+      <CartSummaryMeta itemCount={2} updatedAt={null} locale="en" timeZone="UTC" />,
+    );
+
+    expect(container.textContent).not.toContain("1970");
+    expect(container.textContent).not.toContain(updatedLabel(enMessages));
+    expect(container.textContent).toContain("2 items");
+  });
+
+  it("el carrito vacio del contrato -cero unidades, sin fecha- se pinta sin inventar nada", () => {
+    expect(emptyCartWithQuote.item_count).toBe(0);
+    expect(emptyCartWithQuote.updated_at).toBeNull();
+
+    const { container } = renderIn(
+      "es",
+      <CartSummaryMeta
+        itemCount={emptyCartWithQuote.item_count}
+        updatedAt={emptyCartWithQuote.updated_at}
+        locale="es"
+        timeZone="UTC"
+      />,
+    );
+
+    expect(container.textContent).toContain("0");
+    expect(container.textContent).not.toContain("1970");
+    expect(container.textContent).not.toContain(updatedLabel(esMessages));
+  });
+
+  it("la fecha se formatea en la zona que se le pasa, no en la del proceso", () => {
+    // DEC-011: un instante se formatea contra una zona DECLARADA. En un
+    // componente de servidor, caer en la zona por defecto seria caer en la del
+    // servidor, que no es la de nadie.
+    const view = renderIn(
+      "en",
+      <CartSummaryMeta
+        itemCount={3}
+        updatedAt={cartWithQuote.updated_at}
+        locale="en"
+        timeZone="UTC"
+      />,
+    );
+    const inUtc = view.container.textContent ?? "";
+    expect(inUtc).toContain(updatedLabel(enMessages));
+    expect(inUtc).not.toContain("1970");
+    view.unmount();
+
+    const other = renderIn(
+      "en",
+      <CartSummaryMeta
+        itemCount={3}
+        updatedAt={cartWithQuote.updated_at}
+        locale="en"
+        timeZone="America/Chicago"
+      />,
+    );
+
+    expect(other.container.textContent).not.toEqual(inUtc);
+  });
+
+  it("no compara la cotizacion con el carrito ni avisa de cotizacion caducada", () => {
+    // El aviso NO vuelve (razonado en el propio componente): la cotizacion viaja
+    // en la misma respuesta que el carrito, asi que no hay carrera que avisar.
+    // Este fixture tiene los dos instantes y son distintos; aun asi, nada se
+    // anuncia.
+    expect(cartWithAvailabilityStates.updated_at).not.toEqual(
+      cartWithAvailabilityStates.entry_quote?.evaluated_at,
+    );
+
+    const { container } = renderIn(
+      "en",
+      <CartSummaryMeta
+        itemCount={cartWithAvailabilityStates.item_count}
+        updatedAt={cartWithAvailabilityStates.updated_at}
+        locale="en"
+        timeZone="UTC"
+      />,
+    );
+
+    expect(container.querySelector('[role="alert"]')).toBeNull();
   });
 });
 
@@ -356,13 +589,68 @@ describe("EntryQuotePanel", () => {
   });
 });
 
+describe("disponibilidad derivada del producto", () => {
+  function variantWith(id: string, status: "IN_STOCK" | "LOW_STOCK" | "OUT_OF_STOCK") {
+    const [first] = eligibleProduct.variants;
+    if (first === undefined) throw new Error("el fixture necesita al menos una variante");
+
+    return { ...first, id, availability: { status } };
+  }
+
+  it("sin variantes no hay estado que ensenar, y eso no es 'agotado'", () => {
+    // `null` y no `OUT_OF_STOCK`: no hay nada que agotar. Colapsarlos diria que
+    // el articulo se acabo cuando lo que pasa es que no tiene opciones.
+    expect(productAvailabilityStatus([])).toBeNull();
+  });
+
+  it("se toma el MEJOR estado, no el peor", () => {
+    // Un articulo con cuatro tallas de las que una se agoto sigue siendo un
+    // articulo que se puede pedir. Marcarlo por su peor talla mandaria a otra
+    // tienda a quien tiene la suya disponible.
+    expect(
+      productAvailabilityStatus([variantWith("a", "OUT_OF_STOCK"), variantWith("b", "IN_STOCK")]),
+    ).toBe("IN_STOCK");
+
+    expect(
+      productAvailabilityStatus([variantWith("a", "OUT_OF_STOCK"), variantWith("b", "LOW_STOCK")]),
+    ).toBe("LOW_STOCK");
+  });
+
+  it("solo con TODAS las variantes sin existencias el articulo esta agotado", () => {
+    expect(
+      productAvailabilityStatus([
+        variantWith("a", "OUT_OF_STOCK"),
+        variantWith("b", "OUT_OF_STOCK"),
+      ]),
+    ).toBe("OUT_OF_STOCK");
+
+    expect(
+      isProductSoldOut([variantWith("a", "OUT_OF_STOCK"), variantWith("b", "LOW_STOCK")]),
+    ).toBe(false);
+  });
+
+  it("la tarjeta no marca agotado un articulo al que solo le falta una talla", () => {
+    // El fixture elegible tiene una talla agotada entre cuatro. Antes de esto,
+    // la tarjeta leia un campo agregado que la API no publica.
+    const product = summaryOf(eligibleProduct);
+    expect(product.variants.some((v) => v.availability.status === "OUT_OF_STOCK")).toBe(true);
+
+    renderIn("en", <ProductCard product={product} locale="en" />);
+
+    expect(screen.queryByText(enMessages.availability.OUT_OF_STOCK)).not.toBeInTheDocument();
+  });
+});
+
 describe("fixtures del hito", () => {
   it("el catalogo cubre los casos dificiles del enunciado", () => {
     // Sin estos fixtures, los estados de arriba no se podrian probar y el
     // primero que los veria seria un participante.
     expect(catalog.some((product) => product.entry_eligibility?.is_eligible === true)).toBe(true);
     expect(catalog.some((product) => product.entry_eligibility?.is_eligible === false)).toBe(true);
-    expect(catalog.some((product) => product.availability === "OUT_OF_STOCK")).toBe(true);
+    // El articulo agotado se reconoce por sus VARIANTES: la API no publica
+    // ningun estado agregado del producto y el fixture ya no lo inventa.
+    expect(catalog.some((product) => isProductSoldOut(product.variants))).toBe(true);
+    expect(catalog.some((product) => !isProductSoldOut(product.variants))).toBe(true);
     expect(catalogWithoutPromotion.every((product) => product.entry_eligibility === null)).toBe(
       true,
     );
@@ -378,15 +666,43 @@ describe("fixtures del hito", () => {
     expect(emptyCartWithQuote.entry_quote?.eligible_subtotal).toBeNull();
   });
 
-  it("hay una variante con stock que aun asi no es comprable", () => {
-    // `IN_STOCK` y `is_purchasable: false` a la vez. Existe para que ninguna
-    // pantalla deduzca una cosa de la otra.
-    const contradictory = eligibleProduct.variants.concat(
-      ineligibleProduct.variants,
-      soldOutProduct.variants,
-    );
+  it("hay un articulo con los tres estados de existencias a la vez", () => {
+    // Es lo normal en una tienda con tallas, y es lo que impide que la
+    // agregacion del producto se escriba como "la primera variante que haya".
+    const states = eligibleProduct.variants.map((variant) => variant.availability.status);
 
-    expect(contradictory.length).toBeGreaterThan(0);
+    expect(new Set(states)).toEqual(new Set(["IN_STOCK", "LOW_STOCK", "OUT_OF_STOCK"]));
+    // Y aun asi el articulo se puede pedir: queda alguna talla.
+    expect(isProductSoldOut(eligibleProduct.variants)).toBe(false);
+    expect(isProductSoldOut(soldOutProduct.variants)).toBe(true);
+  });
+
+  it("ningun producto del mock publica `stock_quantity` ni `is_purchasable`", () => {
+    // El catalogo es ANONIMO y publicaba el inventario exacto en crudo mientras
+    // el carrito, que va con sesion, deliberadamente no lo hacia. Hoy no lo
+    // publica ninguna de las dos superficies, y `is_purchasable` sigue pendiente
+    // de decision (HO-017): un fixture que los trajera dejaria los tests en
+    // verde mientras la pantalla consume campos que la respuesta no manda.
+    for (const product of productDetails) {
+      expect(product).not.toHaveProperty("stock_quantity");
+      expect(product).not.toHaveProperty("availability");
+
+      for (const variant of product.variants) {
+        expect(variant).not.toHaveProperty("stock_quantity");
+        expect(variant).not.toHaveProperty("quantity_available");
+        expect(variant).not.toHaveProperty("is_purchasable");
+        // Objeto, no cadena, y con un solo campo.
+        expect(Object.keys(variant.availability)).toEqual(["status"]);
+      }
+    }
+  });
+
+  it("el resumen del catalogo trae las variantes, como la ficha", () => {
+    // La API devuelve la MISMA forma en el listado y en la ficha. Sin variantes
+    // en el resumen, la tarjeta no puede saber si queda algo que pedir.
+    for (const product of catalog) {
+      expect(product.variants.length).toBeGreaterThan(0);
+    }
   });
 
   it("ninguna cifra de los fixtures se calcula: son datos fijos", () => {

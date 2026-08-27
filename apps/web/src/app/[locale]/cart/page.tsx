@@ -5,6 +5,7 @@ import { getTranslations, setRequestLocale } from "next-intl/server";
 
 import { ApiErrorState, useApiErrorMessage } from "@/components/api-error-state";
 import { CartLineRow } from "@/components/cart-line-row";
+import { CartSummaryMeta } from "@/components/cart-summary-meta";
 import { EntryQuotePanel } from "@/components/entry-quote-panel";
 import { formatMoney } from "@/i18n/formatters";
 import { Link } from "@/i18n/navigation";
@@ -88,6 +89,26 @@ export default async function CartPage({
     <div className="lsw-container py-s10 pb-s16">
       <h1 className="lsw-display text-display-md text-text">{t("cart.title")}</h1>
       <div aria-hidden="true" className="lsw-gold-rule mt-s4 max-w-[7rem]" />
+
+      {/* CUANTA MERCANCIA HAY Y CUANDO CAMBIO, JUNTO AL TITULO.
+
+          Solo con lineas. En el carrito vacio, "0 articulos" debajo de "Tu
+          carrito esta vacio" repite lo que ya dice el estado vacio, y la fecha
+          de ultima actualizacion es `null` por contrato -no hay fila de
+          carrito-, de modo que no habria nada que fechar.
+
+          La zona horaria es la LEGAL de la promocion, la misma con la que se
+          formatea el instante de la cotizacion: pintar los dos instantes del
+          mismo carrito en dos relojes distintos invitaria a compararlos mal
+          (DEC-011). Sin promocion abierta, UTC explicito. */}
+      {cartResult.ok && cartResult.data.lines.length > 0 ? (
+        <CartSummaryMeta
+          itemCount={cartResult.data.item_count}
+          updatedAt={cartResult.data.updated_at}
+          locale={locale}
+          timeZone={timeZone ?? "UTC"}
+        />
+      ) : null}
 
       {errorCode === null ? null : (
         <div className="mt-s5">

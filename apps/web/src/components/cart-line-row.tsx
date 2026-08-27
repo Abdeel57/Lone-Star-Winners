@@ -8,28 +8,49 @@ import { useIneligibilityReason } from "@/i18n/storefront-labels";
 import { pickLocalized, type CartLine } from "@/lib/api";
 import { removeCartItemFormAction, updateCartItemFormAction } from "@/lib/cart-actions";
 
+import { AvailabilityBadge } from "./availability-badge";
+
 /**
  * Una linea del carrito.
  *
  * PINTA EXACTAMENTE LO QUE EL CONTRATO PUBLICA, NI UN CAMPO MAS
  * ------------------------------------------------------------
  * `docs/API_CONTRACT.md` seccion 5 publica por linea: `id`, `variant_id`,
- * `product_slug`, `sku`, `name`, `quantity`, `unit_price` y `line_subtotal`.
- * Esta fila llego a pintar una miniatura y un aviso de disponibilidad; ninguno
- * de los dos campos existe en la respuesta (HO-034 punto 2). Se han retirado en
- * vez de rellenarse con un hueco permanente:
+ * `product_slug`, `sku`, `name`, `quantity`, `unit_price`, `line_subtotal`,
+ * `image_url` y `availability`. Los dos ultimos los publico HO-017 y esta fila
+ * los llevaba degradados a proposito desde que HO-034 encontro que no existian.
  *
- *   - un marco de imagen SIEMPRE vacio se lee como una foto rota, no como una
- *     linea sin foto;
- *   - un aviso de disponibilidad que nunca puede dispararse es codigo muerto
- *     que aparenta una garantia que no existe.
+ * LA DISPONIBILIDAD YA SE DICE, Y DICE LO QUE DICE EL CONTRATO
+ * -----------------------------------------------------------
+ * `availability.status` compara el stock de la variante con LA CANTIDAD DE ESTA
+ * LINEA, no con el articulo. De ahi tres decisiones de esta fila:
  *
- * La falta de existencias NO queda sin decirse: `PATCH /cart/items/{id}`
- * responde `409 INSUFFICIENT_STOCK` y la pagina del carrito traduce ese codigo
- * arriba del todo. El aviso llega cuando hay algo que avisar y viene del
- * servidor, que es el unico que lo sabe.
+ *   - `OUT_OF_STOCK` NO se traduce como "agotado". Significa "esta cantidad no
+ *     se puede servir hoy", que puede querer decir "quedan tres y pediste
+ *     cinco", y por eso ademas de la insignia hay una frase que lo dice.
+ *   - Ningun texto promete unidades. La cantidad exacta de existencias no
+ *     viaja (HO-017 pidio expresamente que no se publicara), asi que "quedan
+ *     pocas" se puede decir y "quedan tres" no.
+ *   - `OUT_OF_STOCK` NO bloquea nada aqui: ni la linea, ni los formularios, ni
+ *     la cotizacion. La elegibilidad de la mercancia que no se puede entregar
+ *     es una pregunta legal ABIERTA (`docs/LEGAL_PENDING.md`), y una interfaz
+ *     que descontara esa linea estaria respondiendola por su cuenta. Lo que si
+ *     bloquea es un `PATCH` que pida esa cantidad, y eso lo dice el backend con
+ *     `409 INSUFFICIENT_STOCK`, que la pagina traduce arriba del todo.
  *
- * Los dos campos siguen pedidos a `backend` en HO-017.
+ * SIGUE SIN HABER IMAGEN, Y AHORA SE SABE POR QUE
+ * -----------------------------------------------
+ * `image_url` se consume -esta en el tipo y llega a este componente- y no se
+ * pinta. El contrato dice que HOY ES SIEMPRE `null`: el esquema no tiene
+ * ninguna tabla de medios. Un marco vacio en todas las lineas de todos los
+ * carritos no seria un hueco a la espera de una foto, seria el aspecto
+ * permanente del carrito, y en una lista densa se lee como una foto rota.
+ *
+ * El marcador de posicion de `ProductCard` no es un precedente para esto: alli
+ * la imagen ES la tarjeta y el hueco mantiene la rejilla alineada. Aqui la
+ * linea es texto, y reservar una columna de imagen a 360px le quita sitio a lo
+ * unico que distingue dos lineas, que es el nombre y el SKU. Cuando exista
+ * modelo de medios, la imagen entra aqui con `MediaFrame` como en la tienda.
  *
  * TODAS LAS CIFRAS VIENEN DEL SERVIDOR
  * ------------------------------------
@@ -93,7 +114,18 @@ export function CartLineRow({
               {productName}
             </Link>
           </h3>
-          <p className="mt-1 font-mono text-body-sm text-text-muted">{line.sku}</p>
+          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-2">
+            <p className="font-mono text-body-sm text-text-muted">{line.sku}</p>
+            <AvailabilityBadge status={line.availability.status} />
+          </div>
+
+          {/* La insignia sola diria "existencias insuficientes" y quien la lea
+              entenderia "se acabo". Esta frase es lo que separa las dos cosas, y
+              es literalmente lo que dice el contrato: la cantidad no se puede
+              servir HOY. No se ofrece un numero porque no viaja ninguno. */}
+          {line.availability.status === "OUT_OF_STOCK" ? (
+            <p className="mt-s2 text-caption text-text-subtle">{t("outOfStockNote")}</p>
+          ) : null}
         </div>
 
         {ineligibleReasonKey === null ? null : (

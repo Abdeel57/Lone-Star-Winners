@@ -1,6 +1,6 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 
-import { apiBaseUrl, API_PATHS, type SessionState } from "@/lib/api";
+import { apiBaseUrl, API_PATHS, type CartWithQuote, type SessionState } from "@/lib/api";
 
 import { activeSession, anonymousSession, MOCK_SESSION_TOKEN } from "./fixtures/account";
 import {
@@ -16,7 +16,7 @@ import {
   amoeMailInConfig,
   amoeOnlineFormConfig,
 } from "./fixtures/amoe";
-import { cartWithQuote, emptyCartWithQuote } from "./fixtures/cart";
+import { cartWithAvailabilityStates, cartWithQuote, emptyCartWithQuote } from "./fixtures/cart";
 import {
   cancelledCheckout,
   completedCheckout,
@@ -297,10 +297,20 @@ function collectBody(request: IncomingMessage, done: (rawBody: string) => void):
  * POR QUE ESTO NO ES IMPLEMENTAR UN CARRITO
  * -----------------------------------------
  * No se acumulan lineas, no se suman cantidades, no se recalcula ningun total
- * y no se cotiza ninguna participacion. Se ELIGE entre dos fixtures escritos a
- * mano, `emptyCartWithQuote` y `cartWithQuote`, cuyas cifras siguen sin
- * calcularse en ningun sitio del frontend (DEC-023, requisito R13 de
- * `security`). Anadir dos camisetas mas deja el carrito exactamente igual.
+ * y no se cotiza ninguna participacion. Se ELIGE entre tres fixtures escritos a
+ * mano, `emptyCartWithQuote`, `cartWithQuote` y `cartWithAvailabilityStates`,
+ * cuyas cifras siguen sin calcularse en ningun sitio del frontend (DEC-023,
+ * requisito R13 de `security`). Anadir dos camisetas mas deja el carrito
+ * exactamente igual.
+ *
+ * EL VALOR DE LA COOKIE ELIGE EL FIXTURE
+ * --------------------------------------
+ * `=1` es el carrito de siempre, con sus dos lineas disponibles. `=stock` sirve
+ * el que trae los TRES estados de `availability`, que de otro modo no se
+ * podrian ver en desarrollo -ni comprobar en el humo- porque no hay forma de
+ * quedarse sin existencias contra un mock. Cualquier otro valor no vacio cae en
+ * el carrito de siempre: un valor desconocido no puede vaciar el carrito de
+ * quien lo tenga.
  *
  * POR QUE UNA COOKIE Y NO UNA VARIABLE DE MODULO
  * ----------------------------------------------
@@ -317,11 +327,32 @@ const DEV_CART_COOKIE = "lsw_dev_cart";
 const CART_COOKIE_SET = `${DEV_CART_COOKIE}=1; Path=/; Max-Age=86400; HttpOnly; SameSite=Lax`;
 const CART_COOKIE_CLEAR = `${DEV_CART_COOKIE}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax`;
 
-function hasCartCookie(request: IncomingMessage): boolean {
-  const header = request.headers.cookie;
-  if (header === undefined) return false;
+/** Valor que pide el carrito con los tres estados de disponibilidad. */
+const CART_COOKIE_AVAILABILITY = "stock";
 
-  return header.split(";").some((pair) => pair.trim().startsWith(`${DEV_CART_COOKIE}=1`));
+/**
+ * Fixture de carrito que corresponde a la cookie de la peticion.
+ *
+ * Se lee cookie a cookie y con igualdad sobre el NOMBRE, no con un
+ * `startsWith` sobre la cabecera entera: la cabecera que reenvia Next trae
+ * pseudo-cookies `Path=/` intercaladas (HO-035), y un prefijo sobre la cadena
+ * completa las confundiria con un valor.
+ */
+function cartFixtureFor(request: IncomingMessage): CartWithQuote {
+  const header = request.headers.cookie;
+  if (header === undefined) return emptyCartWithQuote;
+
+  for (const pair of header.split(";")) {
+    const cookie = pair.trim();
+    if (!cookie.startsWith(`${DEV_CART_COOKIE}=`)) continue;
+
+    const value = cookie.slice(`${DEV_CART_COOKIE}=`.length);
+    if (value === CART_COOKIE_AVAILABILITY) return cartWithAvailabilityStates;
+    // Vacio es la cookie que se acaba de retirar: carrito vaciado.
+    if (value.length > 0) return cartWithQuote;
+  }
+
+  return emptyCartWithQuote;
 }
 
 interface MockOutcome {
@@ -361,14 +392,14 @@ function resolveCart(
 
   if (method !== "GET") return null;
 
-  const filled = hasCartCookie(request);
+  const cart = cartFixtureFor(request);
 
   if (pathname === API_PATHS.cart) {
-    return { body: filled ? cartWithQuote : emptyCartWithQuote };
+    return { body: cart };
   }
 
   if (pathname === API_PATHS.cartEntryQuote) {
-    return { body: (filled ? cartWithQuote : emptyCartWithQuote).entry_quote };
+    return { body: cart.entry_quote };
   }
 
   return null;

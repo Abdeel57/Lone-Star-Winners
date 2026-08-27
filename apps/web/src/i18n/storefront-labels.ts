@@ -1,6 +1,6 @@
 import { useTranslations } from "next-intl";
 
-import type { VariantAvailability } from "@/lib/api";
+import type { AvailabilityStatus } from "@/lib/api";
 
 /**
  * Traduccion de los enums del storefront.
@@ -23,19 +23,48 @@ import type { VariantAvailability } from "@/lib/api";
  * test de paridad comprueba que no falte ninguno.
  */
 
-export function useAvailabilityLabel(): (availability: VariantAvailability) => string {
+/**
+ * Disponibilidad, en las DOS superficies que la publican.
+ *
+ * UN SOLO COPY PARA UN SOLO ESTADO
+ * --------------------------------
+ * El catalogo y el carrito publican el mismo objeto, calculado con el mismo
+ * predicado (`docs/API_CONTRACT.md` secciones 4 y 5). Dos diccionarios para el
+ * mismo enum acabarian diciendo cosas distintas del mismo dato, y la primera en
+ * quedarse atras seria la superficie que menos se toca.
+ *
+ * POR QUE `OUT_OF_STOCK` NO DICE "AGOTADO"
+ * ----------------------------------------
+ * Porque el texto tiene que ser cierto en los dos sitios y lo que cambia entre
+ * ellos es LA CANTIDAD POR LA QUE SE PREGUNTA:
+ *
+ *   - en el catalogo se pregunta por UNA unidad, y entonces si no cabe es que
+ *     no queda nada;
+ *   - en el carrito se pregunta por la cantidad de la linea, y entonces puede
+ *     significar "quedan tres y pediste cinco".
+ *
+ * "Agotado" seria falso en el segundo caso. "Existencias insuficientes" es
+ * cierto en los dos, y donde hace falta mas precision -la linea del carrito- la
+ * pantalla anade una frase que lo explica.
+ *
+ * NINGUN texto de este bloque promete unidades: la cantidad exacta NO se
+ * publica en ninguna de las dos superficies (HO-017 pidio expresamente que no).
+ *
+ * `UNAVAILABLE` ya no existe. "Retirado de la venta" es otra pregunta
+ * -`is_purchasable`-, sigue pendiente y el contrato dice que no se deduce de
+ * esta.
+ */
+export function useAvailabilityLabel(): (status: AvailabilityStatus) => string {
   const t = useTranslations("availability");
 
-  return (availability: VariantAvailability): string => {
-    switch (availability) {
+  return (status: AvailabilityStatus): string => {
+    switch (status) {
       case "IN_STOCK":
         return t("IN_STOCK");
       case "LOW_STOCK":
         return t("LOW_STOCK");
       case "OUT_OF_STOCK":
         return t("OUT_OF_STOCK");
-      case "UNAVAILABLE":
-        return t("UNAVAILABLE");
     }
   };
 }
