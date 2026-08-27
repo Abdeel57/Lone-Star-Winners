@@ -42,6 +42,32 @@ const WEAK_SOURCES: readonly { readonly id: string; readonly pattern: RegExp }[]
 
 const SOURCE_FILE = /\.(ts|tsx|mts|cts|js|mjs|cjs)$/;
 
+/**
+ * Una linea que EMPIEZA por marca de comentario documenta; no ejecuta.
+ *
+ * Hizo falta el dia que `packages/sweepstakes` escribio en su cabecera "este
+ * paquete tiene prohibida por lint cualquier fuente de aleatoriedad, incluidas
+ * Math.random(), Date.now()...". El escaner marcaba como infraccion la frase
+ * que anuncia la prohibicion, que es el peor tipo de falso positivo: castiga
+ * documentar el control y empuja a no escribirlo.
+ *
+ * El criterio es deliberadamente estrecho, igual que el `isDetector` de
+ * `internal-draw-disabled.test.ts`: se exime la linea solo si su primer
+ * caracter no vacio abre comentario. `const n = Math.random(); // ok` NO se
+ * exime, porque no empieza por comentario. Y una linea de codigo escondida
+ * dentro de un bloque `/* ... *\/` sin asterisco de continuacion tampoco se
+ * exime: se reportaria. El error posible es de mas, no de menos.
+ */
+function isCommentLine(text: string): boolean {
+  const trimmed = text.trimStart();
+  return (
+    trimmed.startsWith("*") ||
+    trimmed.startsWith("//") ||
+    trimmed.startsWith("/*") ||
+    trimmed.startsWith("#")
+  );
+}
+
 /** Desactivaciones de la restriccion de aleatoriedad, en cualquiera de sus formas. */
 const SUPPRESSION =
   /eslint-disable(?:-next-line|-line)?[^\n]*no-restricted-(?:properties|syntax|imports)/;
@@ -63,6 +89,9 @@ describe("DEC-017: solo CSPRNG en los paquetes que pueden influir en un sorteo",
         // `index` es el contador de un recorrido sobre el propio array: no es
         // una clave de origen externo.
         for (const [index, text] of readRepoFile(file.path).split("\n").entries()) {
+          if (isCommentLine(text)) {
+            continue;
+          }
           for (const source of WEAK_SOURCES) {
             if (source.pattern.test(text)) {
               offences.push(`${file.path}:${String(index + 1)} [${source.id}] ${text.trim()}`);
@@ -108,6 +137,17 @@ describe("DEC-017: solo CSPRNG en los paquetes que pueden influir en un sorteo",
         );
       }
     }
+  });
+
+  it("la exencion de comentarios no tapa codigo ejecutable", () => {
+    // Documentar la prohibicion no es violarla.
+    expect(isCommentLine(" *    de aleatoriedad, incluidas `Math.random()`...")).toBe(true);
+    expect(isCommentLine("// const n = Math.random();")).toBe(true);
+    expect(isCommentLine("/* Math.random() */")).toBe(true);
+
+    // Ejecutar SI lo es, aunque lleve un comentario detras.
+    expect(isCommentLine("const n = Math.random(); // inofensivo, de verdad")).toBe(false);
+    expect(isCommentLine("  return Math.random();")).toBe(false);
   });
 
   it("la regla de ESLint que lo prohibe sigue en la configuracion raiz", () => {

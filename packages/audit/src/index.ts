@@ -13,6 +13,8 @@
  *   `merkle.ts`           prueba de pertenencia de UN registro (DEC-016).
  *   `export-artifact.ts`  el snapshot reproducible byte a byte (DEC-016).
  *   `verifier.ts`         el job periodico y sus `AuditEvent`.
+ *   `ports.ts`             los adaptadores con los que `@lsw/tpa` monta sus
+ *                         puertos sin depender de este paquete.
  *   `actions.ts`          catalogo estable de acciones auditables.
  *   `types.ts`            forma de un `AuditEvent`.
  *
@@ -31,3 +33,4 @@ export * from "./merkle.js";
 export * from "./sealing.js";
 export * from "./export-artifact.js";
 export * from "./verifier.js";
+export * from "./ports.js";

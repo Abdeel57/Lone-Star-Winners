@@ -152,6 +152,18 @@ export interface ExportArtifact {
   readonly key: ExportSnapshotKey;
   readonly formatVersion: string;
   readonly recordCount: number;
+  /**
+   * Los registros YA proyectados y YA ordenados, en el mismo orden que las
+   * lineas de `dataBytes`.
+   *
+   * Existe para que cualquier OTRA representacion del mismo snapshot -un CSV
+   * para el administrador externo, una tabla en un informe- se derive de aqui
+   * y no de una segunda consulta. Dos renderizados que salen del mismo array
+   * pueden diferir en formato; dos renderizados que salen de dos consultas
+   * pueden diferir en contenido, y el dia que difieran nadie sabra cual de los
+   * dos era el snapshot.
+   */
+  readonly orderedRecords: readonly CanonicalObject[];
   /** JSON Lines canonico, UTF-8 sin BOM, terminado en LF. */
   readonly dataBytes: Uint8Array;
   readonly dataSha256: string;
@@ -293,6 +305,7 @@ export function buildExportArtifact(request: ExportArtifactRequest): ExportArtif
     key: request.key,
     formatVersion: EXPORT_ARTIFACT_FORMAT,
     recordCount: prepared.length,
+    orderedRecords: prepared.map((record) => record.payload),
     dataBytes: new Uint8Array(dataBytes),
     dataSha256,
     leafHashes: leaves.map((leaf) => toHex(leaf)),

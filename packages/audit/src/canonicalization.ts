@@ -73,12 +73,25 @@ export const CURRENT_CANONICALIZATION_VERSION = 1;
  */
 export const CHAIN_DOMAIN_ENTRY_LEDGER = "entry_transactions";
 export const CHAIN_DOMAIN_AUDIT_EVENT = "audit_events";
+/**
+ * Registro de un sorteo interno (DEC-017). Tiene cadena PROPIA, y no comparte
+ * la de `audit_events`, por la misma razon por la que el ledger no comparte la
+ * suya: si dos clases de registro conviven en una cadena, una fila de una puede
+ * presentarse como fila de la otra. Un `AuditEvent` lo escribe cualquier accion
+ * administrativa; un `DrawingEvent` solo puede existir tras cinco cerrojos.
+ * Mezclarlos abarataria el segundo hasta el precio del primero.
+ */
+export const CHAIN_DOMAIN_DRAWING_EVENT = "drawing_events";
 
-export type ChainDomain = typeof CHAIN_DOMAIN_ENTRY_LEDGER | typeof CHAIN_DOMAIN_AUDIT_EVENT;
+export type ChainDomain =
+  | typeof CHAIN_DOMAIN_ENTRY_LEDGER
+  | typeof CHAIN_DOMAIN_AUDIT_EVENT
+  | typeof CHAIN_DOMAIN_DRAWING_EVENT;
 
 export const CHAIN_DOMAINS: readonly ChainDomain[] = Object.freeze([
   CHAIN_DOMAIN_ENTRY_LEDGER,
   CHAIN_DOMAIN_AUDIT_EVENT,
+  CHAIN_DOMAIN_DRAWING_EVENT,
 ]);
 
 /** Campos de `entry_transactions` cubiertos por el hash en la version 1. */
@@ -162,6 +175,49 @@ export const AUDIT_EVENT_CANONICAL_FIELDS_V1: readonly string[] = Object.freeze(
 ]);
 
 /**
+ * Campos de un `DrawingEvent` cubiertos por el hash en la version 1 (DEC-017).
+ *
+ * DOS AUSENCIAS DELIBERADAS, Y LAS DOS IMPORTAN:
+ *
+ *   - `server_seed` NO esta. En el esquema commit-reveal la semilla se publica
+ *     DESPUES del sorteo, y el registro se escribe ANTES. Un campo que hubiera
+ *     que rellenar despues exigiria un UPDATE sobre una tabla append-only, o
+ *     bien un hash calculado sobre un `null` que luego deja de ser `null`: las
+ *     dos cosas rompen la evidencia. La revelacion es un registro APARTE que
+ *     referencia a este; lo que si viaja aqui es el `commitment`, escrito antes
+ *     de conocer el resultado, que es exactamente lo que hay que atar.
+ *
+ *   - el resultado no incluye datos personales del seleccionado. Viaja una
+ *     `selected_participant_reference` -identificador interno- porque este
+ *     registro se conserva indefinidamente y se ensena a terceros.
+ */
+export const DRAWING_EVENT_CANONICAL_FIELDS_V1: readonly string[] = Object.freeze([
+  "algorithm_version",
+  "approved_by",
+  "authorization_id",
+  "commitment",
+  "completed_at",
+  "draw_request_id",
+  "entropy_source",
+  "id",
+  "initiated_at",
+  "initiated_by",
+  "metadata",
+  "promotion_id",
+  "recorded_at",
+  "selected_batch_id",
+  "selected_first_ordinal",
+  "selected_last_ordinal",
+  "selected_ordinal",
+  "selected_participant_reference",
+  "selected_provenance",
+  "snapshot_content_digest",
+  "snapshot_id",
+  "status",
+  "total_eligible_entries",
+]);
+
+/**
  * Semantica de bordes del predicado de saldo.
  *
  * ---------------------------------------------------------------------------
@@ -234,6 +290,7 @@ export interface CanonicalizationVersionDescriptor {
   readonly ledgerFields: readonly string[];
   readonly ledgerExcludedFields: readonly ExcludedField[];
   readonly auditEventFields: readonly string[];
+  readonly drawingEventFields: readonly string[];
   readonly balancePredicate: BalancePredicateSemantics;
 }
 
@@ -244,8 +301,34 @@ export const CANONICALIZATION_V1: CanonicalizationVersionDescriptor = Object.fre
   ledgerFields: LEDGER_CANONICAL_FIELDS_V1,
   ledgerExcludedFields: LEDGER_EXCLUDED_FIELDS_V1,
   auditEventFields: AUDIT_EVENT_CANONICAL_FIELDS_V1,
+  drawingEventFields: DRAWING_EVENT_CANONICAL_FIELDS_V1,
   balancePredicate: BALANCE_PREDICATE_V1,
 });
+
+/**
+ * Campos que la version cubre en un dominio.
+ *
+ * Vive aqui, y no en `chain.ts`, porque es una propiedad de la VERSION: el dia
+ * que exista una v2 con otro conjunto de campos, la respuesta cambia con la
+ * version y no con el codigo que la consulta.
+ *
+ * Falla en cerrado ante un dominio desconocido. La alternativa -un `else` que
+ * devolviera los campos del `AuditEvent`- haria que un dominio nuevo se
+ * hasheara con el conjunto equivocado sin que nada lo dijera.
+ */
+export function canonicalFieldsFor(
+  domain: ChainDomain,
+  descriptor: CanonicalizationVersionDescriptor,
+): readonly string[] {
+  switch (domain) {
+    case CHAIN_DOMAIN_ENTRY_LEDGER:
+      return descriptor.ledgerFields;
+    case CHAIN_DOMAIN_AUDIT_EVENT:
+      return descriptor.auditEventFields;
+    case CHAIN_DOMAIN_DRAWING_EVENT:
+      return descriptor.drawingEventFields;
+  }
+}
 
 const DESCRIPTORS = new Map<number, CanonicalizationVersionDescriptor>([[1, CANONICALIZATION_V1]]);
 

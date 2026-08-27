@@ -59,17 +59,24 @@ export const AUDIT_ACTIONS = Object.freeze({
   SNAPSHOT_VALIDATED: "export.snapshot_validated",
   SNAPSHOT_FINALIZED: "export.snapshot_finalized",
   SNAPSHOT_SUPERSEDED: "export.snapshot_superseded",
+  SNAPSHOT_SEALED: "export.snapshot_sealed",
+  EXPORT_PACKAGE_BUILT: "export.package_built",
   EXPORT_DOWNLOADED: "export.downloaded",
   EXPORT_DELIVERED: "export.delivered",
   EXPORT_DELIVERY_FAILED: "export.delivery_failed",
+  EXPORT_DELIVERY_ACKNOWLEDGED: "export.delivery_acknowledged",
   TPA_CONFIG_CHANGED: "tpa.config_changed",
+  TPA_RESULT_INGESTED: "tpa.result_ingested",
 
   // Sorteo interno (DEC-017)
   DRAW_AUTHORIZATION_CREATED: "draw.authorization_created",
   DRAW_AUTHORIZATION_REVOKED: "draw.authorization_revoked",
+  DRAW_APPROVAL_GRANTED: "draw.approval_granted",
+  DRAW_COMMITMENT_PUBLISHED: "draw.commitment_published",
   DRAW_INITIATED: "draw.initiated",
   DRAW_COMPLETED: "draw.completed",
   DRAW_REJECTED: "draw.rejected",
+  DRAW_SEED_REVEALED: "draw.seed_revealed",
 
   // Ganador potencial
   POTENTIAL_WINNER_SELECTED: "winner.selected",

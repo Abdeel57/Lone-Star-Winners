@@ -60,8 +60,8 @@ import { createHash, timingSafeEqual } from "node:crypto";
 import { canonicalizeToBytes } from "./canonical.js";
 import type { CanonicalObject } from "./canonical.js";
 import {
-  CHAIN_DOMAIN_ENTRY_LEDGER,
   CURRENT_CANONICALIZATION_VERSION,
+  canonicalFieldsFor,
   canonicalizationDescriptor,
   isSupportedCanonicalizationVersion,
   projectCanonicalPayload,
@@ -178,10 +178,7 @@ export function computeChainHash(input: ChainHashInput): Uint8Array {
 
 /** Campos que la version cubre en cada dominio. */
 function fieldsFor(domain: ChainDomain, version: number): readonly string[] {
-  const descriptor = canonicalizationDescriptor(version);
-  return domain === CHAIN_DOMAIN_ENTRY_LEDGER
-    ? descriptor.ledgerFields
-    : descriptor.auditEventFields;
+  return canonicalFieldsFor(domain, canonicalizationDescriptor(version));
 }
 
 /**
