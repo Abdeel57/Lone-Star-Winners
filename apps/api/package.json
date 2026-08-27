@@ -15,7 +15,7 @@
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run",
     "contract:emit": "tsc -p tsconfig.build.json && node dist/scripts/emit-contract.js",
-    "contract:check": "pnpm run contract:emit && git diff --exit-code -- openapi"
+    "contract:check": "pnpm run contract:emit && git diff --exit-code HEAD -- openapi"
   },
   "dependencies": {
     "@fastify/cookie": "^11.1.2",
