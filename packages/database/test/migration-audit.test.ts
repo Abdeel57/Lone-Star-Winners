@@ -76,11 +76,47 @@ describe("migraciones: forma y legibilidad (DEC-005)", () => {
     expect(migrations.length).toBeGreaterThan(0);
   });
 
-  it("todas siguen la convencion NNNN_nombre.sql y estan numeradas sin huecos", () => {
-    migrations.forEach((migration, index) => {
+  /**
+   * NUMERACION: UNICA Y CRECIENTE, NO NECESARIAMENTE CONTIGUA.
+   *
+   * Antes se exigia que el numero de cada migracion coincidiera con su indice,
+   * es decir, contiguidad estricta. DEC-046 y HO-025 reparten el espacio de
+   * numeracion entre dos sesiones que trabajan en paralelo -0010-0019 para
+   * identidad y administracion, 0020+ para comercio, participaciones y sorteo-
+   * y ese reparto produce huecos legitimos.
+   *
+   * Lo que se conserva es la garantia que de verdad importaba: que ninguna
+   * migracion se quede sin aplicar y que el orden sea deterministico. Eso lo
+   * dan las otras dos comprobaciones -numeros unicos y crecientes aqui, y el
+   * journal de drizzle IDENTICO a la lista de ficheros en el test siguiente-,
+   * no la contiguidad. Un hueco no oculta una migracion: una migracion que
+   * falte en el journal, si, y eso sigue fallando.
+   *
+   * La alternativa era que las dos sesiones se disputaran el siguiente numero
+   * libre, que produce colisiones de nombre en cuanto ambas crean una a la vez.
+   */
+  it("todas siguen la convencion NNNN_nombre.sql, con numeros unicos y crecientes", () => {
+    const numbers: number[] = [];
+
+    for (const migration of migrations) {
       expect(migration.name).toMatch(/^\d{4}_[a-z0-9_]+\.sql$/u);
-      expect(migration.name.slice(0, 4)).toBe(String(index).padStart(4, "0"));
-    });
+      numbers.push(Number.parseInt(migration.name.slice(0, 4), 10));
+    }
+
+    expect(new Set(numbers).size, "hay dos migraciones con el mismo numero").toBe(numbers.length);
+
+    for (let index = 1; index < numbers.length; index += 1) {
+      const previous = numbers[index - 1] ?? -1;
+      const current = numbers[index] ?? -1;
+      expect(
+        current > previous,
+        `${migrations[index]?.name ?? "?"} no es posterior a ${migrations[index - 1]?.name ?? "?"}`,
+      ).toBe(true);
+    }
+
+    // La primera es la base, y eso si es obligatorio: los tres roles de
+    // DEC-003 se crean alli y todo lo demas los presupone.
+    expect(numbers[0]).toBe(0);
   });
 
   it("todas usan finales de linea LF (DEC-026: el hash de un export no puede depender del sistema operativo)", () => {

@@ -29,3 +29,11 @@ export * from "./client.js";
 export * from "./migrate.js";
 export * from "./domain/permissions.js";
 export * from "./domain/feature-flags.js";
+
+/**
+ * Hito B5 (DEC-046): adaptadores Drizzle de los puertos del dominio.
+ *
+ * Aqui vive SQL; la logica vive en `@lsw/sweepstakes`, `@lsw/commerce` y
+ * `@lsw/tpa`. Ver `repositories/index.ts` para el motivo de la frontera.
+ */
+export * from "./repositories/index.js";

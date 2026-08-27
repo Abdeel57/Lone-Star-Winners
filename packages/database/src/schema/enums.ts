@@ -140,3 +140,123 @@ export const entryActorTypeEnum = pgEnum("entry_actor_type", ["PARTICIPANT", "AD
  * editarlo despues cambiaria el pasado.
  */
 export const cartStatusEnum = pgEnum("cart_status", ["OPEN", "CONVERTED", "ABANDONED"]);
+
+// ---------------------------------------------------------------------------
+// Comercio (DEC-010) - migracion 0020
+//
+// Tres maquinas de estado y no una: el ciclo comercial, lo que dice el
+// proveedor de pago y la mercancia son cosas independientes. Fundirlas obliga
+// a inventar estados como PAGADA_PERO_NO_ENVIADA_CON_DISPUTA, y el numero de
+// combinaciones crece hasta que alguien se salta una. Las transiciones validas
+// viven en `@lsw/commerce`, donde estan probadas una a una.
+// ---------------------------------------------------------------------------
+
+export const orderStatusEnum = pgEnum("order_status", [
+  "DRAFT",
+  "PENDING_PAYMENT",
+  "CONFIRMED",
+  "CANCELLED",
+  "PARTIALLY_REFUNDED",
+  "REFUNDED",
+]);
+
+/** Vocabulario PROPIO, normalizado. Ningun valor nombra a un procesador concreto. */
+export const paymentStateEnum = pgEnum("payment_state", [
+  "REQUIRES_ACTION",
+  "PENDING",
+  "AUTHORIZED",
+  "PAID",
+  "FAILED",
+  "CANCELLED",
+  "REFUNDED",
+  "PARTIALLY_REFUNDED",
+  "DISPUTED",
+]);
+
+export const fulfillmentStateEnum = pgEnum("fulfillment_state", [
+  "NOT_APPLICABLE",
+  "UNFULFILLED",
+  "PARTIALLY_FULFILLED",
+  "FULFILLED",
+  "RETURNED",
+]);
+
+export const chargebackStateEnum = pgEnum("chargeback_state", ["NONE", "OPEN", "WON", "LOST"]);
+
+export const checkoutSessionStatusEnum = pgEnum("checkout_session_status", [
+  "PENDING",
+  "COMPLETED",
+  "CANCELLED",
+  "FAILED",
+]);
+
+// ---------------------------------------------------------------------------
+// AMOE (DEC-012, DEC-032) - migracion 0021
+// ---------------------------------------------------------------------------
+
+/**
+ * `SUBMITTED`, `PENDING_REVIEW` y `APPROVED` consumen cuota del limite por
+ * periodo; `REJECTED` y `CANCELLED` no. Si un rechazo consumiera, un dato mal
+ * tecleado dejaria a la persona sin poder participar ese dia y la via gratuita
+ * quedaria cerrada por un error administrativo.
+ */
+export const amoeSubmissionStatusEnum = pgEnum("amoe_submission_status", [
+  "SUBMITTED",
+  "PENDING_REVIEW",
+  "APPROVED",
+  "REJECTED",
+  "CANCELLED",
+]);
+
+// ---------------------------------------------------------------------------
+// Operaciones sobre participaciones - migracion 0022
+// ---------------------------------------------------------------------------
+
+export const adjustmentDirectionEnum = pgEnum("adjustment_direction", ["CREDIT", "DEBIT"]);
+
+export const adjustmentStatusEnum = pgEnum("adjustment_status", [
+  "PENDING_APPROVAL",
+  "APPLIED",
+  "REJECTED",
+  "CANCELLED",
+]);
+
+export const awardHoldStatusEnum = pgEnum("award_hold_status", ["HELD", "RELEASED", "CANCELLED"]);
+
+// ---------------------------------------------------------------------------
+// Export y sorteo (DEC-016, DEC-017) - migracion 0023
+// ---------------------------------------------------------------------------
+
+export const exportSnapshotStatusEnum = pgEnum("export_snapshot_status", [
+  "DRAFT",
+  "VALIDATING",
+  "FINALIZED",
+  "DELIVERED",
+  "SUPERSEDED",
+]);
+
+/** `NOT_CONFIGURED` es el valor por defecto del negocio: no hay TPA elegido. */
+export const exportDeliveryMethodEnum = pgEnum("export_delivery_method", [
+  "MANUAL_DOWNLOAD",
+  "SFTP",
+  "HTTPS_API",
+  "SIGNED_URL",
+  "NOT_CONFIGURED",
+]);
+
+export const potentialWinnerStatusEnum = pgEnum("potential_winner_status", [
+  "SELECTED",
+  "CONTACT_PENDING",
+  "CONTACTED",
+  "DOCUMENTS_PENDING",
+  "ELIGIBILITY_REVIEW",
+  "VERIFIED",
+  "DISQUALIFIED",
+  "ALTERNATE_REQUIRED",
+  "CONFIRMED",
+]);
+
+export const potentialWinnerSourceEnum = pgEnum("potential_winner_source", [
+  "INTERNAL_DRAW",
+  "EXTERNAL_ADMINISTRATOR",
+]);

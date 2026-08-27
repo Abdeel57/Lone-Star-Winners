@@ -6,3 +6,11 @@ export * from "./feature-flags.js";
 export * from "./entries.js";
 export * from "./cart.js";
 export * from "./credentials.js";
+// Hito B5 (DEC-046): comercio, AMOE, operaciones sobre participaciones y
+// sorteo. Se anaden AL FINAL a proposito: el orden de este barrel es el orden
+// en que dos sesiones paralelas fueron anadiendo dominios, y reordenarlo
+// produciria un conflicto en cada rebase sin cambiar nada.
+export * from "./orders.js";
+export * from "./amoe.js";
+export * from "./entry-operations.js";
+export * from "./draw.js";

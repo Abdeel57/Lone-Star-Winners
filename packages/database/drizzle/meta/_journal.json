@@ -78,6 +78,34 @@
       "when": 1787616010000,
       "tag": "0010_credentials_and_sessions",
       "breakpoints": false
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1787616020000,
+      "tag": "0020_orders_and_checkout",
+      "breakpoints": false
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1787616021000,
+      "tag": "0021_amoe_submissions",
+      "breakpoints": false
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1787616022000,
+      "tag": "0022_entry_operations",
+      "breakpoints": false
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1787616023000,
+      "tag": "0023_draw_and_export",
+      "breakpoints": false
     }
   ]
 }

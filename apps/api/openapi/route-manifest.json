@@ -3,6 +3,303 @@
   "contract_version": "0.1.0",
   "routes": [
     {
+      "method": "GET",
+      "path": "/api/v1/account/amoe-submissions",
+      "operation_id": "listOwnAmoeSubmissions",
+      "authorization": "PARTICIPANT_SELF",
+      "requires_step_up": false,
+      "tags": ["amoe"],
+      "summary": "Envios AMOE del propio participante."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/account/award-holds",
+      "operation_id": "listAwardHolds",
+      "authorization": "entry.self.read",
+      "requires_step_up": false,
+      "tags": ["portal"],
+      "summary": "Concesiones retenidas del propio participante."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/account/entry-numbers",
+      "operation_id": "listEntryNumbers",
+      "authorization": "entry.self.read",
+      "requires_step_up": false,
+      "tags": ["portal"],
+      "summary": "Rangos de numeros asignados al participante (\"mis numeros\")."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/account/entry-summary",
+      "operation_id": "getEntrySummary",
+      "authorization": "entry.self.read",
+      "requires_step_up": false,
+      "tags": ["portal"],
+      "summary": "Saldo de participaciones del participante, con su procedencia."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/account/entry-transactions",
+      "operation_id": "listEntryTransactions",
+      "authorization": "entry.self.read",
+      "requires_step_up": false,
+      "tags": ["portal"],
+      "summary": "Historial del ledger del propio participante, correcciones incluidas."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/account/orders",
+      "operation_id": "listAccountOrders",
+      "authorization": "order.self.read",
+      "requires_step_up": false,
+      "tags": ["portal"],
+      "summary": "Pedidos del propio participante."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/account/orders/:order_id",
+      "operation_id": "getAccountOrder",
+      "authorization": "order.self.read",
+      "requires_step_up": false,
+      "tags": ["portal"],
+      "summary": "Detalle de un pedido, con la traza del calculo de entries."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/amoe-submissions",
+      "operation_id": "listAmoeReviewQueue",
+      "authorization": "amoe.review.read",
+      "requires_step_up": false,
+      "tags": ["admin"],
+      "summary": "Cola de revision de envios AMOE."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/amoe-submissions/:submission_id/approve",
+      "operation_id": "approveAmoeSubmission",
+      "authorization": "amoe.review.approve",
+      "requires_step_up": false,
+      "tags": ["admin"],
+      "summary": "Aprobar un envio AMOE y generar sus participaciones."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/amoe-submissions/:submission_id/reject",
+      "operation_id": "rejectAmoeSubmission",
+      "authorization": "amoe.review.reject",
+      "requires_step_up": false,
+      "tags": ["admin"],
+      "summary": "Rechazar un envio AMOE, con motivo obligatorio."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/draws",
+      "operation_id": "listDrawingEvents",
+      "authorization": "draw.result.read",
+      "requires_step_up": false,
+      "tags": ["draw"],
+      "summary": "Sorteos ejecutados de una promocion, en orden de cadena."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/draws",
+      "operation_id": "initiateDraw",
+      "authorization": "draw.initiate",
+      "requires_step_up": true,
+      "tags": ["draw"],
+      "summary": "Iniciar un sorteo interno."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/entry-adjustments",
+      "operation_id": "listPendingAdjustments",
+      "authorization": "entry.ledger.read",
+      "requires_step_up": false,
+      "tags": ["admin"],
+      "summary": "Ajustes pendientes de aprobacion."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/entry-adjustments",
+      "operation_id": "createEntryAdjustment",
+      "authorization": "entry.adjust.create",
+      "requires_step_up": true,
+      "tags": ["admin"],
+      "summary": "Solicitar un ajuste manual de participaciones."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/entry-adjustments/:adjustment_id/approve",
+      "operation_id": "approveEntryAdjustment",
+      "authorization": "entry.adjust.approve",
+      "requires_step_up": true,
+      "tags": ["admin"],
+      "summary": "Aprobar un ajuste y aplicarlo al ledger."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/entry-adjustments/:adjustment_id/reject",
+      "operation_id": "rejectEntryAdjustment",
+      "authorization": "entry.adjust.approve",
+      "requires_step_up": true,
+      "tags": ["admin"],
+      "summary": "Rechazar un ajuste pendiente, con motivo."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/export-snapshots/:snapshot_id",
+      "operation_id": "getExportSnapshot",
+      "authorization": "export.snapshot.read",
+      "requires_step_up": false,
+      "tags": ["export"],
+      "summary": "Manifiesto de un snapshot."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/export-snapshots/:snapshot_id/deliver",
+      "operation_id": "deliverExportSnapshot",
+      "authorization": "export.deliver",
+      "requires_step_up": true,
+      "tags": ["export"],
+      "summary": "Registrar la entrega de un snapshot al administrador externo."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/export-snapshots/:snapshot_id/download",
+      "operation_id": "downloadExportSnapshot",
+      "authorization": "export.download",
+      "requires_step_up": true,
+      "tags": ["export"],
+      "summary": "Descargar el artefacto de un snapshot finalizado."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/export-snapshots/:snapshot_id/finalize",
+      "operation_id": "finalizeExportSnapshot",
+      "authorization": "export.finalize",
+      "requires_step_up": true,
+      "tags": ["export"],
+      "summary": "Finalizar un snapshot y fijar su evidencia."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/export-snapshots/:snapshot_id/results",
+      "operation_id": "ingestExportResults",
+      "authorization": "winner.status.update",
+      "requires_step_up": true,
+      "tags": ["export"],
+      "summary": "Registrar los ganadores que comunica el administrador externo."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/export-snapshots/:snapshot_id/validate",
+      "operation_id": "validateExportSnapshot",
+      "authorization": "export.snapshot.validate",
+      "requires_step_up": false,
+      "tags": ["export"],
+      "summary": "Reconciliar un snapshot antes de finalizarlo."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/orders/:order_id/refund",
+      "operation_id": "initiateOrderRefund",
+      "authorization": "order.refund.initiate",
+      "requires_step_up": true,
+      "tags": ["admin"],
+      "summary": "Devolver un pedido desde administracion."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/participants/:participant_id/disqualify",
+      "operation_id": "disqualifyParticipant",
+      "authorization": "participant.disqualify",
+      "requires_step_up": true,
+      "tags": ["admin"],
+      "summary": "Descalificar a un participante en una promocion."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/payment-webhooks",
+      "operation_id": "listPaymentWebhooks",
+      "authorization": "payment.webhook.read",
+      "requires_step_up": false,
+      "tags": ["admin"],
+      "summary": "Cola de eventos de pago sin procesar."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/payment-webhooks/:event_id/replay",
+      "operation_id": "replayPaymentWebhook",
+      "authorization": "payment.webhook.replay",
+      "requires_step_up": true,
+      "tags": ["admin"],
+      "summary": "Marcar un evento fallido para reproceso."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/potential-winners/:potential_winner_id/status",
+      "operation_id": "updatePotentialWinnerStatus",
+      "authorization": "winner.status.update",
+      "requires_step_up": true,
+      "tags": ["draw"],
+      "summary": "Mover el expediente de un ganador potencial."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/promotions/:promotion_id/draw-authorizations",
+      "operation_id": "listDrawAuthorizations",
+      "authorization": "draw.result.read",
+      "requires_step_up": false,
+      "tags": ["draw"],
+      "summary": "Autorizaciones documentales de sorteo de una promocion."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/promotions/:promotion_id/draw-authorizations",
+      "operation_id": "createDrawAuthorization",
+      "authorization": "draw.authorization.create",
+      "requires_step_up": true,
+      "tags": ["draw"],
+      "summary": "Registrar una autorizacion documental de sorteo."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/promotions/:promotion_id/draw-authorizations/:authorization_id/revoke",
+      "operation_id": "revokeDrawAuthorization",
+      "authorization": "draw.authorization.create",
+      "requires_step_up": true,
+      "tags": ["draw"],
+      "summary": "Revocar una autorizacion de sorteo, con motivo."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/promotions/:promotion_id/export-snapshots",
+      "operation_id": "listExportSnapshots",
+      "authorization": "export.snapshot.read",
+      "requires_step_up": false,
+      "tags": ["export"],
+      "summary": "Snapshots de una promocion, del mas reciente al mas antiguo."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/promotions/:promotion_id/export-snapshots",
+      "operation_id": "createExportSnapshot",
+      "authorization": "export.snapshot.create",
+      "requires_step_up": false,
+      "tags": ["export"],
+      "summary": "Crear un snapshot de exportacion sobre un corte."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/promotions/:promotion_id/potential-winners",
+      "operation_id": "listPotentialWinners",
+      "authorization": "winner.workflow.read",
+      "requires_step_up": false,
+      "tags": ["draw"],
+      "summary": "Expedientes de ganador potencial de una promocion."
+    },
+    {
       "method": "POST",
       "path": "/api/v1/auth/login",
       "operation_id": "login",
@@ -84,6 +381,24 @@
       "summary": "Cambiar la cantidad de una linea."
     },
     {
+      "method": "POST",
+      "path": "/api/v1/checkout/session",
+      "operation_id": "createCheckoutSession",
+      "authorization": "PARTICIPANT_SELF",
+      "requires_step_up": false,
+      "tags": ["commerce"],
+      "summary": "Abrir una sesion de pago sobre el carrito de servidor."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/checkout/sessions/:order_draft_id",
+      "operation_id": "getCheckoutSession",
+      "authorization": "PARTICIPANT_SELF",
+      "requires_step_up": false,
+      "tags": ["commerce"],
+      "summary": "Estado de una sesion de pago."
+    },
+    {
       "method": "GET",
       "path": "/api/v1/config",
       "operation_id": "getPublicConfig",
@@ -109,6 +424,24 @@
       "requires_step_up": false,
       "tags": ["meta"],
       "summary": "Readiness probe."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/me",
+      "operation_id": "getParticipantProfile",
+      "authorization": "participant.self.read",
+      "requires_step_up": false,
+      "tags": ["portal"],
+      "summary": "Perfil del participante autenticado."
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/me",
+      "operation_id": "updateParticipantProfile",
+      "authorization": "participant.self.update",
+      "requires_step_up": false,
+      "tags": ["portal"],
+      "summary": "Cambiar nombre para mostrar e idioma preferido."
     },
     {
       "method": "GET",
@@ -147,6 +480,15 @@
       "summary": "Promociones visibles al publico."
     },
     {
+      "method": "POST",
+      "path": "/api/v1/promotions/:promotion_id/amoe-submissions",
+      "operation_id": "submitAmoeEntry",
+      "authorization": "amoe.self.submit",
+      "requires_step_up": false,
+      "tags": ["amoe"],
+      "summary": "Enviar una participacion sin compra."
+    },
+    {
       "method": "GET",
       "path": "/api/v1/promotions/:slug",
       "operation_id": "getPromotionBySlug",
@@ -154,6 +496,15 @@
       "requires_step_up": false,
       "tags": ["promotions"],
       "summary": "Detalle de una promocion."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/promotions/:slug/amoe-config",
+      "operation_id": "getAmoeConfig",
+      "authorization": "PUBLIC",
+      "requires_step_up": false,
+      "tags": ["amoe"],
+      "summary": "Modalidad AMOE vigente y lo que exige."
     },
     {
       "method": "GET",
@@ -172,6 +523,15 @@
       "requires_step_up": false,
       "tags": ["promotions"],
       "summary": "La promocion activa, para la portada."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/webhooks/payments/:provider",
+      "operation_id": "receivePaymentWebhook",
+      "authorization": "PUBLIC",
+      "requires_step_up": false,
+      "tags": ["commerce"],
+      "summary": "Recepcion de eventos del proveedor de pago."
     }
   ]
 }

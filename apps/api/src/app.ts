@@ -36,6 +36,13 @@ import { buildCartRoutes } from "./routes/cart.js";
 import { buildHealthRoutes } from "./routes/health.js";
 import { buildMetaRoutes } from "./routes/meta.js";
 import { buildStorefrontRoutes } from "./routes/storefront.js";
+// Hito B5 (DEC-046): comercio, portal, AMOE, ajustes, sorteo y exportacion.
+import { buildAdjustmentRoutes } from "./routes/adjustments.js";
+import { buildAmoeRoutes } from "./routes/amoe.js";
+import { buildDrawRoutes } from "./routes/draw.js";
+import { buildExportRoutes } from "./routes/export.js";
+import { buildOrdersRoutes, installRawBodyForPaymentWebhooks } from "./routes/orders.js";
+import { buildPortalRoutes } from "./routes/portal.js";
 import { installPrincipalResolver, noPrincipalResolver } from "./http/principal.js";
 import { createIdentityRepositories } from "./services/drizzle-identity.js";
 import { createRepositories } from "./services/drizzle-repositories.js";
@@ -88,6 +95,12 @@ export function collectRouteDefinitions(dependencies: AppDependencies): RouteDef
     ...buildStorefrontRoutes(dependencies),
     ...buildCartRoutes(dependencies),
     ...buildAuthRoutes(dependencies),
+    ...buildOrdersRoutes(dependencies),
+    ...buildPortalRoutes(dependencies),
+    ...buildAmoeRoutes(dependencies),
+    ...buildAdjustmentRoutes(dependencies),
+    ...buildDrawRoutes(dependencies),
+    ...buildExportRoutes(dependencies),
   ];
 
   const metaRoutes = buildMetaRoutes({
@@ -113,6 +126,12 @@ export function collectContractRouteDefinitions(dependencies: AppDependencies): 
     ...buildStorefrontRoutes(dependencies),
     ...buildCartRoutes(dependencies),
     ...buildAuthRoutes(dependencies),
+    ...buildOrdersRoutes(dependencies),
+    ...buildPortalRoutes(dependencies),
+    ...buildAmoeRoutes(dependencies),
+    ...buildAdjustmentRoutes(dependencies),
+    ...buildDrawRoutes(dependencies),
+    ...buildExportRoutes(dependencies),
   ];
   routes.push(
     ...buildMetaRoutes({ serverUrl: dependencies.config.http.publicUrl, allRoutes: () => routes }),
@@ -138,6 +157,14 @@ export async function createApp(dependencies: AppDependencies): Promise<FastifyI
 
   // ---- 1. Guardia deny-by-default, antes de cualquier ruta (DEC-015) ----
   installRouteGuard(app);
+
+  //        El parser de cuerpo CRUDO del webhook de pago se instala aqui, antes
+  //        de las rutas: la firma se calcula sobre los BYTES que envio el
+  //        proveedor, y un JSON reserializado -aunque sea equivalente- ya no
+  //        coincide. Es global porque Fastify no permite un parser por ruta, y
+  //        discrimina por url: el resto de la API sigue recibiendo el objeto
+  //        ya parseado.
+  installRawBodyForPaymentWebhooks(app);
 
   // ---- 2. Autorizador y resolutor de identidad ----
   //
