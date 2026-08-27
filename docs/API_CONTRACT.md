@@ -1344,3 +1344,635 @@ dejaría el token vivo para quien lo hubiera copiado.
   `docs/LEGAL_PENDING.md` ("Email verification before earning entries", `TBD`).
   El campo `email_verified` se publica como dato; **que ese dato tenga
   consecuencias es una decisión legal que aún no existe**.
+
+---
+
+# 11. Comercio, Portal, AMOE, Ajustes, Sorteo y Exportación (hito B5)
+
+> **Cómo llegó esta sección aquí.** El reparto pedía que `backend` entregara
+> estas secciones como texto para que el Team Lead las pegara. No fue posible
+> dejarlas fuera del documento: el gate de DEC-015
+> (`tests/security/src/contract/api-contract.test.ts`) exige que **toda** ruta
+> del manifiesto aparezca aquí, así que con las rutas en código y las entradas
+> fuera, el workspace queda en rojo. Se añaden **al final**, en bloque, para no
+> tocar la sección 10, que edita la sesión paralela. Si el Lead prefiere pegarlas
+> él, `git checkout docs/API_CONTRACT.md` revierte este bloque entero.
+
+## Índice de rutas de este hito
+
+Con el camino tal y como lo declara el código (`:slug`, no `{slug}`), que es lo
+que compara el test de contrato contra `apps/api/openapi/route-manifest.json`.
+
+| Método | Camino                                                                              | Authorization               |
+| ------ | ----------------------------------------------------------------------------------- | --------------------------- |
+| POST   | /api/v1/checkout/session                                                            | `PARTICIPANT_SELF`          |
+| GET    | /api/v1/checkout/sessions/:order_draft_id                                           | `PARTICIPANT_SELF`          |
+| GET    | /api/v1/account/orders                                                              | `order.self.read`           |
+| GET    | /api/v1/account/orders/:order_id                                                    | `order.self.read`           |
+| POST   | /api/v1/webhooks/payments/:provider                                                 | `PUBLIC`                    |
+| GET    | /api/v1/account/entry-summary                                                       | `entry.self.read`           |
+| GET    | /api/v1/account/entry-transactions                                                  | `entry.self.read`           |
+| GET    | /api/v1/account/entry-numbers                                                       | `entry.self.read`           |
+| GET    | /api/v1/account/award-holds                                                         | `entry.self.read`           |
+| GET    | /api/v1/me                                                                          | `participant.self.read`     |
+| PATCH  | /api/v1/me                                                                          | `participant.self.update`   |
+| GET    | /api/v1/promotions/:slug/amoe-config                                                | `PUBLIC`                    |
+| POST   | /api/v1/promotions/:promotion_id/amoe-submissions                                   | `amoe.self.submit`          |
+| GET    | /api/v1/account/amoe-submissions                                                    | `PARTICIPANT_SELF`          |
+| GET    | /api/v1/admin/amoe-submissions                                                      | `amoe.review.read`          |
+| POST   | /api/v1/admin/amoe-submissions/:submission_id/approve                               | `amoe.review.approve`       |
+| POST   | /api/v1/admin/amoe-submissions/:submission_id/reject                                | `amoe.review.reject`        |
+| GET    | /api/v1/admin/entry-adjustments                                                     | `entry.ledger.read`         |
+| POST   | /api/v1/admin/entry-adjustments                                                     | `entry.adjust.create`       |
+| POST   | /api/v1/admin/entry-adjustments/:adjustment_id/approve                              | `entry.adjust.approve`      |
+| POST   | /api/v1/admin/entry-adjustments/:adjustment_id/reject                               | `entry.adjust.approve`      |
+| POST   | /api/v1/admin/participants/:participant_id/disqualify                               | `participant.disqualify`    |
+| POST   | /api/v1/admin/orders/:order_id/refund                                               | `order.refund.initiate`     |
+| GET    | /api/v1/admin/payment-webhooks                                                      | `payment.webhook.read`      |
+| POST   | /api/v1/admin/payment-webhooks/:event_id/replay                                     | `payment.webhook.replay`    |
+| GET    | /api/v1/admin/promotions/:promotion_id/draw-authorizations                          | `draw.result.read`          |
+| POST   | /api/v1/admin/promotions/:promotion_id/draw-authorizations                          | `draw.authorization.create` |
+| POST   | /api/v1/admin/promotions/:promotion_id/draw-authorizations/:authorization_id/revoke | `draw.authorization.create` |
+| POST   | /api/v1/admin/draws                                                                 | `draw.initiate`             |
+| GET    | /api/v1/admin/draws                                                                 | `draw.result.read`          |
+| GET    | /api/v1/admin/promotions/:promotion_id/potential-winners                            | `winner.workflow.read`      |
+| POST   | /api/v1/admin/potential-winners/:potential_winner_id/status                         | `winner.status.update`      |
+| POST   | /api/v1/admin/promotions/:promotion_id/export-snapshots                             | `export.snapshot.create`    |
+| GET    | /api/v1/admin/promotions/:promotion_id/export-snapshots                             | `export.snapshot.read`      |
+| GET    | /api/v1/admin/export-snapshots/:snapshot_id                                         | `export.snapshot.read`      |
+| POST   | /api/v1/admin/export-snapshots/:snapshot_id/validate                                | `export.snapshot.validate`  |
+| POST   | /api/v1/admin/export-snapshots/:snapshot_id/finalize                                | `export.finalize`           |
+| GET    | /api/v1/admin/export-snapshots/:snapshot_id/download                                | `export.download`           |
+| POST   | /api/v1/admin/export-snapshots/:snapshot_id/deliver                                 | `export.deliver`            |
+| POST   | /api/v1/admin/export-snapshots/:snapshot_id/results                                 | `winner.status.update`      |
+
+**Todas están `IMPLEMENTED`**, con dos matices que importan y que se detallan en
+cada bloque: las rutas de comercio dependen de un proveedor de pago que sigue sin
+elegir (`CLAUDE.md` §7) y responden `503 PAYMENT_PROVIDER_NOT_CONFIGURED`; las de
+sorteo y de finalización de export dependen de `@lsw/tpa` y `@lsw/audit`, que
+`apps/api` todavía no tiene como dependencia, y responden `409` con código propio
+en vez de improvisar.
+
+---
+
+## 11.1 Comercio
+
+```text
+Method: POST
+Endpoint: /api/v1/checkout/session
+
+Purpose:
+Congelar el carrito de servidor en un pedido DRAFT y abrir una sesión de pago.
+
+Authentication: sesión de participante
+
+Request:
+{
+  "shipping_address": {
+    "full_name": "...", "line1": "...", "line2": null,
+    "city": "...", "region": "...", "postal_code": "...", "country": "US"
+  },
+  "return_url": "https://example.test/checkout/return"
+}
+
+`region`, no `state`: el nombre del campo no debe presuponer que la subdivisión
+territorial se llama estado en toda jurisdicción cubierta. NO hay validación de
+jurisdicción: la elegibilidad territorial la fijan las Official Rules y sigue en
+docs/LEGAL_PENDING.md.
+
+Response: 201
+{
+  "provider": "mock",
+  "mode": "hosted_redirect",
+  "client_config": { "redirect_url": "https://..." },
+  "order_draft_id": "uuid"
+}
+
+`client_config` es DELIBERADAMENTE OPACO: cada proveedor necesita cosas distintas
+y tiparlo obligaría a elegir proveedor, que es la decisión que no está tomada.
+`mode` es `hosted_redirect` o `embedded_component`.
+
+El pedido se crea en DRAFT ANTES de llamar al proveedor: es lo que da el
+`order_draft_id` y lo que permite reintentar sin duplicar el cobro. Las líneas se
+congelan aquí -SKU, nombre, precio y elegibilidad-: el precio que vale es el que
+el participante vio al pulsar, no el que hubiera cuando el proveedor liquide.
+
+Errors:
+409 CART_EMPTY
+503 PAYMENT_PROVIDER_NOT_CONFIGURED (hoy, siempre: el proveedor sigue sin elegir)
+422 VALIDATION_FAILED
+
+Authorization: PARTICIPANT_SELF
+
+Owner: backend
+
+Status: IMPLEMENTED
+```
+
+```text
+Method: GET
+Endpoint: /api/v1/checkout/sessions/{order_draft_id}
+
+Purpose:
+Estado de una sesión de pago.
+
+Authentication: sesión de participante
+
+Request: `order_draft_id` en la ruta
+
+Response: 200
+{ "order_draft_id": "uuid", "status": "PENDING", "order_id": null }
+
+LA INTERFAZ NO DECIDE SI SE HA PAGADO. La página de retorno recibe del proveedor
+unos parámetros en la URL y no se los cree: pregunta aquí, que es donde se ha
+recibido -o no- el webhook firmado. Un `?outcome=paid` lo escribe cualquiera.
+
+`order_id` es null mientras el pedido siga en DRAFT: hasta entonces no hay nada
+que enseñar en el historial.
+
+Errors: 404 ORDER_NOT_FOUND
+
+Authorization: PARTICIPANT_SELF
+
+Owner: backend
+
+Status: IMPLEMENTED
+```
+
+```text
+Method: POST
+Endpoint: /api/v1/webhooks/payments/{provider}
+
+Purpose:
+Recepción de eventos del proveedor de pago.
+
+Authentication:
+Verificación de FIRMA sobre el cuerpo CRUDO, antes de parsear. `apps/api`
+instala un parser que entrega el Buffer intacto solo en esta ruta: un JSON
+reserializado -aunque sea equivalente- ya no coincide con la firma.
+
+Request: cuerpo crudo del proveedor + cabecera de firma
+
+Response: 200 { "received": true } | 202 { "received": true }
+
+202 significa que ese evento ya estaba procesado o lo está procesando otra
+entrega simultánea. Es 2xx a propósito: un 4xx haría que el proveedor
+reintentara en bucle.
+
+Un manejador que falla también devuelve 200: el evento queda persistido en FAILED
+y visible en GET /admin/payment-webhooks. Un 5xx solo conseguiría que el
+proveedor reintentara contra el mismo fallo.
+
+Errors:
+401 UNAUTHENTICATED (firma inválida, o proveedor distinto del montado)
+409 WEBHOOK_DIGEST_MISMATCH (mismo provider_event_id, cuerpo distinto)
+
+Authorization: PUBLIC
+
+Justificación de que sea PUBLIC: el llamante es el proveedor de pago, que no
+tiene sesión. La autenticación es criptográfica, sobre la firma del cuerpo.
+
+Owner: backend
+
+Status: IMPLEMENTED
+```
+
+---
+
+## 11.2 Portal del participante
+
+Las rutas de esta sección se sirven **del ledger**, nunca de un contador.
+`GET /account/entry-summary` devuelve un solo saldo con desglose por procedencia
+-compra, AMOE, ajuste, sistema- porque compra y AMOE conviven en el MISMO
+universo elegible (principio 9). Dos saldos separados dejarían de sumar en cuanto
+hubiera una devolución.
+
+```text
+Method: GET
+Endpoint: /api/v1/account/entry-summary
+
+Purpose: saldo del participante en una promoción, con procedencia.
+
+Authentication: sesión de participante
+
+Request: ?promotion_id=<uuid>
+
+Response: 200
+{
+  "promotion_id": "uuid",
+  "active_entries": 15, "purchase_entries": 12, "amoe_entries": 3,
+  "admin_entries": 0, "system_entries": 0,
+  "as_of": "2026-09-15T12:00:00.000Z"
+}
+
+Errors: 404 PROMOTION_NOT_FOUND; 409 PROMOTION_NOT_OPERATIONAL
+
+PROMOTION_NOT_OPERATIONAL distingue "no existe" de "existe pero no tiene versión
+de reglas activa o ventana": son informaciones distintas y la segunda es
+accionable para operaciones.
+
+Authorization: entry.self.read
+
+Owner: backend
+
+Status: IMPLEMENTED
+```
+
+```text
+Method: GET
+Endpoint: /api/v1/account/entry-transactions
+
+Purpose: historial del ledger propio, correcciones incluidas.
+
+Request: ?promotion_id=<uuid>&cursor=<opaque>&limit=<1..100>
+
+Response: 200
+{ "items": [ { "id", "type", "source_type", "quantity_delta", "reason_key",
+              "effective_at", "expires_at", "reverses_transaction_id" } ],
+  "next_cursor": null }
+
+Una devolución aparece como FILA NUEVA con delta negativo, no como la
+desaparición de la original.
+
+Errors: 404 PROMOTION_NOT_FOUND; 409 PROMOTION_NOT_OPERATIONAL
+
+Authorization: entry.self.read
+
+Owner: backend
+
+Status: IMPLEMENTED
+```
+
+```text
+Method: GET
+Endpoint: /api/v1/account/entry-numbers
+
+Purpose: rangos de números asignados ("mis números").
+
+Request: ?promotion_id=<uuid>&cursor=<opaque>&limit=<1..100>
+
+Response: 200
+{ "items": [ { "batch_id", "quantity", "first_number", "last_number" } ],
+  "next_cursor": null }
+
+Los números viajan como CADENA, jamás como número (DEC-010).
+
+Detrás del flag visible_entry_numbers_enabled, apagado: con el flag apagado
+devuelve 404, y con él encendido pero sin secuencia inicializada devuelve
+409 ENTRY_NUMBER_FORMAT_NOT_CONFIGURED en vez de inventar un prefijo.
+
+AVISO: la secuencia NO es el algoritmo del sorteo (DEC-017).
+
+Errors: 404 NOT_FOUND; 409 ENTRY_NUMBER_FORMAT_NOT_CONFIGURED
+
+Authorization: entry.self.read
+
+Owner: backend
+
+Status: IMPLEMENTED
+```
+
+```text
+Method: GET
+Endpoint: /api/v1/account/award-holds
+
+Purpose:
+Concesiones RETENIDAS: pedidos que ya calificaron y cuyas participaciones esperan
+a que se cumpla una condición del participante -hoy, la verificación del correo,
+y solo si las Official Rules la exigen-.
+
+Request: ?promotion_id=<uuid>
+
+Response: 200
+{ "items": [ { "id", "order_id", "promotion_id", "reason",
+              "qualified_at", "held_at" } ], "next_cursor": null }
+
+Es lo que explica un entry_state PENDING_QUALIFICATION que no avanza. Se sirve
+aparte y no como un sexto valor del enum: frontend declara cinco y añadir uno
+sería un cambio de contrato.
+
+Errors: 404 PROMOTION_NOT_FOUND; 409 PROMOTION_NOT_OPERATIONAL
+
+Authorization: entry.self.read
+
+Owner: backend
+
+Status: IMPLEMENTED
+```
+
+```text
+Method: GET
+Endpoint: /api/v1/account/orders
+
+Purpose: pedidos del propio participante.
+
+Request: ?cursor=<opaque>&limit=<1..100>
+
+Response: 200 { "items": [OrderSummary], "next_cursor": null }
+
+OrderSummary = { id, order_number, status, placed_at, total, item_count,
+promotion_id, entry_state, entries_granted }.
+
+`status` es la PROYECCIÓN del vocabulario de frontend
+(PENDING_PAYMENT | PAID | FULFILLED | CANCELLED | REFUNDED |
+PARTIALLY_REFUNDED | CHARGEBACK) derivada de las cuatro máquinas internas.
+`entry_state` es un campo APARTE
+(NOT_APPLICABLE | PENDING_QUALIFICATION | GRANTED | PARTIALLY_REVERSED |
+REVERSED) y se DERIVA del ledger en cada lectura: no hay columna que lo guarde.
+
+`entries_granted` es null -no 0- mientras no haya cifra.
+
+Authorization: order.self.read
+
+Owner: backend
+
+Status: IMPLEMENTED
+```
+
+```text
+Method: GET
+Endpoint: /api/v1/account/orders/{order_id}
+
+Purpose: detalle de un pedido, con la traza del cálculo de entries.
+
+Response: 200 OrderDetail = OrderSummary + { items, subtotal, shipping_total,
+tax_total, shipping_address, entry_calculation }.
+
+`entry_calculation` es { rules_version_id, engine_version, evaluated_at,
+final_entries, trace } leído del EntryCalculationSnapshot persistido, con la
+versión de motor de ESE movimiento y no la vigente hoy.
+
+Errors: 404 ORDER_NOT_FOUND
+
+Authorization: order.self.read
+
+Owner: backend
+
+Status: IMPLEMENTED
+```
+
+```text
+Method: GET
+Endpoint: /api/v1/me
+
+Purpose: perfil del participante autenticado.
+
+Response: 200 { id, email, display_name, email_verified, language_preference,
+created_at }
+
+SIN fecha de nacimiento, estado de residencia ni edad. No es un olvido: la
+elegibilidad la fijan las Official Rules y sigue en docs/LEGAL_PENDING.md.
+
+Authorization: participant.self.read
+
+Owner: backend
+
+Status: IMPLEMENTED
+```
+
+```text
+Method: PATCH
+Endpoint: /api/v1/me
+
+Purpose: cambiar nombre para mostrar e idioma preferido.
+
+Request: { "display_name": "..." | null, "language_preference": "es-US" }
+
+Solo esos dos campos. El correo NO se cambia por aquí: cambiarlo invalida la
+verificación, y la verificación puede ser condición para acumular
+participaciones. `language_preference` está acotado a en-US | es-US (DEC-021);
+la RESPUESTA lo declara string porque el backend podría soportar un idioma que la
+interfaz aún no tenga.
+
+Response: 200 ParticipantProfile
+
+Errors: 422 VALIDATION_FAILED
+
+Authorization: participant.self.update
+
+Owner: backend
+
+Status: IMPLEMENTED
+```
+
+---
+
+## 11.3 AMOE
+
+```text
+Method: GET
+Endpoint: /api/v1/promotions/{slug}/amoe-config
+
+Purpose: qué modalidad AMOE está vigente y qué exige.
+
+Response: 200
+{
+  "enabled": false, "mode": null,
+  "submission_window": { "opens_at": null, "closes_at": null },
+  "identity_requirements": [],
+  "entries_per_approved_submission": null, "requires_review": null,
+  "max_per_participant_per_period": null, "limit_period": null
+}
+
+Con el flag apagado responde enabled: false y NADA MÁS: si la vía no existe, sus
+parámetros tampoco son asunto de nadie.
+
+Errors: 404 PROMOTION_NOT_FOUND; 409 AMOE_CONFIG_INVALID
+
+Authorization: PUBLIC
+
+Justificación de que sea PUBLIC: la vía SIN COMPRA tiene que ser visible sin
+cuenta. Exigir sesión para saber cómo participar gratis convertiría la cuenta en
+un requisito de participación, que es justo lo que AMOE existe para evitar.
+
+Owner: backend
+
+Status: IMPLEMENTED
+```
+
+```text
+Method: POST
+Endpoint: /api/v1/promotions/{promotion_id}/amoe-submissions
+
+Purpose: enviar una participación sin compra.
+
+Request: { "payload": { "<clave>": "<texto>" } }
+
+`payload` es un mapa de clave a TEXTO: las cuatro modalidades piden datos
+distintos y cuál aplica lo dirá el abogado. Las claves obligatorias las declara
+identity_requirements.
+
+Response: 201
+{ "submission_id", "promotion_id", "status", "mode", "submitted_at",
+  "entries_awarded" }
+
+Una participación aprobada genera entries del MISMO tipo que una compra, con
+source_type AMOE. La aprobación crea una transacción del ledger; nunca incrementa
+un contador.
+
+Errors:
+404 NOT_FOUND (flag apagado)
+409 AMOE_WINDOW_CLOSED
+409 AMOE_LIMIT_REACHED
+409 AMOE_DUPLICATE_SUBMISSION
+409 AMOE_CONFIG_INVALID
+422 VALIDATION_FAILED
+
+Authorization: amoe.self.submit
+
+Owner: backend
+
+Status: IMPLEMENTED
+```
+
+```text
+Method: GET
+Endpoint: /api/v1/account/amoe-submissions
+
+Purpose: envíos AMOE del propio participante.
+
+Request: ?promotion_id=<uuid>
+
+Response: 200 { "items": [AmoeSubmission], "next_cursor": null }
+
+NO devuelve el payload: contiene datos personales y el participante ya sabe lo
+que envió. Lo que necesita es el ESTADO.
+
+Authorization: PARTICIPANT_SELF
+
+No existe capacidad de LECTURA de los envíos propios en el catálogo
+(amoe.self.submit es de escritura). Se declara como recurso propio del
+participante -que es lo que es- en vez de reutilizar una capacidad de escritura
+para leer, o de inventar una que nadie podría conceder.
+
+Owner: backend
+
+Status: IMPLEMENTED
+```
+
+| Método | Endpoint                                       | Authorization         | Notas                                                                 |
+| ------ | ---------------------------------------------- | --------------------- | --------------------------------------------------------------------- |
+| GET    | `/api/v1/admin/amoe-submissions?promotion_id=` | `amoe.review.read`    | Cola de revisión. Lleva `participant_id` interno; nunca el payload.   |
+| POST   | `/api/v1/admin/amoe-submissions/{id}/approve`  | `amoe.review.approve` | Cantidad según la versión de reglas **del envío**, no la vigente hoy. |
+| POST   | `/api/v1/admin/amoe-submissions/{id}/reject`   | `amoe.review.reject`  | `reason_key` obligatorio. Un rechazo NO consume cuota del límite.     |
+
+---
+
+## 11.4 Ajustes, descalificación, devoluciones y webhooks
+
+| Método | Endpoint                                       | Authorization            | Step-up |
+| ------ | ---------------------------------------------- | ------------------------ | ------- |
+| GET    | `/api/v1/admin/entry-adjustments`              | `entry.ledger.read`      | no      |
+| POST   | `/api/v1/admin/entry-adjustments`              | `entry.adjust.create`    | sí      |
+| POST   | `/api/v1/admin/entry-adjustments/{id}/approve` | `entry.adjust.approve`   | sí      |
+| POST   | `/api/v1/admin/entry-adjustments/{id}/reject`  | `entry.adjust.approve`   | sí      |
+| POST   | `/api/v1/admin/participants/{id}/disqualify`   | `participant.disqualify` | sí      |
+| POST   | `/api/v1/admin/orders/{id}/refund`             | `order.refund.initiate`  | sí      |
+| GET    | `/api/v1/admin/payment-webhooks`               | `payment.webhook.read`   | no      |
+| POST   | `/api/v1/admin/payment-webhooks/{id}/replay`   | `payment.webhook.replay` | sí      |
+
+Notas que no caben en la tabla y que importan:
+
+- **`entry.adjust.create` y `entry.adjust.approve` se comprueban tres veces**: el
+  autorizador de la ruta, `AdjustmentService.approve` y el CHECK
+  `adjustments_approver_differs` de la migración 0022. Las dos primeras se pueden
+  saltar cambiando código; la tercera no.
+- **Crear un ajuste devuelve `PENDING_APPROVAL`** mientras
+  `dual_approval_for_sensitive_actions_enabled` esté encendido, que es su valor
+  de arranque y el único flag que arranca así (DEC-032).
+- **Descalificar emite una fila NEGATIVA por cohorte** `(procedencia,
+caducidad)`, con `source_ref = disqualification:<decision_id>:<expiry_key>`
+  (DEC-047). Nunca borra al participante ni sus filas. `reason_detail` es
+  obligatorio: descalificar sin explicar por qué es un borrado con formulario.
+  Respuesta: `{ id, promotion_id, participant_id, decision_id, reason_key,
+decided_at, entries_removed, cohort_count }`.
+- **La devolución administrativa** llama al proveedor y, con el abono confirmado,
+  pide el movimiento de reversal. El importe de mercancía ELEGIBLE lo calcula
+  `@lsw/commerce` sobre la elegibilidad CONGELADA de cada línea. Devuelve
+  `{ order_id, provider_refund_id, amount, entry_transaction_id,
+entries_reversed }`. Hoy responde `503 PAYMENT_PROVIDER_NOT_CONFIGURED`.
+- **`replay` NO reprocesa el evento**: el cuerpo original no se guarda -contiene
+  datos de tarjeta y PII- y sin él no se puede verificar la firma. Lo que hace es
+  dejarlo visible para que el proveedor lo reintente. Un evento ya `PROCESSED`
+  devuelve `404 PAYMENT_EVENT_NOT_REPLAYABLE`: repetir su efecto es exactamente
+  lo que la idempotencia del ledger existe para impedir.
+- Ningún endpoint de esta sección edita ni borra una transacción del ledger. **No
+  existe tal endpoint y no puede existir** (DEC-007).
+
+---
+
+## 11.5 Sorteo (DEC-017)
+
+| Método | Endpoint                                                             | Authorization               | Step-up |
+| ------ | -------------------------------------------------------------------- | --------------------------- | ------- |
+| GET    | `/api/v1/admin/promotions/{id}/draw-authorizations`                  | `draw.result.read`          | no      |
+| POST   | `/api/v1/admin/promotions/{id}/draw-authorizations`                  | `draw.authorization.create` | sí      |
+| POST   | `/api/v1/admin/promotions/{id}/draw-authorizations/{auth_id}/revoke` | `draw.authorization.create` | sí      |
+| POST   | `/api/v1/admin/draws`                                                | `draw.initiate`             | sí      |
+| GET    | `/api/v1/admin/draws?promotion_id=`                                  | `draw.result.read`          | no      |
+| GET    | `/api/v1/admin/promotions/{id}/potential-winners`                    | `winner.workflow.read`      | no      |
+| POST   | `/api/v1/admin/potential-winners/{id}/status`                        | `winner.status.update`      | sí      |
+
+- **`POST /admin/draws` NO SORTEA HOY, y no es un "todavía no".** Consulta los
+  cinco cerrojos de DEC-017 en orden y se niega en el primero que no pasa. El
+  cerrojo 1 -`internal_draw_enabled`, persistido y apagado- está cerrado, así que
+  responde `409 INTERNAL_DRAW_DISABLED` y ahí acaba. Si el flag se encendiera sin
+  que `@lsw/tpa` esté montado, responde `409 DRAW_ENGINE_NOT_WIRED` en vez de
+  improvisar una selección: un sorteo escrito a mano en un handler no tiene
+  rechazo de muestreo, ni commit-reveal, ni cadena de registro.
+- **La lectura de autorizaciones usa `draw.result.read`** porque
+  `draw.authorization.read` no existe en el catálogo. HO-026 nombra esta
+  reutilización como la alternativa aceptada.
+- **La ruta de SEGUNDA APROBACIÓN no existe todavía**, porque `draw.approve`
+  tampoco existe en el catálogo (HO-026 la aceptó como capacidad propia y la
+  resiembra la hace la sesión paralela). Se escribió y se retiró del código a
+  propósito: una ruta declarada y no registrada rompe el escáner de fuentes de
+  `tests/security`. Entra -tabla, código y todo- cuando la capacidad se siembre.
+- **`POST /potential-winners/{id}/status`** responde
+  `409 WINNER_WORKFLOW_NOT_WIRED`: la máquina de estados del expediente vive en
+  `@lsw/tpa`, y replicarla aquí crearía una segunda máquina.
+
+---
+
+## 11.6 Exportación al third-party administrator (DEC-016)
+
+| Método | Endpoint                                         | Authorization              | Step-up |
+| ------ | ------------------------------------------------ | -------------------------- | ------- |
+| POST   | `/api/v1/admin/promotions/{id}/export-snapshots` | `export.snapshot.create`   | no      |
+| GET    | `/api/v1/admin/promotions/{id}/export-snapshots` | `export.snapshot.read`     | no      |
+| GET    | `/api/v1/admin/export-snapshots/{id}`            | `export.snapshot.read`     | no      |
+| POST   | `/api/v1/admin/export-snapshots/{id}/validate`   | `export.snapshot.validate` | no      |
+| POST   | `/api/v1/admin/export-snapshots/{id}/finalize`   | `export.finalize`          | sí      |
+| GET    | `/api/v1/admin/export-snapshots/{id}/download`   | `export.download`          | sí      |
+| POST   | `/api/v1/admin/export-snapshots/{id}/deliver`    | `export.deliver`           | sí      |
+| POST   | `/api/v1/admin/export-snapshots/{id}/results`    | `winner.status.update`     | sí      |
+
+- **Crear** fija la tupla de DEC-016 -promoción, `cutoff_at`, `rules_version_id`,
+  `ledger_high_water_mark` y las tres versiones- y nada más. El corte se pide
+  EXPLÍCITO y no se toma del reloj: es una decisión de operaciones, no el
+  instante en que alguien pulsó el botón.
+- **La marca de agua no es redundante con el corte.** `effective_at` puede ser
+  anterior al corte en una fila escrita DESPUÉS -un pago que liquida tarde-, y
+  sin el tope de secuencia esa fila entraría en un recálculo posterior y
+  cambiaría un digest ya firmado.
+- **Validar** reconcilia y devuelve `{ snapshot_id, passed, checks[] }`. `passed`
+  solo si TODAS las comprobaciones pasan; nunca "casi". Comprueba que los tramos
+  del universo empiezan en 1, no dejan hueco y no se solapan: comprobar solo el
+  total dejaría pasar un hueco compensado por un solapamiento.
+- **Finalizar y descargar se niegan hoy**
+  (`409 EXPORT_DIGEST_CALCULATOR_NOT_CONFIGURED`,
+  `409 EXPORT_ARTIFACT_NOT_AVAILABLE`): el cálculo del digest, el árbol de Merkle
+  y el artefacto reproducible viven en `@lsw/audit`, del que `apps/api` no
+  depende todavía. NO se devuelve el digest guardado: el cerrojo 4 de DEC-017
+  consiste en RECALCULAR desde el origen y comparar, y un digest comparado
+  consigo mismo es un control que nunca falla.
+- **Entregar** se niega con `409 EXPORT_DELIVERY_NOT_CONFIGURED`: el canal lo
+  impone el administrador externo, que sigue sin elegir.
+- **Resultados** crea expedientes de `PotentialWinner` con
+  `source: EXTERNAL_ADMINISTRATOR` y sin `drawing_event_id`: no hubo sorteo
+  interno, y decir lo contrario sería afirmar que existe un registro que no
+  existe. Solo se acepta sobre un snapshot en `DELIVERED`.
+
+Owner de 11.5 y 11.6: `backend` implementa la superficie HTTP y la persistencia;
+**el formato del artefacto, la firma y la entrega son de `security-integration`**
+(DEC-016), igual que los cinco cerrojos de DEC-017, que viven en `@lsw/tpa`.
