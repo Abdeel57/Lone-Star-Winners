@@ -42,6 +42,7 @@ import {
   DrizzlePotentialWinnerRepository,
 } from "./draw-repositories.js";
 import { DrizzleEntryNumberRepository } from "./entry-number-repository.js";
+import { DrizzleExportReconciliationRepository } from "./export-reconciliation-repository.js";
 import { DrizzleUnitOfWork } from "./executor.js";
 import { DrizzleParticipantIdentityRepository } from "./identity-repository.js";
 import { DrizzleLedgerRepository } from "./ledger-repository.js";
@@ -63,6 +64,7 @@ export * from "./adjustment-repository.js";
 export * from "./order-repository.js";
 export * from "./payment-event-repository.js";
 export * from "./snapshot-repository.js";
+export * from "./export-reconciliation-repository.js";
 export * from "./draw-repositories.js";
 export * from "./tpa-ports.js";
 // HO-028: persistencia encadenada de la auditoria. NO entra en
@@ -85,6 +87,7 @@ export interface SweepstakesRepositories {
   readonly orders: DrizzleOrderRepository;
   readonly paymentEvents: DrizzlePaymentEventRepository;
   readonly exportSnapshots: DrizzleSnapshotRepository;
+  readonly exportReconciliation: DrizzleExportReconciliationRepository;
   readonly drawAuthorizations: DrizzleAuthorizationRepository;
   readonly drawAuthorizationWriter: DrizzleDrawAuthorizationWriter;
   readonly drawingEvents: DrizzleDrawingEventChain;
@@ -124,6 +127,7 @@ export function createSweepstakesRepositories(
         ? {}
         : { digestCalculator: options.contentDigestCalculator }),
     }),
+    exportReconciliation: new DrizzleExportReconciliationRepository(db),
     drawAuthorizations: new DrizzleAuthorizationRepository(db),
     drawAuthorizationWriter: new DrizzleDrawAuthorizationWriter(db),
     drawingEvents: new DrizzleDrawingEventChain(db),

@@ -31,7 +31,11 @@
 
 import { asc, eq, sql } from "drizzle-orm";
 
-import { exportSnapshotEntryRanges, exportSnapshots } from "../schema/draw.js";
+import {
+  exportSnapshotEntryRanges,
+  exportSnapshotStates,
+  exportSnapshots,
+} from "../schema/draw.js";
 import { currentExecutor, type DbExecutor } from "./executor.js";
 import {
   createUnconfiguredContentDigestCalculator,
@@ -337,6 +341,74 @@ export class DrizzleSnapshotRepository {
       generatedAt: input.generatedAt,
       generatedBy: input.generatedBy,
       supersedesSnapshotId: input.supersedesSnapshotId,
+    });
+  }
+
+  /**
+   * Anade una transicion de estado. NUNCA actualiza.
+   *
+   * Cada paso -validar, finalizar, entregar, sustituir- es una FILA NUEVA, igual
+   * que en el ledger: una correccion es una fila nueva y no una edicion. La
+   * tabla lo impone con un trigger que rechaza UPDATE y DELETE, y
+   * `UNIQUE (snapshot_id, status)` impide que un snapshot se finalice dos veces:
+   * dos finalizaciones concurrentes con digests distintos dejarian dos
+   * evidencias validas del mismo corte y ninguna forma de saber cual se entrego.
+   *
+   * Las cifras van en columnas `bigint` porque un universo puede tener mas
+   * ordinales de los que un `integer` admite; se aceptan como `number` -que es
+   * lo que produce el dominio- y se convierten aqui, en un solo sitio.
+   */
+  public async appendState(input: {
+    readonly snapshotId: string;
+    readonly status: ExportSnapshotStatusValue;
+    readonly occurredAt: Date;
+    readonly actorReference: string;
+    readonly actorAdminUserId?: string | null;
+    readonly expirationEnabledAtCutoff?: boolean | null;
+    readonly transactionsExcludedByExpiration?: number | null;
+    readonly entriesExcludedByExpiration?: number | null;
+    readonly participantCount?: number | null;
+    readonly entryBatchCount?: number | null;
+    readonly totalEligibleEntries?: number | null;
+    readonly contentDigest?: string | null;
+    readonly merkleRoot?: string | null;
+    readonly artifactSha256?: string | null;
+    readonly signingKeyId?: string | null;
+    readonly deliveryMethod?: ExportDeliveryMethodValue | null;
+    readonly deliveryReference?: string | null;
+    readonly acknowledgedSha256?: string | null;
+    readonly reasonKey?: string | null;
+    readonly reasonDetail?: string | null;
+    readonly metadata?: Readonly<Record<string, unknown>>;
+  }): Promise<void> {
+    const big = (value: number | null | undefined): bigint | null =>
+      value === null || value === undefined ? null : BigInt(value);
+
+    await this.db.insert(exportSnapshotStates).values({
+      snapshotId: input.snapshotId,
+      status: input.status,
+      occurredAt: input.occurredAt,
+      // DEC-035: el instante del registro es explicito, no un DEFAULT, por el
+      // mismo motivo que en el ledger y en `audit_events`.
+      recordedAt: input.occurredAt,
+      actorAdminUserId: input.actorAdminUserId ?? null,
+      actorReference: input.actorReference,
+      expirationEnabledAtCutoff: input.expirationEnabledAtCutoff ?? null,
+      transactionsExcludedByExpiration: big(input.transactionsExcludedByExpiration),
+      entriesExcludedByExpiration: big(input.entriesExcludedByExpiration),
+      participantCount: big(input.participantCount),
+      entryBatchCount: big(input.entryBatchCount),
+      totalEligibleEntries: big(input.totalEligibleEntries),
+      contentDigest: input.contentDigest ?? null,
+      merkleRoot: input.merkleRoot ?? null,
+      artifactSha256: input.artifactSha256 ?? null,
+      signingKeyId: input.signingKeyId ?? null,
+      deliveryMethod: input.deliveryMethod ?? null,
+      deliveryReference: input.deliveryReference ?? null,
+      acknowledgedSha256: input.acknowledgedSha256 ?? null,
+      reasonKey: input.reasonKey ?? null,
+      reasonDetail: input.reasonDetail ?? null,
+      metadata: input.metadata ?? {},
     });
   }
 }

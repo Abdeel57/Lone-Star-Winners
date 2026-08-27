@@ -253,3 +253,98 @@ export function createUnconfiguredContentDigestCalculator(): ContentDigestCalcul
     },
   };
 }
+
+// ---------------------------------------------------------------------------
+// Reconciliacion previa a finalizar (DEC-016)
+//
+// Mismas formas que `ReconciliationInputs` de `@lsw/tpa`, declaradas aqui por
+// el motivo de la cabecera de este fichero: este paquete no depende de aquel, y
+// la compatibilidad es ESTRUCTURAL. El dia que diverjan, el compilador lo dira
+// en el punto de montaje (`apps/api`), que es donde debe decirlo.
+// ---------------------------------------------------------------------------
+
+/** Saldo de un participante al corte, ya desglosado por procedencia. */
+export interface ParticipantBalanceLineRecord {
+  readonly participantReference: string;
+  readonly purchaseEntries: number;
+  readonly amoeEntries: number;
+  readonly adminEntries: number;
+  readonly systemEntries: number;
+  /**
+   * SIEMPRE 0, y no es un hueco sin rellenar.
+   *
+   * `lsw_export_universe_at` es la UNICA definicion del saldo (DEC-007) y es
+   * NETA: un reversal de una compra resta dentro de `purchase_entries`, porque
+   * un reversal CONSERVA la procedencia de lo que revierte (principio 9).
+   * Declarar aqui una cifra de reversals obligaria a una segunda agregacion con
+   * el mismo predicado de saldo, que es exactamente la duplicacion que la
+   * migracion 0023 documenta como la unica tolerada del proyecto.
+   */
+  readonly reversalEntries: number;
+  readonly eligibleEntries: number;
+}
+
+/** Hecho que solo podia otorgar entries una vez y las otorgo mas veces. */
+export interface DuplicateAwardLineRecord {
+  readonly sourceReference: string;
+  readonly awardCount: number;
+}
+
+export interface ChainStatusLineRecord {
+  readonly ok: boolean;
+  readonly verdict: "INTACT" | "UNSEALED" | "COMPROMISED";
+  readonly breakCount: number;
+  readonly observedHeadHash: string | null;
+}
+
+export interface ReconciliationTotalsRecord {
+  readonly participantCount: number;
+  readonly entryBatchCount: number;
+  readonly purchaseSourceEntries: number;
+  readonly amoeSourceEntries: number;
+  readonly adminSourceEntries: number;
+  readonly systemSourceEntries: number;
+  readonly reversalEntries: number;
+  readonly totalEligibleEntries: number;
+}
+
+export interface ExpirationReconciliationLineRecord {
+  readonly predicateVersion: number;
+  readonly cutoffAt: string;
+  readonly expirationEnabledAtCutoff: boolean;
+  readonly excludedTransactionCount: number;
+  readonly excludedEntryQuantity: number;
+  readonly affectedParticipantCount: number;
+}
+
+export interface ConfigurationChangeRecord {
+  readonly key: string;
+  readonly changedAt: string;
+}
+
+/**
+ * Todo lo que las comprobaciones de `@lsw/tpa` necesitan leer.
+ *
+ * `chain` NO se rellena aqui: verificar una hash chain exige `@lsw/audit`, del
+ * que este paquete no depende. Lo monta `apps/api` con el verificador real, que
+ * es la unica forma de que el veredicto signifique algo.
+ */
+export interface ReconciliationSourcesRecord {
+  readonly promotionStatus: string;
+  readonly requirePromotionClosed: boolean;
+  readonly rulesVersionActive: boolean;
+  readonly configurationChangesAfterCutoff: readonly ConfigurationChangeRecord[];
+  readonly totals: ReconciliationTotalsRecord;
+  readonly expiration: ExpirationReconciliationLineRecord;
+  readonly participantBalances: readonly ParticipantBalanceLineRecord[];
+  readonly entryRanges: readonly EntryBatchRangeRecord[];
+  readonly duplicateAmoeAwards: readonly DuplicateAwardLineRecord[];
+  readonly duplicatePaymentAwards: readonly DuplicateAwardLineRecord[];
+  readonly unprocessedRefunds: readonly string[];
+  readonly unprocessedChargebacks: readonly string[];
+  readonly disqualificationsNotReflected: readonly string[];
+  readonly pendingAmoeSubmissions: number;
+  readonly ordersPendingQualification: number;
+  readonly openPaymentDisputes: number;
+  readonly pendingManualAdjustments: number;
+}

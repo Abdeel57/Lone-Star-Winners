@@ -15,6 +15,7 @@
  *   cuenta administrativa lo pide.
  */
 
+import type { RoleId } from "@lsw/security";
 import type { Principal } from "@lsw/sweepstakes";
 import type { FastifyRequest } from "fastify";
 
@@ -23,10 +24,40 @@ import { createStaffLookup, staffPrincipal } from "../services/staff-principal.j
 import { ApiErrors } from "./errors.js";
 import { resolveSession } from "./session-authorizer.js";
 
+/**
+ * Personal autenticado MAS lo que la sesion sabe y el `Principal` no lleva.
+ *
+ * `Principal` es lo que entienden los servicios de dominio de entries: actor,
+ * ambito y capacidades. No lleva los ROLES ni la antiguedad del ultimo MFA, y no
+ * debe llevarlos: son datos de la sesion, no del actor.
+ *
+ * Pero el sorteo si los necesita. `initiateDraw` de `@lsw/tpa` consulta a
+ * `@lsw/security` con los roles efectivos y los segundos desde el ultimo MFA
+ * -es el cerrojo 3 de DEC-017- y ni uno ni otro se pueden deducir del
+ * `Principal`. Resolverlos por separado significaria consultar la sesion DOS
+ * veces por peticion, y con dos consultas separadas por un `await` la segunda
+ * puede ver una sesion que la primera no vio.
+ */
+export interface StaffContext {
+  readonly principal: Principal;
+  readonly roles: readonly RoleId[];
+  /** Segundos desde el ultimo MFA verificado; `null` si no hay ninguno. */
+  readonly secondsSinceLastMfa: number | null;
+  /** Identificador de la cuenta administrativa. Es lo que referencia el ledger. */
+  readonly adminUserId: string;
+}
+
 export async function requireStaff(
   dependencies: AppDependencies,
   request: FastifyRequest,
 ): Promise<Principal> {
+  return (await requireStaffContext(dependencies, request)).principal;
+}
+
+export async function requireStaffContext(
+  dependencies: AppDependencies,
+  request: FastifyRequest,
+): Promise<StaffContext> {
   const session = await resolveSession(request, {
     identity: dependencies.identity,
     config: dependencies.config,
@@ -54,5 +85,10 @@ export async function requireStaff(
     throw ApiErrors.forbidden("STAFF_SESSION_REQUIRED");
   }
 
-  return staffPrincipal(account, session.roles);
+  return {
+    principal: staffPrincipal(account, session.roles),
+    roles: session.roles,
+    secondsSinceLastMfa: session.secondsSinceLastMfa,
+    adminUserId: account.adminUserId,
+  };
 }

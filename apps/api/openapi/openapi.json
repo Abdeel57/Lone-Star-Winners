@@ -2858,7 +2858,7 @@
         }
       },
       "post": {
-        "description": "Comprueba los CINCO cerrojos de DEC-017 y se niega en el primero que no pasa. Hoy el cerrojo 1 -el flag `internal_draw_enabled`- esta cerrado, asi que responde 409 INTERNAL_DRAW_DISABLED y no llega a los demas.",
+        "description": "Llama a `initiateDraw` de `@lsw/tpa`, que comprueba los CINCO cerrojos de DEC-017 y se niega en el primero que no pasa dejando AuditEvent de la negativa. El cerrojo 1 -el flag persistido, apagado por defecto- responde 409 INTERNAL_DRAW_DISABLED; el resto, 409 DRAW_REFUSED con el reason_code estable del dominio en details.reason.",
         "operationId": "initiateDraw",
         "requestBody": {
           "content": {
@@ -5060,7 +5060,7 @@
     },
     "/api/v1/admin/export-snapshots/{snapshot_id}/deliver": {
       "post": {
-        "description": "Registra el acuse, no envia el fichero: el canal de entrega -SFTP, API, URL firmada- lo impone el administrador externo, que todavia no esta elegido (docs/LEGAL_PENDING.md).",
+        "description": "Con `MANUAL_DOWNLOAD` REGISTRA el acuse de una entrega ya hecha por el unico canal que existe hoy, a traves del adaptador, y deja el snapshot en DELIVERED. Con cualquier otro metodo responde 409 `tpa.dry_run`: el canal lo impone el administrador externo, que sigue sin elegirse (docs/LEGAL_PENDING.md).",
         "operationId": "deliverExportSnapshot",
         "parameters": [
           {
@@ -5538,7 +5538,7 @@
     },
     "/api/v1/admin/export-snapshots/{snapshot_id}/download": {
       "get": {
-        "description": "El artefacto es reproducible byte a byte (DEC-016) y lo genera `@lsw/audit`. Sin ese paquete montado no hay artefacto que servir, y NO se improvisa uno: un fichero generado de otra forma tendria otro hash y dejaria de ser evidencia.",
+        "description": "Sirve el paquete ZIP DETERMINISTA (`application/zip`), reproducible byte a byte (DEC-016). Descarga directa: `export.download` exige step-up, asi que la autenticacion fuerte esta en la peticion y no en un enlace que pudiera reenviarse. Exige `reason` escrito y deja `export.downloaded` con el `artifact_sha256` de lo entregado.",
         "operationId": "downloadExportSnapshot",
         "parameters": [
           {
@@ -5548,6 +5548,16 @@
             "schema": {
               "format": "uuid",
               "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "reason",
+            "required": true,
+            "schema": {
+              "maxLength": 2000,
+              "minLength": 3,
               "type": "string"
             }
           }
@@ -5728,7 +5738,7 @@
     },
     "/api/v1/admin/export-snapshots/{snapshot_id}/finalize": {
       "post": {
-        "description": "Calcula el digest de contenido y la raiz de Merkle desde el ORIGEN. Sin el calculador de `@lsw/audit` montado, se NIEGA: devolver el digest guardado convertiria el cerrojo 4 de DEC-017 en comparar un valor consigo mismo.",
+        "description": "Reconcilia, y si nada bloquea calcula `content_digest` y `merkle_root` desde el ORIGEN con `buildExportArtifact` y los escribe en una fila NUEVA. Nunca devuelve el digest guardado: el cerrojo 4 de DEC-017 consiste en recalcular y comparar.",
         "operationId": "finalizeExportSnapshot",
         "parameters": [
           {
@@ -6145,8 +6155,9 @@
             "application/json": {
               "schema": {
                 "properties": {
-                  "reason_code": {
-                    "pattern": "^[a-zA-Z][a-zA-Z0-9_.]{2,63}$",
+                  "external_reference": {
+                    "maxLength": 200,
+                    "minLength": 1,
                     "type": "string"
                   },
                   "winners": {
@@ -6182,7 +6193,7 @@
                 },
                 "required": [
                   "winners",
-                  "reason_code"
+                  "external_reference"
                 ],
                 "type": "object"
               }
@@ -7815,7 +7826,7 @@
     },
     "/api/v1/admin/potential-winners/{potential_winner_id}/status": {
       "post": {
-        "description": "La maquina de estados vive en `@lsw/tpa` y decide QUE transiciones son legitimas. Mientras esa dependencia no este montada, esta ruta se niega en vez de aplicar una transicion sin validar: replicar la tabla aqui crearia una segunda maquina y el dia que discreparan ganaria la que se ejecutara antes.",
+        "description": "La maquina de estados vive en `@lsw/tpa` y decide QUE transiciones son legitimas: aqui no se replica, se llama. Una transicion no permitida responde 409 WINNER_TRANSITION_NOT_ALLOWED con el estado de partida y los destinos posibles.",
         "operationId": "updatePotentialWinnerStatus",
         "parameters": [
           {

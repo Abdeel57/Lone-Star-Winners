@@ -43,6 +43,8 @@ import {
 import type { Order, OrderItem } from "@lsw/commerce";
 import {
   createSweepstakesRepositories,
+  type ContentDigestCalculator,
+  type DrizzleAuditEventRepository,
   type Database,
   type OrderRecord,
   type SweepstakesRepositories,
@@ -50,6 +52,7 @@ import {
 
 import { createParticipantLookup, type ParticipantLookup } from "./participant-lookup.js";
 import type { AuditSink } from "@lsw/sweepstakes";
+import type { AuditRecorder as TpaAuditRecorder } from "@lsw/tpa";
 
 /**
  * Reloj del sistema.
@@ -132,14 +135,39 @@ export interface DomainServices {
   readonly reversal: ReversalService;
   readonly amoe: AmoeService;
   readonly adjustments: AdjustmentService;
+  /**
+   * Grabador de `@lsw/tpa`. Escribe en la MISMA tabla y con la MISMA cadena que
+   * `AuditSink`; lo que cambia es de donde sale cada columna (ver
+   * `tpa-audit-recorder.ts`).
+   */
+  readonly tpaAudit: TpaAuditRecorder;
+  /**
+   * Lectura de la cadena de auditoria. La necesita la reconciliacion del export
+   * para VERIFICARLA de verdad en vez de declararla intacta sin mirar.
+   */
+  readonly auditEvents: DrizzleAuditEventRepository;
 }
 
 export interface DomainServicesOptions {
   readonly audit: AuditSink;
+  readonly tpaAudit: TpaAuditRecorder;
+  readonly auditEvents: DrizzleAuditEventRepository;
+  /**
+   * Quien calcula el digest del manifiesto de contenido (`@lsw/audit`).
+   *
+   * Sin el, `recomputeContentDigest` FALLA y el cerrojo 4 de DEC-017 no se
+   * puede comprobar. No hay modo degradado: devolver el digest guardado seria
+   * comparar un valor consigo mismo.
+   */
+  readonly contentDigestCalculator?: ContentDigestCalculator;
 }
 
 export function createDomainServices(db: Database, options: DomainServicesOptions): DomainServices {
-  const repositories = createSweepstakesRepositories(db);
+  const repositories = createSweepstakesRepositories(db, {
+    ...(options.contentDigestCalculator === undefined
+      ? {}
+      : { contentDigestCalculator: options.contentDigestCalculator }),
+  });
   const clock: Clock = new SystemClock();
   const ids: IdGenerator = new CryptoIdGenerator();
   const audit = options.audit;
@@ -160,6 +188,8 @@ export function createDomainServices(db: Database, options: DomainServicesOption
   return {
     repositories,
     participants: createParticipantLookup(db),
+    tpaAudit: options.tpaAudit,
+    auditEvents: options.auditEvents,
     clock,
     ids,
     award: new AwardService({

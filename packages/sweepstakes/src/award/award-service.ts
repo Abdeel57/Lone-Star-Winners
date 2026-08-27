@@ -235,17 +235,33 @@ export class AwardService {
     // estaba otorgada: en los tres casos ha dejado de estar pendiente, y
     // mantenerla abierta la convertiria en ruido permanente en la cola.
     if (outcome.status !== "HELD_PENDING_EMAIL_VERIFICATION" && hold.status === "HELD") {
-      await this.deps.holds.resolve(hold.id, "RELEASED", this.deps.clock.now());
-      await this.deps.audit.emit({
-        action: "entry.award.hold.released",
-        actor,
-        promotionId,
-        targetEntityType: "EntryAwardHold",
-        targetEntityId: hold.id,
-        reasonKey: ENTRY_REASON_KEYS.purchaseQualified,
-        reasonDetail: null,
-        occurredAt: this.deps.clock.now(),
-        metadata: { order_id: orderId, outcome: outcome.status },
+      /**
+       * HO-032, punto 2: el evento va DENTRO de la transaccion que resuelve la
+       * retencion.
+       *
+       * Antes se emitia fuera. No era incorrecto -el sumidero persistente abre
+       * transaccion propia si no hay ninguna viva- pero la atomicidad de DEC-007
+       * solo la da esta forma: si el registro del hecho no se puede escribir, la
+       * resolucion de la retencion tampoco se confirma. Con la emision fuera
+       * quedaba abierta la ventana contraria: retencion cerrada y ningun rastro
+       * de que alguien la cerro.
+       *
+       * `DrizzleUnitOfWork` REUTILIZA la transaccion viva si la hay, asi que
+       * envolver aqui no anida nada cuando el llamante ya abrio una.
+       */
+      await this.deps.unitOfWork.withTransaction(async () => {
+        await this.deps.holds.resolve(hold.id, "RELEASED", this.deps.clock.now());
+        await this.deps.audit.emit({
+          action: "entry.award.hold.released",
+          actor,
+          promotionId,
+          targetEntityType: "EntryAwardHold",
+          targetEntityId: hold.id,
+          reasonKey: ENTRY_REASON_KEYS.purchaseQualified,
+          reasonDetail: null,
+          occurredAt: this.deps.clock.now(),
+          metadata: { order_id: orderId, outcome: outcome.status },
+        });
       });
     }
 

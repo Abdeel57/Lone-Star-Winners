@@ -470,6 +470,53 @@ describe("liberacion de la retencion", () => {
     expect(harness.holds.all()[0]?.status).toBe("HELD");
     expect(harness.ledger.all()).toHaveLength(0);
   });
+
+  /**
+   * HO-032, punto 2. El test mira la PROFUNDIDAD de transaccion en el instante
+   * de la emision, no el orden de las llamadas.
+   *
+   * Es la unica forma de que falle si alguien vuelve a sacar la emision fuera:
+   * un test que solo comprobara "se emitio `entry.award.hold.released`" pasaria
+   * igual con el evento emitido despues de confirmar, que es exactamente el
+   * caso que HO-032 pide impedir.
+   */
+  it("HO-032: `entry.award.hold.released` se emite DENTRO de la transaccion", async () => {
+    const harness = buildHarness({
+      rulesConfig: baseRulesConfig({ eligibility: { email_verification_required: true } }),
+    });
+
+    const emissions: { readonly action: string; readonly depth: number }[] = [];
+    const award = new AwardService({
+      ledger: harness.ledger,
+      snapshots: harness.snapshots,
+      promotions: harness.promotions,
+      identity: harness.identity,
+      holds: harness.holds,
+      entryNumbers: harness.entryNumbers,
+      clock: harness.clock,
+      ids: harness.ids,
+      unitOfWork: harness.unitOfWork,
+      audit: {
+        emit: (event): Promise<void> => {
+          emissions.push({ action: event.action, depth: harness.unitOfWork.depth });
+          return Promise.resolve();
+        },
+      },
+    });
+
+    harness.identity.set(PARTICIPANT_ID, null);
+    await award.awardForQualifiedOrder(qualifiedOrder());
+    harness.identity.set(PARTICIPANT_ID, new Date("2026-09-14T00:00:00.000Z"));
+    await award.releaseHold(PROMOTION_ID, "order-0001", qualifiedOrder());
+
+    const released = emissions.filter((entry) => entry.action === "entry.award.hold.released");
+    expect(released).toHaveLength(1);
+    expect(released[0]?.depth).toBeGreaterThan(0);
+
+    // Y no es que TODO ocurra dentro por accidente: fuera de transaccion la
+    // profundidad vuelve a cero, asi que la asercion de arriba discrimina.
+    expect(harness.unitOfWork.depth).toBe(0);
+  });
 });
 
 describe("actor", () => {

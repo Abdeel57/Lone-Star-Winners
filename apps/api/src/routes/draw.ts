@@ -2,28 +2,35 @@
  * Sorteo interno y expediente de ganador potencial (DEC-017).
  *
  * ---------------------------------------------------------------------------
- * NINGUNA RUTA DE ESTE FICHERO SORTEA HOY, Y NO ES UN "TODAVIA NO"
+ * EL MOTOR ESTA MONTADO. EL SORTEO SIGUE NEGANDOSE POR DEFECTO
  * ---------------------------------------------------------------------------
  *
- * DEC-017 exige CINCO cerrojos simultaneos para cualquier seleccion aleatoria
- * interna. `POST /admin/draws` los consulta en este orden y se niega en el
- * primero que no pasa:
+ * Las dos frases son ciertas a la vez, y la distincion es todo lo que importa
+ * aqui. `POST /admin/draws` ya NO responde "no implementado": llama a
+ * `initiateDraw` de `@lsw/tpa`, que es la unica puerta por la que se puede
+ * sortear, con los puertos REALES -flags persistidos, autorizador de
+ * `@lsw/security`, repositorios de PostgreSQL, CSPRNG del sistema y la cadena
+ * de `@lsw/audit`-.
  *
- *   1. `internal_draw_enabled`, persistido y APAGADO (DEC-032).
+ * Esa funcion exige CINCO cerrojos simultaneos y se niega en el primero que no
+ * pasa, dejando `AuditEvent` de la negativa:
+ *
+ *   1. `internal_draw_enabled`, persistido y APAGADO por defecto (DEC-032).
  *   2. Autorizacion documental viva, con alcance y ventana.
- *   3. Segunda aprobacion de un actor distinto, dentro de su TTL.
+ *   3. Segunda aprobacion de un actor DISTINTO, dentro de su TTL.
  *   4. Snapshot FINALIZED cuyo digest RECALCULADO coincida con el guardado.
- *   5. CSPRNG utilizable.
+ *   5. CSPRNG utilizable, con rechazo de muestreo.
  *
- * Con el flag apagado, la respuesta es `409 INTERNAL_DRAW_DISABLED` y ahi acaba.
- * Es la respuesta correcta, no un placeholder: el cerrojo 1 esta cerrado.
+ * Hoy fallan dos: el flag esta apagado, y aunque se encendiera no existe la
+ * ruta que concede la segunda aprobacion (ver mas abajo). La respuesta es
+ * `409` con el `reason_code` ESTABLE del dominio en `details.reason`, no un
+ * codigo inventado en este fichero: ese identificador lo leera un tercero
+ * dentro de meses y renombrarlo romperia el historico (DEC-022).
  *
- * Ademas, el MOTOR de seleccion vive en `@lsw/tpa` y `apps/api` todavia no
- * depende de ese paquete (`pnpm install` esta fuera de alcance esta ronda,
- * DEC-046 punto 5). Por eso, si algun dia el flag se encendiera sin que la
- * dependencia exista, la ruta responde `409 DRAW_ENGINE_NOT_WIRED` en vez de
- * improvisar una seleccion aqui. Un sorteo escrito a mano en un handler no
- * tiene commit-reveal, ni rechazo de muestreo, ni cadena de registro.
+ * Lo que este handler NO hace, y no debe hacer nunca: decidir. No comprueba
+ * cerrojos por su cuenta, no elige ordinal y no construye el registro. Un
+ * sorteo escrito a mano en un handler no tiene rechazo de muestreo, ni
+ * commit-reveal, ni cadena de registro.
  *
  * ---------------------------------------------------------------------------
  * `draw.approve` NO EXISTE TODAVIA EN EL CATALOGO
@@ -55,12 +62,25 @@
  * deducirse.
  */
 
+import { createDrawingEventChainPort } from "@lsw/audit";
+import {
+  DRAW_REFUSAL_CODES,
+  DrawRefusedError,
+  PotentialWinnerTransitionError,
+  allowedTransitionsFrom,
+  initiateDraw,
+  transitionPotentialWinner,
+  type DrawServiceDependencies,
+  type DrawingEvent,
+  type PotentialWinner,
+} from "@lsw/tpa";
+import type { FastifyRequest } from "fastify";
 import { z } from "zod";
 
 import type { AppDependencies } from "../app.js";
 import { ApiError, errorEnvelopeSchema } from "../http/errors.js";
 import { pageSchema } from "../http/pagination.js";
-import { requireStaff } from "../http/require-staff.js";
+import { requireStaff, requireStaffContext } from "../http/require-staff.js";
 import type { RouteDefinition } from "../http/route-registry.js";
 import {
   drawAuthorizationSchema,
@@ -68,6 +88,8 @@ import {
   potentialWinnerSchema,
 } from "../http/schemas-b5.js";
 import { domainServicesFor } from "../services/domain-registry.js";
+import type { DomainServices } from "../services/domain-services.js";
+import { createDrawDependencies } from "../services/draw-service.js";
 
 const promotionParamsSchema = z.object({ promotion_id: z.uuid() });
 const authorizationParamsSchema = promotionParamsSchema.extend({
@@ -120,6 +142,108 @@ const winnerStatusBodySchema = z.object({
   reason_code: z.string().regex(/^[a-zA-Z][a-zA-Z0-9_.]{2,63}$/u),
   reason_text: z.string().max(2000).nullable().optional(),
 });
+
+// ---------------------------------------------------------------------------
+// Montaje y proyecciones
+// ---------------------------------------------------------------------------
+
+function drawDependencies(
+  dependencies: AppDependencies,
+  domain: DomainServices,
+): DrawServiceDependencies {
+  return createDrawDependencies({
+    clock: domain.clock,
+    // DEC-013: el flag sale del repositorio, jamas del entorno.
+    config: dependencies.repositories.config,
+    authorizations: domain.repositories.drawAuthorizations,
+    snapshots: domain.repositories.exportSnapshots,
+    drawings: domain.repositories.drawingEvents,
+    chain: createDrawingEventChainPort(),
+    audit: domain.tpaAudit,
+    stepUpMaxAgeSeconds: dependencies.config.session.stepUpMaxAgeSeconds,
+  });
+}
+
+/**
+ * `user-agent`, acotado.
+ *
+ * La cabecera la escribe el cliente y puede traer kilobytes. La columna la
+ * guarda indefinidamente, asi que se recorta aqui y no en la base de datos.
+ */
+function userAgentOf(request: FastifyRequest): string | null {
+  const raw = request.headers["user-agent"];
+  return typeof raw === "string" && raw !== "" ? raw.slice(0, 512) : null;
+}
+
+/**
+ * Negativa del dominio -> respuesta HTTP.
+ *
+ * `details.reason` lleva SIEMPRE el codigo estable de `@lsw/tpa`. El `code` de
+ * primer nivel se conserva como `INTERNAL_DRAW_DISABLED` para el cerrojo 1
+ * porque es el que el contrato documenta y el que el frontend traduce; el resto
+ * comparten `DRAW_REFUSED`, con el motivo exacto en `details`.
+ *
+ * NUNCA viaja `error.message`: es prosa, y DEC-031 deja claro que el envelope
+ * no lleva texto. El detalle legible queda en el log y en el `AuditEvent`.
+ */
+function refusalToApiError(error: DrawRefusedError): ApiError {
+  const flagRefusal =
+    error.code === DRAW_REFUSAL_CODES.FEATURE_DISABLED ||
+    error.code === DRAW_REFUSAL_CODES.FEATURE_FLAG_NOT_EVALUATED;
+
+  return new ApiError({
+    statusCode: 409,
+    code: flagRefusal ? "INTERNAL_DRAW_DISABLED" : "DRAW_REFUSED",
+    details: { reason: error.code, ...error.context },
+    cause: error,
+  });
+}
+
+/**
+ * Proyeccion del registro de sorteo.
+ *
+ * Los dos contadores viajan como CADENA (DEC-010): son `bigint` en la tabla y
+ * no sobreviven a `JSON.parse` como numero.
+ */
+function presentDrawingEvent(event: DrawingEvent): z.infer<typeof drawingEventSchema> {
+  return {
+    id: event.id,
+    promotion_id: event.promotionId,
+    draw_request_id: event.drawRequestId,
+    snapshot_id: event.snapshotId,
+    authorization_id: event.authorizationId,
+    entropy_source: event.entropySource,
+    total_eligible_entries: String(event.totalEligibleEntries),
+    selected_ordinal: String(event.selectedOrdinal),
+    selected_participant_reference: event.selectedParticipantReference,
+    selected_provenance: event.selectedProvenance,
+    completed_at: event.completedAt,
+    record_hash: event.recordHash,
+    previous_record_hash: event.previousRecordHash,
+  };
+}
+
+function presentPotentialWinner(winner: PotentialWinner): z.infer<typeof potentialWinnerSchema> {
+  return {
+    id: winner.id,
+    promotion_id: winner.promotionId,
+    drawing_event_id: winner.drawingEventId,
+    source: winner.source,
+    participant_reference: winner.participantReference,
+    entry_reference: winner.entryReference,
+    rank: winner.rank,
+    status: winner.status,
+    status_changed_at: winner.statusChangedAt,
+    status_reason_code: winner.statusReasonCode,
+    history: winner.history.map((entry) => ({
+      from: entry.from,
+      to: entry.to,
+      occurred_at: entry.occurredAt,
+      actor_id: entry.actorId,
+      reason_code: entry.reasonCode,
+    })),
+  };
+}
 
 export function buildDrawRoutes(dependencies: AppDependencies): RouteDefinition[] {
   const domain = domainServicesFor(dependencies);
@@ -286,7 +410,7 @@ export function buildDrawRoutes(dependencies: AppDependencies): RouteDefinition[
       operationId: "initiateDraw",
       summary: "Iniciar un sorteo interno.",
       description:
-        "Comprueba los CINCO cerrojos de DEC-017 y se niega en el primero que no pasa. Hoy el cerrojo 1 -el flag `internal_draw_enabled`- esta cerrado, asi que responde 409 INTERNAL_DRAW_DISABLED y no llega a los demas.",
+        "Llama a `initiateDraw` de `@lsw/tpa`, que comprueba los CINCO cerrojos de DEC-017 y se niega en el primero que no pasa dejando AuditEvent de la negativa. El cerrojo 1 -el flag persistido, apagado por defecto- responde 409 INTERNAL_DRAW_DISABLED; el resto, 409 DRAW_REFUSED con el reason_code estable del dominio en details.reason.",
       tags: ["draw"],
       authorization: { kind: "PERMISSION", permission: "draw.initiate" },
       schema: {
@@ -299,51 +423,75 @@ export function buildDrawRoutes(dependencies: AppDependencies): RouteDefinition[
           422: errorEnvelopeSchema,
         },
       },
-      handler: async (request) => {
-        await requireStaff(dependencies, request);
+      handler: async (request, reply) => {
+        const staff = await requireStaffContext(dependencies, request);
         const body = request.body as z.infer<typeof initiateDrawBodySchema>;
 
-        // ---- Cerrojo 1: el flag persistido -----------------------------------
-        //
-        // Se lee de la base de datos, nunca del entorno (DEC-013): un flag
-        // legalmente material tiene que dejar rastro de quien lo cambio y por
-        // que, y un fichero de entorno no deja ninguno.
-        const config = await dependencies.repositories.config.read();
-        if (!config.featureFlags.internal_draw_enabled) {
-          request.log.warn(
-            {
-              event: "draw.refused",
-              reason: "draw.refused.feature_disabled",
-              draw_request_id: body.draw_request_id,
-            },
-            "sorteo interno rechazado: el flag esta apagado",
-          );
-          throw new ApiError({
-            statusCode: 409,
-            code: "INTERNAL_DRAW_DISABLED",
-            details: { reason: "draw.refused.feature_disabled" },
+        /**
+         * NO se abre transaccion alrededor de `initiateDraw`, y es deliberado.
+         *
+         * Cada negativa deja su propio `AuditEvent` -el intento de sortear sin
+         * autorizacion es exactamente el hecho que un auditor querra ver- y esos
+         * eventos se escriben DENTRO de la funcion, antes de lanzar. Con una
+         * transaccion envolvente, el `throw` la haria retroceder y la constancia
+         * de la negativa desapareceria con ella: el sistema se habria negado sin
+         * dejar rastro, que es la unica forma de negarse que no sirve de nada.
+         *
+         * El grabador de auditoria abre transaccion propia por evento, asi que
+         * cada uno confirma por su cuenta. En el camino de exito, el registro del
+         * sorteo lo escribe `drawings.append` y el expediente del ganador se
+         * persiste justo despues: si el proceso muriera entre los dos, quedaria
+         * el `DrawingEvent` -que es la evidencia, y lleva dentro el ordinal, el
+         * lote y la referencia del participante- sin su expediente, que se puede
+         * reconstruir desde el. Al reves no seria recuperable.
+         */
+        let outcome;
+        try {
+          outcome = await initiateDraw(drawDependencies(dependencies, domain), {
+            drawRequestId: body.draw_request_id,
+            promotionId: body.promotion_id,
+            snapshotId: body.snapshot_id,
+            authorizationId: body.authorization_id,
+            // Identificadores preasignados por el llamante, como pide el dominio.
+            drawingEventId: domain.ids.next(),
+            potentialWinnerId: domain.ids.next(),
+            initiatedBy: staff.adminUserId,
+            initiatorRoles: staff.roles,
+            secondsSinceLastMfa: staff.secondsSinceLastMfa,
+            reasonText: body.reason_text,
+            requestId: request.id,
+            // HO-032 punto 1: la direccion solo puede viajar como digest CON
+            // CLAVE, y esa clave todavia no existe. `null` es la respuesta
+            // correcta; guardarla en claro para siempre, no.
+            sourceIp: null,
+            userAgent: userAgentOf(request),
           });
+        } catch (error) {
+          if (error instanceof DrawRefusedError) {
+            request.log.warn(
+              {
+                event: "draw.refused",
+                reason: error.code,
+                draw_request_id: body.draw_request_id,
+                promotion_id: body.promotion_id,
+                snapshot_id: body.snapshot_id,
+              },
+              "sorteo interno rechazado por un cerrojo de DEC-017",
+            );
+            throw refusalToApiError(error);
+          }
+          throw error;
         }
 
-        // ---- El motor no esta montado ---------------------------------------
-        //
-        // Los cinco cerrojos y la seleccion viven en `@lsw/tpa`, y `apps/api`
-        // todavia no depende de ese paquete. Aqui NO se improvisa un sorteo: sin
-        // rechazo de muestreo, sin commit-reveal y sin cadena de registro, lo
-        // que saliera no seria defendible ante un tercero.
-        request.log.error(
-          {
-            event: "draw.refused",
-            reason: "draw.refused.engine_not_wired",
-            draw_request_id: body.draw_request_id,
-          },
-          "el flag esta encendido pero el motor de sorteo no esta montado",
-        );
-        throw new ApiError({
-          statusCode: 409,
-          code: "DRAW_ENGINE_NOT_WIRED",
-          details: { required_package: "@lsw/tpa" },
+        // El expediente del ganador POTENCIAL. `initiateDraw` lo construye pero
+        // no lo persiste -no conoce la base de datos-, y aqui no se le cambia
+        // nada: se guarda tal cual sale del dominio.
+        await domain.repositories.unitOfWork.withTransaction(async () => {
+          await domain.repositories.potentialWinners.create(outcome.potentialWinner);
         });
+
+        void reply.code(201);
+        return presentDrawingEvent(outcome.drawingEvent);
       },
     },
 
@@ -370,25 +518,7 @@ export function buildDrawRoutes(dependencies: AppDependencies): RouteDefinition[
 
         const rows = await domain.repositories.drawingEvents.listChain(query.promotion_id);
 
-        return {
-          items: rows.map((row) => ({
-            id: row.id,
-            promotion_id: row.promotionId,
-            draw_request_id: row.drawRequestId,
-            snapshot_id: row.snapshotId,
-            authorization_id: row.authorizationId,
-            entropy_source: row.entropySource,
-            // CADENA: son `bigint` y no sobreviven a `JSON.parse` como numero.
-            total_eligible_entries: String(row.totalEligibleEntries),
-            selected_ordinal: String(row.selectedOrdinal),
-            selected_participant_reference: row.selectedParticipantReference,
-            selected_provenance: row.selectedProvenance,
-            completed_at: row.completedAt,
-            record_hash: row.recordHash,
-            previous_record_hash: row.previousRecordHash,
-          })),
-          next_cursor: null,
-        };
+        return { items: rows.map(presentDrawingEvent), next_cursor: null };
       },
     },
 
@@ -417,28 +547,7 @@ export function buildDrawRoutes(dependencies: AppDependencies): RouteDefinition[
           params.promotion_id,
         );
 
-        return {
-          items: rows.map((row) => ({
-            id: row.id,
-            promotion_id: row.promotionId,
-            drawing_event_id: row.drawingEventId,
-            source: row.source,
-            participant_reference: row.participantReference,
-            entry_reference: row.entryReference,
-            rank: row.rank,
-            status: row.status,
-            status_changed_at: row.statusChangedAt,
-            status_reason_code: row.statusReasonCode,
-            history: row.history.map((entry) => ({
-              from: entry.from,
-              to: entry.to,
-              occurred_at: entry.occurredAt,
-              actor_id: entry.actorId,
-              reason_code: entry.reasonCode,
-            })),
-          })),
-          next_cursor: null,
-        };
+        return { items: rows.map(presentPotentialWinner), next_cursor: null };
       },
     },
 
@@ -448,7 +557,7 @@ export function buildDrawRoutes(dependencies: AppDependencies): RouteDefinition[
       operationId: "updatePotentialWinnerStatus",
       summary: "Mover el expediente de un ganador potencial.",
       description:
-        "La maquina de estados vive en `@lsw/tpa` y decide QUE transiciones son legitimas. Mientras esa dependencia no este montada, esta ruta se niega en vez de aplicar una transicion sin validar: replicar la tabla aqui crearia una segunda maquina y el dia que discreparan ganaria la que se ejecutara antes.",
+        "La maquina de estados vive en `@lsw/tpa` y decide QUE transiciones son legitimas: aqui no se replica, se llama. Una transicion no permitida responde 409 WINNER_TRANSITION_NOT_ALLOWED con el estado de partida y los destinos posibles.",
       tags: ["draw"],
       authorization: { kind: "PERMISSION", permission: "winner.status.update" },
       schema: {
@@ -464,8 +573,9 @@ export function buildDrawRoutes(dependencies: AppDependencies): RouteDefinition[
         },
       },
       handler: async (request) => {
-        await requireStaff(dependencies, request);
+        const staff = await requireStaffContext(dependencies, request);
         const params = request.params as z.infer<typeof winnerParamsSchema>;
+        const body = request.body as z.infer<typeof winnerStatusBodySchema>;
 
         const existing = await domain.repositories.potentialWinners.findById(
           params.potential_winner_id,
@@ -474,11 +584,96 @@ export function buildDrawRoutes(dependencies: AppDependencies): RouteDefinition[
           throw new ApiError({ statusCode: 404, code: "POTENTIAL_WINNER_NOT_FOUND" });
         }
 
-        throw new ApiError({
-          statusCode: 409,
-          code: "WINNER_WORKFLOW_NOT_WIRED",
-          details: { required_package: "@lsw/tpa", current_status: existing.status },
+        const occurredAt = domain.clock.now();
+
+        // La maquina de estados decide ANTES de tocar la base de datos. El
+        // resultado se descarta -el adaptador reconstruye el expediente al
+        // aplicar- pero la validacion no: es la unica que existe, y aplicar
+        // primero para validar despues seria no validar.
+        try {
+          transitionPotentialWinner(existing, {
+            to: body.next_status,
+            occurredAt: occurredAt.toISOString(),
+            actorId: staff.adminUserId,
+            reasonCode: body.reason_code,
+            reasonText: body.reason_text ?? null,
+          });
+        } catch (error) {
+          if (error instanceof PotentialWinnerTransitionError) {
+            throw new ApiError({
+              statusCode: 409,
+              code: "WINNER_TRANSITION_NOT_ALLOWED",
+              details: {
+                reason: error.code,
+                from: error.from,
+                to: error.to,
+                // Los destinos posibles salen de la MISMA maquina que acaba de
+                // negarse. Sin ellos, el panel tendria que llevar su propia
+                // tabla de transiciones para pintar los botones, y ese seria el
+                // primer paso hacia una segunda maquina de estados.
+                allowed: [...allowedTransitionsFrom(error.from)],
+              },
+              cause: error,
+            });
+          }
+          throw error;
+        }
+
+        const updated = await domain.repositories.unitOfWork.withTransaction(async () => {
+          // El `WHERE` del adaptador incluye el estado de partida, asi que dos
+          // transiciones concurrentes desde el mismo estado no se aplican las
+          // dos: la segunda no encuentra fila y devuelve `null`.
+          const applied = await domain.repositories.potentialWinners.applyTransition({
+            id: existing.id,
+            expectedStatus: existing.status,
+            nextStatus: body.next_status,
+            occurredAt,
+            actorReference: staff.adminUserId,
+            reasonCode: body.reason_code,
+            reasonText: body.reason_text ?? null,
+          });
+
+          if (applied === null) {
+            return null;
+          }
+
+          await domain.tpaAudit.record({
+            occurredAt: occurredAt.toISOString(),
+            actor: { type: "STAFF", id: staff.adminUserId, roles: staff.roles },
+            action: "winner.status_changed",
+            targetEntityType: "potential_winner",
+            targetEntityId: existing.id,
+            promotionId: existing.promotionId,
+            requestId: request.id,
+            before: null,
+            after: null,
+            reasonCode: body.reason_code,
+            reasonText: body.reason_text ?? null,
+            sourceIp: null,
+            userAgent: userAgentOf(request),
+            metadata: {
+              from_status: existing.status,
+              to_status: body.next_status,
+              // Referencia interna, nunca nombre ni correo: este registro se
+              // ensena a terceros.
+              participant_reference: existing.participantReference,
+              rank: existing.rank,
+            },
+            canonicalizationVersion: 1,
+          });
+
+          return applied;
         });
+
+        if (updated === null) {
+          throw new ApiError({
+            statusCode: 409,
+            code: "WINNER_TRANSITION_CONFLICT",
+            details: { expected_status: existing.status },
+          });
+        }
+
+        return presentPotentialWinner(updated);
       },
     },
   ];

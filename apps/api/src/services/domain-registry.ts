@@ -22,12 +22,14 @@
  *   `createDependencies` y el fichero desaparece. Queda anotado.
  */
 
+import { buildExportArtifact, createAuditEventChainPort, redactDiff } from "@lsw/audit";
 import { DrizzleAuditEventRepository, DrizzleUnitOfWork, type Database } from "@lsw/database";
 
 import type { AppDependencies } from "../app.js";
 import { createLogger } from "../observability/logger.js";
 import { createAuditSink } from "./audit-sink.js";
 import { createDomainServices, type DomainServices } from "./domain-services.js";
+import { createTpaAuditRecorder } from "./tpa-audit-recorder.js";
 
 const cache = new WeakMap<AppDependencies, DomainServices>();
 
@@ -72,36 +74,53 @@ export function domainServicesFor(dependencies: AppDependencies): DomainServices
   const handle = dependencies.database as { db: Database } | undefined;
   const db = handle === undefined ? MISSING_DATABASE : handle.db;
 
+  /**
+   * HO-028, punto 2: MONTADO.
+   *
+   * Los hechos auditables se PERSISTEN, encadenados, en la misma transaccion
+   * que el efecto que auditan. Las tres piezas que faltaban vienen de
+   * `@lsw/audit`, que `apps/api` ya declara como dependencia:
+   *
+   *   `createAuditEventChainPort()`  construye el hash de DEC-008/DEC-035. Sin
+   *                                  el, el repositorio no esta configurado y
+   *                                  `createAuditSink` devuelve un sumidero que
+   *                                  SE NIEGA, con lo que toda ruta auditada
+   *                                  falla en vez de confirmar sin registro.
+   *   `redactDiff`                   sanea `before`/`after` con la allowlist de
+   *                                  cada operacion. Sin el se escribian a
+   *                                  `null` SIEMPRE, que era correcto pero
+   *                                  ciego.
+   *   `buildExportArtifact`          recalcula el `content_digest` desde el
+   *                                  origen (cerrojo 4 de DEC-017).
+   *
+   * El repositorio se construye UNA vez y se comparte entre el sumidero del
+   * dominio de entries y el grabador de `@lsw/tpa`: son dos puertos con formas
+   * distintas -ver `tpa-audit-recorder.ts`- pero UNA sola cadena. Dos
+   * repositorios serian dos cerrojos consultivos distintos sobre la misma clave
+   * y la serializacion dejaria de valer.
+   */
+  const auditRepository = new DrizzleAuditEventRepository(db, {
+    chainPort: createAuditEventChainPort(),
+  });
+  const unitOfWork = new DrizzleUnitOfWork(db);
+
   const services = createDomainServices(db, {
-    /**
-     * HO-028: los hechos auditables se PERSISTEN, encadenados, en la misma
-     * transaccion que el efecto que auditan.
-     *
-     * EL UNICO PUNTO DE MONTAJE QUE FALTA, Y ESTA A UNA LINEA
-     *
-     *   `chainPort` construye el hash de DEC-008 y vive en `@lsw/audit`, que
-     *   `apps/api` todavia no declara como dependencia (HO-028, punto 2: es del
-     *   Team Lead, porque exige `pnpm install`). Mientras no se pase, el
-     *   repositorio no esta configurado y `createAuditSink` devuelve un
-     *   sumidero que SE NIEGA: las rutas auditadas fallan en vez de confirmar
-     *   efectos sin registro.
-     *
-     *   El dia que la dependencia exista, esto es:
-     *
-     *     import { createAuditEventChainPort, redactDiff } from "@lsw/audit";
-     *     ...
-     *     new DrizzleAuditEventRepository(db, { chainPort: createAuditEventChainPort() })
-     *     ...
-     *     redactor: { redact: redactDiff }
-     *
-     *   y nada mas. Los dos puertos son estructuralmente compatibles: si algun
-     *   dia divergen, el compilador lo dira aqui.
-     */
     audit: createAuditSink({
-      repository: new DrizzleAuditEventRepository(db),
-      unitOfWork: new DrizzleUnitOfWork(db),
+      repository: auditRepository,
+      unitOfWork,
       logger: createLogger(dependencies.config),
+      redactor: { redact: redactDiff },
     }),
+    tpaAudit: createTpaAuditRecorder({ repository: auditRepository, unitOfWork }),
+    auditEvents: auditRepository,
+    /**
+     * Cerrojo 4 de DEC-017. `compute` devuelve SOLO el digest del artefacto
+     * recalculado; el resto -raiz de Merkle, bytes, manifiesto- lo produce el
+     * mismo `buildExportArtifact` cuando hace falta empaquetar, y por eso las
+     * dos rutas -finalizar y sortear- no pueden discrepar: es la misma funcion
+     * sobre los mismos registros.
+     */
+    contentDigestCalculator: { compute: (input) => buildExportArtifact(input).contentDigest },
   });
 
   cache.set(dependencies, services);
