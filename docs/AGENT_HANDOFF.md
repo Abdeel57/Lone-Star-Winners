@@ -699,9 +699,10 @@ mutar líneas porque el trigger de 0009 solo disparaba con `UPDATE carts`),
 `item_count` (suma de `quantity`), `image_url` **siempre `null`** (no existe
 tabla de medios y no se inventa) y `availability: { status }` derivada del
 mismo predicado `fitsStock` que produce el `409 INSUFFICIENT_STOCK`.
-`quantity_available` NO se publica: no hay decisión sobre publicar inventario y
-`GET /products` sí publica `stock_quantity` en crudo — una de las dos rutas
-está mal y lo decide el usuario (punto abierto para el Team Lead).
+`quantity_available` NO se publica en ninguna ruta. La incoherencia con
+`GET /products`, que publicaba `stock_quantity` en crudo, se resolvió hacia la
+superficie que no filtra: el catálogo publica `availability.status` por
+variante con el mismo predicado (`6025ccd`, DEC-051).
 `is_purchasable` sigue pendiente (§4). Disponibilidad y elegibilidad de
 entries: TBD en `docs/LEGAL_PENDING.md`; mientras tanto `availability` es
 solo informativa. Hallazgo colateral en curso: `PATCH /cart/items/{id}` no

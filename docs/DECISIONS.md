@@ -2371,3 +2371,54 @@ entregado en HO-035). Sin cambios en `apps/web`.
 
 Proposed by: backend-sweepstakes (HO-035)
 Agreed by: Team Lead
+
+## DEC-051
+
+Status: Accepted
+
+Date: 2026-08-27
+
+Decision:
+**Una superficie anónima no publica más que la superficie autenticada sobre
+el mismo dato.** Aplicado al inventario: `GET /products` y
+`GET /products/{slug}` dejan de publicar `stock_quantity` en crudo y publican
+por variante `availability: { status: "IN_STOCK" | "LOW_STOCK" |
+"OUT_OF_STOCK" }`, el mismo objeto que la línea del carrito (§5), derivado del
+mismo predicado (`apps/api/src/services/availability.ts`: `fitsStock`,
+`availabilityFor`) y evaluado para una unidad. `quantity_available` no se
+publica en ninguna ruta; `is_purchasable` sigue pendiente y no se deriva de
+`availability`.
+
+Context:
+Al cerrar HO-017, backend detectó una incoherencia: el carrito, con sesión,
+publicaba deliberadamente solo `status` (HO-017 pedía no publicar inventario),
+mientras el catálogo, anónimo, publicaba el número exacto de unidades por
+variante. Una de las dos rutas estaba mal, y el inventario exacto de una
+tienda es información comercial que no tiene por qué ser pública ni servir
+para que un tercero mida las ventas rastreando la cifra. Ningún fichero de
+`apps/web` leía `stock_quantity`, así que el cambio no rompió nada en el
+escaparate.
+
+Alternatives:
+A — publicar el número en las dos rutas (descartado: filtra inventario a
+cualquiera y contradice HO-017). B — dejar cada ruta como estaba (descartado:
+dos verdades sobre el mismo dato, y la más indiscreta en la superficie
+anónima). C — `status` en las dos rutas, con un solo predicado (elegida).
+D — umbral "quedan menos de N" para `LOW_STOCK` (descartado: N sería una
+constante de negocio que nadie aprobó, principio 2; el umbral es la propia
+cantidad pedida, y en el catálogo esa cantidad es una unidad).
+
+Reason:
+La regla general es la que evita repetir la discusión con el siguiente dato:
+lo que un anónimo puede ver es, como mucho, lo que ve un usuario con sesión
+sobre lo mismo. El predicado único garantiza que catálogo, carrito y el `409
+INSUFFICIENT_STOCK` no puedan divergir. Tests con afirmación negativa
+explícita de que `stock_quantity` y `quantity_available` no aparecen en la
+respuesta.
+
+Affected areas: `apps/api` (`services/availability.ts`, `routes/storefront.ts`,
+`routes/cart.ts`, `http/schemas.ts`), `docs/API_CONTRACT.md` §4, `apps/web`
+(tipos provisionales del catálogo alineados por frontend-ux).
+
+Proposed by: backend-sweepstakes (HO-017, punto abierto)
+Agreed by: Team Lead
