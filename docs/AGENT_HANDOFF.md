@@ -1323,3 +1323,42 @@ Affected files: `apps/api/src/routes/{amoe,adjustments,auth}.ts`,
 
 Blocking: NO para el panel con mocks; SÍ para conectar AMOE y ajustes a la
 API real.
+
+---
+
+## HO-032
+
+Status: OPEN
+
+## Handoff
+
+Date: 2026-08-27
+From: security-integration (HO-028)
+To: sesión paralela (`packages/security/src/env/**`) y backend-sweepstakes
+
+Context:
+Dos hallazgos al implementar la auditoría persistente:
+
+1. **`audit_events.source_ip` debe ser un digest con clave.** Un SHA-256 a
+   secas de una IPv4 se invierte por fuerza bruta (2³² valores). El secreto
+   de la clave vive en `packages/security/src/env/**` (sesión paralela). Hasta
+   entonces el campo se escribe `null`, que es la respuesta correcta.
+2. **`AwardService.releaseHold` emite `entry.award.hold.released` fuera de
+   la transacción que resuelve la retención** (`award-service.ts:239` frente a
+   `withTransaction` en `:433`). El sink lo absorbe abriendo una transacción
+   propia, pero la atomicidad de DEC-007 solo se cumple si el evento va
+   dentro de la misma transacción que el efecto. Mover la emisión dentro.
+
+What I need from you:
+
+- Sesión paralela: variable de entorno `AUDIT_IP_DIGEST_KEY` (o nombre
+  coherente con el registro), declarada en `.env.example` con valor falso y
+  en el registro de `packages/security/src/env/`, con regla de
+  endurecimiento en producción; `security` la consume por puerto.
+- backend: mover la emisión de `releaseHold` dentro de `withTransaction` y
+  añadir un test que falle si el evento se emite fuera.
+
+Affected files: `packages/security/src/env/**`, `.env.example`,
+`packages/sweepstakes/src/award/award-service.ts`.
+
+Blocking: NO para construir; SÍ antes de dar por auditado el award.
