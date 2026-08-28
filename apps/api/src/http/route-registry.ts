@@ -68,6 +68,32 @@ export type RouteAuthorization =
   | {
       readonly kind: "PERMISSION";
       readonly permission: PermissionKey;
+      /**
+       * Solo para capacidades con `requiresSecondApproval`. Nombra DONDE el
+       * dominio comprueba la segunda aprobacion, y su presencia le dice al
+       * autorizador que no la decida el.
+       *
+       * POR QUE LA PUERTA NO PUEDE DECIDIR ESTO
+       *   Una segunda aprobacion es un hecho sobre un RECURSO CONCRETO: existe,
+       *   la dio un actor distinto y sigue dentro de su TTL. El autorizador
+       *   corre antes del handler y solo conoce (metodo, camino, sesion); no
+       *   sabe sobre que ajuste ni sobre que sorteo se pregunta, asi que no
+       *   puede comprobarlo sin adivinar. `packages/tpa/src/ports.ts` ya lo
+       *   dice explicitamente: el catalogo aporta la REGLA y el dominio calcula
+       *   el HECHO.
+       *
+       * POR QUE ES UNA CADENA Y NO UN BOOLEANO
+       *   Un `true` suelto seria una forma corta de apagar un control. Al
+       *   exigir el nombre del sitio que lo impone, la declaracion se puede
+       *   comprobar leyendo ese sitio, y un `grep` enumera en un segundo todas
+       *   las rutas que difieren la comprobacion. Un booleano no se puede
+       *   auditar; una referencia si.
+       *
+       * Sin este campo, una capacidad con `requiresSecondApproval` se deniega
+       * en la puerta. Fallar en cerrado es lo correcto: es preferible un 403 en
+       * una ruta que aun no tiene su comprobacion a un 200 que la finge.
+       */
+      readonly secondApprovalEnforcedBy?: string;
     };
 
 export interface RouteSchemas {

@@ -35,6 +35,26 @@
  *   Con los roles derivados del scope, `authorize()` deniega por si solo
  *   cualquier capacidad de personal a una sesion de escaparate, con el catalogo
  *   en la mano y sin que este fichero opine. Una decision, un sitio.
+ *
+ * ---------------------------------------------------------------------------
+ * LOS TRES HECHOS QUE EL CATALOGO NO CONOCE (HO-034.1)
+ * ---------------------------------------------------------------------------
+ *   `authorize()` exige tres datos que no puede deducir: si en ESTA peticion
+ *   viaja un motivo, cuanto vale AHORA el flag persistido del que depende la
+ *   capacidad, y si existe una segunda aprobacion viva.
+ *
+ *   Los tres llegaban como constantes -`false`, `false`, `null`- con un
+ *   comentario que decia que las rutas los aportarian. Las rutas no podian:
+ *   esto es un `preHandler` y corre ANTES del handler. El efecto medido eran
+ *   27 de 62 capacidades inalcanzables para todo el mundo -incluidas
+ *   `promotion.activate`, `promotion.close`, `pii.view.full` y
+ *   `order.refund.initiate`- con la apariencia de ser deliberadas.
+ *
+ *   Ahora dos se resuelven aqui y la tercera se delega, y esa asimetria es la
+ *   parte que importa: el motivo y el flag son hechos de la PETICION y del
+ *   SISTEMA, visibles desde la puerta; la segunda aprobacion es un hecho sobre
+ *   un RECURSO, y la puerta no sabe sobre cual se pregunta. Fingirla aqui seria
+ *   apagar seis controles con un booleano.
  */
 
 import {
@@ -52,6 +72,8 @@ import type { FastifyRequest } from "fastify";
 import type { ApiConfig } from "../config/env.js";
 import type { IdentityRepositories } from "../services/identity-ports.js";
 
+import { presentedReasonCode } from "./authorization-inputs.js";
+import { getPermission } from "./permission-catalog.js";
 import { cookieNameFor } from "./session-cookie.js";
 import type { AuthorizationOutcome, Authorizer } from "./route-registry.js";
 
@@ -64,9 +86,51 @@ export interface ResolvedSession {
   readonly secondsSinceLastMfa: number | null;
 }
 
-export interface SessionAuthorizerDeps {
+/**
+ * Lectura del flag PERSISTIDO (DEC-013, DEC-032).
+ *
+ * `boolean | null`, y `null` NO es `false`: significa "no evaluado", que
+ * `authorize()` deniega con motivo propio. La firma es la misma que
+ * `FeatureFlagPort` de `@lsw/tpa` y la implementacion que se le pasa es la
+ * misma, `createFeatureFlagPort`. Se declara aqui para no hacer que la puerta
+ * dependa del paquete de sorteo.
+ */
+export interface AuthorizerFlagReader {
+  isEnabled(key: string, promotionId: string | null): Promise<boolean | null>;
+}
+
+/**
+ * Lo que hace falta para RESOLVER una sesion, que es menos que para autorizar.
+ *
+ * Existe por `require-staff.ts`, que solo necesita saber quien pregunta y no
+ * toma ninguna decision de capacidad. Obligarle a construir un lector de flags
+ * que nunca va a usar seria pedirle una dependencia para nada, y esas
+ * dependencias de adorno acaban rellenandose con un objeto falso.
+ */
+export interface SessionResolverDeps {
   readonly identity: IdentityRepositories;
   readonly config: ApiConfig;
+}
+
+/**
+ * Ambito del flag en la puerta: SIEMPRE global.
+ *
+ * `FeatureFlagPort` admite un flag por promocion, pero el autorizador corre
+ * antes del handler y no sabe sobre que promocion se pregunta -ni tiene por que
+ * haber una-. Adivinarla seria elegir el ambito por el cliente. Si algun dia
+ * una capacidad debe depender del flag de UNA promocion concreta, esa decision
+ * es del handler, no de aqui.
+ */
+const PROMOTION_SCOPE = null;
+
+export interface SessionAuthorizerDeps extends SessionResolverDeps {
+  /**
+   * Sin esto, toda capacidad que dependa de un flag se denegaba con
+   * `FEATURE_FLAG_NOT_EVALUATED` para siempre. Es obligatorio a proposito: un
+   * lector de flags opcional acabaria ausente en algun punto de arranque y la
+   * negativa parecerian permisos mal configurados.
+   */
+  readonly flags: AuthorizerFlagReader;
 }
 
 function presentedToken(
@@ -95,7 +159,7 @@ function presentedToken(
  */
 export async function resolveSession(
   request: FastifyRequest,
-  deps: SessionAuthorizerDeps,
+  deps: SessionResolverDeps,
 ): Promise<ResolvedSession | null> {
   const presented = presentedToken(request, deps.config.session.cookieName);
 
@@ -205,26 +269,70 @@ export function createSessionAuthorizer(deps: SessionAuthorizerDeps): Authorizer
      * tomarla dos veces -aqui por scope y alli por capacidad- con el riesgo de
      * que un dia digan cosas distintas.
      */
+    /**
+     * Los TRES hechos que el catalogo no puede conocer (HO-034.1).
+     *
+     * Hasta aqui llegaban como `false`, `false` y `null` constantes, con un
+     * comentario que decia que las rutas los aportarian. No podian: esto corre
+     * en un `preHandler`, antes del handler, asi que nada de lo que el handler
+     * haga llega a tiempo. La medida fue 27 de 62 capacidades inalcanzables
+     * para todo el mundo, y el comentario las hacia parecer deliberadas.
+     */
+    const definition = getPermission(authorization.permission);
+
+    /**
+     * FLAG: el valor persistido, no una constante.
+     *
+     * Se consulta SOLO si la capacidad depende de uno. Preguntar siempre
+     * costaria una lectura por peticion en las 55 capacidades que no dependen
+     * de ninguno, y ademas convertiria un fallo del repositorio de flags en un
+     * fallo de TODA la superficie autorizada, incluida la que no tiene nada que
+     * ver con flags.
+     *
+     * No se envuelve en `catch`. Si la lectura falla, la peticion falla: un
+     * `catch` que devolviera `null` haria indistinguible "la base de datos no
+     * contesta" de "el flag no esta sembrado", y uno que devolviera `true`
+     * seria un desastre silencioso.
+     */
+    const featureFlagEnabled =
+      definition.featureFlagKey === null
+        ? null
+        : await deps.flags.isEnabled(definition.featureFlagKey, PROMOTION_SCOPE);
+
+    /**
+     * MOTIVO: el de esta peticion.
+     *
+     * Se resuelve aunque la capacidad no lo exija, porque cuesta leer una
+     * propiedad y porque asi el valor que ve `authorize()` es siempre el hecho
+     * real y no depende de una rama.
+     */
+    const reasonCode = presentedReasonCode(request);
+
+    /**
+     * SEGUNDA APROBACION: la puerta NO la decide.
+     *
+     * Es un hecho sobre un recurso concreto -existe, la dio otro actor, sigue
+     * viva-, y aqui solo se conocen metodo, camino y sesion. Comprobarla desde
+     * la puerta obligaria a adivinar sobre que recurso se pregunta.
+     * `packages/tpa/src/ports.ts` ya reparte asi el trabajo: el catalogo pone
+     * la regla, el dominio calcula el hecho, dentro de la misma transaccion que
+     * el efecto.
+     *
+     * Por eso el valor sale de una declaracion EXPLICITA de la ruta que nombra
+     * donde se impone. Sin declaracion, `false`, y la capacidad se deniega en
+     * la puerta. Un `true` por defecto convertiria seis controles -entre ellos
+     * `draw.initiate` y `rbac.role.assign`- en decoracion.
+     */
+    const secondApprovalGranted = authorization.secondApprovalEnforcedBy !== undefined;
+
     const decision = authorize({
       roles: session.roles,
       capability: authorization.permission,
       secondsSinceLastMfa: session.secondsSinceLastMfa,
       stepUpMaxAgeSeconds: deps.config.session.stepUpMaxAgeSeconds,
-      // Las tres de abajo son `false`/`null` a proposito en esta fase.
-      //
-      // `reasonProvided` y `secondApprovalGranted` los aporta el flujo concreto
-      // -un ajuste manual con motivo escrito, una segunda aprobacion viva- y
-      // ninguna ruta de las que existen hoy los produce. Declararlos `true`
-      // "para que funcionen" convertiria dos controles en decoracion.
-      //
-      // `featureFlagEnabled: null` significa "no consultado", y `authorize()`
-      // DENIEGA en ese caso. Es lo correcto: una capacidad que depende de un
-      // flag legalmente material no puede concederse sin haberlo leido. Las
-      // rutas que dependan de flag tendran que resolverlo antes; hasta
-      // entonces, fallan cerradas.
-      reasonProvided: false,
-      secondApprovalGranted: false,
-      featureFlagEnabled: null,
+      reasonProvided: reasonCode !== null,
+      secondApprovalGranted,
+      featureFlagEnabled,
     });
 
     if (decision.allowed) {

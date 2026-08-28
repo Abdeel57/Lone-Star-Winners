@@ -2379,12 +2379,19 @@ con qué permiso se le juzga. Tampoco se desenmascara "si el actor tiene la
 capacidad": `pii.view.full` exige segundo factor reciente y motivo (DEC-006,
 DEC-027), y comprobarla dentro del handler saltaría las dos condiciones.
 
-**LIMITACIÓN DECLARADA (HO-034.1).** Hoy esta ruta responde **403**:
-`session-authorizer.ts` pasa `reasonProvided: false`, así que toda capacidad con
-`requiresReason` se deniega. No se ha degradado a una capacidad más débil para
-"que funcione" — el 403 es la respuesta correcta mientras el motivo no viaje. Se
-levantará sola cuando se cierre ese punto. Las demás rutas de §11.7 no dependen
-de él.
+**Cómo viaja el motivo (HO-034.1).** Esta ruta exige motivo, y es un `GET` sin
+cuerpo donde ponerlo. Se manda en la cabecera:
+
+    X-LSW-Reason-Code: participant_support_case
+
+La forma es la misma que la del `reason_code` que se persiste en `audit_events`
+(`^[a-zA-Z][a-zA-Z0-9_.]{2,63}$`), de modo que **lo que abre la puerta es
+exactamente lo que queda escrito en la traza**. Sin cabecera, o con una que no
+respete la forma, la respuesta sigue siendo **403**: eso no es un fallo, es el
+control funcionando. Hace falta además segundo factor reciente.
+
+Durante un tiempo esta ruta respondió 403 siempre, porque el autorizador pasaba
+`reasonProvided: false` como constante. Ya no.
 
 401 · 403 · 404.
 

@@ -51,6 +51,7 @@ import { buildExportRoutes } from "./routes/export.js";
 import { buildOrdersRoutes, installRawBodyForPaymentWebhooks } from "./routes/orders.js";
 import { buildPortalRoutes } from "./routes/portal.js";
 import { installPrincipalResolver } from "./http/principal.js";
+import { createFeatureFlagPort } from "./services/draw-service.js";
 import { createIdentityRepositories } from "./services/drizzle-identity.js";
 import { createParticipantLookup } from "./services/participant-lookup.js";
 import { createRepositories } from "./services/drizzle-repositories.js";
@@ -199,7 +200,14 @@ export async function createApp(dependencies: AppDependencies): Promise<FastifyI
   //        Falla cerrado, y se cierra del todo cuando exista el registro.
   app.decorate(
     "lswAuthorizer",
-    createSessionAuthorizer({ identity: dependencies.identity, config }),
+    createSessionAuthorizer({
+      identity: dependencies.identity,
+      config,
+      // El MISMO puerto que usa el dominio de sorteo, no una segunda lectura de
+      // flags: dos formas de responder "esta encendido?" acabarian respondiendo
+      // cosas distintas, y una de las dos seria la que autoriza.
+      flags: createFeatureFlagPort(dependencies.repositories.config),
+    }),
   );
   installPrincipalResolver(
     app,

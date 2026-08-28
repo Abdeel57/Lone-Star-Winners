@@ -30,18 +30,23 @@
  *   ser.
  *
  * ---------------------------------------------------------------------------
- * LIMITACION DECLARADA: LA RUTA DE PII COMPLETA HOY RESPONDE 403 (HO-034.1)
+ * LA RUTA DE PII COMPLETA YA NO RESPONDE 403 POR CONSTRUCCION (HO-034.1)
  * ---------------------------------------------------------------------------
  *
- * `session-authorizer.ts` pasa `reasonProvided: false` a `authorize()`, asi que
- * toda capacidad con `requiresReason` -y `pii.view.full` es una de ellas- se
- * deniega hoy. La ruta se registra igualmente y NO se degrada a una capacidad
- * mas debil para "que funcione": el 403 es la respuesta correcta mientras el
- * motivo no viaje. Se levantara sola cuando se cierre HO-034 punto 1, que es de
- * otra sesion.
+ * Durante un tiempo si lo hizo: `session-authorizer.ts` pasaba
+ * `reasonProvided: false` como constante, asi que toda capacidad con
+ * `requiresReason` -y `pii.view.full` es una de ellas- se denegaba para todo el
+ * mundo. La ruta se registro igualmente y NO se degrado a una capacidad mas
+ * debil "para que funcionase": el 403 era la respuesta correcta mientras el
+ * motivo no viajase.
  *
- * Las otras dos rutas no dependen de eso: `participant.list` y
- * `participant.read` no exigen motivo ni step-up.
+ * Ahora el motivo viaja. Como es un GET y no tiene cuerpo donde ponerlo, se
+ * manda en la cabecera `X-LSW-Reason-Code`, con la MISMA forma que el
+ * `reason_code` que se persiste en `audit_events`. Sin ella la ruta sigue
+ * respondiendo 403, y eso no es un fallo: es el control funcionando.
+ *
+ * Sigue haciendo falta ademas un segundo factor reciente, que es la otra
+ * condicion que el catalogo pone a `pii.view.full` y que nada de esto relaja.
  *
  * ---------------------------------------------------------------------------
  * `pii_masked` ES UN DATO, NO UNA DEDUCCION DEL FRONTEND

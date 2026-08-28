@@ -28,6 +28,14 @@ function buildDependencies(databaseWorks = true): AppDependencies {
       close: () => Promise.resolve(),
     },
     paymentProvider: { name: "none" },
+    /*
+     * El autorizador lee los feature flags persistidos desde aqui (HO-034.1).
+     * Se declara aunque estas pruebas no autoricen nada con flag: sin el, la
+     * construccion de la app falla al arrancar, que es el comportamiento
+     * correcto -una dependencia ausente debe romper el arranque, no la primera
+     * peticion que la necesite- pero deja estas pruebas hablando de otra cosa.
+     */
+    repositories: { config: { read: () => Promise.resolve({ featureFlags: {} }) } },
   } as unknown as AppDependencies;
 }
 
