@@ -56,13 +56,16 @@ export function dbErrorText(error: unknown): string {
  * aplicacion sin `cause` (se evalua el propio error).
  */
 export function dbErrorMatching(pattern: RegExp): (error: unknown) => boolean {
+  // Sin la bandera `g`: con ella `test()` avanza `lastIndex` entre llamadas y un
+  // patron reutilizado en dos aserciones fallaria en la segunda sin motivo.
+  const safe = new RegExp(pattern.source, pattern.flags.replace("g", ""));
   return (error: unknown) => {
     const text = dbErrorText(error);
-    const ok = pattern.test(text);
-    if (!ok && process.env.LSW_DB_ERROR_DEBUG === "1") {
-      // Diagnostico opcional: vitest no imprime `cause`, y sin esto un fallo de
-      // patron no dice que dijo el motor.
-      console.error(`[db-error] patron ${String(pattern)} no aparece en:\n${text}`);
+    const ok = safe.test(text);
+    if (!ok) {
+      // Solo se imprime cuando la prueba ya esta fallando: vitest no muestra
+      // `cause`, y sin esto el fallo no dice que dijo el motor.
+      console.error(`[db-error] patron ${String(safe)} no aparece en:\n${text}`);
     }
     return ok;
   };

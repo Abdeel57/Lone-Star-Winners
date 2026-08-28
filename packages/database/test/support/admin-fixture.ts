@@ -1,4 +1,9 @@
 /**
+ * Cuenta administrativa de PRUEBA. Vive en test/ y NO en src/testing a proposito:
+ * tsconfig.build.json compila src/**, files publica dist/, y una fabrica de
+ * administradores ACTIVE no debe viajar dentro del artefacto del que depende la
+ * API en produccion aunque el mapa de exports la deje inalcanzable.
+ *
  * Cuenta administrativa de PRUEBA, en una sola forma para todos los tests de
  * integracion. Antes habia dos ad hoc (`createAdmin`, `createAdminUser`) y
  * tres copias mas en `beforeAll`, y cada una fallaba a su manera contra los
@@ -31,7 +36,7 @@
 
 import { sql } from "drizzle-orm";
 
-import type { Database } from "../client.js";
+import type { Database } from "../../src/client.js";
 
 export const LIVE_ADMIN_ROLE_KEYS = [
   "PARTICIPANT",
@@ -49,8 +54,13 @@ export type LiveAdminRoleKey = (typeof LIVE_ADMIN_ROLE_KEYS)[number];
 export interface CreateTestAdminOptions {
   /** Etiqueta unica dentro del test; forma el correo `<label>@example.invalid` y el nombre. */
   readonly label: string;
-  /** Estado de la cuenta. `ACTIVE` (por defecto) rellena `mfa_enrolled_at`; `INVITED` no. */
-  readonly status?: "ACTIVE" | "INVITED";
+  /**
+   * Estado de la cuenta. `ACTIVE` (por defecto) rellena `mfa_enrolled_at`;
+   * `INVITED` no; `DEACTIVATED` rellena `deactivated_at` (y `mfa_enrolled_at`,
+   * porque una cuenta desactivada fue activa antes), que es lo que exige el
+   * si-y-solo-si de `admin_users_deactivated_consistency`.
+   */
+  readonly status?: "ACTIVE" | "INVITED" | "DEACTIVATED";
   /** Roles a asignar en `admin_user_roles`, en orden. */
   readonly roles?: readonly LiveAdminRoleKey[];
   /** Nombre completo; por defecto la etiqueta. Debe medir entre 1 y 160. */
@@ -90,17 +100,23 @@ export async function createTestAdmin(
   );
 
   const adminUserId =
-    status === "ACTIVE"
+    status === "DEACTIVATED"
       ? await firstId(
           db,
-          sql`INSERT INTO admin_users (identity_id, full_name, status, mfa_enrolled_at)
-              VALUES (${identityId}, ${fullName}, 'ACTIVE', now()) RETURNING id`,
+          sql`INSERT INTO admin_users (identity_id, full_name, status, mfa_enrolled_at, deactivated_at)
+              VALUES (${identityId}, ${fullName}, DEACTIVATED, now(), now()) RETURNING id`,
         )
-      : await firstId(
-          db,
-          sql`INSERT INTO admin_users (identity_id, full_name, status)
+      : status === "ACTIVE"
+        ? await firstId(
+            db,
+            sql`INSERT INTO admin_users (identity_id, full_name, status, mfa_enrolled_at)
+              VALUES (${identityId}, ${fullName}, 'ACTIVE', now()) RETURNING id`,
+          )
+        : await firstId(
+            db,
+            sql`INSERT INTO admin_users (identity_id, full_name, status)
               VALUES (${identityId}, ${fullName}, 'INVITED') RETURNING id`,
-        );
+          );
 
   for (const roleKey of options.roles ?? []) {
     await db.execute(

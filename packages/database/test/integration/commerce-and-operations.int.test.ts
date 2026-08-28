@@ -36,8 +36,8 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import type { Database } from "../../src/client.js";
 import { startTestDatabase, type TestDatabase } from "../../src/testing/postgres-container.js";
-import { createTestAdmin } from "../../src/testing/admin-fixture.js";
-import { dbErrorMatching } from "../../src/testing/db-errors.js";
+import { createTestAdmin } from "../support/admin-fixture.js";
+import { dbErrorMatching } from "../support/db-errors.js";
 
 let testDb: TestDatabase;
 let app: Database;
