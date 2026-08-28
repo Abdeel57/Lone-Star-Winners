@@ -1227,37 +1227,37 @@ Status: PROPOSED
 Superficie aislada y protegida. Toda ruta exige sesión administrativa con MFA
 (DEC-006); las marcadas con step-up exigen además re-autenticación reciente.
 
-| Method | Endpoint                                       | Authorization            | Status      |
-| ------ | ---------------------------------------------- | ------------------------ | ----------- |
-| GET    | `/api/v1/admin/dashboard`                      | `dashboard.read`         | IMPLEMENTED |
-| GET    | `/api/v1/admin/promotions`                     | `promotion.read`         | PROPOSED    |
-| POST   | `/api/v1/admin/promotions`                     | `promotion.create`       | PROPOSED    |
-| PATCH  | `/api/v1/admin/promotions/{id}`                | `promotion.update`       | PROPOSED    |
-| POST   | `/api/v1/admin/promotions/{id}/activate`       | `promotion.activate`     | PROPOSED    |
-| POST   | `/api/v1/admin/promotions/{id}/close`          | `promotion.close`        | PROPOSED    |
-| GET    | `/api/v1/admin/promotions/{id}/rules-versions` | `rules.version.read`     | PROPOSED    |
-| POST   | `/api/v1/admin/promotions/{id}/rules-versions` | `rules.version.create`   | PROPOSED    |
-| POST   | `/api/v1/admin/rules-versions/{id}/activate`   | `rules.version.activate` | PROPOSED    |
-| GET    | `/api/v1/admin/products`                       | `product.read`           | PROPOSED    |
-| POST   | `/api/v1/admin/products`                       | `product.write`          | PROPOSED    |
-| POST   | `/api/v1/admin/products/{id}/publish`          | `product.publish`        | PROPOSED    |
-| GET    | `/api/v1/admin/participants`                   | `participant.list`       | IMPLEMENTED |
-| GET    | `/api/v1/admin/participants/{id}`              | `participant.read`       | IMPLEMENTED |
-| POST   | `/api/v1/admin/participants/{id}/disqualify`   | `participant.disqualify` | PROPOSED    |
-| GET    | `/api/v1/admin/orders`                         | `order.read`             | IMPLEMENTED |
-| POST   | `/api/v1/admin/orders/{id}/refund`             | `order.refund.initiate`  | PROPOSED    |
-| GET    | `/api/v1/admin/entry-transactions`             | `entry.ledger.read`      | PROPOSED    |
-| POST   | `/api/v1/admin/entry-adjustments`              | `entry.adjust.create`    | PROPOSED    |
-| POST   | `/api/v1/admin/entry-adjustments/preview`      | `entry.adjust.create`    | IMPLEMENTED |
-| POST   | `/api/v1/admin/entry-adjustments/{id}/approve` | `entry.adjust.approve`   | PROPOSED    |
-| GET    | `/api/v1/admin/amoe-submissions`               | `amoe.review.read`       | PROPOSED    |
-| POST   | `/api/v1/admin/amoe-submissions/{id}/approve`  | `amoe.review.approve`    | PROPOSED    |
-| POST   | `/api/v1/admin/amoe-submissions/{id}/reject`   | `amoe.review.reject`     | PROPOSED    |
-| GET    | `/api/v1/admin/payment-webhooks`               | `payment.webhook.read`   | PROPOSED    |
-| POST   | `/api/v1/admin/payment-webhooks/{id}/replay`   | `payment.webhook.replay` | PROPOSED    |
-| GET    | `/api/v1/admin/reconciliation`                 | `reconciliation.read`    | PROPOSED    |
-| GET    | `/api/v1/admin/feature-flags`                  | `flag.read`              | PROPOSED    |
-| PATCH  | `/api/v1/admin/feature-flags/{key}`            | `flag.update`            | PROPOSED    |
+| Method | Endpoint                                                 | Authorization            | Status      |
+| ------ | -------------------------------------------------------- | ------------------------ | ----------- |
+| GET    | `/api/v1/admin/dashboard`                                | `dashboard.read`         | IMPLEMENTED |
+| GET    | `/api/v1/admin/promotions`                               | `promotion.read`         | PROPOSED    |
+| POST   | `/api/v1/admin/promotions`                               | `promotion.create`       | PROPOSED    |
+| PATCH  | `/api/v1/admin/promotions/{promotion_id}`                | `promotion.update`       | PROPOSED    |
+| POST   | `/api/v1/admin/promotions/{promotion_id}/activate`       | `promotion.activate`     | PROPOSED    |
+| POST   | `/api/v1/admin/promotions/{promotion_id}/close`          | `promotion.close`        | PROPOSED    |
+| GET    | `/api/v1/admin/promotions/{promotion_id}/rules-versions` | `rules.version.read`     | PROPOSED    |
+| POST   | `/api/v1/admin/promotions/{promotion_id}/rules-versions` | `rules.version.create`   | PROPOSED    |
+| POST   | `/api/v1/admin/rules-versions/{id}/activate`             | `rules.version.activate` | PROPOSED    |
+| GET    | `/api/v1/admin/products`                                 | `product.read`           | PROPOSED    |
+| POST   | `/api/v1/admin/products`                                 | `product.write`          | PROPOSED    |
+| POST   | `/api/v1/admin/products/{product_id}/publish`            | `product.publish`        | PROPOSED    |
+| GET    | `/api/v1/admin/participants`                             | `participant.list`       | IMPLEMENTED |
+| GET    | `/api/v1/admin/participants/{id}`                        | `participant.read`       | IMPLEMENTED |
+| POST   | `/api/v1/admin/participants/{id}/disqualify`             | `participant.disqualify` | PROPOSED    |
+| GET    | `/api/v1/admin/orders`                                   | `order.read`             | IMPLEMENTED |
+| POST   | `/api/v1/admin/orders/{id}/refund`                       | `order.refund.initiate`  | PROPOSED    |
+| GET    | `/api/v1/admin/entry-transactions`                       | `entry.ledger.read`      | PROPOSED    |
+| POST   | `/api/v1/admin/entry-adjustments`                        | `entry.adjust.create`    | PROPOSED    |
+| POST   | `/api/v1/admin/entry-adjustments/preview`                | `entry.adjust.create`    | IMPLEMENTED |
+| POST   | `/api/v1/admin/entry-adjustments/{id}/approve`           | `entry.adjust.approve`   | PROPOSED    |
+| GET    | `/api/v1/admin/amoe-submissions`                         | `amoe.review.read`       | PROPOSED    |
+| POST   | `/api/v1/admin/amoe-submissions/{id}/approve`            | `amoe.review.approve`    | PROPOSED    |
+| POST   | `/api/v1/admin/amoe-submissions/{id}/reject`             | `amoe.review.reject`     | PROPOSED    |
+| GET    | `/api/v1/admin/payment-webhooks`                         | `payment.webhook.read`   | PROPOSED    |
+| POST   | `/api/v1/admin/payment-webhooks/{id}/replay`             | `payment.webhook.replay` | PROPOSED    |
+| GET    | `/api/v1/admin/reconciliation`                           | `reconciliation.read`    | PROPOSED    |
+| GET    | `/api/v1/admin/feature-flags`                            | `flag.read`              | PROPOSED    |
+| PATCH  | `/api/v1/admin/feature-flags/{key}`                      | `flag.update`            | PROPOSED    |
 
 Notas que no caben en la tabla y que importan:
 
@@ -2116,15 +2116,15 @@ requires_second_approval, as_of }`. Es una LECTURA: ni fila de ledger, ni
 
 ## 11.5 Sorteo (DEC-017)
 
-| Método | Endpoint                                                             | Authorization               | Step-up |
-| ------ | -------------------------------------------------------------------- | --------------------------- | ------- |
-| GET    | `/api/v1/admin/promotions/{id}/draw-authorizations`                  | `draw.result.read`          | no      |
-| POST   | `/api/v1/admin/promotions/{id}/draw-authorizations`                  | `draw.authorization.create` | sí      |
-| POST   | `/api/v1/admin/promotions/{id}/draw-authorizations/{auth_id}/revoke` | `draw.authorization.create` | sí      |
-| POST   | `/api/v1/admin/draws`                                                | `draw.initiate`             | sí      |
-| GET    | `/api/v1/admin/draws?promotion_id=`                                  | `draw.result.read`          | no      |
-| GET    | `/api/v1/admin/promotions/{id}/potential-winners`                    | `winner.workflow.read`      | no      |
-| POST   | `/api/v1/admin/potential-winners/{id}/status`                        | `winner.status.update`      | sí      |
+| Método | Endpoint                                                                       | Authorization               | Step-up |
+| ------ | ------------------------------------------------------------------------------ | --------------------------- | ------- |
+| GET    | `/api/v1/admin/promotions/{promotion_id}/draw-authorizations`                  | `draw.result.read`          | no      |
+| POST   | `/api/v1/admin/promotions/{promotion_id}/draw-authorizations`                  | `draw.authorization.create` | sí      |
+| POST   | `/api/v1/admin/promotions/{promotion_id}/draw-authorizations/{auth_id}/revoke` | `draw.authorization.create` | sí      |
+| POST   | `/api/v1/admin/draws`                                                          | `draw.initiate`             | sí      |
+| GET    | `/api/v1/admin/draws?promotion_id=`                                            | `draw.result.read`          | no      |
+| GET    | `/api/v1/admin/promotions/{promotion_id}/potential-winners`                    | `winner.workflow.read`      | no      |
+| POST   | `/api/v1/admin/potential-winners/{id}/status`                                  | `winner.status.update`      | sí      |
 
 - **`POST /admin/draws` llama a `initiateDraw()` de `@lsw/tpa`** con los puertos
   reales: flag persistido (`ConfigRepository`, nunca entorno), `authorize()` de
@@ -2158,16 +2158,16 @@ requires_second_approval, as_of }`. Es una LECTURA: ni fila de ledger, ni
 
 ## 11.6 Exportación al third-party administrator (DEC-016)
 
-| Método | Endpoint                                         | Authorization              | Step-up |
-| ------ | ------------------------------------------------ | -------------------------- | ------- |
-| POST   | `/api/v1/admin/promotions/{id}/export-snapshots` | `export.snapshot.create`   | no      |
-| GET    | `/api/v1/admin/promotions/{id}/export-snapshots` | `export.snapshot.read`     | no      |
-| GET    | `/api/v1/admin/export-snapshots/{id}`            | `export.snapshot.read`     | no      |
-| POST   | `/api/v1/admin/export-snapshots/{id}/validate`   | `export.snapshot.validate` | no      |
-| POST   | `/api/v1/admin/export-snapshots/{id}/finalize`   | `export.finalize`          | sí      |
-| GET    | `/api/v1/admin/export-snapshots/{id}/download`   | `export.download`          | sí      |
-| POST   | `/api/v1/admin/export-snapshots/{id}/deliver`    | `export.deliver`           | sí      |
-| POST   | `/api/v1/admin/export-snapshots/{id}/results`    | `winner.status.update`     | sí      |
+| Método | Endpoint                                                   | Authorization              | Step-up |
+| ------ | ---------------------------------------------------------- | -------------------------- | ------- |
+| POST   | `/api/v1/admin/promotions/{promotion_id}/export-snapshots` | `export.snapshot.create`   | no      |
+| GET    | `/api/v1/admin/promotions/{promotion_id}/export-snapshots` | `export.snapshot.read`     | no      |
+| GET    | `/api/v1/admin/export-snapshots/{id}`                      | `export.snapshot.read`     | no      |
+| POST   | `/api/v1/admin/export-snapshots/{id}/validate`             | `export.snapshot.validate` | no      |
+| POST   | `/api/v1/admin/export-snapshots/{id}/finalize`             | `export.finalize`          | sí      |
+| GET    | `/api/v1/admin/export-snapshots/{id}/download`             | `export.download`          | sí      |
+| POST   | `/api/v1/admin/export-snapshots/{id}/deliver`              | `export.deliver`           | sí      |
+| POST   | `/api/v1/admin/export-snapshots/{id}/results`              | `winner.status.update`     | sí      |
 
 - **Crear** fija la tupla de DEC-016 -promoción, `cutoff_at`, `rules_version_id`,
   `ledger_high_water_mark` y las tres versiones- y nada más. El corte se pide
@@ -2445,3 +2445,198 @@ exactamente el fallo que la traza existe para impedir.
 ```
 
 401 · 403 · 422 (`action` con forma inválida se rechaza antes de la consulta).
+
+---
+
+## 12. Altas del panel: catálogo y promociones (DEC-010, DEC-011, DEC-012)
+
+Hasta esta sección el catálogo era **de solo lectura**. El escaparate leía
+productos y promociones, el panel las listaba, y no existía ninguna forma de
+crear una: el panel enseñaba listas vacías y llenarlas exigía SQL a mano contra
+producción. Ésta es la puerta que faltaba.
+
+**Nada de lo que hay aquí concede participaciones.** Un producto es
+**mercancía** (`CLAUDE.md` §1): tiene SKU, precio, nombre y existencias, y
+ninguna columna suya dice cuántas participaciones otorga, porque eso lo dice la
+`PromotionRulesVersion` (DEC-012). Crear un producto y publicarlo **no** lo
+convierte en elegible para nada.
+
+**Publicar es una ruta aparte y no un `PATCH { status }`.** El catálogo de
+DEC-027 separa `product.write` de `product.publish`, y el registro de DEC-015
+declara la capacidad por (método, camino). Si el estado viajara en el cuerpo, la
+capacidad exigida la elegiría el cliente al decidir qué campos manda, y el
+autorizador —que corre **antes** del handler— no puede juzgar una decisión que
+todavía no se ha tomado. Lo mismo vale para activar y cerrar una promoción.
+
+**Los dos idiomas son obligatorios en el alta.** No hay `optional` ni fallback de
+uno al otro (principio 4). Un producto con nombre solo en inglés no es bilingüe a
+medias: es un producto que en media tienda aparece sin nombre.
+
+### GET /api/v1/admin/products
+
+    Authorization: product.read
+
+Catálogo completo, `DRAFT` y `ARCHIVED` incluidos —a diferencia de
+`GET /products`, que solo sirve lo publicado—. Paginación con `?cursor=`.
+
+`price_amount_minor` es **cadena**, no número: un importe en unidad menor puede
+superar el entero seguro de JavaScript. `null` significa que el producto aún no
+tiene variante, **no** que sea gratis.
+
+401 · 403.
+
+### POST /api/v1/admin/products
+
+    Authorization: product.write
+
+```json
+{
+  "sku": "GORRA-LS-001",
+  "slug": "gorra-lone-star",
+  "currency": "USD",
+  "name": { "es-US": "Gorra Lone Star", "en-US": "Lone Star Cap" },
+  "description": { "es-US": null, "en-US": null },
+  "price_amount_minor": 2500,
+  "stock_quantity": 100
+}
+```
+
+Crea producto, sus dos traducciones y su primera variante con precio, **todo en
+la misma transacción**: un producto sin variante no tiene precio y uno sin
+traducciones no tiene nombre, y cualquiera de las mitades sin la otra deja en el
+catálogo una fila que el escaparate no puede pintar.
+
+**Nace en `DRAFT` siempre.** `price_amount_minor` va en la **unidad menor** de la
+moneda como entero (DEC-010): 2500 son 25,00 USD. `stock_quantity: null` es
+"existencias no gestionadas", que no es lo mismo que cero.
+
+**201** con el producto · 409 `CATALOG_CONFLICT` si el SKU o el slug ya existen,
+con el mensaje del motor en `details.engine` · 422 · 401 · 403.
+
+### GET /api/v1/admin/products/{product_id}
+
+    Authorization: product.read
+
+401 · 403 · 404.
+
+### PATCH /api/v1/admin/products/{product_id}
+
+    Authorization: product.write
+
+Campos opcionales: `name`, `price_amount_minor`, `stock_quantity`. Un `PATCH` sin
+ningún campo es 422: no es una edición.
+
+**No cambia el estado**, a propósito. Ver la ruta siguiente.
+
+200 · 401 · 403 · 404 · 409 · 422.
+
+### POST /api/v1/admin/products/{product_id}/publish
+
+    Authorization: product.publish
+
+```json
+{ "published": true }
+```
+
+`true` lo pone `ACTIVE` y visible en la tienda; `false` lo archiva. La variante
+sigue al producto: una variante `ACTIVE` bajo un producto `ARCHIVED` seguiría
+siendo comprable por su identificador aunque no aparezca en ningún listado.
+
+200 · 401 · 403 · 404 · 422.
+
+### GET /api/v1/admin/promotions
+
+    Authorization: promotion.read
+
+Promociones para el panel, borradores incluidos. Paginación con `?cursor=`.
+
+401 · 403.
+
+### POST /api/v1/admin/promotions
+
+    Authorization: promotion.create
+
+```json
+{
+  "slug": "gmc-denali-2025",
+  "internal_name": "GMC Denali 2025",
+  "legal_timezone": "America/Chicago",
+  "public_name": {
+    "es-US": "Gana una GMC Denali 2025",
+    "en-US": "Win a 2025 GMC Denali"
+  },
+  "starts_at": null,
+  "ends_at": null
+}
+```
+
+**`legal_timezone` es obligatoria y no tiene valor por defecto** (DEC-011). Todos
+los plazos se evalúan contra ella, nunca contra la del navegador ni la del
+contenedor. Un valor por defecto —aunque fuera `America/Chicago`, que es la de
+las Official Rules— convertiría una decisión legal en un descuido. Que la zona
+exista lo comprueba PostgreSQL contra su propio catálogo.
+
+**Nace en `DRAFT` y todavía no puede activarse**: le falta la
+`PromotionRulesVersion` (DEC-012).
+
+**201** · 409 `CATALOG_CONFLICT` si el slug existe, o `LIFECYCLE_REFUSED` si la
+zona horaria no la conoce el servidor · 422 · 401 · 403.
+
+### GET /api/v1/admin/promotions/{promotion_id}
+
+    Authorization: promotion.read
+
+401 · 403 · 404.
+
+### PATCH /api/v1/admin/promotions/{promotion_id}
+
+    Authorization: promotion.update
+
+Campos opcionales: `internal_name`, `public_name`, `starts_at`, `ends_at`.
+
+**La zona horaria legal no se edita**, a propósito: cambiarla después de haber
+evaluado plazos contra ella movería retroactivamente el momento en que la
+promoción abrió o cerró.
+
+200 · 401 · 403 · 404 · 409 · 422.
+
+### POST /api/v1/admin/promotions/{promotion_id}/activate
+
+    Authorization: promotion.activate   (motivo obligatorio + step-up)
+
+```json
+{ "reason_code": "promotion_launch_approved", "reason_text": null }
+```
+
+El `reason_code` lo lee el **autorizador**, antes del handler, con la misma forma
+que se persiste en `audit_events.reason_code` (`^[a-zA-Z][a-zA-Z0-9_.]{2,63}$`):
+lo que abre la puerta es exactamente lo que queda escrito en la traza. Sin
+motivo, o con uno mal formado, **403**.
+
+**Los cerrojos los impone PostgreSQL**, no la API
+(`lsw_promotions_enforce_lifecycle`):
+
+1. La transición tiene que figurar en `promotion_status_transitions`.
+2. Ventana explícita: `starts_at` y `ends_at` no pueden ser `null`.
+3. `active_rules_version_id` no puede ser `null`, la versión tiene que
+   pertenecer a esta promoción y estar en `ACTIVE`.
+4. Esa versión no puede tener **claves legales sin resolver**
+   (`unresolved_required_keys` vacío). Es una columna **generada** por el motor:
+   la aplicación no puede escribirla, luego no puede declarar resuelto lo que no
+   lo está. Ver `docs/LEGAL_PENDING.md`.
+
+Si alguno salta: **409 `LIFECYCLE_REFUSED`** con el mensaje del motor en
+`details.engine`. Ese texto llega al panel a propósito —quien no puede activar
+necesita saber cuál de los cuatro cerrojos saltó, y el único que lo sabe con
+certeza es el que lo comprobó—. El texto **no** es contrato estable; el código
+sí.
+
+200 · 401 · 403 · 404 · 409 · 422.
+
+### POST /api/v1/admin/promotions/{promotion_id}/close
+
+    Authorization: promotion.close   (motivo obligatorio + step-up)
+
+Mismo cuerpo que `activate`. Cerrar detiene la entrada de participaciones.
+
+200 · 401 · 403 · 404 · 409 · 422.

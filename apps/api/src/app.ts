@@ -42,6 +42,7 @@ import { buildAdjustmentRoutes } from "./routes/adjustments.js";
 // HO-034 punto 5: los cuatro modulos de lectura que el panel llamaba y que no
 // existian (dashboard, pedidos, participantes y traza de auditoria).
 import { buildAdminAuditRoutes } from "./routes/admin-audit.js";
+import { buildAdminCatalogRoutes } from "./routes/admin-catalog.js";
 import { buildAdminDashboardRoutes } from "./routes/admin-dashboard.js";
 import { buildAdminOrdersRoutes } from "./routes/admin-orders.js";
 import { buildAdminParticipantRoutes } from "./routes/admin-participants.js";
@@ -114,6 +115,7 @@ export function collectRouteDefinitions(dependencies: AppDependencies): RouteDef
     ...buildAdminOrdersRoutes(dependencies),
     ...buildAdminParticipantRoutes(dependencies),
     ...buildAdminAuditRoutes(dependencies),
+    ...buildAdminCatalogRoutes(dependencies),
   ];
 
   const metaRoutes = buildMetaRoutes({
@@ -149,6 +151,7 @@ export function collectContractRouteDefinitions(dependencies: AppDependencies): 
     ...buildAdminOrdersRoutes(dependencies),
     ...buildAdminParticipantRoutes(dependencies),
     ...buildAdminAuditRoutes(dependencies),
+    ...buildAdminCatalogRoutes(dependencies),
   ];
   routes.push(
     ...buildMetaRoutes({ serverUrl: dependencies.config.http.publicUrl, allRoutes: () => routes }),

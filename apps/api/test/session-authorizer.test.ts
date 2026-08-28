@@ -68,7 +68,7 @@ function fakeIdentity(session: SessionRecord | null, adminRoles: readonly string
 function requestWith(
   cookieName: string,
   token: string | null,
-  extra: { body?: unknown; headers?: Record<string, string> } = {},
+  extra: { body?: unknown; headers?: Record<string, string> | undefined } = {},
 ): never {
   return {
     cookies: token === null ? {} : { [cookieName]: token },

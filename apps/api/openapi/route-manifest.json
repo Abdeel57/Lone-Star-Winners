@@ -319,6 +319,105 @@
     },
     {
       "method": "GET",
+      "path": "/api/v1/admin/products",
+      "operation_id": "listAdminProducts",
+      "authorization": "product.read",
+      "requires_step_up": false,
+      "tags": ["admin"],
+      "summary": "Catalogo completo para el panel, borradores incluidos."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/products",
+      "operation_id": "createAdminProduct",
+      "authorization": "product.write",
+      "requires_step_up": false,
+      "tags": ["admin"],
+      "summary": "Dar de alta mercancia. Nace en DRAFT."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/products/:product_id",
+      "operation_id": "getAdminProduct",
+      "authorization": "product.read",
+      "requires_step_up": false,
+      "tags": ["admin"],
+      "summary": "Un producto del catalogo, en cualquier estado."
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/admin/products/:product_id",
+      "operation_id": "updateAdminProduct",
+      "authorization": "product.write",
+      "requires_step_up": false,
+      "tags": ["admin"],
+      "summary": "Editar nombre, precio o existencias."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/products/:product_id/publish",
+      "operation_id": "publishAdminProduct",
+      "authorization": "product.publish",
+      "requires_step_up": false,
+      "tags": ["admin"],
+      "summary": "Publicar o archivar un producto."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/promotions",
+      "operation_id": "listAdminPromotions",
+      "authorization": "promotion.read",
+      "requires_step_up": false,
+      "tags": ["admin"],
+      "summary": "Promociones para el panel, borradores incluidos."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/promotions",
+      "operation_id": "createAdminPromotion",
+      "authorization": "promotion.create",
+      "requires_step_up": false,
+      "tags": ["admin"],
+      "summary": "Crear una promocion. Nace en DRAFT."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/promotions/:promotion_id",
+      "operation_id": "getAdminPromotion",
+      "authorization": "promotion.read",
+      "requires_step_up": false,
+      "tags": ["admin"],
+      "summary": "Una promocion, en cualquier estado."
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/admin/promotions/:promotion_id",
+      "operation_id": "updateAdminPromotion",
+      "authorization": "promotion.update",
+      "requires_step_up": false,
+      "tags": ["admin"],
+      "summary": "Editar nombre y ventana de una promocion."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/promotions/:promotion_id/activate",
+      "operation_id": "activateAdminPromotion",
+      "authorization": "promotion.activate",
+      "requires_step_up": true,
+      "tags": ["admin"],
+      "summary": "Activar una promocion. Exige motivo y segundo factor reciente."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/promotions/:promotion_id/close",
+      "operation_id": "closeAdminPromotion",
+      "authorization": "promotion.close",
+      "requires_step_up": true,
+      "tags": ["admin"],
+      "summary": "Cerrar una promocion. Exige motivo y segundo factor reciente."
+    },
+    {
+      "method": "GET",
       "path": "/api/v1/admin/promotions/:promotion_id/draw-authorizations",
       "operation_id": "listDrawAuthorizations",
       "authorization": "draw.result.read",
