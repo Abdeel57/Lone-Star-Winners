@@ -200,7 +200,24 @@ export function buildAdjustmentRoutes(dependencies: AppDependencies): RouteDefin
       description:
         "Con `dual_approval_for_sensitive_actions_enabled` encendido -que es el valor de arranque- queda en PENDING_APPROVAL y no toca el ledger hasta que otra persona lo apruebe.",
       tags: ["admin"],
-      authorization: { kind: "PERMISSION", permission: "entry.adjust.create" },
+      authorization: {
+        kind: "PERMISSION",
+        permission: "entry.adjust.create",
+        /*
+         * SEGUNDA APROBACION (HO-034.1): la impone el flujo, no esta puerta.
+         * Crear NO toca el ledger: deja el ajuste en PENDING_APPROVAL y el efecto
+         * solo ocurre cuando OTRA persona con entry.adjust.approve lo aprueba.
+         * Los sitios reales que lo imponen, para auditarlo leyendolos:
+         *   - packages/sweepstakes/src/adjustment/adjustment-service.ts,
+         *     approve(): rechaza si no esta PENDING_APPROVAL y si
+         *     requestedByAdminUserId === actor.adminUserId (ADJUSTMENT_SELF_APPROVAL_FORBIDDEN);
+         *   - packages/database/drizzle/0022_entry_operations.sql,
+         *     CONSTRAINT adjustments_approver_differs: el motor lo impide aunque
+         *     la aplicacion fallara.
+         */
+        secondApprovalEnforcedBy:
+          "packages/sweepstakes/src/adjustment/adjustment-service.ts#approve (PENDING_APPROVAL + requestedByAdminUserId !== actor) y packages/database/drizzle/0022_entry_operations.sql#adjustments_approver_differs",
+      },
       schema: {
         body: createAdjustmentBodySchema,
         response: {
@@ -264,7 +281,24 @@ export function buildAdjustmentRoutes(dependencies: AppDependencies): RouteDefin
       // Misma capacidad que CREAR, no la de leer el ledger. La pregunta que
       // contesta es "que pasaria si yo pidiera esto", y quien no puede pedirlo
       // no tiene por que poder simularlo sobre un participante concreto.
-      authorization: { kind: "PERMISSION", permission: "entry.adjust.create" },
+      authorization: {
+        kind: "PERMISSION",
+        permission: "entry.adjust.create",
+        /*
+         * SEGUNDA APROBACION (HO-034.1): la impone el flujo, no esta puerta.
+         * Crear NO toca el ledger: deja el ajuste en PENDING_APPROVAL y el efecto
+         * solo ocurre cuando OTRA persona con entry.adjust.approve lo aprueba.
+         * Los sitios reales que lo imponen, para auditarlo leyendolos:
+         *   - packages/sweepstakes/src/adjustment/adjustment-service.ts,
+         *     approve(): rechaza si no esta PENDING_APPROVAL y si
+         *     requestedByAdminUserId === actor.adminUserId (ADJUSTMENT_SELF_APPROVAL_FORBIDDEN);
+         *   - packages/database/drizzle/0022_entry_operations.sql,
+         *     CONSTRAINT adjustments_approver_differs: el motor lo impide aunque
+         *     la aplicacion fallara.
+         */
+        secondApprovalEnforcedBy:
+          "packages/sweepstakes/src/adjustment/adjustment-service.ts#approve (PENDING_APPROVAL + requestedByAdminUserId !== actor) y packages/database/drizzle/0022_entry_operations.sql#adjustments_approver_differs",
+      },
       schema: {
         body: previewAdjustmentBodySchema,
         response: {

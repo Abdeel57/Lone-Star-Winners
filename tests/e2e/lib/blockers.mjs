@@ -120,8 +120,9 @@ export const ADMIN_DASHBOARD_ENDPOINTS_MISSING = false;
  * Se levanta cuando la ruta de ajustes declare quien impone la segunda
  * aprobacion (`apps/api/src/routes/adjustments.ts`).
  */
-export const SECOND_APPROVAL_NOT_DECLARED_FOR_ADJUSTMENTS =
-  process.env.E2E_ADJUSTMENTS_SECOND_APPROVAL_DECLARED !== "true";
+// RESUELTO: POST /admin/entry-adjustments (y preview) declaran secondApprovalEnforcedBy
+// nombrando adjustment-service.ts#approve y el CHECK adjustments_approver_differs.
+export const SECOND_APPROVAL_NOT_DECLARED_FOR_ADJUSTMENTS = false;
 
 export const ALL_BLOCKERS = Object.freeze({
   SECOND_APPROVAL_NOT_DECLARED_FOR_ADJUSTMENTS,
