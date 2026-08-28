@@ -114,3 +114,6 @@ $RECYCLE.BIN/
 
 # Claude Code - ajustes locales del usuario, no compartidos
 .claude/settings.local.json
+
+# Secreto TOTP del administrador de arranque. Es una credencial (principio 19).
+.admin-totp
