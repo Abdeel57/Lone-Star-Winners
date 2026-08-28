@@ -1744,3 +1744,71 @@ activarlas devolverá `409` con el motivo exacto, que es la respuesta correcta.
 Merece la pena que la pantalla lo diga de antemano en vez de dejar que el usuario
 descubra el 409: si `active_rules_version_id` es `null`, el botón de activar
 puede explicarse en vez de fallar.
+
+## HO-039
+
+Status: OPEN
+
+## Handoff
+
+Date: 2026-08-27
+From: security-integration (e2e real, commit `7e47044`) y frontend-ux, vía
+Team Lead
+To: backend-sweepstakes (contrato y esquema), frontend-ux (consumo cuando
+llegue)
+
+Context:
+El primer e2e contra `apps/api` real demostró que **el escaparate ha vivido de
+fixtures**: `GET /promotions/{slug}` publica `id, slug, status, title, summary,
+legal_timezone, starts_at, ends_at, rules_version_id, rules_version,
+prize_value`, y `GET /products*` publica `id, slug, name, description, sku,
+currency, variants[{ id, sku, price, availability }]`. Todo lo demás que
+pintan la portada, la ficha de promoción y el catálogo existía solo en
+`apps/web/src/lib/api/contract.ts` (marcado `[PROVISIONAL]`) y en
+`src/mocks/fixtures/*`. Contra la API real las cuatro páginas públicas morían
+con `TypeError` (500). `31f4c92` hace que el escaparate tolere la ausencia —
+no pinta lo que no tiene y deriva `price_from` de las variantes — pero **el
+hero de la GMC, la banda del premio, la fotografía, el tope de 10,000 de
+DEC-042 y la oferta de participaciones siguen sin fuente en producción**.
+
+What I need from you (backend), en el contrato antes que en el código
+(principio 16), y como **opcionales** mientras el abogado no cierre lo suyo:
+
+1. **`prize`** en `PromotionDetail`: `{ name: LocalizedText, description:
+LocalizedText, declared_value: MoneyMinor | null }`. `prize_value` ya
+   existe en el resumen; `declared_value` es el mismo dato y debe salir de la
+   misma columna, no de una segunda.
+2. **`media`** en `PromotionDetail`: `{ hero_url, square_url, alt:
+LocalizedText | null }` (dos recortes, DEC-042; `alt` nulo = decorativa).
+   No existe modelo de medios en el esquema (HO-017 lo confirmó para
+   productos): decidir si es una tabla de medios o dos URL en la promoción,
+   y registrarlo como DEC. Hasta entonces, la foto del premio sigue siendo
+   un fichero estático de `apps/web/public/prizes/` que el frontend elige, y
+   eso es exactamente lo que DEC-042 quería evitar.
+3. **`entry_pool`** en `PromotionDetail`: `{ cap: number, issued: number |
+null }`. `cap` es configuración de la promoción (su escritura es §12,
+   `entry_pool_cap`); `issued` sale del ledger (`lsw_entry_balances_at`),
+   nunca de un contador aparte. El frontend no resta ni pinta `issued`
+   (DEC-044); lo publica el backend porque el panel lo necesitará.
+4. **`entry_offer`** en `PromotionDetail`: `{ base_entries_per_unit,
+unit_amount, multiplier, multiplier_starts_at, multiplier_ends_at }`,
+   derivado de la `PromotionRulesVersion` activa (DEC-012), `null` sin
+   versión activa. Es lo que permite decir qué ofrece la promoción sin meter
+   nada en el carrito. El borrador del abogado fija "2 participaciones por
+   cada $5.00 completos": esa es la forma de este objeto, no una constante.
+5. **`administrator_name`** en `PromotionDetail` (`string | null`), pendiente
+   del TPA (LEGAL_PENDING).
+6. Catálogo (HO-019, sigue abierto): `variant.name`, `summary`,
+   `category_key`, `image_url`/`images`, `shipping_note`,
+   `entry_eligibility` (evaluada contra la versión de reglas activa, con
+   `evaluated_against_rules_version_id`). Los tipos en `apps/web` ya son
+   opcionales y el catálogo funciona sin ellos; lo que falta es que el
+   catálogo deje de ser SKU y precio.
+
+Frontend, cuando llegue cada campo: quitar el `?` correspondiente en
+`contract.ts` y el caso "ausente" del test `real-api-shapes.test.tsx`, que
+es el que hoy fija que la ausencia no rompe.
+
+Blocking: NO para el despliegue (el escaparate ya no cae). SÍ para que la
+promoción de la GMC sea real en producción: hoy en Railway la portada
+enseña título y valor del premio, y nada más de lo que se ve en el mock.
