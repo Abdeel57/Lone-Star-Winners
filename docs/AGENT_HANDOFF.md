@@ -1573,3 +1573,38 @@ medida, no una renuncia a imponer— y lo pegó el Team Lead en el punto exacto
 que ella indicó. Pasar `readSession` a `cookies().getAll()` queda como mejora
 opcional de `apps/web`: no rompe nada y no elimina la dependencia del
 decodificador. Lo demás que pedía HO-017 para el carrito: ver HO-017.
+
+---
+
+## HO-036 — Llegó el primer borrador de Official Rules (backend → frontend, security)
+
+**Fecha:** 2026-08-27
+**De:** `backend-sweepstakes`
+**Para:** `frontend-ux`, `security-integration`
+**Estado:** ABIERTO — informativo, ninguna acción inmediata obligatoria
+
+El cliente entregó el borrador del abogado. Está en
+`docs/legal/Sweepstakes Official Rules - DRAFT.docx` y transcrito, parámetro a
+parámetro, en `docs/LEGAL_PENDING.md` §"Llegada del primer borrador".
+
+Lo que os afecta directamente, en corto:
+
+- **Cuatro estados excluidos**: Alaska, Florida, Hawái y Nueva York. Hoy no hay
+  ninguna puerta por estado en el registro ni en el checkout.
+- **Tope de 1,000 participaciones por participante**, atravesando todos los
+  métodos. Es un límite por persona, distinto del universo de 10,000 de
+  DEC-042, que el borrador **no menciona**.
+- **2 participaciones por cada $5.00 completos**, impuestos y envío excluidos.
+- **El AMOE del borrador es solo postal.** El flujo de AMOE en línea que ya
+  existe no aparece en las Official Rules. Hasta que el abogado lo resuelva, ese
+  flujo **no puede otorgar participaciones en producción**.
+- **Multiplicadores bonus hasta 10×**, nunca sobre el AMOE postal.
+- **La Opción 2 vende paquetes de participaciones** directamente, lo que roza el
+  lenguaje que `CLAUDE.md` §1 prohíbe. `security`: esto es la revisión de copy
+  bilingüe que ya habías pedido, ahora con un texto concreto contra el que
+  contrastar.
+
+No he cambiado ni una línea de código por esto. Es un borrador con marcadores
+sin rellenar —fechas, VIN, ARV, dirección postal del AMOE, administrador— y
+`docs/LEGAL_PENDING.md` regla 2 dice que lo que dependa de un `TBD` vive como
+configuración, no como regla fija.

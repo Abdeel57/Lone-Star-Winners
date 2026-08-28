@@ -237,3 +237,111 @@ Mientras siga `TBD`, `availability` es **exclusivamente informativa**: no entra
 en ninguna aritmética de entries, ni en el carrito ni en el pedido, y ninguna
 línea deja de cotizarse por estar agotada. Cambiar eso sería decidir una regla
 legal desde el código.
+
+---
+
+# Llegada del primer borrador de Official Rules (2026-08-27)
+
+El cliente entregó **`docs/legal/Sweepstakes Official Rules - DRAFT.docx`**,
+redactado por su abogado. Es el primer texto legal real del proyecto.
+
+**Sigue siendo un borrador y conserva marcadores sin rellenar**, así que NADA de
+lo que sigue se convierte en código fijo: se registra como parámetro de
+configuración de la promoción y se marca `PROVISIONAL — DRAFT` hasta que llegue
+una versión final. Regla 1 de este documento intacta: aquí no se inventa nada,
+solo se transcribe lo que el borrador dice y se señala lo que NO dice.
+
+## Lo que el borrador SÍ resuelve
+
+| Punto                           | Lo que dice el borrador                                                                                                                                                                                                                                                                                                                                   |
+| ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Elegibilidad**                | Residente legal de EE. UU. (50 estados + D.C.), 18+ y con mayoría de edad en su estado. Excluidos empleados, directivos, socios y sus familiares y convivientes. Cribado contra Denied Persons / Entity List (BIS), Specially Designated Nationals (Tesoro) y Table of Denial Orders (Comercio).                                                          |
+| **Estados permitidos**          | **VOID en Alaska, Florida, Hawái y Nueva York**, y donde esté prohibido o restringido.                                                                                                                                                                                                                                                                    |
+| **Edad mínima**                 | 18 años, y además la mayoría de edad de su estado.                                                                                                                                                                                                                                                                                                        |
+| **Entradas por compra**         | **2 participaciones por cada $5.00 completos** del precio pagado, **excluyendo impuestos y envío**.                                                                                                                                                                                                                                                       |
+| **Paquetes de participaciones** | Misma tasa: 2 por cada $5.00 completos, impuestos excluidos. El número incluido se declara en la página del paquete.                                                                                                                                                                                                                                      |
+| **AMOE**                        | **Solo por correo postal.** Postal o ficha de 3×5 pulgadas, **escrita a mano**, con nombre legal completo, dirección, email, teléfono, fecha de nacimiento y firma. **200 participaciones por ficha válida.** Máximo **5 fichas por participante** y **2 fichas por sobre**. Matasellos dentro del periodo y recepción ≤ 7 días naturales tras el cierre. |
+| **Tope por participante**       | **1,000 participaciones**, sea cual sea el método o la combinación de métodos.                                                                                                                                                                                                                                                                            |
+| **Multiplicadores**             | Periodos bonus anunciados por el patrocinador, **hasta 10×**, aplicables solo a compra y paquetes. **Nunca al AMOE postal**, que vale 200 siempre. El tope de 1,000 no se mueve durante un bonus.                                                                                                                                                         |
+| **Reembolsos y contracargos**   | Las participaciones atribuibles a una compra reembolsada, revertida o con contracargo **quedan anuladas y se cancelan**.                                                                                                                                                                                                                                  |
+| **Probabilidades**              | Participaciones del participante ÷ total de participaciones elegibles recibidas.                                                                                                                                                                                                                                                                          |
+| **Método de sorteo**            | Sorteo aleatorio realizado por el **Administrador** (tercero) con generador auditado.                                                                                                                                                                                                                                                                     |
+| **Registro del sorteo**         | Antes de anunciar: total de participaciones elegibles, participaciones por participante, hora de la selección y ganador. Conservado y disponible a petición escrita.                                                                                                                                                                                      |
+| **Suplentes**                   | Tres sorteos alternos; después el premio queda sin adjudicar.                                                                                                                                                                                                                                                                                             |
+| **Notificación**                | Email, teléfono y/o SMS en 7 días hábiles. El ganador devuelve declaración jurada, exoneración, cesión de imagen y **W-9** en 5 días naturales.                                                                                                                                                                                                           |
+| **Fiscalidad**                  | 1099-MISC si el premio vale $2,000 o más. W-9 obligatorio como condición.                                                                                                                                                                                                                                                                                 |
+| **Automatización**              | Participaciones generadas por script, macro o bot: nulas.                                                                                                                                                                                                                                                                                                 |
+| **Terminación anticipada**      | El patrocinador puede cancelar por fraude, fallo técnico o fuerza mayor, y puede (sin obligación) sortear entre las participaciones no sospechosas hasta ese momento.                                                                                                                                                                                     |
+
+## Marcadores que el abogado todavía no ha rellenado
+
+Nombre del sweepstakes · dirección del patrocinador · **nombre y dirección del
+Administrador** · fecha de inicio y de fin · URL del sitio · **dirección postal
+para el AMOE** · año, marca, modelo, versión, **VIN**, millaje y **ARV** del
+vehículo · importe de la alternativa en efectivo · **fecha del sorteo** ·
+estado y condado para arbitraje · email de contacto.
+
+Sin la fecha de inicio/fin y sin el punto de cualificación de la orden, ninguna
+promoción puede otorgar participaciones por compra.
+
+## Cuatro contradicciones con lo ya construido — NO se resuelven aquí
+
+Se registran porque afectan al diseño y **ninguna la decide un ingeniero**.
+
+### 1. El AMOE del borrador es solo postal; el sistema tiene AMOE en línea
+
+El borrador describe **exclusivamente** entrada por correo con ficha manuscrita.
+El sistema tiene un flujo de revisión de participaciones gratuitas en línea
+(pantalla "Revisión gratuita" del panel, `/admin/amoe-submissions`).
+
+Son dos mecanismos distintos, no dos vistas del mismo. Preguntas para el
+abogado: ¿el AMOE en línea desaparece, o convive y hay que añadirlo a las
+Official Rules? Si convive, ¿cuántas participaciones vale y con qué límite?
+
+Mientras siga `TBD`, **el AMOE en línea no puede generar participaciones en
+producción**: concedería participaciones que las Official Rules no contemplan.
+
+### 2. El tope de 10,000 participaciones (DEC-042) NO aparece en el borrador
+
+DEC-042 fijó un universo total de **10,000 participaciones** para la promoción
+de la GMC 2025. El borrador **no menciona ningún tope total**; solo un tope
+**por participante** de 1,000, que es otra cosa.
+
+Además, la cláusula de probabilidades ("participaciones del participante ÷
+total recibidas") describe un universo **abierto**. Un universo cerrado de
+10,000 cambia esa fórmula y exige decir qué pasa con una compra elegible cuando
+el cupo se agota.
+
+Mientras siga `TBD`, el tope total sigue siendo configuración de la promoción y
+la interfaz lo muestra como dato, sin urgencia fabricada.
+
+### 3. "Entry Package Purchase" y el lenguaje de `CLAUDE.md` §1
+
+La Opción 2 permite **comprar paquetes de participaciones** directamente. La
+constitución del proyecto (§1) dice que el producto no es venta de boletos y
+que las participaciones son promocionales derivadas de mercancía elegible.
+
+El borrador lo escribió el abogado y manda. Pero el modelo de datos y el copy
+bilingüe se construyeron sobre la otra premisa, así que hace falta decidir cómo
+se presenta un paquete en la tienda sin que el texto lo convierta en la venta
+de una oportunidad de ganar. Es exactamente la revisión de compliance de copy
+que `security` ya había pedido en la nota de proceso de arriba.
+
+### 4. El sorteo lo hace el Administrador externo
+
+El borrador atribuye el sorteo al **Administrador**, no al patrocinador. Eso
+refuerza el punto 4 de "Drawing evidence and TPA delivery": el sorteo interno
+probablemente **no llegue a autorizarse nunca**, y el trabajo real está en la
+exportación al tercero. El registro que el borrador exige —total, desglose por
+participante, hora, ganador— coincide con lo que produce el export snapshot.
+
+## Puntos de arriba que el borrador NO toca
+
+Siguen `TBD` sin cambios: caducidad de participaciones, redondeo en reembolsos
+parciales, retención y derecho de supresión, verificación de email antes de
+acumular, idioma legalmente controlante, descargo sobre la imagen del premio,
+punto de cualificación de la orden, numeración visible de participaciones y
+efecto de la disponibilidad de mercancía sobre la elegibilidad.
+
+El borrador está redactado **solo en inglés**, así que el idioma controlante
+sigue sin decidirse formalmente y no hay versión en español que revisar.
