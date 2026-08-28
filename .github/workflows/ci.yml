@@ -396,6 +396,10 @@ jobs:
       STEP_UP_MAX_AGE_SECONDS: "300"
       PAYMENT_PROVIDER: none
       DEFAULT_CURRENCY: USD
+      # Obligatoria en el esquema de arranque de apps/api (enum trace..fatal).
+      # Sin ella la API no levanta y Playwright falla con "Process from
+      # config.webServer was not able to start" sin mas pista que ese texto.
+      LOG_LEVEL: warn
 
       # ---- apps/web --------------------------------------------------------
       WEB_PORT: "3310"
