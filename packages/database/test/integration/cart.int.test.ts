@@ -79,12 +79,18 @@ async function singleValue<T>(db: Database, query: ReturnType<typeof sql>): Prom
  * cada `execute` suelto en su propia transaccion implicita; esta funcion existe
  * para dejar escrito POR QUE no se agrupan.
  */
+/**
+ * Microsegundos desde la epoca, no milisegundos: `timestamptz` tiene precision
+ * de microsegundo y dos sentencias seguidas caben de sobra en el mismo
+ * milisegundo, con lo que `Date.getTime()` las veia iguales y "despues" no era
+ * mayor que "antes".
+ */
 async function updatedAtOf(cartId: string): Promise<number> {
-  const value = await singleValue<string | Date>(
+  const value = await singleValue<string>(
     app,
-    sql`SELECT updated_at FROM carts WHERE id = ${cartId}`,
+    sql`SELECT (extract(epoch FROM updated_at) * 1000000)::bigint::text FROM carts WHERE id = ${cartId}`,
   );
-  return new Date(value).getTime();
+  return Number(value);
 }
 
 /**

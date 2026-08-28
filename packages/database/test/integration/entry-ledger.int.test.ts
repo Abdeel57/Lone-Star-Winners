@@ -26,10 +26,14 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import type { Database } from "../../src/client.js";
 import { startTestDatabase, type TestDatabase } from "../../src/testing/postgres-container.js";
+import { createTestAdmin } from "../../src/testing/admin-fixture.js";
+import { dbErrorMatching } from "../../src/testing/db-errors.js";
 
 let testDb: TestDatabase;
 let app: Database;
 let migrator: Database;
+/** Propietario de las tablas: solo para demostrar triggers, nunca para preparar datos. */
+let owner: Database;
 
 interface Fixture {
   readonly promotionId: string;
@@ -134,7 +138,7 @@ async function insertTransaction(options: {
           ${options.sourceRef},
           ${options.delta},
           ${options.status ?? "POSTED"}::entry_transaction_status,
-          ${options.effectiveAt ?? "2026-09-10T12:00:00Z"}::timestamptz,
+          ${options.effectiveAt ?? "2026-03-10T12:00:00Z"}::timestamptz,
           ${options.expiresAt ?? null}::timestamptz,
           ${recordedAt}::timestamptz,
           ${options.rulesVersionId ?? fixture.rulesVersionId},
@@ -158,22 +162,18 @@ beforeAll(async () => {
   testDb = await startTestDatabase();
   app = testDb.connectAs("app").db;
   migrator = testDb.connectAs("migrator").db;
+  owner = testDb.connectAsOwner().db;
 
-  const identityId = await singleValue<string>(
-    app,
-    sql`INSERT INTO identities (email, status) VALUES ('ledger-admin@example.invalid', 'ACTIVE') RETURNING id`,
-  );
-  const adminUserId = await singleValue<string>(
-    app,
-    sql`INSERT INTO admin_users (identity_id, full_name, status)
-        VALUES (${identityId}, 'Fixture Admin', 'ACTIVE') RETURNING id`,
-  );
+  const { adminUserId } = await createTestAdmin(app, {
+    label: "ledger-admin",
+    fullName: "Fixture Admin",
+  });
 
   const promotionId = await singleValue<string>(
     app,
     sql`INSERT INTO promotions (slug, internal_name, legal_timezone, starts_at, ends_at)
         VALUES ('ledger-fixture', 'ledger fixture', 'America/Chicago',
-                '2026-09-01T05:00:00Z', '2026-10-01T05:00:00Z')
+                '2026-03-01T05:00:00Z', '2026-12-01T05:00:00Z')
         RETURNING id`,
   );
 
@@ -247,13 +247,19 @@ describe("DEC-007 - el ledger es append-only, y se comprueba intentando romperlo
       reasonKey: "ORDER_QUALIFIED",
     });
 
+    // El migrator no tiene DML (DEC-003): capa 1 tambien para el.
     await expect(
       migrator.execute(sql`UPDATE entry_transactions SET reason_key = 'TAMPERED' WHERE id = ${id}`),
-    ).rejects.toThrow(/55006|solo insercion|prohibido/iu);
+    ).rejects.toSatisfy(dbErrorMatching(/permission denied|42501/iu));
+
+    // El propietario si tiene privilegios: ahi es el trigger (capa 2).
+    await expect(
+      owner.execute(sql`UPDATE entry_transactions SET reason_key = 'TAMPERED' WHERE id = ${id}`),
+    ).rejects.toSatisfy(dbErrorMatching(/55006|solo insercion|prohibido/iu));
 
     await expect(
-      migrator.execute(sql`DELETE FROM entry_transactions WHERE id = ${id}`),
-    ).rejects.toThrow(/55006|solo insercion|prohibido/iu);
+      owner.execute(sql`DELETE FROM entry_transactions WHERE id = ${id}`),
+    ).rejects.toSatisfy(dbErrorMatching(/55006|solo insercion|prohibido/iu));
   });
 
   it("tampoco se puede TRUNCATE la tabla desde la aplicacion", async () => {
@@ -299,7 +305,7 @@ describe("DEC-009 - un webhook repetido no puede duplicar entries", () => {
         delta: 10,
         reasonKey: "ORDER_QUALIFIED",
       }),
-    ).rejects.toThrow(/entry_transactions_idempotent_source|duplicate key/iu);
+    ).rejects.toSatisfy(dbErrorMatching(/entry_transactions_idempotent_source|duplicate key/iu));
   });
 
   it("la devolucion de esa misma orden SI se admite: es otro hecho, otra referencia", async () => {
@@ -338,7 +344,9 @@ describe("DEC-009 - un webhook repetido no puede duplicar entries", () => {
         sql`INSERT INTO payment_webhook_events (provider, provider_event_id, event_type, payload_digest)
             VALUES ('fixture_provider', 'evt_1', 'payment.succeeded', ${digest})`,
       ),
-    ).rejects.toThrow(/payment_webhook_events_unique_provider_event|duplicate key/iu);
+    ).rejects.toSatisfy(
+      dbErrorMatching(/payment_webhook_events_unique_provider_event|duplicate key/iu),
+    );
   });
 });
 
@@ -435,7 +443,7 @@ describe("reversals - una correccion es otra fila, con las reglas de entonces", 
         reasonKey: "ORDER_REFUNDED_IN_PART",
         reverses: original,
       }),
-    ).rejects.toThrow(/Sobre-reversal/iu);
+    ).rejects.toSatisfy(dbErrorMatching(/Sobre-reversal/iu));
   });
 
   it("un reversal debe anclarse a la rules_version ORIGINAL, no a la vigente hoy (DEC-007)", async () => {
@@ -467,7 +475,7 @@ describe("reversals - una correccion es otra fila, con las reglas de entonces", 
         reverses: original,
         rulesVersionId: secondVersionId,
       }),
-    ).rejects.toThrow(/rules_version original/iu);
+    ).rejects.toSatisfy(dbErrorMatching(/rules_version original/iu));
   });
 
   it("un reversal debe anclarse a la engine_version ORIGINAL", async () => {
@@ -492,7 +500,7 @@ describe("reversals - una correccion es otra fila, con las reglas de entonces", 
         reverses: original,
         engineVersion: ENGINE_VERSION + 1,
       }),
-    ).rejects.toThrow(/engine_version original/iu);
+    ).rejects.toSatisfy(dbErrorMatching(/engine_version original/iu));
   });
 
   it("un reversal conserva la procedencia: revertir una compra no la convierte en AMOE", async () => {
@@ -516,7 +524,7 @@ describe("reversals - una correccion es otra fila, con las reglas de entonces", 
         reasonKey: "ORDER_REFUNDED_IN_FULL",
         reverses: original,
       }),
-    ).rejects.toThrow(/procedencia/iu);
+    ).rejects.toSatisfy(dbErrorMatching(/procedencia/iu));
   });
 
   it("un reversal no puede cruzar de participante", async () => {
@@ -538,7 +546,7 @@ describe("reversals - una correccion es otra fila, con las reglas de entonces", 
         reasonKey: "ORDER_REFUNDED_IN_FULL",
         reverses: original,
       }),
-    ).rejects.toThrow(/mismo participante|misma promocion/iu);
+    ).rejects.toSatisfy(dbErrorMatching(/mismo participante|misma promocion/iu));
   });
 
   it("no se puede revertir un reversal", async () => {
@@ -571,7 +579,7 @@ describe("reversals - una correccion es otra fila, con las reglas de entonces", 
         reasonKey: "PAYMENT_CHARGEBACK",
         reverses: reversal,
       }),
-    ).rejects.toThrow(/ya es un reversal|movimiento positivo/iu);
+    ).rejects.toSatisfy(dbErrorMatching(/ya es un reversal|movimiento positivo/iu));
   });
 });
 
@@ -602,7 +610,7 @@ describe("restricciones de forma del movimiento", () => {
         delta: 0,
         reasonKey: "ORDER_QUALIFIED",
       }),
-    ).rejects.toThrow(/entry_transactions_delta_not_zero/iu);
+    ).rejects.toSatisfy(dbErrorMatching(/entry_transactions_delta_not_zero/iu));
   });
 
   it("una entry ganada no puede declararse reversal de nada", async () => {
@@ -623,7 +631,7 @@ describe("restricciones de forma del movimiento", () => {
         reasonKey: "ORDER_QUALIFIED",
         reverses: original,
       }),
-    ).rejects.toThrow(/entry_transactions_anchor_forbidden/iu);
+    ).rejects.toSatisfy(dbErrorMatching(/entry_transactions_anchor_forbidden/iu));
   });
 
   it("un refund sin transaccion revertida se rechaza", async () => {
@@ -635,7 +643,7 @@ describe("restricciones de forma del movimiento", () => {
         delta: -5,
         reasonKey: "ORDER_REFUNDED_IN_FULL",
       }),
-    ).rejects.toThrow(/entry_transactions_anchor_required/iu);
+    ).rejects.toSatisfy(dbErrorMatching(/entry_transactions_anchor_required/iu));
   });
 
   it("el motivo es un codigo estable, no prosa (DEC-022)", async () => {
@@ -647,7 +655,7 @@ describe("restricciones de forma del movimiento", () => {
         delta: 5,
         reasonKey: "el cliente devolvio el producto",
       }),
-    ).rejects.toThrow(/entry_transactions_reason_key_shape/iu);
+    ).rejects.toSatisfy(dbErrorMatching(/entry_transactions_reason_key_shape/iu));
   });
 
   it("una version de reglas de otra promocion se rechaza (DEC-012)", async () => {
@@ -671,7 +679,7 @@ describe("restricciones de forma del movimiento", () => {
         reasonKey: "ORDER_QUALIFIED",
         rulesVersionId: otherRulesId,
       }),
-    ).rejects.toThrow(/no pertenece a la promocion/iu);
+    ).rejects.toSatisfy(dbErrorMatching(/no pertenece a la promocion/iu));
   });
 });
 
@@ -701,7 +709,7 @@ describe("DEC-033 - caducidad de entries como configuracion desactivada", () => 
         reasonKey: "ORDER_QUALIFIED",
         expiresAt: "2027-01-01T00:00:00Z",
       }),
-    ).rejects.toThrow(/entry_expiration_enabled/iu);
+    ).rejects.toSatisfy(dbErrorMatching(/entry_expiration_enabled/iu));
   });
 
   it("encender el flag exige motivo y actor (DEC-013), y entonces la caducidad se acepta y se aplica", async () => {
@@ -709,7 +717,7 @@ describe("DEC-033 - caducidad de entries como configuracion desactivada", () => 
       app.execute(
         sql`UPDATE feature_flags SET enabled = true WHERE key = 'entry_expiration_enabled'`,
       ),
-    ).rejects.toThrow(/motivo escrito/iu);
+    ).rejects.toSatisfy(dbErrorMatching(/motivo escrito/iu));
 
     await app.execute(
       sql`UPDATE feature_flags
@@ -819,7 +827,7 @@ describe("DEC-033 - caducidad de entries como configuracion desactivada", () => 
         effectiveAt: "2026-09-20T00:00:00Z",
         expiresAt: "2027-01-01T00:00:00Z",
       }),
-    ).rejects.toThrow(/hereda la caducidad/iu);
+    ).rejects.toSatisfy(dbErrorMatching(/hereda la caducidad/iu));
 
     const reversalId = await insertTransaction({
       participantId,
@@ -889,10 +897,10 @@ describe("DEC-033 - caducidad de entries como configuracion desactivada", () => 
 
   it("el catalogo del flag no se puede reescribir en caliente", async () => {
     await expect(
-      migrator.execute(
+      owner.execute(
         sql`UPDATE feature_flags SET dec032_default = true WHERE key = 'internal_draw_enabled'`,
       ),
-    ).rejects.toThrow(/migracion revisada/iu);
+    ).rejects.toSatisfy(dbErrorMatching(/migracion revisada/iu));
   });
 });
 
@@ -971,7 +979,7 @@ describe("el saldo es derivado, y la cache no es fuente de verdad (DEC-007)", ()
         reasonKey: "ORDER_QUALIFIED",
         status: "PROVISIONAL",
       }),
-    ).rejects.toThrow(/provisional_entries_enabled/iu);
+    ).rejects.toSatisfy(dbErrorMatching(/provisional_entries_enabled/iu));
   });
 
   it("la cache se puede vaciar entera y reconstruir: eso prueba que no es fuente de verdad", async () => {
@@ -1097,16 +1105,16 @@ describe("DEC-009 - rangos de numeros sin solapamiento posible", () => {
             VALUES (${transactionId}, ${fixture.promotionId}, ${participantId}, 3,
                     int8range(${start + 1}, ${start + 4}, '[)'))`,
       ),
-    ).rejects.toThrow(/entry_batches_no_overlap|conflicting key value/iu);
+    ).rejects.toSatisfy(dbErrorMatching(/entry_batches_no_overlap|conflicting key value/iu));
   });
 
   it("la secuencia solo avanza: un numero no se reutiliza jamas", async () => {
     await expect(
-      migrator.execute(
+      owner.execute(
         sql`UPDATE promotion_entry_number_sequences SET next_number = 1
             WHERE promotion_id = ${fixture.promotionId}`,
       ),
-    ).rejects.toThrow(/solo avanza/iu);
+    ).rejects.toSatisfy(dbErrorMatching(/solo avanza/iu));
   });
 
   it("un reversal NO devuelve numeros al pozo: cambia la elegibilidad, no la identidad", async () => {
@@ -1173,7 +1181,7 @@ describe("DEC-009 - rangos de numeros sin solapamiento posible", () => {
             VALUES (${transactionId}, ${fixture.promotionId}, ${participantId}, 9,
                     lsw_allocate_entry_range(${fixture.promotionId}, 9))`,
       ),
-    ).rejects.toThrow(/aporto|numeros/iu);
+    ).rejects.toSatisfy(dbErrorMatching(/aporto|numeros/iu));
   });
 
   it("un reversal no recibe numeros", async () => {

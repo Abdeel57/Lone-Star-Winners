@@ -36,6 +36,8 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import type { Database } from "../../src/client.js";
 import { startTestDatabase, type TestDatabase } from "../../src/testing/postgres-container.js";
+import { createTestAdmin } from "../../src/testing/admin-fixture.js";
+import { dbErrorMatching } from "../../src/testing/db-errors.js";
 
 let testDb: TestDatabase;
 let app: Database;
@@ -82,16 +84,8 @@ async function singleValue<T>(db: Database, query: ReturnType<typeof sql>): Prom
 }
 
 async function createAdmin(label: string): Promise<string> {
-  const identityId = await singleValue<string>(
-    app,
-    sql`INSERT INTO identities (email, status)
-        VALUES (${`${label}@example.invalid`}, 'ACTIVE') RETURNING id`,
-  );
-  return singleValue<string>(
-    app,
-    sql`INSERT INTO admin_users (identity_id, full_name, status)
-        VALUES (${identityId}, ${label}, 'ACTIVE') RETURNING id`,
-  );
+  const created = await createTestAdmin(app, { label });
+  return created.adminUserId;
 }
 
 async function createOrder(options: {
@@ -269,7 +263,7 @@ describe("DEC-011 - qualified_at es de una sola escritura", () => {
       app.execute(
         sql`UPDATE orders SET qualified_at = '2026-09-20T12:00:00Z' WHERE id = ${orderId}`,
       ),
-    ).rejects.toThrow(/una sola vez/iu);
+    ).rejects.toSatisfy(dbErrorMatching(/una sola vez/iu));
   });
 
   it("un pedido sin promocion no puede calificar", async () => {
@@ -410,7 +404,7 @@ describe("un ajuste no lo puede aprobar quien lo pidio", () => {
 
     await expect(
       app.execute(sql`UPDATE adjustments SET status = 'PENDING_APPROVAL' WHERE id = ${id}`),
-    ).rejects.toThrow(/resuelto/iu);
+    ).rejects.toSatisfy(dbErrorMatching(/resuelto/iu));
   });
 });
 
@@ -578,7 +572,7 @@ describe("un envio AMOE es un expediente, no un movimiento", () => {
 
     await expect(
       app.execute(sql`UPDATE amoe_submissions SET status = 'APPROVED' WHERE id = ${id}`),
-    ).rejects.toThrow(/resuelto/iu);
+    ).rejects.toSatisfy(dbErrorMatching(/resuelto/iu));
   });
 });
 

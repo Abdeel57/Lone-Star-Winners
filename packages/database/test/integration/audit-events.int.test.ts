@@ -57,10 +57,14 @@ import {
 } from "../../src/repositories/audit-event-repository.js";
 import { DrizzleUnitOfWork } from "../../src/repositories/executor.js";
 import { startTestDatabase, type TestDatabase } from "../../src/testing/postgres-container.js";
+import { createTestAdmin } from "../../src/testing/admin-fixture.js";
+import { dbErrorMatching } from "../../src/testing/db-errors.js";
 
 let testDb: TestDatabase;
 let app: Database;
 let migrator: Database;
+/** Propietario de las tablas: solo para demostrar triggers, nunca para preparar datos. */
+let owner: Database;
 let readonlyReport: Database;
 
 let promotionId: string;
@@ -155,17 +159,12 @@ beforeAll(async () => {
   testDb = await startTestDatabase();
   app = testDb.connectAs("app").db;
   migrator = testDb.connectAs("migrator").db;
+  owner = testDb.connectAsOwner().db;
   readonlyReport = testDb.connectAs("readonly_report").db;
 
-  const identityId = await singleValue<string>(
-    app,
-    sql`INSERT INTO identities (email, status)
-        VALUES ('audit-fixture@example.invalid', 'ACTIVE') RETURNING id`,
-  );
-  adminUserId = await singleValue<string>(
-    migrator,
-    sql`INSERT INTO admin_users (identity_id, status) VALUES (${identityId}, 'ACTIVE') RETURNING id`,
-  );
+  // Con el rol app (0001 le concede INSERT sobre admin_users); el migrator no
+  // tiene DML sobre las tablas de identidad y respondia "permission denied".
+  adminUserId = (await createTestAdmin(app, { label: "audit-fixture" })).adminUserId;
   promotionId = await singleValue<string>(
     app,
     sql`INSERT INTO promotions (slug, internal_name, legal_timezone, starts_at, ends_at)
@@ -197,14 +196,25 @@ describe("DEC-007 capa 3: la tabla no se puede editar ni borrar, con NINGUN rol"
     await expect(app.execute(sql`DELETE FROM audit_events`)).rejects.toThrow();
   });
 
-  it("el MIGRATOR tampoco: ahi es el trigger quien lo impide, no el permiso", async () => {
-    // Este es el caso que los privilegios NO cubren, y por el que DEC-007 exige
-    // tres capas: el migrator aplica el esquema, asi que tiene privilegios de
-    // sobra. Lo detiene `lsw_reject_mutation()`.
+  it("el migrator tampoco, y ahi es el privilegio: ese rol es solo DDL (DEC-003)", async () => {
+    // El migrator aplica el esquema pero NO tiene DML sobre ninguna tabla: su
+    // UPDATE muere en el GRANT (42501) antes de llegar al trigger. Por eso la
+    // capa 2 se demuestra con el propietario, en la prueba siguiente.
     await expect(
       migrator.execute(sql`UPDATE audit_events SET reason_text = 'reescrito'`),
-    ).rejects.toThrow(/DEC-007/u);
-    await expect(migrator.execute(sql`DELETE FROM audit_events`)).rejects.toThrow(/DEC-007/u);
+    ).rejects.toSatisfy(dbErrorMatching(/permission denied|42501/iu));
+  });
+
+  it("ni siquiera el PROPIETARIO puede: ahi es el trigger quien lo impide, no el permiso", async () => {
+    // Este es el caso que los privilegios NO cubren, y por el que DEC-007 exige
+    // tres capas: el superusuario que aplica las migraciones en el proveedor
+    // (DEC-043) tiene privilegios de sobra. Lo detiene `lsw_reject_mutation()`.
+    await expect(
+      owner.execute(sql`UPDATE audit_events SET reason_text = 'reescrito'`),
+    ).rejects.toSatisfy(dbErrorMatching(/DEC-007/u));
+    await expect(owner.execute(sql`DELETE FROM audit_events`)).rejects.toSatisfy(
+      dbErrorMatching(/DEC-007/u),
+    );
   });
 
   it("el rol de informes no puede ni insertar", async () => {
@@ -238,14 +248,14 @@ describe("DEC-008: la cadena no se puede bifurcar ni desviar", () => {
 
     await expect(
       app.execute(
-        sql`INSERT INTO audit_events (id, chain_key, occurred_at, recorded_at, actor_type,
+        sql`INSERT INTO audit_events (id, chain_key, promotion_id, occurred_at, recorded_at, actor_type,
                                       actor_roles, action, target_entity_type, metadata,
                                       canonicalization_version, chain_prev_hash, chain_hash)
-            VALUES (gen_random_uuid(), ${promotionId}, now(), now(), 'SYSTEM', '[]'::jsonb,
+            VALUES (gen_random_uuid(), ${promotionId}, ${promotionId}, now(), now(), 'SYSTEM', '[]'::jsonb,
                     'audit.integrity_check', 'audit_events', '{}'::jsonb, 1,
                     repeat('a', 64), repeat('b', 64))`,
       ),
-    ).rejects.toThrow(/no engancha con la cadena/u);
+    ).rejects.toSatisfy(dbErrorMatching(/no engancha con la cadena/u));
   });
 
   it("dos filas no pueden declarar el mismo antecesor", async () => {
@@ -255,20 +265,20 @@ describe("DEC-008: la cadena no se puede bifurcar ni desviar", () => {
     const head = await repositoryFor(app).headHash(promotionId);
 
     await app.execute(
-      sql`INSERT INTO audit_events (id, chain_key, occurred_at, recorded_at, actor_type,
+      sql`INSERT INTO audit_events (id, chain_key, promotion_id, occurred_at, recorded_at, actor_type,
                                     actor_roles, action, target_entity_type, metadata,
                                     canonicalization_version, chain_prev_hash, chain_hash)
-          VALUES (gen_random_uuid(), ${promotionId}, now(), now(), 'SYSTEM', '[]'::jsonb,
+          VALUES (gen_random_uuid(), ${promotionId}, ${promotionId}, now(), now(), 'SYSTEM', '[]'::jsonb,
                   'audit.integrity_check', 'audit_events', '{}'::jsonb, 1,
                   ${head}, repeat('c', 64))`,
     );
 
     await expect(
       app.execute(
-        sql`INSERT INTO audit_events (id, chain_key, occurred_at, recorded_at, actor_type,
+        sql`INSERT INTO audit_events (id, chain_key, promotion_id, occurred_at, recorded_at, actor_type,
                                       actor_roles, action, target_entity_type, metadata,
                                       canonicalization_version, chain_prev_hash, chain_hash)
-            VALUES (gen_random_uuid(), ${promotionId}, now(), now(), 'SYSTEM', '[]'::jsonb,
+            VALUES (gen_random_uuid(), ${promotionId}, ${promotionId}, now(), now(), 'SYSTEM', '[]'::jsonb,
                     'audit.integrity_check', 'audit_events', '{}'::jsonb, 1,
                     ${head}, repeat('d', 64))`,
       ),
@@ -370,10 +380,12 @@ describe("HO-028: sin puerto de encadenado no se escribe nada", () => {
 
     await expect(
       new DrizzleUnitOfWork(app).withTransaction(() => unconfigured.append(buildFields(50))),
-    ).rejects.toThrow(/puerto de encadenado/u);
+    ).rejects.toSatisfy(dbErrorMatching(/puerto de encadenado/u));
   });
 
   it("fuera de transaccion tampoco: el evento va con el hecho que audita", async () => {
-    await expect(repositoryFor(app).append(buildFields(51))).rejects.toThrow(/transaccion viva/u);
+    await expect(repositoryFor(app).append(buildFields(51))).rejects.toSatisfy(
+      dbErrorMatching(/transaccion viva/u),
+    );
   });
 });

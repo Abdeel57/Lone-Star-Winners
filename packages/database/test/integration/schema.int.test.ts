@@ -13,9 +13,13 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import type { Database } from "../../src/client.js";
 import { startTestDatabase, type TestDatabase } from "../../src/testing/postgres-container.js";
+import { createTestAdmin } from "../../src/testing/admin-fixture.js";
+import { dbErrorMatching } from "../../src/testing/db-errors.js";
 
 let testDb: TestDatabase;
 let app: Database;
+/** Propietario de las tablas: solo para demostrar triggers, nunca para preparar datos. */
+let owner: Database;
 
 /** Configuracion de PRUEBA con todas las claves resueltas. No son valores legales: son fixtures. */
 const FIXTURE_RESOLVED_CONFIG = {
@@ -36,6 +40,7 @@ const FIXTURE_RESOLVED_CONFIG = {
 beforeAll(async () => {
   testDb = await startTestDatabase();
   app = testDb.connectAs("app").db;
+  owner = testDb.connectAsOwner().db;
 }, 180_000);
 
 afterAll(async () => {
@@ -43,18 +48,9 @@ afterAll(async () => {
 });
 
 async function createAdminUser(name: string): Promise<string> {
-  const identity = await app.execute<{ id: string }>(
-    sql`INSERT INTO identities (email, status) VALUES (${`${name}@example.invalid`}, 'ACTIVE') RETURNING id`,
-  );
-  const identityId = identity.rows[0]?.id;
-  const admin = await app.execute<{ id: string }>(
-    sql`INSERT INTO admin_users (identity_id, full_name, status) VALUES (${identityId}, ${name}, 'INVITED') RETURNING id`,
-  );
-  const adminId = admin.rows[0]?.id;
-  if (adminId === undefined) {
-    throw new Error("No se pudo crear la cuenta administrativa de prueba.");
-  }
-  return adminId;
+  // INVITED a proposito: estas pruebas ejercen GRANTs y triggers, no el login.
+  const created = await createTestAdmin(app, { label: name, status: "INVITED" });
+  return created.adminUserId;
 }
 
 async function createPromotion(slug: string): Promise<string> {
@@ -92,7 +88,7 @@ describe("DEC-003 - roles y privilegios", () => {
   it("el rol app no puede borrar una asignacion de rol administrativo", async () => {
     const adminId = await createAdminUser("delete-probe-admin");
     await app.execute(
-      sql`INSERT INTO admin_user_roles (admin_user_id, role_key) VALUES (${adminId}, 'READ_ONLY_AUDITOR')`,
+      sql`INSERT INTO admin_user_roles (admin_user_id, role_key) VALUES (${adminId}, 'COMPLIANCE_OFFICER')`,
     );
     await expect(
       app.execute(sql`DELETE FROM admin_user_roles WHERE admin_user_id = ${adminId}`),
@@ -102,7 +98,7 @@ describe("DEC-003 - roles y privilegios", () => {
   it("el rol app no puede reescribir quien concedio un rol, solo marcar la revocacion", async () => {
     const adminId = await createAdminUser("column-grant-probe-admin");
     await app.execute(
-      sql`INSERT INTO admin_user_roles (admin_user_id, role_key) VALUES (${adminId}, 'CUSTOMER_SUPPORT')`,
+      sql`INSERT INTO admin_user_roles (admin_user_id, role_key) VALUES (${adminId}, 'SUPPORT')`,
     );
 
     await expect(
@@ -167,7 +163,7 @@ describe("DEC-017 - separacion de funciones", () => {
       app.execute(
         sql`INSERT INTO admin_user_roles (admin_user_id, role_key) VALUES (${adminId}, 'DRAW_OFFICER')`,
       ),
-    ).rejects.toThrow(/separacion de funciones/iu);
+    ).rejects.toSatisfy(dbErrorMatching(/separacion de funciones/iu));
   });
 
   it("dos personas distintas si pueden tener uno cada una", async () => {
@@ -189,7 +185,7 @@ describe("DEC-011 - zona horaria legal", () => {
         sql`INSERT INTO promotions (slug, internal_name, legal_timezone)
             VALUES ('zona-invalida', 'fixture', 'America/Ciudad_Inventada')`,
       ),
-    ).rejects.toThrow(/zona horaria IANA/iu);
+    ).rejects.toSatisfy(dbErrorMatching(/zona horaria IANA/iu));
   });
 
   it("acepta una zona IANA valida", async () => {
@@ -240,7 +236,7 @@ describe("DEC-012 - la configuracion legal como bloqueo verificable", () => {
             SET status = 'ACTIVE', activated_at = now(), activated_by_admin_user_id = ${adminId}
             WHERE id = ${version.rows[0]?.id}`,
       ),
-    ).rejects.toThrow(/Claves legales sin resolver/iu);
+    ).rejects.toSatisfy(dbErrorMatching(/Claves legales sin resolver/iu));
   });
 
   it("no permite activar una promocion sin version de reglas activa", async () => {
@@ -248,7 +244,7 @@ describe("DEC-012 - la configuracion legal como bloqueo verificable", () => {
     await app.execute(sql`UPDATE promotions SET status = 'SCHEDULED' WHERE id = ${promotionId}`);
     await expect(
       app.execute(sql`UPDATE promotions SET status = 'ACTIVE' WHERE id = ${promotionId}`),
-    ).rejects.toThrow(/sin PromotionRulesVersion activa/iu);
+    ).rejects.toSatisfy(dbErrorMatching(/sin PromotionRulesVersion activa/iu));
   });
 
   it("permite activar cuando TODAS las claves requeridas estan resueltas", async () => {
@@ -296,11 +292,16 @@ describe("DEC-012 - la configuracion legal como bloqueo verificable", () => {
       app.execute(
         sql`UPDATE promotion_rules_versions SET config = '{"tampered": true}'::jsonb WHERE id = ${versionId}`,
       ),
-    ).rejects.toThrow(/inmutable/iu);
+    ).rejects.toSatisfy(dbErrorMatching(/inmutable/iu));
 
+    // `app` no tiene DELETE sobre la tabla y moriria en el privilegio; la
+    // inmutabilidad la demuestra el trigger contra el PROPIETARIO.
     await expect(
       app.execute(sql`DELETE FROM promotion_rules_versions WHERE id = ${versionId}`),
-    ).rejects.toThrow(/no se borra/iu);
+    ).rejects.toSatisfy(dbErrorMatching(/permission denied|42501/iu));
+    await expect(
+      owner.execute(sql`DELETE FROM promotion_rules_versions WHERE id = ${versionId}`),
+    ).rejects.toSatisfy(dbErrorMatching(/no se borra/iu));
 
     await expect(
       app.execute(
@@ -343,14 +344,14 @@ describe("ciclo de vida de la promocion", () => {
         sql`INSERT INTO promotions (slug, internal_name, legal_timezone, status)
             VALUES ('nace-activa', 'fixture', 'UTC', 'ACTIVE')`,
       ),
-    ).rejects.toThrow(/nace en DRAFT/iu);
+    ).rejects.toSatisfy(dbErrorMatching(/nace en DRAFT/iu));
   });
 
   it("rechaza una transicion que no figura en promotion_status_transitions", async () => {
     const promotionId = await createPromotion("transicion-invalida");
     await expect(
       app.execute(sql`UPDATE promotions SET status = 'COMPLETED' WHERE id = ${promotionId}`),
-    ).rejects.toThrow(/Transicion de promocion no permitida/iu);
+    ).rejects.toSatisfy(dbErrorMatching(/Transicion de promocion no permitida/iu));
   });
 
   it("las transiciones validas se pueden consultar como datos", async () => {
@@ -371,7 +372,7 @@ describe("DEC-010 - dinero en enteros", () => {
         sql`INSERT INTO product_variants (product_id, sku, price_amount_minor, currency)
             VALUES (${product.rows[0]?.id}, 'FIX-CUR-001-EUR', 1000, 'EUR')`,
       ),
-    ).rejects.toThrow(/moneda/iu);
+    ).rejects.toSatisfy(dbErrorMatching(/moneda/iu));
   });
 
   it("rechaza un precio negativo", async () => {

@@ -87,6 +87,16 @@ export interface TestDatabase {
   readonly superuserUrl: string;
   /** Abre una conexion con uno de los tres roles de DEC-003. */
   connectAs(role: DatabaseRole): DatabaseHandle;
+  /**
+   * Abre una conexion como el PROPIETARIO de las tablas (el superusuario que
+   * aplico las migraciones). Existe para una sola clase de prueba: demostrar
+   * que un trigger rechaza una mutacion aunque quien la intente tenga TODOS los
+   * privilegios. Con `migrator` no se puede: ese rol es solo DDL (DEC-003) y
+   * no tiene DML sobre ninguna tabla, asi que su `UPDATE` muere en el GRANT
+   * (42501) antes de llegar al trigger, y la prueba no probaria nada del
+   * trigger. Nunca lo uses para preparar datos: para eso esta `app`.
+   */
+  connectAsOwner(): DatabaseHandle;
   stop(): Promise<void>;
 }
 
@@ -207,6 +217,20 @@ async function startContainerTestDatabase(): Promise<TestDatabase> {
       open.push(handle);
       return handle;
     },
+    connectAsOwner(): DatabaseHandle {
+      // `role: "migrator"` es la etiqueta del handle (tipo de conexion); el
+      // usuario real es el de `superuserUrl`, propietario de las tablas.
+      const handle = createDatabaseHandle({
+        role: "migrator",
+        connectionString: superuserUrl,
+        maxConnections: 2,
+        statementTimeoutMs: 30_000,
+        ssl: false,
+        applicationName: "lsw-test-owner",
+      });
+      open.push(handle);
+      return handle;
+    },
     stop: async () => {
       await Promise.all(open.map((handle) => handle.close()));
       await container.stop();
@@ -282,6 +306,20 @@ async function startExternalTestDatabase(adminUrl: string): Promise<TestDatabase
     superuserUrl,
     connectAs(role: DatabaseRole): DatabaseHandle {
       const handle = openRoleHandle(superuserUrl, role, passwords);
+      open.push(handle);
+      return handle;
+    },
+    connectAsOwner(): DatabaseHandle {
+      // `role: "migrator"` es la etiqueta del handle (tipo de conexion); el
+      // usuario real es el de `superuserUrl`, propietario de las tablas.
+      const handle = createDatabaseHandle({
+        role: "migrator",
+        connectionString: superuserUrl,
+        maxConnections: 2,
+        statementTimeoutMs: 30_000,
+        ssl: false,
+        applicationName: "lsw-test-owner",
+      });
       open.push(handle);
       return handle;
     },

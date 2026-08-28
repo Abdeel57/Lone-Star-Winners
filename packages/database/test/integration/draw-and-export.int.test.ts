@@ -38,10 +38,14 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import type { Database } from "../../src/client.js";
 import { startTestDatabase, type TestDatabase } from "../../src/testing/postgres-container.js";
+import { createTestAdmin } from "../../src/testing/admin-fixture.js";
+import { dbErrorMatching } from "../../src/testing/db-errors.js";
 
 let testDb: TestDatabase;
 let app: Database;
 let migrator: Database;
+/** Propietario de las tablas: solo para demostrar triggers, nunca para preparar datos. */
+let owner: Database;
 
 interface Fixture {
   readonly promotionId: string;
@@ -88,17 +92,12 @@ beforeAll(async () => {
   testDb = await startTestDatabase();
   app = testDb.connectAs("app").db;
   migrator = testDb.connectAs("migrator").db;
+  owner = testDb.connectAsOwner().db;
 
-  const identityId = await singleValue<string>(
-    app,
-    sql`INSERT INTO identities (email, status)
-        VALUES ('draw-admin@example.invalid', 'ACTIVE') RETURNING id`,
-  );
-  const adminUserId = await singleValue<string>(
-    app,
-    sql`INSERT INTO admin_users (identity_id, full_name, status)
-        VALUES (${identityId}, 'Draw Fixture Admin', 'ACTIVE') RETURNING id`,
-  );
+  const { adminUserId } = await createTestAdmin(app, {
+    label: "draw-admin",
+    fullName: "Draw Fixture Admin",
+  });
 
   const promotionId = await singleValue<string>(
     app,
@@ -183,14 +182,22 @@ describe("DEC-016 - un snapshot finalizado es evidencia, no un registro editable
     ).rejects.toThrow();
   });
 
-  it("el trigger rechaza la mutacion incluso con el rol migrator", async () => {
-    // La capa 1 (privilegios) no protege al superusuario que aplica las
-    // migraciones en el proveedor de hosting (DEC-043). La capa 2 si.
+  it("el migrator no tiene DML: muere en el privilegio (DEC-003)", async () => {
     await expect(
       migrator.execute(
         sql`UPDATE export_snapshots SET generated_by = 'otro' WHERE id = ${fixture.snapshotId}`,
       ),
-    ).rejects.toThrow(/solo insercion|DEC-007/iu);
+    ).rejects.toSatisfy(dbErrorMatching(/permission denied|42501/iu));
+  });
+
+  it("el trigger rechaza la mutacion incluso con el PROPIETARIO", async () => {
+    // La capa 1 (privilegios) no protege al superusuario que aplica las
+    // migraciones en el proveedor de hosting (DEC-043). La capa 2 si.
+    await expect(
+      owner.execute(
+        sql`UPDATE export_snapshots SET generated_by = 'otro' WHERE id = ${fixture.snapshotId}`,
+      ),
+    ).rejects.toSatisfy(dbErrorMatching(/solo insercion|DEC-007/iu));
   });
 
   it("el manifiesto pliega la ultima transicion sobre la fila base", async () => {
@@ -306,7 +313,7 @@ describe("DEC-016 - los tramos del universo no pueden solaparse", () => {
       sql`INSERT INTO entry_batches (entry_transaction_id, promotion_id, participant_id,
                                      quantity, number_range)
           VALUES (${transactionId}, ${fixture.promotionId}, ${fixture.participantId},
-                  10, int8range(1, 11, '[)'))
+                  10, lsw_allocate_entry_range(${fixture.promotionId}, 10))
           RETURNING id`,
     );
 
@@ -400,12 +407,20 @@ describe("DEC-008 y DEC-017 - drawing_events es append-only en tres capas", () =
     await expect(app.execute(sql`DELETE FROM drawing_events WHERE id = ${id}`)).rejects.toThrow();
   });
 
-  it("capa 2: el trigger rechaza la mutacion incluso con el rol migrator", async () => {
+  it("capa 1 bis: el migrator no tiene DML y muere en el privilegio (DEC-003)", async () => {
     const id = await insertDrawing("draw-3", HEX("3"));
 
     await expect(
       migrator.execute(sql`UPDATE drawing_events SET selected_ordinal = 1 WHERE id = ${id}`),
-    ).rejects.toThrow(/solo insercion|DEC-007/iu);
+    ).rejects.toSatisfy(dbErrorMatching(/permission denied|42501/iu));
+  });
+
+  it("capa 2: el trigger rechaza la mutacion incluso con el PROPIETARIO", async () => {
+    const id = await insertDrawing("draw-3-owner", HEX("e"));
+
+    await expect(
+      owner.execute(sql`UPDATE drawing_events SET selected_ordinal = 1 WHERE id = ${id}`),
+    ).rejects.toSatisfy(dbErrorMatching(/solo insercion|DEC-007/iu));
   });
 
   it("dos sorteos con el mismo draw_request_id no pueden existir", async () => {
@@ -491,7 +506,7 @@ describe("DEC-017 cerrojo 2 - la autorizacion solo admite ser revocada", () => {
                SET revoked_at = now() + interval '1 day', revocation_reason = 'Otra vez'
              WHERE id = ${id}`,
       ),
-    ).rejects.toThrow(/revocada|DEC-017/iu);
+    ).rejects.toSatisfy(dbErrorMatching(/revocada|DEC-017/iu));
   });
 
   it("ninguna migracion siembra autorizaciones: la promocion arranca sin ninguna", async () => {
