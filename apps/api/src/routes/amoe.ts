@@ -74,7 +74,18 @@ const rejectBodySchema = z.object({
   notes: z.string().max(2000).nullable().optional(),
 });
 
+/**
+ * `reason_key` OBLIGATORIO tambien al aprobar, no solo al rechazar.
+ *
+ * El catalogo marca `amoe.review.approve` con `requiresReason`, y el autorizador
+ * lo exige ANTES del handler (HO-034.1). Sin este campo la ruta no podia pasar
+ * la puerta con ningun cuerpo, y el 403 parecia un problema de permisos cuando
+ * era un cuerpo al que le faltaba el campo que la puerta buscaba. Aprobar una
+ * participacion que no paso por compra es la decision mas sensible de la via
+ * gratuita: merece el mismo motivo que un rechazo.
+ */
 const approveBodySchema = z.object({
+  reason_key: z.string().regex(/^[A-Z][A-Z0-9_]{2,63}$/u),
   notes: z.string().max(2000).nullable().optional(),
 });
 

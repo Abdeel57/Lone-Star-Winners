@@ -29,6 +29,23 @@ import type { FastifyRequest } from "fastify";
  */
 const REASON_CODE = /^[a-zA-Z][a-zA-Z0-9_.]{2,63}$/u;
 
+/**
+ * El contrato publica DOS nombres para el mismo concepto, y los dos valen.
+ *
+ * `reason_key` (`^[A-Z][A-Z0-9_]{2,63}`) es el de AMOE y ajustes, secciones
+ * 11.3 y 11.4; `reason_code` es el de sorteo y de la traza de auditoria. Son la misma
+ * cosa -una clave estable que explica por que se hizo algo- con dos ortografias
+ * historicas. La primera version de este modulo solo leia `reason_code`, y el
+ * efecto fue que rechazar un envio AMOE o proponer un ajuste devolvia 403 aunque
+ * el cuerpo llevara motivo: la puerta buscaba un nombre y el cuerpo traia el
+ * otro.
+ *
+ * Unificar el nombre en el contrato es un cambio aparte y de mas alcance; hasta
+ * entonces, la puerta reconoce los dos y el patron de cada uno es el que ya
+ * exige su ruta.
+ */
+const REASON_KEY = /^[A-Z][A-Z0-9_]{2,63}$/u;
+
 /** Cabecera para las rutas sin cuerpo. En minuscula: Fastify normaliza. */
 export const REASON_HEADER = "x-lsw-reason-code";
 
@@ -62,10 +79,15 @@ export const REASON_HEADER = "x-lsw-reason-code";
 export function presentedReasonCode(request: FastifyRequest): string | null {
   const body: unknown = request.body;
 
-  if (typeof body === "object" && body !== null && "reason_code" in body) {
-    const value: unknown = (body as { readonly reason_code?: unknown }).reason_code;
-    if (typeof value === "string" && REASON_CODE.test(value)) {
-      return value;
+  if (typeof body === "object" && body !== null) {
+    const fields = body as { readonly reason_code?: unknown; readonly reason_key?: unknown };
+
+    if (typeof fields.reason_code === "string" && REASON_CODE.test(fields.reason_code)) {
+      return fields.reason_code;
+    }
+
+    if (typeof fields.reason_key === "string" && REASON_KEY.test(fields.reason_key)) {
+      return fields.reason_key;
     }
   }
 

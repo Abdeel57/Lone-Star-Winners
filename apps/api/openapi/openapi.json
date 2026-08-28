@@ -2066,8 +2066,15 @@
                         "type": "null"
                       }
                     ]
+                  },
+                  "reason_key": {
+                    "pattern": "^[A-Z][A-Z0-9_]{2,63}$",
+                    "type": "string"
                   }
                 },
+                "required": [
+                  "reason_key"
+                ],
                 "type": "object"
               }
             }

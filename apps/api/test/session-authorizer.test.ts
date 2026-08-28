@@ -258,6 +258,21 @@ describe("motivo obligatorio", () => {
     expect(outcome).toStrictEqual({ allowed: true });
   });
 
+  it("con reason_key -el nombre de AMOE y ajustes- tambien permite", async () => {
+    // El contrato publica dos nombres para el mismo concepto. La primera
+    // version solo leia reason_code, y rechazar un envio AMOE devolvia 403 con
+    // el motivo puesto. Este caso es el que lo habria detectado.
+    const outcome = await decide({
+      authorization: ACTIVATE,
+      session: staffSession(),
+      adminRoles: MANAGER,
+      cookie: "staff",
+      body: { reason_key: "MEETS_REQUIREMENTS" },
+    });
+
+    expect(outcome).toStrictEqual({ allowed: true });
+  });
+
   it("un motivo con forma invalida NO cuenta como motivo", async () => {
     // Lo importante del control. Si bastara con "no vacio", mandar "x" abriria
     // las 26 capacidades que exigen motivo y el control seria un tramite.
