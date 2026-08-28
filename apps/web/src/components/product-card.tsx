@@ -6,6 +6,7 @@ import type { Locale } from "@/i18n/locales";
 import { Link } from "@/i18n/navigation";
 import { useAvailabilityLabel } from "@/i18n/storefront-labels";
 import { pickLocalized, type ProductSummary } from "@/lib/api";
+import { priceFrom } from "@/lib/product-price";
 import { isProductSoldOut } from "@/lib/product-availability";
 
 /**
@@ -128,7 +129,7 @@ export function ProductCard({
   const tProduct = useTranslations("product");
   const availabilityLabel = useAvailabilityLabel();
 
-  const price = formatMoney(product.price_from, locale);
+  const price = formatMoney(priceFrom(product), locale);
   const name = pickLocalized(product.name, locale);
 
   /*
@@ -303,7 +304,9 @@ export function ProductCard({
 function EligibilityBadge({ product }: { readonly product: ProductSummary }) {
   const t = useTranslations("shop");
 
-  if (product.entry_eligibility === null) {
+  const eligibility = product.entry_eligibility ?? null;
+
+  if (eligibility === null) {
     return (
       <Badge tone="neutral" surface="light" shape="square" size="sm">
         <ChipLabel short={t("eligibilityUnknownChip")} full={t("eligibilityUnknown")} />
@@ -311,7 +314,7 @@ function EligibilityBadge({ product }: { readonly product: ProductSummary }) {
     );
   }
 
-  return product.entry_eligibility.is_eligible ? (
+  return eligibility.is_eligible ? (
     // Oro pleno con texto casi negro: es la insignia protagonista del catalogo
     // y la unica que la marca destaca de verdad. Su contorno es oro de TINTA
     // -lo pone la variante `brand solid` de banda clara-: el oro de marca contra

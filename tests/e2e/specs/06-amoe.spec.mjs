@@ -119,7 +119,9 @@ test.describe("envio y revision AMOE", () => {
     expect(submission.status).toBe("PENDING_REVIEW");
     expect(submission.entries_awarded).toBeNull();
 
-    const own = await page.request.get(`${API_BASE_URL}/account/amoe-submissions`);
+    const own = await page.request.get(
+      `${API_BASE_URL}/account/amoe-submissions?promotion_id=${fixture.promotion.id}`,
+    );
     expect(own.status()).toBe(200);
     expect((await own.json()).items.length).toBeGreaterThan(0);
   });

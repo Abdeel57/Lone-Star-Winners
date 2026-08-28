@@ -375,7 +375,7 @@ describe("PromotionHero, composicion de DEC-042", () => {
       />,
     );
 
-    const pool = activePromotionDetail.entry_pool;
+    const pool = activePromotionDetail.entry_pool ?? null;
     expect(pool, "el fixture protagonista declara universo").not.toBeNull();
     if (pool === null) return;
 
@@ -444,7 +444,7 @@ describe("PromotionHero, composicion de DEC-042", () => {
      * protagonista traiga descripcion: el dia que una promocion no la traiga, un
      * `alt` ausente haria que un lector de pantalla leyera el nombre del fichero.
      */
-    const media = activePromotionDetail.media;
+    const media = activePromotionDetail.media ?? null;
     expect(media, "la promocion protagonista declara imagenes").not.toBeNull();
     if (media === null) return;
 
@@ -614,7 +614,7 @@ describe("PromotionHero sin Reglas Oficiales publicadas (DEC-044)", () => {
     // El estado contenido no es una pantalla vacia. Lo que se retira son las
     // afirmaciones; el premio y el titulo son dato del backend y no dicen nada
     // sobre las condiciones de participacion.
-    const prize = activePromotionWithoutRulesDetail.prize;
+    const prize = activePromotionWithoutRulesDetail.prize ?? null;
     expect(prize, "el fixture adversarial declara premio").not.toBeNull();
     if (prize === null) return;
 

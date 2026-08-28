@@ -107,7 +107,9 @@ export function AddToCartForm({
         <Select name="variant_id" defaultValue={defaultVariant?.id ?? ""}>
           {product.variants.map((variant) => {
             const price = formatMoney(variant.price, locale);
-            const name = pickLocalized(variant.name, locale);
+            // La API publica `sku` y no `name` (HO-019): el SKU identifica la talla.
+            const name =
+              variant.name === undefined ? variant.sku : pickLocalized(variant.name, locale);
             const status = variant.availability.status;
 
             // El estado se dice tambien cuando la talla SI se puede pedir pero

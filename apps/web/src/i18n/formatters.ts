@@ -68,7 +68,10 @@ const DIGITS = /^\d+$/;
  * El separador decimal se inserta MOVIENDO CARACTERES, no dividiendo. No hay
  * ninguna operacion aritmetica en toda la funcion.
  */
-export function formatMoney(money: MoneyMinor, locale: Locale): string | null {
+export function formatMoney(money: MoneyMinor | null | undefined, locale: Locale): string | null {
+  // Ausencia (la API no publica el importe) se trata como importe invalido: no
+  // se pinta nada, y la pantalla decide. Nunca "NaN" ni "$0.00" inventado.
+  if (money === null || money === undefined) return null;
   if (!AMOUNT_MINOR_PATTERN.test(money.amount_minor)) return null;
 
   let formatter: Intl.NumberFormat;

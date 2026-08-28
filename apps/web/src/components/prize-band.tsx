@@ -50,7 +50,7 @@ export function PrizeBand({
   const t = useTranslations("home");
   const tPromotion = useTranslations("promotion");
 
-  const prize = promotion.prize;
+  const prize = promotion.prize ?? null;
   if (prize === null) return null;
 
   /*

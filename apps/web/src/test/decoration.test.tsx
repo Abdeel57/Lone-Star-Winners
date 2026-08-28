@@ -271,7 +271,7 @@ describe("FooterDisclosure", () => {
  */
 describe("media del premio", () => {
   it("no apunta a ningun host externo", () => {
-    const media = activePromotionDetail.media;
+    const media = activePromotionDetail.media ?? null;
     expect(media, "la promocion protagonista declara imagenes").not.toBeNull();
     if (media === null) return;
 
@@ -289,7 +289,7 @@ describe("media del premio", () => {
     // El hero pinta a sangre y apaisado; una tarjeta pinta cuadrado. Servir el
     // mismo recorte para los dos deja el vehiculo a medias en la tarjeta, que
     // es exactamente el motivo de que `PromotionMedia` publique dos campos.
-    const media = activePromotionDetail.media;
+    const media = activePromotionDetail.media ?? null;
     if (media === null) return;
 
     expect(media.hero_url).not.toBe(media.square_url);
@@ -308,7 +308,7 @@ describe("media del premio", () => {
      * El respaldo -foto sin recortar, y despues ilustracion- sigue siendo
      * legitimo, y por eso esto se comprueba solo cuando los recortes existen.
      */
-    const media = activePromotionDetail.media;
+    const media = activePromotionDetail.media ?? null;
     if (media === null) return;
 
     if (resolvePrizePhoto(["gmc-2025-hero.jpg"]) !== null) {

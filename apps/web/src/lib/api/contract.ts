@@ -323,8 +323,24 @@ export interface EntryPool {
  * `GET /promotions/{slug}` pero no publica su forma. Estos tres campos son la
  * peticion del frontend, no un acuerdo.
  */
+/**
+ * LAS CINCO CLAVES SIGUIENTES SON OPCIONALES, Y NO POR COMODIDAD.
+ *
+ * El e2e contra la API real (primer push, 2026-08-27) demostro que
+ * `GET /promotions/{slug}` NO publica `prize`, `administrator_name`,
+ * `entry_offer`, `media` ni `entry_pool`: existian solo aqui y en las fixtures
+ * del mock, y el escaparate moria con `TypeError` al leer `prize.name` sobre
+ * `undefined`. HO-039 pide al backend publicarlas; hasta entonces:
+ *
+ *   undefined  = la API no publica la clave (hoy, siempre);
+ *   null       = la API la publica y la promocion no declara nada.
+ *
+ * La interfaz trata los dos casos igual -ausencia- y NUNCA inventa un valor.
+ * Las fixtures del mock siguen enviandolas para que las pantallas que las
+ * pintan se puedan probar; el humo y los tests unitarios cubren AMBAS formas.
+ */
 export interface PromotionDetail extends PromotionSummary {
-  readonly prize: PromotionPrize | null;
+  readonly prize?: PromotionPrize | null | undefined;
   /**
    * Nombre del administrador independiente, si la promocion declara uno
    * (principio #10). `null` mientras no este contratado o publicado.
@@ -332,19 +348,19 @@ export interface PromotionDetail extends PromotionSummary {
    * No es texto localizado: es el nombre propio de una empresa y se escribe
    * igual en los dos idiomas.
    */
-  readonly administrator_name: string | null;
+  readonly administrator_name?: string | null | undefined;
   /** Oferta vigente, o `null` si la promocion no declara ninguna. */
-  readonly entry_offer: EntryOffer | null;
+  readonly entry_offer?: EntryOffer | null | undefined;
   /**
    * Imagenes del premio (DEC-042). `null` si la promocion no declara ninguna,
    * que es el caso por defecto y el que la interfaz tiene que saber pintar.
    */
-  readonly media: PromotionMedia | null;
+  readonly media?: PromotionMedia | null | undefined;
   /**
    * Universo de participaciones (DEC-042). `null` si la promocion no declara
    * tope: no todas lo tienen, y un `0` significaria "ninguna participacion".
    */
-  readonly entry_pool: EntryPool | null;
+  readonly entry_pool?: EntryPool | null | undefined;
 }
 
 /** [CONTRATO] `GET /promotions` devuelve una pagina por cursor. */
@@ -486,8 +502,12 @@ export interface Availability {
 export interface ProductVariant {
   readonly id: string;
   readonly sku: string;
-  /** [PROVISIONAL] Nombre de la variante ("Talla M"). Pedido en HO-019. */
-  readonly name: LocalizedText;
+  /**
+   * [PROVISIONAL] Nombre de la variante ("Talla M"). Pedido en HO-019 y, tras el
+   * e2e real, confirmado como NO publicado: la API da `sku`, `price` y
+   * `availability`. Opcional por eso; la interfaz enseña el SKU si falta.
+   */
+  readonly name?: LocalizedText;
   readonly price: MoneyMinor;
   /** El MISMO objeto que la linea del carrito. Ver `Availability`. */
   readonly availability: Availability;
@@ -546,17 +566,31 @@ export interface ProductSummary {
   readonly id: string;
   readonly slug: string;
   readonly name: LocalizedText;
+  /**
+   * LO QUE LA API PUBLICA DE VERDAD (e2e real, 2026-08-27): `id`, `slug`,
+   * `name`, `description`, `sku`, `currency` y `variants[{ id, sku, price,
+   * availability }]`. Todo lo marcado [PROVISIONAL] abajo es opcional porque hoy
+   * NO llega (HO-019 sigue abierto); `undefined` = no publicado. La interfaz
+   * deriva `price_from` de `variants` (`@/lib/product-price`) y no pinta lo que
+   * no tiene, en vez de morir con `TypeError` como hacia contra la API real.
+   */
+  readonly sku?: string;
+  readonly currency?: string;
   /** [PROVISIONAL] Resumen corto para la tarjeta. Pedido en HO-019. */
-  readonly summary: LocalizedText;
+  readonly summary?: LocalizedText;
   /** [PROVISIONAL] Clave estable de categoria; el copy es del frontend. */
-  readonly category_key: string;
+  readonly category_key?: string;
   /** [PROVISIONAL] Sin modelo de medios, como en el carrito. Pedido en HO-019. */
-  readonly image_url: string | null;
-  /** [PROVISIONAL] Precio de la variante mas barata. Pedido en HO-019. */
-  readonly price_from: MoneyMinor;
+  readonly image_url?: string | null;
+  /**
+   * [PROVISIONAL] Precio de la variante mas barata. Pedido en HO-019. La API no
+   * lo publica: usa `priceFrom(product)` de `@/lib/product-price`, que lo deriva
+   * de `variants` (es presentacion, no aritmetica de participaciones).
+   */
+  readonly price_from?: MoneyMinor;
   readonly variants: readonly ProductVariant[];
   /** [PROVISIONAL] Elegibilidad ya evaluada. Pedida en HO-019. */
-  readonly entry_eligibility: ProductEntryEligibility | null;
+  readonly entry_eligibility?: ProductEntryEligibility | null;
 }
 
 /**
@@ -569,9 +603,9 @@ export interface ProductSummary {
 export interface ProductDetail extends ProductSummary {
   readonly description: LocalizedText;
   /** [PROVISIONAL] Informacion de envio, localizada. Pedida en HO-019. */
-  readonly shipping_note: LocalizedText | null;
+  readonly shipping_note?: LocalizedText | null;
   /** [PROVISIONAL] Galeria. Sin modelo de medios no hay fuente. */
-  readonly images: readonly string[];
+  readonly images?: readonly string[];
 }
 
 /** [CONTRATO] `GET /products` devuelve una pagina por cursor. */

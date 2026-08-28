@@ -12,6 +12,7 @@ import { Link } from "@/i18n/navigation";
 import { routing } from "@/i18n/routing";
 import { useCategoryLabel, useIneligibilityReason } from "@/i18n/storefront-labels";
 import { fetchProduct, pickLocalized, type ProductDetail } from "@/lib/api";
+import { priceFrom } from "@/lib/product-price";
 import { productAvailabilityStatus } from "@/lib/product-availability";
 
 /**
@@ -65,7 +66,8 @@ export default async function ProductDetailPage({
   }
 
   const product = result.data;
-  const price = formatMoney(product.price_from, locale);
+  const price = formatMoney(priceFrom(product), locale);
+  const shippingNote = product.shipping_note ?? null;
 
   return (
     <div className="lsw-container py-s10 pb-s16">
@@ -78,15 +80,19 @@ export default async function ProductDetailPage({
 
         <div className="flex flex-col gap-s6 lg:pt-s2">
           <div>
-            <ProductCategory categoryKey={product.category_key} />
+            {product.category_key === undefined ? null : (
+              <ProductCategory categoryKey={product.category_key} />
+            )}
 
             <h1 className="lsw-display mt-s3 text-display-md text-text sm:text-display-lg">
               {pickLocalized(product.name, locale)}
             </h1>
 
-            <p className="mt-s4 text-body-lg text-text-muted">
-              {pickLocalized(product.summary, locale)}
-            </p>
+            {product.summary === undefined ? null : (
+              <p className="mt-s4 text-body-lg text-text-muted">
+                {pickLocalized(product.summary, locale)}
+              </p>
+            )}
           </div>
 
           {/* El precio, con el peso que le corresponde: lo que se adquiere aqui
@@ -121,13 +127,13 @@ export default async function ProductDetailPage({
         </p>
       </section>
 
-      {product.shipping_note === null ? null : (
+      {shippingNote === null ? null : (
         <Card as="section" elevation="flat" padding="md" className="mt-s6 max-w-narrow">
           <CardTitle as="h2" size="sm">
             {t("product.shippingHeading")}
           </CardTitle>
           <p className="mt-s2 text-body-md text-text-muted">
-            {pickLocalized(product.shipping_note, locale)}
+            {pickLocalized(shippingNote, locale)}
           </p>
         </Card>
       )}
@@ -174,7 +180,8 @@ function ProductGallery({
   const t = useTranslations("product");
   const name = pickLocalized(product.name, locale);
 
-  const images = product.images.length > 0 ? product.images : nonNull(product.image_url);
+  const gallery = product.images ?? [];
+  const images = gallery.length > 0 ? gallery : nonNull(product.image_url ?? null);
 
   if (images.length === 0) {
     return (
@@ -277,12 +284,16 @@ function EligibilityNotice({ product }: { readonly product: ProductDetail }) {
   const tShop = useTranslations("shop");
   const ineligibilityReason = useIneligibilityReason();
 
-  if (product.entry_eligibility === null) {
+  // `undefined` (la API no publica elegibilidad, HO-019) se trata como `null`:
+  // sin dato no se afirma nada sobre participaciones.
+  const eligibility = product.entry_eligibility ?? null;
+
+  if (eligibility === null) {
     return <Alert tone="info">{tShop("noPromotionNotice")}</Alert>;
   }
 
-  if (!product.entry_eligibility.is_eligible) {
-    return <Alert tone="info">{ineligibilityReason(product.entry_eligibility.reason_key)}</Alert>;
+  if (!eligibility.is_eligible) {
+    return <Alert tone="info">{ineligibilityReason(eligibility.reason_key)}</Alert>;
   }
 
   return (

@@ -224,7 +224,7 @@ describe("banda de anuncio sin Reglas Oficiales publicadas (DEC-044)", () => {
           // El universo llega DISPONIBLE a proposito, igual que en el fixture
           // adversarial del hero: lo que se retira solo se puede comprobar si el
           // dato para pintarlo estaba a mano.
-          entryPool={activePromotionWithoutRulesDetail.entry_pool}
+          entryPool={activePromotionWithoutRulesDetail.entry_pool ?? null}
           locale={locale}
         />,
       );
@@ -251,7 +251,7 @@ describe("banda de anuncio sin Reglas Oficiales publicadas (DEC-044)", () => {
         locale,
         <AnnouncementBand
           promotion={activePromotionWithoutRules}
-          entryPool={activePromotionWithoutRulesDetail.entry_pool}
+          entryPool={activePromotionWithoutRulesDetail.entry_pool ?? null}
           locale={locale}
         />,
       );
@@ -281,7 +281,7 @@ describe("banda de anuncio sin Reglas Oficiales publicadas (DEC-044)", () => {
       "es",
       <AnnouncementBand
         promotion={activePromotion}
-        entryPool={activePromotionDetail.entry_pool}
+        entryPool={activePromotionDetail.entry_pool ?? null}
         locale="es"
       />,
     );

@@ -141,10 +141,9 @@ describe("catalogo y paginacion por cursor", () => {
       expect(product).not.toHaveProperty("entries_per_unit");
 
       // Lo que SI trae es elegibilidad ya evaluada, y con procedencia.
-      if (product.entry_eligibility !== null) {
-        expect(product.entry_eligibility.evaluated_against_rules_version_id.length).toBeGreaterThan(
-          0,
-        );
+      const eligibility = product.entry_eligibility ?? null;
+      if (eligibility !== null) {
+        expect(eligibility.evaluated_against_rules_version_id.length).toBeGreaterThan(0);
       }
     }
   });

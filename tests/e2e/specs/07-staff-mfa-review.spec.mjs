@@ -193,7 +193,10 @@ test.describe("aprobacion de un envio AMOE", () => {
 
     const approved = await page.request.post(
       `${API_BASE_URL}/admin/amoe-submissions/${submissionId}/approve`,
-      { headers: cookieHeader(staffCookie), data: { notes: "Escenario de e2e." } },
+      {
+        headers: cookieHeader(staffCookie),
+        data: { reason_key: "AMOE_REVIEW_VERIFIED", notes: "Escenario de e2e." },
+      },
     );
     expect(approved.status()).toBe(200);
     expect((await approved.json()).status).toBe("APPROVED");

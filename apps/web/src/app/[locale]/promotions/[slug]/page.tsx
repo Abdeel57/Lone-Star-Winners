@@ -108,7 +108,9 @@ export default async function PromotionDetailPage({
 
   // `formatMoney` devuelve `null` cuando el importe no respeta DEC-010. Se
   // resuelve una sola vez para que el JSX no decida dos veces lo mismo.
-  const declaredValue = promotion.prize?.declared_value ?? null;
+  // La API real no publica `prize` (HO-039): ausencia y `null` pintan lo mismo.
+  const prize = promotion.prize ?? null;
+  const declaredValue = prize?.declared_value ?? null;
   const prizeValue = declaredValue === null ? null : formatMoney(declaredValue, locale);
 
   return (
@@ -159,17 +161,17 @@ export default async function PromotionDetailPage({
       </div>
 
       <div className="lsw-container pt-s12">
-        {promotion.prize === null ? null : (
+        {prize === null ? null : (
           <section aria-labelledby="prize">
             <SectionHeading id="prize" title={t("promotion.prizeHeading")} size="lg" />
 
             <Card elevation="raised" padding="lg" className="mt-s8">
               <CardTitle as="h3" size="lg">
-                {pickLocalized(promotion.prize.name, locale)}
+                {pickLocalized(prize.name, locale)}
               </CardTitle>
 
               <p className="mt-s4 max-w-narrow text-body-lg text-text-muted">
-                {pickLocalized(promotion.prize.description, locale)}
+                {pickLocalized(prize.description, locale)}
               </p>
 
               {prizeValue === null ? null : (
@@ -215,7 +217,7 @@ export default async function PromotionDetailPage({
               arriba (DEC-044): sin documento que fije el ratio, el panel
               conserva el titulo y dice que falta, pero no publica la cifra. */}
           <EntryOfferPanel
-            offer={promotion.entry_offer}
+            offer={promotion.entry_offer ?? null}
             presentation={presentation}
             multipliersEnabled={isFeatureEnabled(uiConfig.flags, "entry_multipliers_enabled")}
             rulesPublished={hasRules}

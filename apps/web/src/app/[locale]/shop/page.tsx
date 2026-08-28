@@ -231,8 +231,12 @@ function singleParam(value: string | string[] | undefined): string | null {
  * de forma visible pero no rompe nada, y no se sustituye por una lista de
  * categorias cableada aqui: seria dato de negocio metido en el frontend.
  */
-function categoriesOf(products: readonly { readonly category_key: string }[]): readonly string[] {
-  return [...new Set(products.map((product) => product.category_key))].sort();
+function categoriesOf(products: readonly { readonly category_key?: string }[]): readonly string[] {
+  // Sin categoria publicada (la API real no la trae, HO-019) no hay filtro.
+  const keys = products
+    .map((product) => product.category_key)
+    .filter((key): key is string => key !== undefined);
+  return [...new Set(keys)].sort();
 }
 
 function nextPageQuery(cursor: string, category: string | null): string {
