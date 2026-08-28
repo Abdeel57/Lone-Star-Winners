@@ -262,7 +262,7 @@ export async function approveAmoeAction(
     submissionId,
     reason.note === null
       ? { reason_key: reason.reason_key }
-      : { reason_key: reason.reason_key, note: reason.note },
+      : { reason_key: reason.reason_key, notes: reason.note },
     locale,
     session,
   );
@@ -292,7 +292,7 @@ export async function rejectAmoeAction(
     submissionId,
     reason.note === null
       ? { reason_key: reason.reason_key }
-      : { reason_key: reason.reason_key, note: reason.note },
+      : { reason_key: reason.reason_key, notes: reason.note },
     locale,
     session,
   );
@@ -385,7 +385,7 @@ export async function approveAdjustmentAction(
     adjustmentId,
     reason.note === null
       ? { reason_key: reason.reason_key }
-      : { reason_key: reason.reason_key, note: reason.note },
+      : { reason_key: reason.reason_key, notes: reason.note },
     locale,
     session,
   );

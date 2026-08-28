@@ -1083,7 +1083,7 @@ export function fetchAdminAmoeSubmissions(
  */
 export function approveAmoeSubmission(
   submissionId: string,
-  input: { readonly reason_key: string; readonly note?: string },
+  input: { readonly reason_key: string; readonly notes?: string },
   locale: Locale,
   session: SessionContext,
 ): Promise<ApiResult<AdminAmoeSubmission>> {
@@ -1097,7 +1097,7 @@ export function approveAmoeSubmission(
 /** Rechazo de un envio AMOE. */
 export function rejectAmoeSubmission(
   submissionId: string,
-  input: { readonly reason_key: string; readonly note?: string },
+  input: { readonly reason_key: string; readonly notes?: string },
   locale: Locale,
   session: SessionContext,
 ): Promise<ApiResult<AdminAmoeSubmission>> {
@@ -1195,7 +1195,7 @@ export function createAdjustment(
  */
 export function approveAdjustment(
   adjustmentId: string,
-  input: { readonly reason_key: string; readonly note?: string },
+  input: { readonly reason_key: string; readonly notes?: string },
   locale: Locale,
   session: SessionContext,
 ): Promise<ApiResult<AdminAdjustment>> {

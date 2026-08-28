@@ -190,7 +190,11 @@ test.describe("ajuste manual", () => {
      */
     const selfApproval = await page.request.post(
       `${API_BASE_URL}/admin/entry-adjustments/${adjustmentId}/approve`,
-      { headers: cookieHeader(manager), failOnStatusCode: false },
+      {
+        headers: cookieHeader(manager),
+        data: { reason_key: "REVIEWED_AND_CORRECT" },
+        failOnStatusCode: false,
+      },
     );
     expect(selfApproval.status()).toBeGreaterThanOrEqual(400);
     expect(["FORBIDDEN", "ADJUSTMENT_SELF_APPROVAL_FORBIDDEN"]).toContain(
@@ -206,9 +210,9 @@ test.describe("ajuste manual", () => {
 
     const approved = await officerPage.request.post(
       `${API_BASE_URL}/admin/entry-adjustments/${adjustmentId}/approve`,
-      // La ruta de aprobar no tiene cuerpo y `entry.adjust.approve` exige motivo:
-      // viaja por la cabecera que acepta el autorizador (HO-034.1).
-      { headers: { ...cookieHeader(officer), "x-lsw-reason-code": "SUPPORT_RESOLUTION" } },
+      // El motivo del APROBADOR va en el cuerpo, como en rechazar (d53cf42), y
+      // queda en la traza como metadata.approval_reason_key.
+      { headers: cookieHeader(officer), data: { reason_key: "REVIEWED_AND_CORRECT" } },
     );
 
     expect(approved.status()).toBe(200);
