@@ -31,6 +31,7 @@
  * reproduce la prueba: ejecuta otra distinta y la llama igual.
  */
 
+import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -38,6 +39,13 @@ import { defineConfig, devices } from "@playwright/test";
 
 const PACKAGE_DIR = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = join(PACKAGE_DIR, "..", "..");
+
+// `next` se resuelve desde apps/web, no desde node_modules de la raiz: pnpm no
+// lo eleva (ni en local ni en CI), asi que la ruta de la raiz no existe y el
+// webServer moria con MODULE_NOT_FOUND antes de arrancar.
+const NEXT_BIN = createRequire(join(REPO_ROOT, "apps", "web", "package.json")).resolve(
+  "next/dist/bin/next",
+);
 
 const MODE =
   process.env.E2E_MODE ?? (process.env.WEB_ENABLE_API_MOCKS === "true" ? "mocks" : "full");
@@ -61,7 +69,7 @@ const webServer =
   MODE === "mocks"
     ? [
         {
-          command: `node ${JSON.stringify(join(REPO_ROOT, "node_modules", "next", "dist", "bin", "next"))} dev --port ${WEB_PORT}`,
+          command: `node ${JSON.stringify(NEXT_BIN)} dev --port ${WEB_PORT}`,
           cwd: join(REPO_ROOT, "apps", "web"),
           url: `${WEB_BASE_URL}/healthz`,
           timeout: 240_000,
@@ -94,7 +102,7 @@ const webServer =
           stderr: "pipe",
         },
         {
-          command: `node ${JSON.stringify(join(REPO_ROOT, "node_modules", "next", "dist", "bin", "next"))} start --port ${WEB_PORT}`,
+          command: `node ${JSON.stringify(NEXT_BIN)} start --port ${WEB_PORT}`,
           cwd: join(REPO_ROOT, "apps", "web"),
           url: `${WEB_BASE_URL}/healthz`,
           timeout: 180_000,
