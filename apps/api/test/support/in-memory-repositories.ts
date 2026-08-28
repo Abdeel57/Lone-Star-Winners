@@ -232,6 +232,7 @@ export function createFakeRepositories(options: FakeOptions = {}): FakeRepositor
         }
         return {
           id: line.id,
+          productId: found.product.id,
           productVariantId: line.variantId,
           productSlug: found.product.slug,
           sku: found.variant.sku,

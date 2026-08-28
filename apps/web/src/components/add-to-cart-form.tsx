@@ -172,6 +172,12 @@ function AddToCartError({ code }: { readonly code: string }) {
     case "INSUFFICIENT_STOCK":
       message = tErrors("INSUFFICIENT_STOCK");
       break;
+    // La API rechaza la linea (409) cuando la version de reglas activa no tiene
+    // una formula de calculo valida: es un fallo de configuracion de la
+    // promocion, no del comprador, y el texto lo dice sin culparle.
+    case "CALCULATION_CONFIG_INVALID":
+      message = tErrors("CALCULATION_CONFIG_INVALID");
+      break;
     case "VALIDATION_FAILED":
       message = tErrors("VALIDATION_FAILED");
       break;

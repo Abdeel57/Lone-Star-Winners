@@ -30,6 +30,16 @@ test.beforeAll(async () => {
 
 test.beforeEach(async ({ page }) => {
   await loginParticipant(page, PARTICIPANT_EMAIL);
+
+  // El carrito del participante sembrado persiste entre pruebas y entre
+  // ejecuciones contra la misma base: se vacia por la API antes de cada una para
+  // que "la linea tiene cantidad 2" no dependa de que esta sea la primera vez.
+  const current = await page.request.get(`${API_BASE_URL}/cart`);
+  if (current.ok()) {
+    for (const line of (await current.json()).lines ?? []) {
+      await page.request.delete(`${API_BASE_URL}/cart/items/${line.id}`);
+    }
+  }
 });
 
 test("anadir al carrito desde la ficha de producto crea la linea en el servidor", async ({

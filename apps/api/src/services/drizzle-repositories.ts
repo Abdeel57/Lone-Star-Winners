@@ -393,6 +393,7 @@ function createCartRepository(db: Database): CartRepository {
       updatedAt: cart.updatedAt,
       lines: lines.map((line) => ({
         id: line.id,
+        productId: line.productId,
         productVariantId: line.productVariantId,
         productSlug: line.productSlug,
         sku: line.sku,

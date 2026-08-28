@@ -110,13 +110,27 @@ function buildRulesConfig(window) {
     allowed_jurisdictions: FILLER,
     minimum_age: FILLER,
     promotion_start_end_rules: FILLER,
-    entry_limits: FILLER,
-    product_eligibility: FILLER,
-    purchase_entry_formula: FILLER,
+    /*
+     * Las cuatro claves que SI parsea el motor de calculo
+     * (`calculationConfigSchema` de packages/sweepstakes) llevan una forma
+     * valida y NO un relleno: con el relleno, `POST /cart/items` responde 409
+     * CALCULATION_CONFIG_INVALID y el recorrido de compra no arranca. Los
+     * VALORES siguen siendo de fixture y sin valor legal (la formula real la
+     * fija el abogado; ver docs/LEGAL_PENDING.md): "2 participaciones por cada
+     * $5.00" reproduce la forma del borrador, no una decision.
+     */
+    entry_limits: { per_order_max: null, per_participant_max: null },
+    product_eligibility: { mode: "ALL_PRODUCTS" },
+    purchase_entry_formula: {
+      mode: "ENTRIES_PER_CURRENCY_UNIT",
+      amount_unit_minor: "500",
+      entries_per_amount_unit: { numerator: 2, denominator: 1 },
+      rounding_policy: "FLOOR",
+    },
     official_rules_document: FILLER,
     controlling_language: FILLER,
     winner_drawing_method: FILLER,
-    partial_refund_rounding_policy: FILLER,
+    partial_refund_rounding_policy: "FLOOR",
     entry_expiration: FILLER,
 
     /*

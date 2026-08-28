@@ -91,7 +91,7 @@
     }
   },
   "apiErrors": {
-    "CALCULATION_CONFIG_INVALID": "No hemos podido calcular una cifra de participaciones para este carrito. Nuestro equipo ya está avisado.",
+    "CALCULATION_CONFIG_INVALID": "Esta promoción aún no está configurada por completo, así que de momento no se puede añadir este artículo al carrito. Inténtalo más tarde.",
     "CART_ITEM_NOT_FOUND": "Esa línea ya no está en tu carrito.",
     "FORBIDDEN": "No tienes acceso a eso.",
     "INSUFFICIENT_STOCK": "No hay existencias suficientes para la cantidad que has pedido.",

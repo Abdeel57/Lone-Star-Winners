@@ -440,7 +440,7 @@ export function buildOrdersRoutes(dependencies: AppDependencies): RouteDefinitio
         const items = cart.lines.map((line) => {
           subtotal += line.unitAmountMinor * BigInt(line.quantity);
           return {
-            productId: line.productVariantId,
+            productId: line.productId,
             productVariantId: line.productVariantId,
             sku: line.sku,
             productSlug: line.productSlug,

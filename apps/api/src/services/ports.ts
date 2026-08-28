@@ -154,6 +154,13 @@ export type CartOwnerRef =
 
 export interface CartLineRecord {
   readonly id: string;
+  /**
+   * Producto padre de la variante. Viaja aparte porque el pedido lo necesita
+   * (`order_items.product_id` es clave ajena a `products`): sin el, el checkout
+   * escribia el id de la VARIANTE en esa columna y el motor lo rechazaba con
+   * 500 antes de llegar a decir que no hay proveedor de pago (e2e real).
+   */
+  readonly productId: string;
   readonly productVariantId: string;
   readonly productSlug: string;
   readonly sku: string;

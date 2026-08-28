@@ -91,7 +91,7 @@
     }
   },
   "apiErrors": {
-    "CALCULATION_CONFIG_INVALID": "We could not calculate an entry figure for this cart. Our team has been notified.",
+    "CALCULATION_CONFIG_INVALID": "This promotion is not fully configured yet, so this item cannot be added to the cart right now. Please try again later.",
     "CART_ITEM_NOT_FOUND": "That line is no longer in your cart.",
     "FORBIDDEN": "You do not have access to that.",
     "INSUFFICIENT_STOCK": "There is not enough stock for the quantity you asked for.",

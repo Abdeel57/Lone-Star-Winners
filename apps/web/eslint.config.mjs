@@ -34,7 +34,7 @@ export default tseslint.config(
     // que se piden con `LSW_NEXT_DIST_DIR` (ver `next.config.mjs`): el primero lo
     // usa el humo, el segundo un build que no quiera pisar un `next dev` vivo.
     // Mismo caso que `.next`: generados, no fuente.
-    ignores: ["next-env.d.ts", ".next/**", ".next-smoke/**", ".next-build/**"],
+    ignores: ["next-env.d.ts", ".next/**", ".next-smoke/**", ".next-build/**", ".next-e2e/**"],
   },
 
   // Capa type-aware con globs locales (ver caveat de la cabecera).
