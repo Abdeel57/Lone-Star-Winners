@@ -2450,23 +2450,6 @@ exactamente el fallo que la traza existe para impedir.
 
 ## 12. Altas del panel: catálogo y promociones (DEC-010, DEC-011, DEC-012)
 
-Índice de rutas de esta sección, con los parámetros en la forma del código
-(`:param`), que es la que comprueba el test de contrato (DEC-015):
-
-| Método | Ruta                                            | Autorización         |
-| ------ | ----------------------------------------------- | -------------------- |
-| GET    | /api/v1/admin/products                          | `product.read`       |
-| POST   | /api/v1/admin/products                          | `product.write`      |
-| GET    | /api/v1/admin/products/:product_id              | `product.read`       |
-| PATCH  | /api/v1/admin/products/:product_id              | `product.write`      |
-| POST   | /api/v1/admin/products/:product_id/publish      | `product.publish`    |
-| GET    | /api/v1/admin/promotions                        | `promotion.read`     |
-| POST   | /api/v1/admin/promotions                        | `promotion.create`   |
-| GET    | /api/v1/admin/promotions/:promotion_id          | `promotion.read`     |
-| PATCH  | /api/v1/admin/promotions/:promotion_id          | `promotion.update`   |
-| POST   | /api/v1/admin/promotions/:promotion_id/activate | `promotion.activate` |
-| POST   | /api/v1/admin/promotions/:promotion_id/close    | `promotion.close`    |
-
 Hasta esta sección el catálogo era **de solo lectura**. El escaparate leía
 productos y promociones, el panel las listaba, y no existía ninguna forma de
 crear una: el panel enseñaba listas vacías y llenarlas exigía SQL a mano contra
@@ -2530,13 +2513,13 @@ moneda como entero (DEC-010): 2500 son 25,00 USD. `stock_quantity: null` es
 **201** con el producto · 409 `CATALOG_CONFLICT` si el SKU o el slug ya existen,
 con el mensaje del motor en `details.engine` · 422 · 401 · 403.
 
-### GET /api/v1/admin/products/{product_id}
+### GET /api/v1/admin/products/:product_id
 
     Authorization: product.read
 
 401 · 403 · 404.
 
-### PATCH /api/v1/admin/products/{product_id}
+### PATCH /api/v1/admin/products/:product_id
 
     Authorization: product.write
 
@@ -2547,7 +2530,7 @@ ningún campo es 422: no es una edición.
 
 200 · 401 · 403 · 404 · 409 · 422.
 
-### POST /api/v1/admin/products/{product_id}/publish
+### POST /api/v1/admin/products/:product_id/publish
 
     Authorization: product.publish
 
@@ -2599,13 +2582,13 @@ exista lo comprueba PostgreSQL contra su propio catálogo.
 **201** · 409 `CATALOG_CONFLICT` si el slug existe, o `LIFECYCLE_REFUSED` si la
 zona horaria no la conoce el servidor · 422 · 401 · 403.
 
-### GET /api/v1/admin/promotions/{promotion_id}
+### GET /api/v1/admin/promotions/:promotion_id
 
     Authorization: promotion.read
 
 401 · 403 · 404.
 
-### PATCH /api/v1/admin/promotions/{promotion_id}
+### PATCH /api/v1/admin/promotions/:promotion_id
 
     Authorization: promotion.update
 
@@ -2617,7 +2600,7 @@ promoción abrió o cerró.
 
 200 · 401 · 403 · 404 · 409 · 422.
 
-### POST /api/v1/admin/promotions/{promotion_id}/activate
+### POST /api/v1/admin/promotions/:promotion_id/activate
 
     Authorization: promotion.activate   (motivo obligatorio + step-up)
 
@@ -2650,7 +2633,7 @@ sí.
 
 200 · 401 · 403 · 404 · 409 · 422.
 
-### POST /api/v1/admin/promotions/{promotion_id}/close
+### POST /api/v1/admin/promotions/:promotion_id/close
 
     Authorization: promotion.close   (motivo obligatorio + step-up)
 
