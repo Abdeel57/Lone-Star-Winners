@@ -2037,8 +2037,8 @@ Status: IMPLEMENTED
 | Método | Endpoint                                       | Authorization         | Notas                                                                                                                                            |
 | ------ | ---------------------------------------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
 | GET    | `/api/v1/admin/amoe-submissions?promotion_id=` | `amoe.review.read`    | Cola de revisión. Lleva `participant_id` interno; nunca el payload. Añade `entries_before`, `entries_if_approved` y `entries_after_if_approved`. |
-| POST   | `/api/v1/admin/amoe-submissions/{id}/approve`  | `amoe.review.approve` | `reason_key` obligatorio (HO-034.1). Cantidad según la versión de reglas **del envío**, no la vigente hoy.                                       |
-| POST   | `/api/v1/admin/amoe-submissions/{id}/reject`   | `amoe.review.reject`  | `reason_key` obligatorio. Un rechazo NO consume cuota del límite.                                                                                |
+| POST   | `/api/v1/admin/amoe-submissions/{id}/approve`  | `amoe.review.approve` | Cuerpo `{ reason_key, notes? }`; `reason_key` obligatorio (HO-034.1). Cantidad según la versión de reglas **del envío**, no la vigente hoy.      |
+| POST   | `/api/v1/admin/amoe-submissions/{id}/reject`   | `amoe.review.reject`  | Cuerpo `{ reason_key, notes? }`; `reason_key` obligatorio. Un rechazo NO consume cuota del límite.                                               |
 
 ---
 
