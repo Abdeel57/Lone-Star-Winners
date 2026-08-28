@@ -472,6 +472,15 @@
     },
     {
       "method": "POST",
+      "path": "/api/v1/admin/promotions/:promotion_id/schedule",
+      "operation_id": "scheduleAdminPromotion",
+      "authorization": "promotion.update",
+      "requires_step_up": false,
+      "tags": ["admin"],
+      "summary": "Programar una promocion: DRAFT -> SCHEDULED."
+    },
+    {
+      "method": "POST",
       "path": "/api/v1/auth/login",
       "operation_id": "login",
       "authorization": "PUBLIC",

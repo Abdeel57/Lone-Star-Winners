@@ -2600,6 +2600,22 @@ promoción abrió o cerró.
 
 200 · 401 · 403 · 404 · 409 · 422.
 
+### POST /api/v1/admin/promotions/:promotion_id/schedule
+
+    Authorization: promotion.update
+
+Sin cuerpo. Pasa la promoción de `DRAFT` a `SCHEDULED`, que es **la antesala
+obligatoria de `ACTIVE`**: el motor no admite `DRAFT → ACTIVE` directamente
+(`promotion_status_transitions`). Primero se publica la ventana y después, con
+la versión de reglas activa, se activa.
+
+Exige `starts_at` y `ends_at`; si faltan, **409 `LIFECYCLE_REFUSED`** con el
+mensaje del motor. Es reversible (`SCHEDULED → DRAFT` existe en la tabla) y por
+eso va con `promotion.update` y sin motivo: no cambia el universo de
+participaciones.
+
+200 · 401 · 403 · 404 · 409.
+
 ### POST /api/v1/admin/promotions/:promotion_id/activate
 
     Authorization: promotion.activate   (motivo obligatorio + step-up)

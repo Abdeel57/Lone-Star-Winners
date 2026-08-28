@@ -685,6 +685,40 @@ export function buildAdminCatalogRoutes(dependencies: AppDependencies): RouteDef
 
     {
       method: "POST",
+      url: "/api/v1/admin/promotions/:promotion_id/schedule",
+      operationId: "scheduleAdminPromotion",
+      summary: "Programar una promocion: DRAFT -> SCHEDULED.",
+      description:
+        "La antesala de ACTIVE. El motor no admite DRAFT -> ACTIVE directamente (promotion_status_transitions): primero se publica la ventana y despues, con la version de reglas activa, se activa. Exige starts_at y ends_at; si faltan, 409 LIFECYCLE_REFUSED con el mensaje del motor. Es reversible (SCHEDULED -> DRAFT existe en la tabla) y por eso va con promotion.update y sin motivo: no cambia el universo de participaciones.",
+      tags: ["admin"],
+      authorization: { kind: "PERMISSION", permission: "promotion.update" },
+      schema: {
+        params: promotionParamsSchema,
+        response: {
+          200: promotionSchema,
+          401: errorEnvelopeSchema,
+          403: errorEnvelopeSchema,
+          404: errorEnvelopeSchema,
+          409: errorEnvelopeSchema,
+        },
+      },
+      handler: async (request) => {
+        await requireStaff(dependencies, request);
+        const params = request.params as z.infer<typeof promotionParamsSchema>;
+
+        try {
+          const updated = await repo().setPromotionStatus(params.promotion_id, "SCHEDULED");
+          if (updated === null) throw ApiErrors.notFound();
+          return presentPromotion(updated);
+        } catch (error) {
+          if (error instanceof ApiError) throw error;
+          return translateDatabaseError(error);
+        }
+      },
+    },
+
+    {
+      method: "POST",
       url: "/api/v1/admin/promotions/:promotion_id/activate",
       operationId: "activateAdminPromotion",
       summary: "Activar una promocion. Exige motivo y segundo factor reciente.",

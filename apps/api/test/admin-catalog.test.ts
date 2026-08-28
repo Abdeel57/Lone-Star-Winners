@@ -371,6 +371,51 @@ describe("POST /admin/promotions", () => {
   });
 });
 
+describe("POST /admin/promotions/:promotion_id/schedule", () => {
+  it("programa sin motivo: es reversible y no toca el universo", async () => {
+    const calls: unknown[] = [];
+    shared.repository = {
+      setPromotionStatus: (_id: string, status: string) => {
+        calls.push(status);
+        return Promise.resolve(promotionFixture({ status: "SCHEDULED" }));
+      },
+    };
+
+    const app = await appAllowingPermissions();
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/v1/admin/promotions/${PROMOTION_ID}/schedule`,
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json<{ status: string }>().status).toBe("SCHEDULED");
+    expect(calls).toStrictEqual(["SCHEDULED"]);
+  });
+
+  it("sin ventana, el motor lo rechaza y el 409 lleva su mensaje", async () => {
+    shared.repository = {
+      setPromotionStatus: () =>
+        Promise.reject(
+          pgError(
+            "23514",
+            "DEC-011: una promocion SCHEDULED necesita ventana explicita (starts_at y ends_at).",
+          ),
+        ),
+    };
+
+    const app = await appAllowingPermissions();
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/v1/admin/promotions/${PROMOTION_ID}/schedule`,
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(
+      response.json<{ error: { details: { engine: string } } }>().error.details.engine,
+    ).toContain("starts_at");
+  });
+});
+
 describe("POST /admin/promotions/:promotion_id/activate", () => {
   it("un cerrojo del motor se traduce a 409 con SU mensaje", async () => {
     // El caso mas importante del archivo. Quien intenta activar y no puede
