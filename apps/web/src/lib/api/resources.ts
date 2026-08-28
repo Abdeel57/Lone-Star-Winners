@@ -14,9 +14,6 @@ import type {
   AdminExportSnapshotPage,
   AdminOrderPage,
   AdminParticipantPage,
-  AdminProductPage,
-  AdminPromotionPage,
-  AdminPromotionRow,
   AdminRulesVersionPage,
   AmoeConfig,
   AmoeSubmission,
@@ -45,6 +42,17 @@ import type {
   SessionState,
   SiteConfigResponse,
 } from "./contract";
+import type {
+  AdminProductInput,
+  AdminProductPage,
+  AdminProductPatch,
+  AdminProductRow,
+  AdminPromotionInput,
+  AdminPromotionPage,
+  AdminPromotionPatch,
+  AdminPromotionRow,
+  AdminReasonInput,
+} from "./admin-contract";
 import { apiGet, apiRequest, queryString, type ApiRequestOptions } from "./http";
 import { ok, type ApiResult } from "./result";
 
@@ -1274,4 +1282,162 @@ export function fetchAdminOrder(
   session: SessionContext,
 ): Promise<ApiResult<OrderDetail>> {
   return apiGet<OrderDetail>(adminOrderPath(orderId), { locale, ...sessionOptions(session) });
+}
+
+// ---------------------------------------------------------------------------
+// Altas del panel: catalogo y promociones (seccion 12)
+// ---------------------------------------------------------------------------
+
+export function adminProductPath(productId: string): string {
+  return `${API_PATHS.adminProducts}/${encodeURIComponent(productId)}`;
+}
+
+export function adminProductPublishPath(productId: string): string {
+  return `${adminProductPath(productId)}/publish`;
+}
+
+export function adminPromotionSchedulePath(promotionId: string): string {
+  return `${adminPromotionPath(promotionId)}/schedule`;
+}
+
+export function adminPromotionActivatePath(promotionId: string): string {
+  return `${adminPromotionPath(promotionId)}/activate`;
+}
+
+export function adminPromotionClosePath(promotionId: string): string {
+  return `${adminPromotionPath(promotionId)}/close`;
+}
+
+/** Un producto del panel, en cualquier estado. */
+export function fetchAdminProduct(
+  productId: string,
+  locale: Locale,
+  session: SessionContext,
+): Promise<ApiResult<AdminProductRow>> {
+  return apiGet<AdminProductRow>(adminProductPath(productId), {
+    locale,
+    ...sessionOptions(session),
+  });
+}
+
+/**
+ * Alta de un producto. Nace en DRAFT: publicar es `publishAdminProduct`.
+ *
+ * `price_amount_minor` ya llega convertido a la unidad menor; la conversion
+ * desde el texto tecleado la hace `lib/admin/catalog-input.ts` en el servidor.
+ */
+export function createAdminProduct(
+  input: AdminProductInput,
+  locale: Locale,
+  session: SessionContext,
+): Promise<ApiResult<AdminProductRow>> {
+  return apiRequest<AdminProductRow>("POST", API_PATHS.adminProducts, {
+    locale,
+    body: input,
+    ...sessionOptions(session),
+  });
+}
+
+/** Edicion de nombre, precio o existencias. NO cambia el estado. */
+export function updateAdminProduct(
+  productId: string,
+  patch: AdminProductPatch,
+  locale: Locale,
+  session: SessionContext,
+): Promise<ApiResult<AdminProductRow>> {
+  return apiRequest<AdminProductRow>("PATCH", adminProductPath(productId), {
+    locale,
+    body: patch,
+    ...sessionOptions(session),
+  });
+}
+
+/**
+ * Publicar (`true`) o archivar (`false`).
+ *
+ * Ruta aparte porque exige `product.publish`, otra capacidad que `product.write`,
+ * y el autorizador decide por (metodo, camino) antes de leer el cuerpo.
+ */
+export function publishAdminProduct(
+  productId: string,
+  input: { readonly published: boolean },
+  locale: Locale,
+  session: SessionContext,
+): Promise<ApiResult<AdminProductRow>> {
+  return apiRequest<AdminProductRow>("POST", adminProductPublishPath(productId), {
+    locale,
+    body: input,
+    ...sessionOptions(session),
+  });
+}
+
+/** Alta de una promocion. Nace en DRAFT y sin version de reglas (DEC-012). */
+export function createAdminPromotion(
+  input: AdminPromotionInput,
+  locale: Locale,
+  session: SessionContext,
+): Promise<ApiResult<AdminPromotionRow>> {
+  return apiRequest<AdminPromotionRow>("POST", API_PATHS.adminPromotions, {
+    locale,
+    body: input,
+    ...sessionOptions(session),
+  });
+}
+
+/** Edicion de nombres y ventana. La zona horaria legal NO se edita (DEC-011). */
+export function updateAdminPromotion(
+  promotionId: string,
+  patch: AdminPromotionPatch,
+  locale: Locale,
+  session: SessionContext,
+): Promise<ApiResult<AdminPromotionRow>> {
+  return apiRequest<AdminPromotionRow>("PATCH", adminPromotionPath(promotionId), {
+    locale,
+    body: patch,
+    ...sessionOptions(session),
+  });
+}
+
+/** DRAFT -> SCHEDULED. Sin motivo: es reversible y no toca el universo. */
+export function scheduleAdminPromotion(
+  promotionId: string,
+  locale: Locale,
+  session: SessionContext,
+): Promise<ApiResult<AdminPromotionRow>> {
+  return apiRequest<AdminPromotionRow>("POST", adminPromotionSchedulePath(promotionId), {
+    locale,
+    ...sessionOptions(session),
+  });
+}
+
+/**
+ * SCHEDULED -> ACTIVE. Motivo obligatorio: lo lee el autorizador antes del
+ * handler, y sin el la respuesta es 403, no 422. Los cerrojos de DEC-012 los
+ * impone PostgreSQL y llegan como 409 LIFECYCLE_REFUSED con su mensaje.
+ */
+export function activateAdminPromotion(
+  promotionId: string,
+  input: AdminReasonInput,
+  locale: Locale,
+  session: SessionContext,
+): Promise<ApiResult<AdminPromotionRow>> {
+  return apiRequest<AdminPromotionRow>("POST", adminPromotionActivatePath(promotionId), {
+    locale,
+    body: input,
+    ...sessionOptions(session),
+  });
+}
+
+/** ACTIVE -> CLOSED. Mismo cuerpo y mismas reglas que activar. */
+export function closeAdminPromotion(
+  promotionId: string,
+  input: AdminReasonInput,
+  locale: Locale,
+  session: SessionContext,
+): Promise<ApiResult<AdminPromotionRow>> {
+  return apiRequest<AdminPromotionRow>("POST", adminPromotionClosePath(promotionId), {
+    locale,
+    body: input,
+    ...sessionOptions(session),
+  });
 }

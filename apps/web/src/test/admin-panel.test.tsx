@@ -18,6 +18,7 @@ const IDLE_RESULT = {
   requestId: null,
   field: null,
   retryAfterSeconds: null,
+  detail: null,
 };
 
 vi.mock("@/lib/admin/actions", () => ({

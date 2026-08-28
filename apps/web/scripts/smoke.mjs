@@ -459,6 +459,34 @@ const CHECKS = [
   },
 
   /*
+   * ALTAS DE LA SECCION 12: catalogo y promociones con sus formularios.
+   *
+   * El listado del catalogo tiene que traer el nombre en ESPANOL del fixture y
+   * el SKU: son las dos columnas que el telefono pinta como tarjeta y el
+   * escritorio como tabla, y las dos salen del backend simulado. Las pantallas
+   * de alta no tienen texto de fixture -son formularios vacios- y por eso solo
+   * se comprueba que responden y que no pintan el estado de error.
+   */
+  {
+    path: "/admin/es/catalog",
+    headers: { cookie: STAFF_COOKIE },
+    expect: ["Camiseta de algodón grueso", "HW-TEE-001"],
+  },
+  { path: "/admin/es/catalog/new", headers: { cookie: STAFF_COOKIE }, expect: [] },
+  {
+    path: "/admin/es/catalog/prd_0000000000000001",
+    headers: { cookie: STAFF_COOKIE },
+    expect: ["Camiseta de algodón grueso", "HW-TEE-001"],
+  },
+  { path: "/admin/en/promotions/new", headers: { cookie: STAFF_COOKIE }, expect: [] },
+  {
+    // La ficha: nombre interno del fixture y la zona legal, que sale fila a fila.
+    path: "/admin/es/promotions/prm_status_ACTIVE",
+    headers: { cookie: STAFF_COOKIE },
+    expect: ["(ACTIVE)", "America/Chicago"],
+  },
+
+  /*
    * LAS TRES LECTURAS DE LA SECCION 11.7, con lo que cada una tiene que poder
    * decir SIN publicar PII.
    *

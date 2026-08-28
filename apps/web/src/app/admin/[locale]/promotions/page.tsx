@@ -1,4 +1,4 @@
-import { Badge, buttonVariants, DataTable, EmptyState } from "@lsw/ui";
+import { Badge, buttonVariants, EmptyState } from "@lsw/ui";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getTranslations, setRequestLocale } from "next-intl/server";
@@ -7,26 +7,29 @@ import { AdminChrome } from "@/components/admin/admin-chrome";
 import { AdminPager } from "@/components/admin/admin-pager";
 import { openAdminScreen } from "@/components/admin/admin-screen";
 import { AdminSectionError } from "@/components/admin/admin-section-error";
+import { ResponsiveRecords } from "@/components/admin/responsive-records";
 import { PromotionStatusBadge } from "@/components/promotion-status-badge";
 import { adminHref } from "@/i18n/admin-routing";
 import { formatZonedDate } from "@/i18n/formatters";
 import { isLocale } from "@/i18n/locales";
+import { can } from "@/lib/admin/capabilities";
 import { fetchAdminPromotions, pickLocalized, type AdminPromotionRow } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
 
 /**
- * Listado de promociones.
+ * Listado de promociones (seccion 12 del contrato).
  *
  * LA COLUMNA QUE IMPORTA ES LA DE REGLAS. Una promocion sin version de reglas
- * ACTIVE no puede activarse (DEC-012) y ademas el escaparate no le pinta el
- * hero completo (DEC-044). Verlo en el listado evita el recorrido tipico:
- * activar, mirar la portada, no entender por que sale contenida, y buscar el
- * motivo en tres pantallas.
+ * ACTIVE no puede activarse (DEC-012), y verlo en el listado evita el recorrido
+ * tipico: entrar, intentar activar, leer un 409 y buscar el motivo en tres
+ * pantallas. El listado lo dice antes.
  *
  * Las fechas se formatean contra la ZONA LEGAL de cada promocion, no contra la
  * del navegador ni la del servidor (DEC-011). Dos promociones de la misma tabla
- * pueden tener zonas distintas, y por eso la zona se lee fila a fila.
+ * pueden tener zonas distintas, y por eso la zona se lee fila a fila. Una
+ * promocion recien creada no tiene ventana, y eso se dice: es una de las dos
+ * cosas que faltan para poder activarla.
  */
 export default async function AdminPromotionsPage({
   params,
@@ -58,6 +61,17 @@ export default async function AdminPromotionsPage({
     screen.session,
   );
 
+  const canCreate = can(screen.actor, "promotion.create");
+
+  const window = (row: AdminPromotionRow): string => {
+    const zoned = (iso: string | null): string | null =>
+      iso === null ? null : formatZonedDate(iso, locale, { timeZone: row.legal_timezone });
+    const opens = zoned(row.starts_at);
+    const closes = zoned(row.ends_at);
+    if (opens === null && closes === null) return t("windowNotSet");
+    return `${opens ?? t("windowNotSet")} – ${closes ?? t("windowNotSet")}`;
+  };
+
   return (
     <AdminChrome
       locale={locale}
@@ -65,68 +79,75 @@ export default async function AdminPromotionsPage({
       current="promotions"
       title={t("title")}
       description={t("description")}
+      {...(canCreate
+        ? {
+            actions: (
+              <Link
+                href={adminHref(locale, "/promotions/new")}
+                className={buttonVariants({ variant: "primary", size: "md" })}
+              >
+                {t("newCta")}
+              </Link>
+            ),
+          }
+        : {})}
     >
       {!result.ok ? (
         <AdminSectionError failure={result.error} headingLevel="h2" />
       ) : (
         <div className="flex flex-col gap-s6">
-          <div>
-            <DataTable<AdminPromotionRow>
-              caption={t("tableCaption")}
-              scrollRegionLabel={t("tableCaption")}
-              rows={result.data.items}
-              rowKey={(row) => row.id}
-              emptyState={
-                <EmptyState
-                  headingLevel="h2"
-                  title={t("emptyTitle")}
-                  description={t("emptyBody")}
-                />
-              }
-              columns={[
-                {
-                  id: "title",
-                  header: t("columnTitle"),
-                  isRowHeader: true,
-                  cell: (row) => (
-                    <Link
-                      href={adminHref(locale, `/promotions/${encodeURIComponent(row.id)}`)}
-                      className="underline underline-offset-4"
-                    >
-                      {pickLocalized(row.title, locale)}
-                    </Link>
+          <ResponsiveRecords<AdminPromotionRow>
+            caption={t("tableCaption")}
+            scrollRegionLabel={t("tableCaption")}
+            rows={result.data.items}
+            rowKey={(row) => row.id}
+            emptyState={
+              <EmptyState
+                headingLevel="h2"
+                title={t("emptyTitle")}
+                description={canCreate ? t("emptyBody") : t("emptyBodyReadOnly")}
+              />
+            }
+            columns={[
+              {
+                id: "title",
+                header: t("columnTitle"),
+                isRowHeader: true,
+                cell: (row) => (
+                  <Link
+                    href={adminHref(locale, `/promotions/${encodeURIComponent(row.id)}`)}
+                    className="underline underline-offset-4"
+                  >
+                    {pickLocalized(row.public_name, locale)}
+                  </Link>
+                ),
+              },
+              {
+                id: "status",
+                header: t("columnStatus"),
+                cell: (row) => <PromotionStatusBadge status={row.status} size="sm" />,
+              },
+              {
+                id: "window",
+                header: t("columnWindow"),
+                cell: (row) => window(row),
+              },
+              {
+                id: "rules",
+                header: t("columnRules"),
+                cell: (row) =>
+                  row.active_rules_version_id === null ? (
+                    <Badge tone="warning" size="sm">
+                      {t("noRulesVersion")}
+                    </Badge>
+                  ) : (
+                    <Badge tone="brand" size="sm">
+                      {t("rulesVersionActive")}
+                    </Badge>
                   ),
-                },
-                {
-                  id: "status",
-                  header: t("columnStatus"),
-                  cell: (row) => <PromotionStatusBadge status={row.status} size="sm" />,
-                },
-                {
-                  id: "window",
-                  header: t("columnWindow"),
-                  cell: (row) =>
-                    `${formatZonedDate(row.starts_at, locale, { timeZone: row.legal_timezone }) ?? ""} - ${
-                      formatZonedDate(row.ends_at, locale, { timeZone: row.legal_timezone }) ?? ""
-                    }`,
-                },
-                {
-                  id: "rules",
-                  header: t("columnRules"),
-                  cell: (row) =>
-                    row.rules_version_id === null ? (
-                      <Badge tone="warning" size="sm">
-                        {t("noRulesVersion")}
-                      </Badge>
-                    ) : (
-                      <Badge tone="brand" size="sm">
-                        {t("rulesVersion", { version: row.active_rules_version ?? 0 })}
-                      </Badge>
-                    ),
-                },
-              ]}
-            />
-          </div>
+              },
+            ]}
+          />
 
           <AdminPager
             locale={locale}

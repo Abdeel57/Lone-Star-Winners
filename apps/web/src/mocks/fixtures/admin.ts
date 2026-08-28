@@ -180,17 +180,25 @@ export const adminDashboardWithoutLedgerCapability: AdminDashboard = {
 // Promociones y versiones de reglas
 // ---------------------------------------------------------------------------
 
+/**
+ * Promociones del panel, con la FORMA REAL de la seccion 12: `public_name` e
+ * `internal_name` -no `title`-, `active_rules_version_id` -no
+ * `rules_version_id`-, y ventana que puede ser `null`. Una forma imaginada aqui
+ * convertiria los tests en un espejo (ver `admin-reads.test.ts`).
+ */
 export const adminPromotions: readonly AdminPromotionRow[] = publicPromotions.map(
   (promotion): AdminPromotionRow => ({
     id: promotion.id,
     slug: promotion.slug,
+    internal_name: `${promotion.title["en-US"]} (${promotion.status})`,
     status: promotion.status,
-    title: promotion.title,
     legal_timezone: promotion.legal_timezone,
     starts_at: promotion.starts_at,
     ends_at: promotion.ends_at,
-    rules_version_id: promotion.rules_version_id,
-    active_rules_version: promotion.rules_version_id === null ? null : 3,
+    active_rules_version_id: promotion.rules_version_id,
+    public_name: promotion.title,
+    created_at: "2026-08-01T12:00:00.000Z",
+    updated_at: "2026-08-20T12:00:00.000Z",
   }),
 );
 
@@ -249,24 +257,52 @@ export const adminRulesVersionPage: AdminRulesVersionPage = {
 // Catalogo, pedidos y participantes
 // ---------------------------------------------------------------------------
 
+/**
+ * Catalogo del panel, con la forma real de la seccion 12.
+ *
+ * Los tres estados a proposito, y un producto SIN existencias gestionadas
+ * (`stock_quantity: null`): la pantalla tiene que decir "sin gestionar" y no
+ * "0", que son dos afirmaciones distintas delante de quien vende.
+ */
 export const adminProducts: readonly AdminProductRow[] = [
   {
     id: "prd_0000000000000001",
+    sku: "HW-TEE-001",
     slug: "heavyweight-tee",
-    title: { "en-US": "Heavyweight Cotton Tee", "es-US": "Camiseta de algodón grueso" },
-    published: true,
-    variant_count: 6,
-    price: { amount_minor: "2500", currency: "USD" },
+    status: "ACTIVE",
+    currency: "USD",
+    name: { "en-US": "Heavyweight Cotton Tee", "es-US": "Camiseta de algodón grueso" },
+    price_amount_minor: "2500",
+    stock_quantity: 120,
+    variant_id: "var_0000000000000001",
+    created_at: "2026-08-10T08:00:00.000Z",
     updated_at: "2026-09-10T08:00:00.000Z",
   },
   {
     id: "prd_0000000000000002",
+    sku: "EN-MUG-001",
     slug: "enamel-mug",
-    title: { "en-US": "Enamel Camp Mug", "es-US": "Taza esmaltada de campamento" },
-    published: false,
-    variant_count: 1,
-    price: { amount_minor: "1800", currency: "USD" },
+    status: "DRAFT",
+    currency: "USD",
+    name: { "en-US": "Enamel Camp Mug", "es-US": "Taza esmaltada de campamento" },
+    price_amount_minor: "1800",
+    stock_quantity: null,
+    variant_id: "var_0000000000000002",
+    created_at: "2026-09-08T08:00:00.000Z",
     updated_at: "2026-09-08T08:00:00.000Z",
+  },
+  {
+    id: "prd_0000000000000003",
+    sku: "LS-CAP-2024",
+    slug: "cap-2024",
+    status: "ARCHIVED",
+    currency: "USD",
+    name: { "en-US": "2024 Cap", "es-US": "Gorra 2024" },
+    price_amount_minor: "2200",
+    stock_quantity: 0,
+    variant_id: "var_0000000000000003",
+    created_at: "2025-11-01T08:00:00.000Z",
+    updated_at: "2026-02-01T08:00:00.000Z",
   },
 ];
 

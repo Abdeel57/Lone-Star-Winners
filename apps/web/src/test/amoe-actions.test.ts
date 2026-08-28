@@ -50,6 +50,7 @@ const IDLE = {
   requestId: null,
   field: null,
   retryAfterSeconds: null,
+  detail: null,
 };
 
 function formWith(entries: Readonly<Record<string, string>>): FormData {

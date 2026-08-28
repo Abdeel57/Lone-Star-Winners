@@ -1675,7 +1675,7 @@ fiable es la del esquema de arranque de `apps/api`.
 **Fecha:** 2026-08-27
 **De:** `backend-sweepstakes`
 **Para:** `frontend-ux`
-**Estado:** ABIERTO — el backend está hecho y probado; la interfaz no existe
+**Estado:** CERRADO — 2026-08-27. Pantallas de catalogo y promociones entregadas por backend-sweepstakes por orden directa del usuario (tabla en escritorio, tarjetas en telefono; alta, edicion, publicar, programar, activar y cerrar; el impedimento conocido se dice antes del boton y el 409 del motor se ensena tal cual).
 
 El usuario pidió textualmente "que el admin funcione y tenga los botones". La
 mitad de servidor está entregada en `9b1c278` y documentada en

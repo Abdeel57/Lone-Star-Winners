@@ -399,4 +399,23 @@ export const scenarios = {
 
   adminAudit: (body: JsonBodyType) =>
     http.get(url(API_PATHS.adminAuditEvents), () => HttpResponse.json(body)),
+
+  // -------------------------------------------------------------------------
+  // Altas del panel (seccion 12)
+  // -------------------------------------------------------------------------
+
+  /** SKU o direccion repetidos: 409 con el mensaje del motor en `details.engine`. */
+  adminCatalogConflict: (path: string, engine: string) =>
+    http.post(url(path), () =>
+      HttpResponse.json(errorEnvelope("CATALOG_CONFLICT", { engine }), { status: 409 }),
+    ),
+
+  /**
+   * Un cerrojo del ciclo de vida salto. El texto es del MOTOR y la interfaz lo
+   * ensena tal cual: es el unico que sabe con certeza cual de los cuatro fue.
+   */
+  adminLifecycleRefused: (path: string, engine: string) =>
+    http.post(url(path), () =>
+      HttpResponse.json(errorEnvelope("LIFECYCLE_REFUSED", { engine }), { status: 409 }),
+    ),
 };

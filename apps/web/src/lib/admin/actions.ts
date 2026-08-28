@@ -15,9 +15,21 @@ import {
   rejectAmoeSubmission,
   verifyMfa,
   type AdjustmentDirection,
+  activateAdminPromotion,
+  closeAdminPromotion,
+  createAdminProduct,
+  createAdminPromotion,
+  fetchAdminProduct,
+  fetchAdminPromotion,
+  publishAdminProduct,
+  scheduleAdminPromotion,
+  updateAdminProduct,
+  updateAdminPromotion,
 } from "@/lib/api";
 import { fromFailure, invalid, SUCCEEDED, type ActionResult } from "@/lib/action-result";
-import { localeFrom, secretFrom, textFrom } from "@/lib/form-input";
+import { checkboxFrom, localeFrom, secretFrom, textFrom } from "@/lib/form-input";
+import { isIanaTimeZone, priceToMinorUnits, zonedWallTimeToIso } from "@/lib/admin/catalog-input";
+import { PROMOTION_ACTIVATE_REASONS, PROMOTION_CLOSE_REASONS } from "@/lib/admin/reason-codes";
 import { mutableSession } from "@/lib/session-server";
 
 /**
@@ -374,6 +386,423 @@ export async function approveAdjustmentAction(
     reason.note === null
       ? { reason_key: reason.reason_key }
       : { reason_key: reason.reason_key, note: reason.note },
+    locale,
+    session,
+  );
+
+  if (!result.ok) return fromFailure(result.error);
+
+  revalidatePath("/admin", "layout");
+  return SUCCEEDED;
+}
+
+// ---------------------------------------------------------------------------
+// Altas del panel: catalogo y promociones (seccion 12)
+// ---------------------------------------------------------------------------
+//
+// LO QUE ESTAS ACCIONES CONVIERTEN Y LO QUE NO DECIDEN
+//
+//   Convierten dos cosas que el formulario no puede mandar en la forma que la
+//   API exige: el precio tecleado con decimales pasa a unidad menor, y la
+//   fecha de pared pasa a instante UTC contra la zona legal de la promocion.
+//   Las dos conversiones viven en `lib/admin/catalog-input.ts`, sin coma
+//   flotante y con sus propios tests.
+//
+//   NO deciden si un SKU es valido, si una promocion puede activarse ni cuantas
+//   participaciones genera nada. Eso lo decide el backend y el motor de base
+//   de datos, y sus respuestas -422, 409 con el mensaje del motor- se
+//   traducen a un resultado de formulario y se ensenan.
+
+/** Existencias: vacio = no gestionadas (`null`); si no, entero no negativo. */
+function stockFrom(
+  formData: FormData,
+): { readonly ok: true; readonly value: number | null } | { readonly ok: false } {
+  const raw = textFrom(formData, "stock");
+  if (raw === null) return { ok: true, value: null };
+  if (!/^\d+$/u.test(raw)) return { ok: false };
+
+  const value = Number.parseInt(raw, 10);
+  return Number.isSafeInteger(value) ? { ok: true, value } : { ok: false };
+}
+
+/**
+ * Un campo de fecha del formulario, resuelto contra la zona legal.
+ *
+ * Vacio significa "sin fijar" y viaja como `null`. Una hora que no existe en
+ * esa zona -el hueco del horario de verano- se rechaza con el campo señalado,
+ * en vez de inventarse una hora cercana.
+ */
+function windowFieldFrom(
+  formData: FormData,
+  field: "starts_at" | "ends_at",
+  timeZone: string,
+):
+  | { readonly ok: true; readonly value: string | null }
+  | { readonly ok: false; readonly result: ActionResult } {
+  const raw = textFrom(formData, field);
+  if (raw === null) return { ok: true, value: null };
+
+  const iso = zonedWallTimeToIso(raw, timeZone);
+  if (iso === null) return { ok: false, result: invalid("DATETIME_INVALID", field) };
+
+  return { ok: true, value: iso };
+}
+
+/** Los dos nombres, los dos obligatorios (principio 4). */
+function localizedFrom(
+  formData: FormData,
+  prefix: string,
+):
+  | { readonly ok: true; readonly value: { readonly "es-US": string; readonly "en-US": string } }
+  | { readonly ok: false; readonly result: ActionResult } {
+  const es = textFrom(formData, `${prefix}_es`);
+  if (es === null) return { ok: false, result: invalid("FIELD_REQUIRED", `${prefix}_es`) };
+
+  const en = textFrom(formData, `${prefix}_en`);
+  if (en === null) return { ok: false, result: invalid("FIELD_REQUIRED", `${prefix}_en`) };
+
+  return { ok: true, value: { "es-US": es, "en-US": en } };
+}
+
+/** Alta de un producto. Redirige a su ficha, que es donde se publica. */
+export async function createProductAction(
+  _previous: ActionResult,
+  formData: FormData,
+): Promise<ActionResult> {
+  const locale = localeFrom(formData);
+  if (locale === null) return invalid("VALIDATION_FAILED");
+
+  const sku = textFrom(formData, "sku");
+  if (sku === null) return invalid("FIELD_REQUIRED", "sku");
+
+  const slug = textFrom(formData, "slug");
+  if (slug === null) return invalid("FIELD_REQUIRED", "slug");
+
+  const currencyRaw = textFrom(formData, "currency");
+  if (currencyRaw === null) return invalid("FIELD_REQUIRED", "currency");
+  const currency = currencyRaw.toUpperCase();
+
+  const name = localizedFrom(formData, "name");
+  if (!name.ok) return name.result;
+
+  const priceText = textFrom(formData, "price");
+  if (priceText === null) return invalid("FIELD_REQUIRED", "price");
+
+  const price = priceToMinorUnits(priceText, currency);
+  if (price === null) return invalid("PRICE_INVALID", "price");
+
+  const stock = stockFrom(formData);
+  if (!stock.ok) return invalid("VALIDATION_FAILED", "stock");
+
+  const session = await mutableSession();
+  const result = await createAdminProduct(
+    {
+      sku,
+      slug,
+      currency,
+      name: name.value,
+      description: {
+        "es-US": textFrom(formData, "description_es"),
+        "en-US": textFrom(formData, "description_en"),
+      },
+      price_amount_minor: price,
+      stock_quantity: stock.value,
+    },
+    locale,
+    session,
+  );
+
+  if (!result.ok) return fromFailure(result.error);
+
+  revalidatePath("/admin", "layout");
+  redirect(adminHref(locale, `/catalog/${encodeURIComponent(result.data.id)}`));
+}
+
+/**
+ * Edicion de nombre, precio y existencias.
+ *
+ * La moneda se lee del PRODUCTO, no del formulario: es lo que decide cuantos
+ * decimales tiene el precio, y un campo oculto se edita en cinco segundos.
+ */
+export async function updateProductAction(
+  _previous: ActionResult,
+  formData: FormData,
+): Promise<ActionResult> {
+  const locale = localeFrom(formData);
+  if (locale === null) return invalid("VALIDATION_FAILED");
+
+  const productId = textFrom(formData, "product_id");
+  if (productId === null) return invalid("VALIDATION_FAILED");
+
+  const name = localizedFrom(formData, "name");
+  if (!name.ok) return name.result;
+
+  const priceText = textFrom(formData, "price");
+  if (priceText === null) return invalid("FIELD_REQUIRED", "price");
+
+  const stock = stockFrom(formData);
+  if (!stock.ok) return invalid("VALIDATION_FAILED", "stock");
+
+  const session = await mutableSession();
+
+  const current = await fetchAdminProduct(productId, locale, session);
+  if (!current.ok) return fromFailure(current.error);
+
+  const price = priceToMinorUnits(priceText, current.data.currency);
+  if (price === null) return invalid("PRICE_INVALID", "price");
+
+  const result = await updateAdminProduct(
+    productId,
+    { name: name.value, price_amount_minor: price, stock_quantity: stock.value },
+    locale,
+    session,
+  );
+
+  if (!result.ok) return fromFailure(result.error);
+
+  revalidatePath("/admin", "layout");
+  return SUCCEEDED;
+}
+
+/**
+ * Publicar o retirar.
+ *
+ * `published` se compara con la cadena "true", no con `Boolean()`:
+ * `Boolean("false")` es `true`, y ese es exactamente el fallo que publicaria
+ * un producto al intentar retirarlo.
+ */
+export async function publishProductAction(
+  _previous: ActionResult,
+  formData: FormData,
+): Promise<ActionResult> {
+  const locale = localeFrom(formData);
+  if (locale === null) return invalid("VALIDATION_FAILED");
+
+  const productId = textFrom(formData, "product_id");
+  if (productId === null) return invalid("VALIDATION_FAILED");
+
+  const published = formData.get("published") === "true";
+
+  const session = await mutableSession();
+  const result = await publishAdminProduct(productId, { published }, locale, session);
+
+  if (!result.ok) return fromFailure(result.error);
+
+  revalidatePath("/admin", "layout");
+  return SUCCEEDED;
+}
+
+/** Alta de una promocion. Redirige a su ficha. */
+export async function createPromotionAction(
+  _previous: ActionResult,
+  formData: FormData,
+): Promise<ActionResult> {
+  const locale = localeFrom(formData);
+  if (locale === null) return invalid("VALIDATION_FAILED");
+
+  const slug = textFrom(formData, "slug");
+  if (slug === null) return invalid("FIELD_REQUIRED", "slug");
+
+  const internalName = textFrom(formData, "internal_name");
+  if (internalName === null) return invalid("FIELD_REQUIRED", "internal_name");
+
+  /*
+   * La zona se valida aqui con el MISMO catalogo que usa el formateador. No es
+   * la comprobacion autoritativa -PostgreSQL vuelve a validarla contra el
+   * suyo- pero evita mandar una promocion entera para que vuelva por una zona
+   * mal tecleada.
+   */
+  const timeZone = textFrom(formData, "legal_timezone");
+  if (timeZone === null) return invalid("FIELD_REQUIRED", "legal_timezone");
+  if (!isIanaTimeZone(timeZone)) return invalid("TIMEZONE_INVALID", "legal_timezone");
+
+  const publicName = localizedFrom(formData, "public_name");
+  if (!publicName.ok) return publicName.result;
+
+  const startsAt = windowFieldFrom(formData, "starts_at", timeZone);
+  if (!startsAt.ok) return startsAt.result;
+
+  const endsAt = windowFieldFrom(formData, "ends_at", timeZone);
+  if (!endsAt.ok) return endsAt.result;
+
+  const session = await mutableSession();
+  const result = await createAdminPromotion(
+    {
+      slug,
+      internal_name: internalName,
+      legal_timezone: timeZone,
+      public_name: publicName.value,
+      starts_at: startsAt.value,
+      ends_at: endsAt.value,
+    },
+    locale,
+    session,
+  );
+
+  if (!result.ok) return fromFailure(result.error);
+
+  revalidatePath("/admin", "layout");
+  redirect(adminHref(locale, `/promotions/${encodeURIComponent(result.data.id)}`));
+}
+
+/**
+ * Edicion de nombres y ventana.
+ *
+ * La zona legal se lee de la PROMOCION, no del formulario: es contra la que se
+ * resuelven las fechas, y no se edita (DEC-011).
+ */
+export async function updatePromotionAction(
+  _previous: ActionResult,
+  formData: FormData,
+): Promise<ActionResult> {
+  const locale = localeFrom(formData);
+  if (locale === null) return invalid("VALIDATION_FAILED");
+
+  const promotionId = textFrom(formData, "promotion_id");
+  if (promotionId === null) return invalid("VALIDATION_FAILED");
+
+  const internalName = textFrom(formData, "internal_name");
+  if (internalName === null) return invalid("FIELD_REQUIRED", "internal_name");
+
+  const publicName = localizedFrom(formData, "public_name");
+  if (!publicName.ok) return publicName.result;
+
+  const session = await mutableSession();
+
+  const current = await fetchAdminPromotion(promotionId, locale, session);
+  if (!current.ok) return fromFailure(current.error);
+
+  const timeZone = current.data.legal_timezone;
+
+  const startsAt = windowFieldFrom(formData, "starts_at", timeZone);
+  if (!startsAt.ok) return startsAt.result;
+
+  const endsAt = windowFieldFrom(formData, "ends_at", timeZone);
+  if (!endsAt.ok) return endsAt.result;
+
+  const result = await updateAdminPromotion(
+    promotionId,
+    {
+      internal_name: internalName,
+      public_name: publicName.value,
+      starts_at: startsAt.value,
+      ends_at: endsAt.value,
+    },
+    locale,
+    session,
+  );
+
+  if (!result.ok) return fromFailure(result.error);
+
+  revalidatePath("/admin", "layout");
+  return SUCCEEDED;
+}
+
+/**
+ * Motivo de una transicion sensible, comprobado contra la lista que el panel
+ * ofrece.
+ *
+ * SE COMPARA CON LA LISTA y no se acepta cualquier texto: un `reason_code`
+ * manipulado tiene que morir aqui, no viajar al backend. `OTHER` exige nota:
+ * un motivo que no dice nada y sin nota es una traza que no explica nada.
+ */
+function transitionReasonFrom(
+  formData: FormData,
+  allowed: readonly string[],
+):
+  | { readonly ok: true; readonly reasonCode: string; readonly reasonText: string | null }
+  | { readonly ok: false; readonly result: ActionResult } {
+  const reasonCode = textFrom(formData, "reason_code");
+  if (reasonCode === null || !allowed.includes(reasonCode)) {
+    return { ok: false, result: invalid("FIELD_REQUIRED", "reason_code") };
+  }
+
+  const reasonText = textFrom(formData, "reason_text");
+  if (reasonCode === "OTHER" && reasonText === null) {
+    return { ok: false, result: invalid("FIELD_REQUIRED", "reason_text") };
+  }
+
+  return { ok: true, reasonCode, reasonText };
+}
+
+/** DRAFT -> SCHEDULED. Sin motivo; con confirmacion. */
+export async function schedulePromotionAction(
+  _previous: ActionResult,
+  formData: FormData,
+): Promise<ActionResult> {
+  const locale = localeFrom(formData);
+  if (locale === null) return invalid("VALIDATION_FAILED");
+
+  const promotionId = textFrom(formData, "promotion_id");
+  if (promotionId === null) return invalid("VALIDATION_FAILED");
+
+  if (!checkboxFrom(formData, "confirmed")) return invalid("CONFIRMATION_REQUIRED", "confirmed");
+
+  const session = await mutableSession();
+  const result = await scheduleAdminPromotion(promotionId, locale, session);
+
+  if (!result.ok) return fromFailure(result.error);
+
+  revalidatePath("/admin", "layout");
+  return SUCCEEDED;
+}
+
+/**
+ * SCHEDULED -> ACTIVE.
+ *
+ * Si el motor rechaza la transicion, `fromFailure` conserva su mensaje en
+ * `detail` y la pantalla lo ensena tal cual: es la unica explicacion fiable de
+ * cual de los cerrojos de DEC-012 salto.
+ */
+export async function activatePromotionAction(
+  _previous: ActionResult,
+  formData: FormData,
+): Promise<ActionResult> {
+  const locale = localeFrom(formData);
+  if (locale === null) return invalid("VALIDATION_FAILED");
+
+  const promotionId = textFrom(formData, "promotion_id");
+  if (promotionId === null) return invalid("VALIDATION_FAILED");
+
+  if (!checkboxFrom(formData, "confirmed")) return invalid("CONFIRMATION_REQUIRED", "confirmed");
+
+  const reason = transitionReasonFrom(formData, PROMOTION_ACTIVATE_REASONS);
+  if (!reason.ok) return reason.result;
+
+  const session = await mutableSession();
+  const result = await activateAdminPromotion(
+    promotionId,
+    { reason_code: reason.reasonCode, reason_text: reason.reasonText },
+    locale,
+    session,
+  );
+
+  if (!result.ok) return fromFailure(result.error);
+
+  revalidatePath("/admin", "layout");
+  return SUCCEEDED;
+}
+
+/** ACTIVE -> CLOSED. Mismas reglas que activar. */
+export async function closePromotionAction(
+  _previous: ActionResult,
+  formData: FormData,
+): Promise<ActionResult> {
+  const locale = localeFrom(formData);
+  if (locale === null) return invalid("VALIDATION_FAILED");
+
+  const promotionId = textFrom(formData, "promotion_id");
+  if (promotionId === null) return invalid("VALIDATION_FAILED");
+
+  if (!checkboxFrom(formData, "confirmed")) return invalid("CONFIRMATION_REQUIRED", "confirmed");
+
+  const reason = transitionReasonFrom(formData, PROMOTION_CLOSE_REASONS);
+  if (!reason.ok) return reason.result;
+
+  const session = await mutableSession();
+  const result = await closeAdminPromotion(
+    promotionId,
+    { reason_code: reason.reasonCode, reason_text: reason.reasonText },
     locale,
     session,
   );

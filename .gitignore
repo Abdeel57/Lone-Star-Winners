@@ -25,6 +25,7 @@ build/
 out/
 .next/
 .next-smoke/
+.next-e2e/
 .next-build/
 .nuxt/
 .output/

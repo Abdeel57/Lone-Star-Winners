@@ -1908,35 +1908,6 @@ export interface AdminRulesVersion {
 
 export type AdminRulesVersionPage = CursorPage<AdminRulesVersion>;
 
-/** [PROVISIONAL] Fila del listado de promociones del panel. */
-export interface AdminPromotionRow {
-  readonly id: string;
-  readonly slug: string;
-  readonly status: PromotionStatus;
-  readonly title: LocalizedText;
-  readonly legal_timezone: string;
-  readonly starts_at: string;
-  readonly ends_at: string;
-  readonly rules_version_id: string | null;
-  /** Version de reglas vigente, ya resuelta. `null` si no hay ninguna. */
-  readonly active_rules_version: number | null;
-}
-
-export type AdminPromotionPage = CursorPage<AdminPromotionRow>;
-
-/** [PROVISIONAL] Fila del catalogo en el panel. */
-export interface AdminProductRow {
-  readonly id: string;
-  readonly slug: string;
-  readonly title: LocalizedText;
-  readonly published: boolean;
-  readonly variant_count: number;
-  readonly price: MoneyMinor;
-  readonly updated_at: string;
-}
-
-export type AdminProductPage = CursorPage<AdminProductRow>;
-
 /**
  * [CONTRATO] Fila del listado de pedidos en el panel (seccion 11.7).
  *

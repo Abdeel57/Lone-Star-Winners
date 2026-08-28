@@ -1,4 +1,5 @@
-import { Alert, Badge, DataTable, EmptyState } from "@lsw/ui";
+import { buttonVariants, EmptyState } from "@lsw/ui";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 
@@ -6,6 +7,9 @@ import { AdminChrome } from "@/components/admin/admin-chrome";
 import { AdminPager } from "@/components/admin/admin-pager";
 import { openAdminScreen } from "@/components/admin/admin-screen";
 import { AdminSectionError } from "@/components/admin/admin-section-error";
+import { ProductStatusBadge } from "@/components/admin/product-status-badge";
+import { ResponsiveRecords } from "@/components/admin/responsive-records";
+import { adminHref } from "@/i18n/admin-routing";
 import { formatInteger, formatMoney, formatZonedDate } from "@/i18n/formatters";
 import { isLocale } from "@/i18n/locales";
 import { can } from "@/lib/admin/capabilities";
@@ -14,18 +18,21 @@ import { fetchAdminProducts, pickLocalized, type AdminProductRow } from "@/lib/a
 export const dynamic = "force-dynamic";
 
 /**
- * Catalogo de mercancia elegible.
+ * Catalogo de mercancia (seccion 12 del contrato).
  *
- * ARMAZON DE LECTURA. La edicion y la publicacion existen en el contrato
- * (`product.write`, `product.publish`) pero sus formularios no se escriben
- * contra un endpoint en `PROPOSED`: un formulario de edicion que no puede
- * guardar es peor que la ausencia del formulario, porque quien lo usa cree que
- * ha guardado. Cuando `backend` implemente esas dos rutas, esta pantalla las
- * consume sin cambiar de forma.
+ * YA NO ES UN ARMAZON DE LECTURA. Desde aqui se crea un producto -boton de
+ * arriba- y desde la ficha de cada uno se edita y se publica. El listado ensena
+ * lo que decide si un articulo aparece en la tienda: su estado y su precio. Un
+ * articulo en borrador con precio es la causa habitual de "no me sale en la
+ * tienda", y por eso el estado va en la segunda columna y no al final.
  *
- * LO QUE SI SE ENSENA YA es lo que decide si un articulo aparece en la tienda:
- * si esta publicado, cuantas variantes tiene y su precio. Un articulo
- * despublicado con variantes es la causa habitual de "no me sale en la tienda".
+ * EN EL TELEFONO SON TARJETAS, en el escritorio una tabla: mismas columnas,
+ * misma informacion (`ResponsiveRecords`). Quien da de alta mercancia desde el
+ * movil tiene que ver cada producto entero sin arrastrar.
+ *
+ * NADA DE ESTO CONCEDE PARTICIPACIONES: un producto es mercancia. Cuantas
+ * participaciones genera una compra lo dicen las reglas de la promocion
+ * (DEC-012), y esta pantalla no lo sabe ni lo pregunta.
  */
 export default async function AdminCatalogPage({
   params,
@@ -66,48 +73,79 @@ export default async function AdminCatalogPage({
       current="catalog"
       title={t("title")}
       description={t("description")}
+      {...(canWrite
+        ? {
+            actions: (
+              <Link
+                href={adminHref(locale, "/catalog/new")}
+                className={buttonVariants({ variant: "primary", size: "md" })}
+              >
+                {t("newCta")}
+              </Link>
+            ),
+          }
+        : {})}
     >
       {!result.ok ? (
         <AdminSectionError failure={result.error} headingLevel="h2" />
       ) : (
         <div className="flex flex-col gap-s6">
-          {canWrite ? <Alert tone="info">{t("editingPending")}</Alert> : null}
-
-          <DataTable<AdminProductRow>
+          <ResponsiveRecords<AdminProductRow>
             caption={t("tableCaption")}
             scrollRegionLabel={t("tableCaption")}
             rows={result.data.items}
             rowKey={(row) => row.id}
             emptyState={
-              <EmptyState headingLevel="h2" title={t("emptyTitle")} description={t("emptyBody")} />
+              <EmptyState
+                headingLevel="h2"
+                title={t("emptyTitle")}
+                description={canWrite ? t("emptyBody") : t("emptyBodyReadOnly")}
+              />
             }
             columns={[
               {
-                id: "title",
+                id: "name",
                 header: t("columnTitle"),
                 isRowHeader: true,
-                cell: (row) => pickLocalized(row.title, locale),
-              },
-              {
-                id: "published",
-                header: t("columnPublished"),
                 cell: (row) => (
-                  <Badge tone={row.published ? "success" : "neutral"} size="sm">
-                    {row.published ? t("published") : t("unpublished")}
-                  </Badge>
+                  <Link
+                    href={adminHref(locale, `/catalog/${encodeURIComponent(row.id)}`)}
+                    className="underline underline-offset-4"
+                  >
+                    {pickLocalized(row.name, locale)}
+                  </Link>
                 ),
               },
               {
-                id: "variants",
-                header: t("columnVariants"),
-                align: "end",
-                cell: (row) => formatInteger(row.variant_count, locale),
+                id: "status",
+                header: t("columnStatus"),
+                cell: (row) => <ProductStatusBadge status={row.status} locale={locale} size="sm" />,
+              },
+              {
+                id: "sku",
+                header: t("columnSku"),
+                cell: (row) => <span className="font-mono">{row.sku}</span>,
               },
               {
                 id: "price",
                 header: t("columnPrice"),
                 align: "end",
-                cell: (row) => formatMoney(row.price, locale) ?? "",
+                cell: (row) =>
+                  row.price_amount_minor === null
+                    ? ""
+                    : (formatMoney(
+                        { amount_minor: row.price_amount_minor, currency: row.currency },
+                        locale,
+                      ) ?? ""),
+              },
+              {
+                id: "stock",
+                header: t("columnStock"),
+                align: "end",
+                cell: (row) =>
+                  row.stock_quantity === null
+                    ? t("stockUnmanaged")
+                    : formatInteger(row.stock_quantity, locale),
               },
               {
                 id: "updated",

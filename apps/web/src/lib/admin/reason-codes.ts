@@ -78,3 +78,19 @@ export const REASONS_REQUIRING_NOTE: readonly string[] = ["OTHER"];
 export function reasonRequiresNote(reasonKey: string): boolean {
   return REASONS_REQUIRING_NOTE.includes(reasonKey);
 }
+
+/**
+ * Motivos para ACTIVAR una promocion (seccion 12).
+ *
+ * Programar no lleva motivo -es reversible y no reparte participaciones-;
+ * activar si, porque abre el universo. Son claves OPERATIVAS: ninguna afirma
+ * nada sobre elegibilidad ni condiciones de participacion.
+ */
+export const PROMOTION_ACTIVATE_REASONS = ["PROMOTION_LAUNCH_APPROVED", "OTHER"] as const;
+
+/** Motivos para CERRAR una promocion. */
+export const PROMOTION_CLOSE_REASONS = [
+  "ENTRY_PERIOD_ENDED",
+  "EARLY_TERMINATION",
+  "OTHER",
+] as const;

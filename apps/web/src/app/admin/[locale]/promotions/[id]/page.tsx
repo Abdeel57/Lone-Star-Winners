@@ -6,39 +6,53 @@ import { getTranslations, setRequestLocale } from "next-intl/server";
 import { AdminChrome } from "@/components/admin/admin-chrome";
 import { openAdminScreen } from "@/components/admin/admin-screen";
 import { AdminSectionError } from "@/components/admin/admin-section-error";
+import { PromotionForm } from "@/components/admin/promotion-form";
+import {
+  PromotionTransitionForm,
+  type PromotionTransition,
+} from "@/components/admin/promotion-transition-form";
 import { PromotionStatusBadge } from "@/components/promotion-status-badge";
 import { adminHref } from "@/i18n/admin-routing";
-import { rulesKeyLabeller, rulesStatusLabeller } from "@/i18n/admin-labels";
+import { reasonLabeller, rulesKeyLabeller, rulesStatusLabeller } from "@/i18n/admin-labels";
 import { formatZonedDateTime } from "@/i18n/formatters";
 import { isLocale, type Locale } from "@/i18n/locales";
+import { type ActionResult } from "@/lib/action-result";
+import {
+  activatePromotionAction,
+  closePromotionAction,
+  schedulePromotionAction,
+  updatePromotionAction,
+} from "@/lib/admin/actions";
 import { can } from "@/lib/admin/capabilities";
+import { isoToZonedWallTime } from "@/lib/admin/catalog-input";
+import { PROMOTION_ACTIVATE_REASONS, PROMOTION_CLOSE_REASONS } from "@/lib/admin/reason-codes";
 import {
   fetchAdminPromotion,
   fetchAdminRulesVersions,
   pickLocalized,
+  type AdminCapability,
+  type AdminPromotionRow,
   type AdminRulesVersion,
 } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
 
 /**
- * Detalle de promocion, con sus versiones de reglas.
+ * Ficha de una promocion: resumen, estado, datos y versiones de reglas.
  *
- * AQUI VIVE EL VALIDADOR DE ACTIVACION DE DEC-012, y es la razon de que esta
- * pantalla exista. DEC-012 dice que una promocion no transiciona a `ACTIVE`
- * mientras quede una clave requerida en estado provisional o `TBD`, y que el
- * validador "devuelve la lista de claves faltantes".
+ * EL BLOQUE DE ESTADO ES EL CORAZON DE LA PANTALLA. Ofrece UNA transicion, la
+ * que corresponde al estado actual -programar, activar o cerrar-, y dice
+ * ANTES del boton lo que la pantalla ya sabe que falta: el periodo para
+ * programar, la version de reglas para activar. Es la version en pantalla de
+ * lo que DEC-012 pide del validador: que la respuesta a "por que no puedo
+ * activar" no sea mirar logs.
  *
- * ESA LISTA SE PINTA, CLAVE POR CLAVE. Es la diferencia entre un boton gris que
- * no explica nada y una pantalla que dice exactamente que le falta al abogado
- * por cerrar. Sin ella, la respuesta a "por que no puedo activar" seria mirar
- * logs, y el atajo evidente -"activo igual y ya lo arreglamos"- es justo el que
- * DEC-012 existe para bloquear.
+ * EL CERROJO NO ES DE ESTA PANTALLA. Lo que aqui se desactiva es un boton; el
+ * control es el trigger de PostgreSQL, que ademas conoce condiciones que esta
+ * pantalla no ve. Cuando responde 409, su mensaje se ensena tal cual.
  *
- * EL CERROJO NO ES DE ESTA PANTALLA. `activatable` lo decide el backend y no se
- * deduce de que la lista este vacia: puede haber mas condiciones que las
- * claves. Deducirlo aqui seria reimplementar el cerrojo en el frontend, que es
- * exactamente lo que DEC-012 quiere que viva en un solo sitio.
+ * Las fechas se formatean contra la ZONA LEGAL de la promocion (DEC-011), y el
+ * formulario de edicion las recibe ya convertidas a hora de pared de esa zona.
  */
 export default async function AdminPromotionDetailPage({
   params,
@@ -54,7 +68,7 @@ export default async function AdminPromotionDetailPage({
   const screen = await openAdminScreen({
     locale,
     current: "promotions",
-    path: "/promotions",
+    path: `/promotions/${id}`,
     title: t("detailTitle"),
     capability: "promotion.read",
   });
@@ -73,7 +87,7 @@ export default async function AdminPromotionDetailPage({
       locale={locale}
       actor={screen.actor}
       current="promotions"
-      title={promotion.ok ? pickLocalized(promotion.data.title, locale) : t("detailTitle")}
+      title={promotion.ok ? pickLocalized(promotion.data.public_name, locale) : t("detailTitle")}
       actions={
         <Link
           href={adminHref(locale, "/promotions")}
@@ -86,64 +100,111 @@ export default async function AdminPromotionDetailPage({
       {!promotion.ok ? (
         <AdminSectionError failure={promotion.error} headingLevel="h2" />
       ) : (
-        <div className="flex flex-col gap-s8">
+        <div className="flex flex-col gap-s6">
           <Card elevation="raised" padding="lg">
-            <CardTitle as="h2" size="sm">
-              {t("overviewHeading")}
-            </CardTitle>
+            <div className="flex flex-wrap items-center justify-between gap-s3">
+              <CardTitle as="h2" size="sm">
+                {t("overviewHeading")}
+              </CardTitle>
+              <PromotionStatusBadge status={promotion.data.status} />
+            </div>
 
             <dl className="mt-s4 grid grid-cols-1 gap-s4 sm:grid-cols-2">
-              <div>
-                <dt className="text-caption uppercase tracking-wide text-text-subtle">
-                  {t("columnStatus")}
-                </dt>
-                <dd className="mt-s1">
-                  <PromotionStatusBadge status={promotion.data.status} size="sm" />
-                </dd>
-              </div>
-
-              <div>
-                <dt className="text-caption uppercase tracking-wide text-text-subtle">
-                  {t("slugLabel")}
-                </dt>
-                <dd className="font-mono text-body-sm text-text">{promotion.data.slug}</dd>
-              </div>
-
-              <div>
-                <dt className="text-caption uppercase tracking-wide text-text-subtle">
-                  {t("opensLabel")}
-                </dt>
-                <dd className="text-body-sm text-text">
-                  {formatZonedDateTime(promotion.data.starts_at, locale, {
-                    timeZone: promotion.data.legal_timezone,
-                    showTimeZoneName: true,
-                  }) ?? ""}
-                </dd>
-              </div>
-
-              <div>
-                <dt className="text-caption uppercase tracking-wide text-text-subtle">
-                  {t("closesLabel")}
-                </dt>
-                <dd className="text-body-sm text-text">
-                  {formatZonedDateTime(promotion.data.ends_at, locale, {
-                    timeZone: promotion.data.legal_timezone,
-                    showTimeZoneName: true,
-                  }) ?? ""}
-                </dd>
-              </div>
+              <Field label={t("internalNameLabel")} value={promotion.data.internal_name} />
+              <Field label={t("slugLabel")} value={promotion.data.slug} mono />
+              <Field label={t("timezoneLabel")} value={promotion.data.legal_timezone} mono />
+              <Field
+                label={t("columnRules")}
+                value={
+                  promotion.data.active_rules_version_id === null ? (
+                    <Badge tone="warning" size="sm">
+                      {t("noRulesVersion")}
+                    </Badge>
+                  ) : (
+                    <Badge tone="brand" size="sm">
+                      {t("rulesVersionActive")}
+                    </Badge>
+                  )
+                }
+              />
+              <Field
+                label={t("opensLabel")}
+                value={
+                  promotion.data.starts_at === null
+                    ? t("windowNotSet")
+                    : (formatZonedDateTime(promotion.data.starts_at, locale, {
+                        timeZone: promotion.data.legal_timezone,
+                        showTimeZoneName: true,
+                      }) ?? t("windowNotSet"))
+                }
+              />
+              <Field
+                label={t("closesLabel")}
+                value={
+                  promotion.data.ends_at === null
+                    ? t("windowNotSet")
+                    : (formatZonedDateTime(promotion.data.ends_at, locale, {
+                        timeZone: promotion.data.legal_timezone,
+                        showTimeZoneName: true,
+                      }) ?? t("windowNotSet"))
+                }
+              />
             </dl>
 
-            {/*
-             * Sin version de reglas publicada, el escaparate NO pinta el hero
-             * completo de esta promocion (DEC-044). Se dice aqui porque el
-             * sintoma se ve en la tienda y la causa esta en esta pantalla.
-             */}
-            {promotion.data.rules_version_id === null ? (
+            {promotion.data.active_rules_version_id === null ? (
               <Alert tone="warning" className="mt-s5">
                 {t("noRulesConsequence")}
               </Alert>
             ) : null}
+          </Card>
+
+          <Card elevation="raised" padding="lg">
+            <CardTitle as="h2" size="sm">
+              {t("stateHeading")}
+            </CardTitle>
+            <div className="mt-s4">
+              <TransitionBlock
+                locale={locale}
+                promotion={promotion.data}
+                canUpdate={can(screen.actor, "promotion.update")}
+                canActivate={can(screen.actor, "promotion.activate")}
+                canClose={can(screen.actor, "promotion.close")}
+              />
+            </div>
+          </Card>
+
+          <Card elevation="raised" padding="lg">
+            <CardTitle as="h2" size="sm">
+              {t("dataHeading")}
+            </CardTitle>
+            <div className="mt-s4">
+              {can(screen.actor, "promotion.update") ? (
+                <PromotionForm
+                  locale={locale}
+                  action={updatePromotionAction}
+                  promotion={{
+                    id: promotion.data.id,
+                    slug: promotion.data.slug,
+                    internalName: promotion.data.internal_name,
+                    legalTimezone: promotion.data.legal_timezone,
+                    publicName: promotion.data.public_name,
+                    startsAtWall:
+                      promotion.data.starts_at === null
+                        ? null
+                        : isoToZonedWallTime(
+                            promotion.data.starts_at,
+                            promotion.data.legal_timezone,
+                          ),
+                    endsAtWall:
+                      promotion.data.ends_at === null
+                        ? null
+                        : isoToZonedWallTime(promotion.data.ends_at, promotion.data.legal_timezone),
+                  }}
+                />
+              ) : (
+                <Alert tone="info">{t("noUpdateCapability")}</Alert>
+              )}
+            </div>
           </Card>
 
           <section aria-labelledby="promotion-rules">
@@ -181,6 +242,127 @@ export default async function AdminPromotionDetailPage({
       )}
     </AdminChrome>
   );
+}
+
+function Field({
+  label,
+  value,
+  mono,
+}: {
+  readonly label: string;
+  readonly value: React.ReactNode;
+  readonly mono?: boolean;
+}) {
+  return (
+    <div className="min-w-0">
+      <dt className="text-caption uppercase tracking-wide text-text-subtle">{label}</dt>
+      <dd
+        className={`mt-s1 break-words text-body-sm text-text${mono === true ? " font-mono" : ""}`}
+      >
+        {value}
+      </dd>
+    </div>
+  );
+}
+
+/**
+ * La transicion que corresponde al estado actual, o el motivo de que no haya.
+ *
+ * Programar exige `promotion.update`; activar, `promotion.activate`; cerrar,
+ * `promotion.close`. Sin la capacidad se dice CUAL falta, con su nombre
+ * tecnico: es lo que hay que citar al pedirla.
+ */
+async function TransitionBlock({
+  locale,
+  promotion,
+  canUpdate,
+  canActivate,
+  canClose,
+}: {
+  readonly locale: Locale;
+  readonly promotion: AdminPromotionRow;
+  readonly canUpdate: boolean;
+  readonly canActivate: boolean;
+  readonly canClose: boolean;
+}) {
+  const t = await getTranslations({ locale, namespace: "admin.promotions" });
+  const label = await reasonLabeller(locale);
+
+  const plan = transitionFor(promotion.status);
+  if (plan === null) {
+    return <p className="text-body-sm text-text-muted">{t("noTransition")}</p>;
+  }
+
+  const allowed =
+    plan.transition === "schedule"
+      ? canUpdate
+      : plan.transition === "activate"
+        ? canActivate
+        : canClose;
+
+  if (!allowed) {
+    return (
+      <Alert tone="info">{t("transitionNoCapability", { capability: plan.capability })}</Alert>
+    );
+  }
+
+  const hasWindow = promotion.starts_at !== null && promotion.ends_at !== null;
+  const hasRules = promotion.active_rules_version_id !== null;
+
+  const blockedReason =
+    plan.transition === "schedule" && !hasWindow
+      ? t("needsWindow")
+      : plan.transition === "activate" && !hasRules
+        ? t("needsRulesVersion")
+        : undefined;
+
+  const reasons =
+    plan.transition === "activate"
+      ? PROMOTION_ACTIVATE_REASONS
+      : plan.transition === "close"
+        ? PROMOTION_CLOSE_REASONS
+        : [];
+
+  return (
+    <PromotionTransitionForm
+      locale={locale}
+      action={plan.action}
+      promotionId={promotion.id}
+      transition={plan.transition}
+      {...(blockedReason === undefined ? {} : { blockedReason })}
+      reasons={reasons.map((value) => ({ value, label: label(value) }))}
+    />
+  );
+}
+
+/**
+ * Que transicion ofrece cada estado. Espejo de las filas de
+ * `promotion_status_transitions` que esta pantalla expone; el resto del ciclo
+ * (exportacion, sorteo, ganador) tiene sus propias pantallas.
+ */
+function transitionFor(status: AdminPromotionRow["status"]): {
+  readonly transition: PromotionTransition;
+  readonly capability: AdminCapability;
+  readonly action: (previous: ActionResult, formData: FormData) => Promise<ActionResult>;
+} | null {
+  switch (status) {
+    case "DRAFT":
+      return {
+        transition: "schedule",
+        capability: "promotion.update",
+        action: schedulePromotionAction,
+      };
+    case "SCHEDULED":
+      return {
+        transition: "activate",
+        capability: "promotion.activate",
+        action: activatePromotionAction,
+      };
+    case "ACTIVE":
+      return { transition: "close", capability: "promotion.close", action: closePromotionAction };
+    default:
+      return null;
+  }
 }
 
 /**

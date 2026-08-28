@@ -1,6 +1,11 @@
 import {
   adminOrderPath,
+  adminProductPath,
+  adminProductPublishPath,
+  adminPromotionActivatePath,
+  adminPromotionClosePath,
   adminPromotionPath,
+  adminPromotionSchedulePath,
   adminRulesVersionsPath,
   API_PATHS,
   checkoutSessionPath,
@@ -38,6 +43,7 @@ import {
   adminOrderPage,
   adminParticipantPage,
   adminProductPage,
+  adminProducts,
   adminPromotionPage,
   adminPromotions,
   adminRulesVersionPage,
@@ -258,6 +264,40 @@ export const mockRoutes: readonly MockRoute[] = [
     { method: "GET", path: adminRulesVersionsPath(promotion.id), body: adminRulesVersionPage },
   ]),
   { method: "GET", path: API_PATHS.adminProducts, body: adminProductPage },
+  /*
+   * Altas de la seccion 12. Las mutaciones devuelven el PRIMER fixture tal
+   * cual: lo que el humo y los tests comprueban es que el formulario llega y
+   * que la respuesta tiene la forma del contrato, no que el mock persista.
+   */
+  { method: "POST", path: API_PATHS.adminProducts, body: adminProducts[0] },
+  ...adminProducts.flatMap((product): readonly MockRoute[] => [
+    { method: "GET", path: adminProductPath(product.id), body: product },
+    { method: "PATCH", path: adminProductPath(product.id), body: product },
+    {
+      method: "POST",
+      path: adminProductPublishPath(product.id),
+      body: { ...product, status: "ACTIVE" },
+    },
+  ]),
+  { method: "POST", path: API_PATHS.adminPromotions, body: adminPromotions[0] },
+  ...adminPromotions.flatMap((promotion): readonly MockRoute[] => [
+    { method: "PATCH", path: adminPromotionPath(promotion.id), body: promotion },
+    {
+      method: "POST",
+      path: adminPromotionSchedulePath(promotion.id),
+      body: { ...promotion, status: "SCHEDULED" },
+    },
+    {
+      method: "POST",
+      path: adminPromotionActivatePath(promotion.id),
+      body: { ...promotion, status: "ACTIVE" },
+    },
+    {
+      method: "POST",
+      path: adminPromotionClosePath(promotion.id),
+      body: { ...promotion, status: "CLOSED" },
+    },
+  ]),
   { method: "GET", path: API_PATHS.adminOrders, body: adminOrderPage },
   ...orderDetails.map((order): MockRoute => ({
     method: "GET",

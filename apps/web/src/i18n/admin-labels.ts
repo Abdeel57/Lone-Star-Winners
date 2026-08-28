@@ -222,6 +222,9 @@ const TRANSLATED_REASONS = [
   "SUPPORT_RESOLUTION",
   "COMPLIANCE_DIRECTIVE",
   "REVIEWED_AND_CORRECT",
+  "PROMOTION_LAUNCH_APPROVED",
+  "ENTRY_PERIOD_ENDED",
+  "EARLY_TERMINATION",
   "OTHER",
 ] as const;
 
@@ -262,6 +265,12 @@ export async function reasonLabeller(locale: Locale): Promise<(key: string) => s
         return t("COMPLIANCE_DIRECTIVE");
       case "REVIEWED_AND_CORRECT":
         return t("REVIEWED_AND_CORRECT");
+      case "PROMOTION_LAUNCH_APPROVED":
+        return t("PROMOTION_LAUNCH_APPROVED");
+      case "ENTRY_PERIOD_ENDED":
+        return t("ENTRY_PERIOD_ENDED");
+      case "EARLY_TERMINATION":
+        return t("EARLY_TERMINATION");
       case "OTHER":
         return t("OTHER");
     }

@@ -99,6 +99,13 @@ const TRANSLATED_CODES = [
   "VERIFICATION_TOKEN_INVALID",
   "VERIFICATION_TOKEN_EXPIRED",
   "MFA_CODE_INVALID",
+  // Altas del panel (seccion 12) y validacion previa de sus formularios.
+  "CATALOG_CONFLICT",
+  "LIFECYCLE_REFUSED",
+  "PRICE_INVALID",
+  "DATETIME_INVALID",
+  "TIMEZONE_INVALID",
+  "CONFIRMATION_REQUIRED",
 ] as const;
 
 type TranslatedCode = (typeof TRANSLATED_CODES)[number];
@@ -194,6 +201,18 @@ export function useApiErrorMessage(): (code: string | null) => string {
         return t("VERIFICATION_TOKEN_EXPIRED");
       case "MFA_CODE_INVALID":
         return t("MFA_CODE_INVALID");
+      case "CATALOG_CONFLICT":
+        return t("CATALOG_CONFLICT");
+      case "LIFECYCLE_REFUSED":
+        return t("LIFECYCLE_REFUSED");
+      case "PRICE_INVALID":
+        return t("PRICE_INVALID");
+      case "DATETIME_INVALID":
+        return t("DATETIME_INVALID");
+      case "TIMEZONE_INVALID":
+        return t("TIMEZONE_INVALID");
+      case "CONFIRMATION_REQUIRED":
+        return t("CONFIRMATION_REQUIRED");
     }
   };
 }

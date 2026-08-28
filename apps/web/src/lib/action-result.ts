@@ -38,6 +38,19 @@ export interface ActionResult {
    * aqui a una frase seria escribir texto en el servidor, donde no hay idioma.
    */
   readonly retryAfterSeconds: number | null;
+  /**
+   * Texto que el backend publica como DATO, no como copy: hoy, el mensaje del
+   * motor de base de datos en un 409 `LIFECYCLE_REFUSED` (`details.engine`).
+   *
+   * No contradice el "no lleva texto" de arriba: esto no lo redacta la accion
+   * ni el servidor de Next, llega tal cual de la API y se ensena tal cual,
+   * porque el unico que sabe con certeza cual de los cerrojos salto es el que
+   * lo comprobo. Traducirlo o resumirlo aqui produciria una explicacion que se
+   * queda obsoleta el dia que cambie el trigger. Es el mismo tratamiento que
+   * `retryAfterSeconds`: se publica como llega y la pantalla decide como
+   * ensenarlo.
+   */
+  readonly detail: string | null;
 }
 
 export const IDLE: ActionResult = {
@@ -46,6 +59,7 @@ export const IDLE: ActionResult = {
   requestId: null,
   field: null,
   retryAfterSeconds: null,
+  detail: null,
 };
 
 export const SUCCEEDED: ActionResult = {
@@ -54,11 +68,12 @@ export const SUCCEEDED: ActionResult = {
   requestId: null,
   field: null,
   retryAfterSeconds: null,
+  detail: null,
 };
 
 /** Fallo detectado por la propia accion, antes de llamar a la API. */
 export function invalid(code: string, field: string | null = null): ActionResult {
-  return { status: "error", code, requestId: null, field, retryAfterSeconds: null };
+  return { status: "error", code, requestId: null, field, retryAfterSeconds: null, detail: null };
 }
 
 /**
@@ -83,6 +98,7 @@ export function fromFailure(failure: ApiFailure, field: string | null = null): A
     requestId: failure.requestId,
     field,
     retryAfterSeconds: retryAfterSecondsFrom(failure.details),
+    detail: engineDetailFrom(failure.details),
   };
 }
 
@@ -103,4 +119,21 @@ function retryAfterSecondsFrom(details: unknown): number | null {
   if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) return null;
 
   return Math.trunc(value);
+}
+
+/**
+ * Extrae `details.engine` de un fallo: el mensaje del motor de base de datos
+ * que la seccion 12 del contrato publica en un 409 `LIFECYCLE_REFUSED`.
+ *
+ * Solo se acepta una cadena no vacia. Cualquier otra forma se descarta: mejor
+ * un error sin detalle que un "[object Object]" delante de quien opera.
+ */
+function engineDetailFrom(details: unknown): string | null {
+  if (typeof details !== "object" || details === null) return null;
+  if (!("engine" in details)) return null;
+
+  const { engine } = details;
+  if (typeof engine !== "string" || engine.trim().length === 0) return null;
+
+  return engine;
 }
