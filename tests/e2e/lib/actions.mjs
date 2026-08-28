@@ -99,6 +99,27 @@ export function cookieHeader(cookie) {
 }
 
 /**
+ * Cabecera `Cookie` a partir del `Set-Cookie` de una respuesta de la API.
+ *
+ * Para las pruebas que hablan con la API sin navegador (`request`): el tarro
+ * de cookies del contexto SI guarda la cookie de personal, pero con
+ * `Path=/admin` no la adjunta a `/api/v1/...`, asi que un `login` seguido de
+ * `mfa/verify` en el mismo contexto responde 401 UNAUTHENTICATED sin llegar a
+ * mirar el codigo. Se lee la cookie de la respuesta y se manda a mano, que es
+ * lo mismo que hace `loginStaff` con la del navegador.
+ */
+export function sessionCookieHeaderFrom(response, name = "lsw_session_staff") {
+  const setCookie = response
+    .headersArray()
+    .filter((header) => header.name.toLowerCase() === "set-cookie")
+    .map((header) => header.value)
+    .find((value) => value.startsWith(`${name}=`));
+  expect(setCookie, `la respuesta debe emitir la cookie ${name}`).toBeDefined();
+  const pair = setCookie.split(";")[0];
+  return { cookie: pair };
+}
+
+/**
  * Comprueba que una pagina NO esta mostrando el estado de error de la capa de
  * API.
  *

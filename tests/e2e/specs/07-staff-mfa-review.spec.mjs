@@ -19,6 +19,7 @@ import {
   loginParticipant,
   loginStaff,
   waitForNextTotpWindow,
+  sessionCookieHeaderFrom,
 } from "../lib/actions.mjs";
 import {
   ADMIN_DASHBOARD_ENDPOINTS_MISSING,
@@ -73,7 +74,10 @@ test("un codigo TOTP no vale dos veces", async ({ request }) => {
   });
   expect(first.status()).toBe(200);
 
-  const verified = await request.post(`${API_BASE_URL}/auth/mfa/verify`, { data: { code } });
+  const verified = await request.post(`${API_BASE_URL}/auth/mfa/verify`, {
+    headers: sessionCookieHeaderFrom(first),
+    data: { code },
+  });
   expect(verified.status()).toBe(200);
   expect((await verified.json()).authenticated).toBe(true);
 
@@ -89,6 +93,7 @@ test("un codigo TOTP no vale dos veces", async ({ request }) => {
   expect(second.status()).toBe(200);
 
   const replay = await request.post(`${API_BASE_URL}/auth/mfa/verify`, {
+    headers: sessionCookieHeaderFrom(second),
     data: { code },
     failOnStatusCode: false,
   });
