@@ -57,7 +57,10 @@ test.describe("ajuste manual", () => {
     expect(before.status()).toBe(200);
 
     const preview = await page.request.post(`${API_BASE_URL}/admin/entry-adjustments/preview`, {
-      headers: cookieHeader(manager),
+      // `entry.adjust.create` exige motivo (catalogo DEC-027) y la previsualizacion
+      // no lleva cuerpo de motivo: viaja en la cabecera que acepta el autorizador
+      // para ese caso (HO-034.1).
+      headers: { ...cookieHeader(manager), "x-lsw-reason-code": "SUPPORT_RESOLUTION" },
       data: {
         promotion_id: fixture.promotion.id,
         participant_id: fixture.participant.id,
@@ -98,7 +101,10 @@ test.describe("ajuste manual", () => {
     const manager = await loginStaff(page, fixture.staff.promotionManager);
 
     const preview = await page.request.post(`${API_BASE_URL}/admin/entry-adjustments/preview`, {
-      headers: cookieHeader(manager),
+      // `entry.adjust.create` exige motivo (catalogo DEC-027) y la previsualizacion
+      // no lleva cuerpo de motivo: viaja en la cabecera que acepta el autorizador
+      // para ese caso (HO-034.1).
+      headers: { ...cookieHeader(manager), "x-lsw-reason-code": "SUPPORT_RESOLUTION" },
       data: {
         promotion_id: fixture.promotion.id,
         participant_id: fixture.participant.id,
