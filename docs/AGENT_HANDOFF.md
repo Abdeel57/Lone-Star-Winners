@@ -1667,3 +1667,80 @@ Blocking: NO para el push. Sí antes de dar por cerrada la configuración de
 despliegue (`docs/DEPLOYMENT_RAILWAY.md`): mientras tanto, la lista de
 "obligatorias" del registro no es fiable como checklist de Railway; la
 fiable es la del esquema de arranque de `apps/api`.
+
+---
+
+## HO-037 — El panel ya puede crear productos y promociones: faltan los botones (backend → frontend)
+
+**Fecha:** 2026-08-27
+**De:** `backend-sweepstakes`
+**Para:** `frontend-ux`
+**Estado:** ABIERTO — el backend está hecho y probado; la interfaz no existe
+
+El usuario pidió textualmente "que el admin funcione y tenga los botones". La
+mitad de servidor está entregada en `9b1c278` y documentada en
+`docs/API_CONTRACT.md` **§12**. Lo que falta es pantalla.
+
+### Lo que ya responde
+
+Once rutas, todas en el manifiesto (78 rutas ahora, eran 67):
+
+| Método | Ruta                                        | Capacidad            |
+| ------ | ------------------------------------------- | -------------------- |
+| GET    | `/admin/products`                           | `product.read`       |
+| POST   | `/admin/products`                           | `product.write`      |
+| GET    | `/admin/products/{product_id}`              | `product.read`       |
+| PATCH  | `/admin/products/{product_id}`              | `product.write`      |
+| POST   | `/admin/products/{product_id}/publish`      | `product.publish`    |
+| GET    | `/admin/promotions`                         | `promotion.read`     |
+| POST   | `/admin/promotions`                         | `promotion.create`   |
+| GET    | `/admin/promotions/{promotion_id}`          | `promotion.read`     |
+| PATCH  | `/admin/promotions/{promotion_id}`          | `promotion.update`   |
+| POST   | `/admin/promotions/{promotion_id}/activate` | `promotion.activate` |
+| POST   | `/admin/promotions/{promotion_id}/close`    | `promotion.close`    |
+
+Las pantallas **Catálogo** y **Promociones** del panel ya existen y hoy pintan
+listas vacías. Lo que falta es el formulario de alta, el de edición y los botones
+de publicar, activar y cerrar.
+
+### Cinco cosas que la interfaz NO puede decidir por su cuenta
+
+1. **Los dos idiomas son obligatorios en el alta.** El formulario tiene que pedir
+   nombre en español y en inglés, los dos, sin rellenar uno con el otro. Un
+   `422` con `path: "name.es-US"` significa exactamente eso.
+
+2. **El precio va en la unidad menor, como entero.** 25,00 USD se manda como
+   `2500`. Si el formulario acepta "25.00" y lo manda tal cual, es un `422`. Y
+   `price_amount_minor` **vuelve como cadena**, no como número: puede superar el
+   entero seguro de JavaScript, así que no lo pases por `Number()` para
+   formatearlo.
+
+3. **Activar y cerrar exigen un `reason_code`** con forma
+   `^[a-zA-Z][a-zA-Z0-9_.]{2,63}$`, y **el autorizador lo lee antes del
+   handler**. Sin él la respuesta es **403**, no 422, porque quien deniega es la
+   puerta y no la validación. Un diálogo de confirmación que no pida motivo hará
+   que el botón parezca roto.
+
+4. **El `409 LIFECYCLE_REFUSED` hay que enseñarlo, no traducirlo.** Su
+   `details.engine` trae el mensaje de PostgreSQL explicando cuál de los cuatro
+   cerrojos saltó: falta ventana, falta versión de reglas, la versión no está
+   activa, o le quedan claves legales sin resolver. Reescribirlo en el frontend
+   produciría una explicación que se queda obsoleta el día que cambie el trigger,
+   y quien opera necesita el motivo real.
+
+5. **Publicar no es un campo, es un botón.** `PATCH` con `status` no hace nada, a
+   propósito: publicar exige `product.publish`, que es otra capacidad. Si la
+   pantalla mete el estado en el formulario de edición, el usuario verá que
+   guardar "no aplica" el cambio.
+
+### Lo que el usuario todavía no podrá hacer, y no es culpa de la interfaz
+
+**Activar una promoción.** Le falta la `PromotionRulesVersion` (DEC-012), que no
+existe todavía como superficie de escritura, y además el trigger exige que esa
+versión no tenga claves legales sin resolver — y el borrador del abogado (HO-036)
+aún no fija fechas de inicio ni de fin. Crear y editar promociones sí funciona;
+activarlas devolverá `409` con el motivo exacto, que es la respuesta correcta.
+
+Merece la pena que la pantalla lo diga de antemano en vez de dejar que el usuario
+descubra el 409: si `active_rules_version_id` es `null`, el botón de activar
+puede explicarse en vez de fallar.
