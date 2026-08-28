@@ -1608,3 +1608,62 @@ No he cambiado ni una línea de código por esto. Es un borrador con marcadores
 sin rellenar —fechas, VIN, ARV, dirección postal del AMOE, administrador— y
 `docs/LEGAL_PENDING.md` regla 2 dice que lo que dependa de un `TBD` vive como
 configuración, no como regla fija.
+
+## HO-037
+
+Status: OPEN
+
+## Handoff
+
+Date: 2026-08-27
+From: sesión paralela (lone-star-a3, backend) y Team Lead
+To: security-integration (test de paridad, registro), backend-sweepstakes
+(decisión del grupo A)
+
+Context:
+El primer despliegue de `api` en Railway no arrancó porque faltaba
+`MFA_SECRET_ENCRYPTION_KEY`, obligatoria en el esquema de arranque
+(`apps/api/src/config/env.ts`) y ausente del servicio. Al revisar el sentido
+contrario apareció el fallo simétrico: **el registro
+(`packages/security/src/env/registry.ts`) marca como obligatorias para `api`
+ocho variables que el esquema de arranque nunca valida y que ningún código
+lee** (comprobado con grep sobre `packages/` y `apps/` excluyendo el propio
+registro):
+
+- **Grupo A — valores codificados que el registro presenta como
+  configurables (4).** El código lee un literal y la variable se ignora en
+  silencio: `ARGON2_MEMORY_KIB` (→ `ARGON2_PARAMETERS` en
+  `packages/security/src/crypto/password.ts`), `EXPORT_SCHEMA_VERSION` (→
+  constante en `apps/api/src/routes/export.ts`),
+  `AUDIT_CHAIN_CANONICALIZATION_VERSION` (→ `CURRENT_CANONICALIZATION_VERSION`
+  en `packages/audit`), `MFA_TOTP_ISSUER` (→ literal en
+  `packages/database/src/scripts/create-admin-cli.ts`). Un operador que ponga
+  `ARGON2_MEMORY_KIB=65536` en Railway cree haber endurecido algo y no ha
+  endurecido nada. Las dos versiones de formato rozan además el principio 14.
+- **Grupo B — funcionalidad que aún no existe (4).** `EMAIL_PROVIDER`,
+  `OTEL_ENABLED`, `PAYMENT_WEBHOOK_TOLERANCE_SECONDS`, `PGBOSS_SCHEMA`.
+
+Existe test de paridad registro ↔ `.env.example`, pero **no** registro ↔
+esquema de arranque de `apps/api`.
+
+What I need from you:
+
+1. **security-integration**: un test en `tests/security` que afirme, en
+   **dirección única**, que toda variable que el registro marca obligatoria
+   para `api` está validada por `apps/api/src/config/env.ts` (el esquema puede
+   validar de más sin que sea fallo). Para que nazca en verde, **rebajar las
+   ocho en el registro** (no ampliar `env.ts`: para el grupo B sería exigir
+   configuración de algo inexistente; para el grupo A sería mentir también en
+   el arranque). `packages/security` es de security (DEC-027).
+2. **backend-sweepstakes** (decisión del grupo A, asumida por la sesión
+   paralela, después de HO-034.1 y de su fase 3): cablear de verdad
+   `EXPORT_SCHEMA_VERSION` y `AUDIT_CHAIN_CANONICALIZATION_VERSION` (versiones
+   de formato con consecuencias de auditoría: el código debe leer la
+   configuración en vez del literal) y **borrar** del registro
+   `ARGON2_MEMORY_KIB` y `MFA_TOTP_ISSUER` hasta que alguien los necesite. Si
+   la decisión cambia, se anota aquí antes de tocar código.
+
+Blocking: NO para el push. Sí antes de dar por cerrada la configuración de
+despliegue (`docs/DEPLOYMENT_RAILWAY.md`): mientras tanto, la lista de
+"obligatorias" del registro no es fiable como checklist de Railway; la
+fiable es la del esquema de arranque de `apps/api`.
