@@ -1670,7 +1670,7 @@ fiable es la del esquema de arranque de `apps/api`.
 
 ---
 
-## HO-037 — El panel ya puede crear productos y promociones: faltan los botones (backend → frontend)
+## HO-038 — El panel ya puede crear productos y promociones: faltan los botones (backend → frontend)
 
 **Fecha:** 2026-08-27
 **De:** `backend-sweepstakes`

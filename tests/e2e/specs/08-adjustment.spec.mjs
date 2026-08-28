@@ -29,7 +29,7 @@
 import { expect, test } from "@playwright/test";
 
 import { cookieHeader, loginStaff, waitForNextTotpWindow } from "../lib/actions.mjs";
-import { AUTHORIZER_DOES_NOT_EVALUATE_FLAGS } from "../lib/blockers.mjs";
+import { SECOND_APPROVAL_NOT_DECLARED_FOR_ADJUSTMENTS } from "../lib/blockers.mjs";
 import { API_BASE_URL, WEB_BASE_URL, readFixture } from "../lib/fixture.mjs";
 
 let fixture;
@@ -40,8 +40,8 @@ test.beforeAll(async () => {
 
 test.describe("ajuste manual", () => {
   test.fixme(
-    AUTHORIZER_DOES_NOT_EVALUATE_FLAGS,
-    "entry.adjust.create depende de flag + step-up + motivo + segunda aprobacion, y session-authorizer.ts no evalua ninguno. Ver lib/blockers.mjs.",
+    SECOND_APPROVAL_NOT_DECLARED_FOR_ADJUSTMENTS,
+    "entry.adjust.create exige segunda aprobacion y POST /admin/entry-adjustments no declara secondApprovalEnforcedBy, asi que el autorizador deniega por construccion (HO-034.1). Ver lib/blockers.mjs.",
   );
 
   test("la previsualizacion calcula antes, cambio y despues sin escribir nada", async ({

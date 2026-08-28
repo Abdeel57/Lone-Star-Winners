@@ -2450,6 +2450,23 @@ exactamente el fallo que la traza existe para impedir.
 
 ## 12. Altas del panel: catálogo y promociones (DEC-010, DEC-011, DEC-012)
 
+Índice de rutas de esta sección, con los parámetros en la forma del código
+(`:param`), que es la que comprueba el test de contrato (DEC-015):
+
+| Método | Ruta                                            | Autorización         |
+| ------ | ----------------------------------------------- | -------------------- |
+| GET    | /api/v1/admin/products                          | `product.read`       |
+| POST   | /api/v1/admin/products                          | `product.write`      |
+| GET    | /api/v1/admin/products/:product_id              | `product.read`       |
+| PATCH  | /api/v1/admin/products/:product_id              | `product.write`      |
+| POST   | /api/v1/admin/products/:product_id/publish      | `product.publish`    |
+| GET    | /api/v1/admin/promotions                        | `promotion.read`     |
+| POST   | /api/v1/admin/promotions                        | `promotion.create`   |
+| GET    | /api/v1/admin/promotions/:promotion_id          | `promotion.read`     |
+| PATCH  | /api/v1/admin/promotions/:promotion_id          | `promotion.update`   |
+| POST   | /api/v1/admin/promotions/:promotion_id/activate | `promotion.activate` |
+| POST   | /api/v1/admin/promotions/:promotion_id/close    | `promotion.close`    |
+
 Hasta esta sección el catálogo era **de solo lectura**. El escaparate leía
 productos y promociones, el panel las listaba, y no existía ninguna forma de
 crear una: el panel enseñaba listas vacías y llenarlas exigía SQL a mano contra

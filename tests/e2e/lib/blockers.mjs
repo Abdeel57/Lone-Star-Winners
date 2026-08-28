@@ -50,8 +50,9 @@
  * Sembrar el flag encendido en base de datos NO lo desbloquea: el autorizador
  * no lo lee.
  */
-export const AUTHORIZER_DOES_NOT_EVALUATE_FLAGS =
-  process.env.E2E_AUTHORIZER_EVALUATES_FLAGS !== "true";
+// RESUELTO en 57ee8eb (HO-034.1: flag desde createFeatureFlagPort y motivo desde reason_code o X-LSW-Reason-Code). Se deja en `false` en vez de borrarse para que el
+// historial de bloqueos siga siendo legible desde las propias pruebas.
+export const AUTHORIZER_DOES_NOT_EVALUATE_FLAGS = false;
 
 /**
  * `apps/web` y `apps/api` no coinciden en la forma del carrito.
@@ -66,7 +67,9 @@ export const AUTHORIZER_DOES_NOT_EVALUATE_FLAGS =
  * real, aunque el `POST /cart/items` haya funcionado. La comprobacion a nivel
  * de API si corre, y es la que demuestra que el backend hace su parte.
  */
-export const CART_PAGE_SHAPE_MISMATCH = process.env.E2E_CART_SHAPES_ALIGNED !== "true";
+// RESUELTO en c90c732 (carrito alineado a la seccion 5 del contrato). Se deja en `false` en vez de borrarse para que el
+// historial de bloqueos siga siendo legible desde las propias pruebas.
+export const CART_PAGE_SHAPE_MISMATCH = false;
 
 /**
  * `apps/web` no emite ninguna cabecera de seguridad.
@@ -79,7 +82,9 @@ export const CART_PAGE_SHAPE_MISMATCH = process.env.E2E_CART_SHAPES_ALIGNED !== 
  * DEC-018 las pide. `apps/api` SI las emite -helmet, en `app.ts`- asi que la
  * comprobacion del backend corre de verdad y no esta bloqueada.
  */
-export const WEB_EMITS_NO_SECURITY_HEADERS = process.env.E2E_WEB_SECURITY_HEADERS !== "true";
+// RESUELTO en c90c732 (CSP con nonce por peticion, DEC-049). Se deja en `false` en vez de borrarse para que el
+// historial de bloqueos siga siendo legible desde las propias pruebas.
+export const WEB_EMITS_NO_SECURITY_HEADERS = false;
 
 /**
  * No existe `POST /auth/register` en `apps/api`.
@@ -101,11 +106,25 @@ export const NO_PARTICIPANT_REGISTRATION_ENDPOINT =
  * Las pantallas responden 200 pero pintan su estado de error. Solo la cola de
  * revision AMOE y la de ajustes tienen backend real.
  */
-export const ADMIN_DASHBOARD_ENDPOINTS_MISSING =
-  process.env.E2E_ADMIN_DASHBOARD_ENDPOINTS !== "true";
+// RESUELTO en ed777b4 (dashboard, pedidos, participantes, auditoria; seccion 11.7) y 9b1c278 (catalogo y promociones; seccion 12). Se deja en `false` en vez de borrarse para que el
+// historial de bloqueos siga siendo legible desde las propias pruebas.
+export const ADMIN_DASHBOARD_ENDPOINTS_MISSING = false;
 
 /** Todos los bloqueos, para que un solo sitio pueda enumerarlos en el informe. */
+/**
+ * HO-034.1 (57ee8eb) dejo SEIS capacidades cerradas por construccion: las que
+ * exigen segunda aprobacion. El autorizador no la decide -es un hecho sobre un
+ * recurso concreto- y la deniega salvo que la ruta declare, con
+ * `secondApprovalEnforcedBy`, donde la impone el dominio. `entry.adjust.create`
+ * (POST /admin/entry-adjustments) no lo declara todavia, asi que sigue en 403.
+ * Se levanta cuando la ruta de ajustes declare quien impone la segunda
+ * aprobacion (`apps/api/src/routes/adjustments.ts`).
+ */
+export const SECOND_APPROVAL_NOT_DECLARED_FOR_ADJUSTMENTS =
+  process.env.E2E_ADJUSTMENTS_SECOND_APPROVAL_DECLARED !== "true";
+
 export const ALL_BLOCKERS = Object.freeze({
+  SECOND_APPROVAL_NOT_DECLARED_FOR_ADJUSTMENTS,
   AUTHORIZER_DOES_NOT_EVALUATE_FLAGS,
   CART_PAGE_SHAPE_MISMATCH,
   WEB_EMITS_NO_SECURITY_HEADERS,
