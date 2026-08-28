@@ -1812,3 +1812,38 @@ es el que hoy fija que la ausencia no rompe.
 Blocking: NO para el despliegue (el escaparate ya no cae). SÍ para que la
 promoción de la GMC sea real en producción: hoy en Railway la portada
 enseña título y valor del premio, y nada más de lo que se ve en el mock.
+
+## HO-040
+
+Status: OPEN
+
+## Handoff
+
+Date: 2026-08-27
+From: sesión paralela (revisión de `cbec565`) y Team Lead
+To: security-integration (test de integración), backend-sweepstakes (revisión)
+
+Context:
+`POST /orders` escribía el id de la VARIANTE en `order_items.product_id`
+desde que existe la ruta, y ningún test lo vio: los dobles en memoria de
+`apps/api/test/support/in-memory-repositories.ts` aceptan cualquier uuid en
+cualquier columna, así que un pedido "correcto" para el doble era un pedido
+que el motor rechazaba por clave ajena (500 antes del 503 de pago). Lo
+encontró el e2e real (`cbec565`). Es la versión de base de datos de la
+lección de `admin-reads.test.ts`: un doble que no impone claves ajenas no
+prueba integridad referencial.
+
+What I need from you:
+Un test de integración contra PostgreSQL real
+(`packages/database/test/integration/`, o uno nuevo en `apps/api` con
+`startTestDatabase()`) que recorra el checkout de punta a punta con datos
+sembrados: carrito con una línea → `POST /orders` → fila en `orders` y en
+`order_items` con `product_id = products.id` y
+`product_variant_id = product_variants.id`, y el 503
+`PAYMENT_PROVIDER_NOT_CONFIGURED` como respuesta. Que afirme por NOMBRE de
+restricción cuando algo falle (`dbErrorMatching`). Sin Docker en local se
+ejecuta en CI y contra el Postgres embebido del scratchpad; el e2e 04 queda
+como segunda red, no como la única.
+
+Blocking: NO. Se hace cuando se decida qué parte del checkout merece prueba
+de integración; hasta entonces la red es el e2e 04.
