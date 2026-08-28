@@ -100,6 +100,20 @@ const orderParamsSchema = z.object({ order_id: z.uuid() });
 const eventParamsSchema = z.object({ event_id: z.uuid() });
 const promotionQuerySchema = z.object({ promotion_id: z.uuid() });
 
+/**
+ * Aprobar lleva motivo, igual que rechazar.
+ *
+ * Hasta aqui esta ruta no tenia cuerpo, y como `entry.adjust.approve` exige
+ * motivo, el unico canal era la cabecera X-LSW-Reason-Code: funcionaba, pero
+ * el motivo de aprobar un movimiento del ledger no quedaba en ninguna traza.
+ * Ahora va en el cuerpo y en `audit_events`, como en rechazar y como en el
+ * AMOE. El autorizador lo lee del mismo sitio.
+ */
+const approveAdjustmentBodySchema = z.object({
+  reason_key: z.string().regex(REASON_KEY),
+  notes: z.string().max(2000).nullable().optional(),
+});
+
 const rejectBodySchema = z.object({
   reason_key: z.string().regex(REASON_KEY),
 });
@@ -344,13 +358,14 @@ export function buildAdjustmentRoutes(dependencies: AppDependencies): RouteDefin
       method: "POST",
       url: "/api/v1/admin/entry-adjustments/:adjustment_id/approve",
       operationId: "approveEntryAdjustment",
-      summary: "Aprobar un ajuste y aplicarlo al ledger.",
+      summary: "Aprobar un ajuste y aplicarlo al ledger, con motivo.",
       description:
-        "El aprobador debe ser una persona DISTINTA del solicitante. Lo comprueba el servicio y lo impone ademas un CHECK de la base de datos.",
+        "El aprobador debe ser una persona DISTINTA del solicitante. Lo comprueba el servicio y lo impone ademas un CHECK de la base de datos. reason_key es el motivo DEL APROBADOR y queda en la traza junto al del ajuste: aprobar toca el ledger y merece la misma explicacion que rechazar.",
       tags: ["admin"],
       authorization: { kind: "PERMISSION", permission: "entry.adjust.approve" },
       schema: {
         params: adjustmentParamsSchema,
+        body: approveAdjustmentBodySchema,
         response: {
           200: adjustmentSchema,
           401: errorEnvelopeSchema,
@@ -362,10 +377,14 @@ export function buildAdjustmentRoutes(dependencies: AppDependencies): RouteDefin
       handler: async (request) => {
         const staff = await requireStaff(dependencies, request);
         const params = request.params as z.infer<typeof adjustmentParamsSchema>;
+        const body = request.body as z.infer<typeof approveAdjustmentBodySchema>;
 
         try {
           const outcome = await domain.repositories.unitOfWork.withTransaction(() =>
-            domain.adjustments.approve(params.adjustment_id, staff),
+            domain.adjustments.approve(params.adjustment_id, staff, {
+              reasonKey: body.reason_key,
+              notes: body.notes ?? null,
+            }),
           );
           const row = outcome.adjustment;
           return {

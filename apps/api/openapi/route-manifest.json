@@ -153,7 +153,7 @@
       "authorization": "entry.adjust.approve",
       "requires_step_up": true,
       "tags": ["admin"],
-      "summary": "Aprobar un ajuste y aplicarlo al ledger."
+      "summary": "Aprobar un ajuste y aplicarlo al ledger, con motivo."
     },
     {
       "method": "POST",

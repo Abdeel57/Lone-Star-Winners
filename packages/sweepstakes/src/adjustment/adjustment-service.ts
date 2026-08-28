@@ -167,6 +167,12 @@ export interface AdjustmentServiceDependencies {
   readonly unitOfWork: UnitOfWork;
 }
 
+/** Motivo del APROBADOR de un ajuste. Distinto del motivo del ajuste. */
+export interface AdjustmentApproval {
+  readonly reasonKey: string;
+  readonly notes: string | null;
+}
+
 export class AdjustmentService {
   private readonly deps: AdjustmentServiceDependencies;
 
@@ -306,7 +312,21 @@ export class AdjustmentService {
     };
   }
 
-  public async approve(adjustmentId: string, principal: Principal): Promise<AdjustmentOutcome> {
+  /**
+   * Aprueba un ajuste pendiente y lo aplica al ledger.
+   *
+   * `approval` es el motivo DEL APROBADOR, distinto del motivo del ajuste
+   * (`adjustment.reasonKey`, que explica por que existe). Aprobar toca el
+   * ledger, asi que quien aprueba deja su propia razon en la traza, igual que
+   * quien rechaza. Va en `metadata` del evento y no en `reasonKey`: ese campo
+   * sigue diciendo por que existe la participacion, que es lo que se filtra
+   * seis meses despues.
+   */
+  public async approve(
+    adjustmentId: string,
+    principal: Principal,
+    approval: AdjustmentApproval | null = null,
+  ): Promise<AdjustmentOutcome> {
     this.requireCapability(principal, SWEEPSTAKES_CAPABILITIES.entryAdjustApprove);
     if (principal.actor.type !== "ADMIN") {
       throw new SweepstakesError("CAPABILITY_REQUIRED", {
@@ -331,7 +351,7 @@ export class AdjustmentService {
       });
     }
 
-    return await this.apply(adjustment, principal, this.deps.clock.now());
+    return await this.apply(adjustment, principal, this.deps.clock.now(), approval);
   }
 
   public async reject(
@@ -545,6 +565,7 @@ export class AdjustmentService {
     adjustment: Adjustment,
     principal: Principal,
     now: Date,
+    approval: AdjustmentApproval | null = null,
   ): Promise<AdjustmentOutcome> {
     const approverId = principal.actor.type === "ADMIN" ? principal.actor.adminUserId : null;
 
@@ -648,6 +669,8 @@ export class AdjustmentService {
         occurredAt: now,
         metadata: {
           entry_transaction_id: transaction.id,
+          approval_reason_key: approval?.reasonKey ?? null,
+          approval_notes: approval?.notes ?? null,
           quantity_delta: transaction.quantityDelta,
           requested_by: adjustment.requestedByAdminUserId,
           approved_by: approverId,

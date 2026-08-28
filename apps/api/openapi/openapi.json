@@ -4602,7 +4602,7 @@
     },
     "/api/v1/admin/entry-adjustments/{adjustment_id}/approve": {
       "post": {
-        "description": "El aprobador debe ser una persona DISTINTA del solicitante. Lo comprueba el servicio y lo impone ademas un CHECK de la base de datos.",
+        "description": "El aprobador debe ser una persona DISTINTA del solicitante. Lo comprueba el servicio y lo impone ademas un CHECK de la base de datos. reason_key es el motivo DEL APROBADOR y queda en la traza junto al del ajuste: aprobar toca el ledger y merece la misma explicacion que rechazar.",
         "operationId": "approveEntryAdjustment",
         "parameters": [
           {
@@ -4616,6 +4616,36 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "notes": {
+                    "anyOf": [
+                      {
+                        "maxLength": 2000,
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "reason_key": {
+                    "pattern": "^[A-Z][A-Z0-9_]{2,63}$",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "reason_key"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
         "responses": {
           "200": {
             "content": {
@@ -4887,7 +4917,7 @@
             "sessionCookie": []
           }
         ],
-        "summary": "Aprobar un ajuste y aplicarlo al ledger.",
+        "summary": "Aprobar un ajuste y aplicarlo al ledger, con motivo.",
         "tags": [
           "admin"
         ],
