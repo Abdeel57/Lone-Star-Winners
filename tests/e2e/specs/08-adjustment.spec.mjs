@@ -88,9 +88,10 @@ test.describe("ajuste manual", () => {
     expect(body.as_of).toBeTruthy();
 
     // Y no ha escrito nada: la cola de ajustes sigue como estaba.
-    const listed = await page.request.get(`${API_BASE_URL}/admin/entry-adjustments`, {
-      headers: cookieHeader(manager),
-    });
+    const listed = await page.request.get(
+      `${API_BASE_URL}/admin/entry-adjustments?promotion_id=${fixture.promotion.id}`,
+      { headers: cookieHeader(manager) },
+    );
     expect(listed.status()).toBe(200);
   });
 
@@ -157,6 +158,11 @@ test.describe("ajuste manual", () => {
   });
 
   test("quien propone no puede aprobar: hacen falta dos personas", async ({ page, browser }) => {
+    // Dos personas = dos inicios de sesion con segundo factor, y cada uno espera
+    // a la ventana TOTP siguiente (hasta 30 s) para no reutilizar un codigo. En
+    // secuencia con las pruebas anteriores supera los 60 s por defecto; con
+    // `slow()` el limite es el triple. No es lentitud del sistema: es el reloj.
+    test.slow();
     await waitForNextTotpWindow();
     const manager = await loginStaff(page, fixture.staff.promotionManager);
 
@@ -200,7 +206,9 @@ test.describe("ajuste manual", () => {
 
     const approved = await officerPage.request.post(
       `${API_BASE_URL}/admin/entry-adjustments/${adjustmentId}/approve`,
-      { headers: cookieHeader(officer) },
+      // La ruta de aprobar no tiene cuerpo y `entry.adjust.approve` exige motivo:
+      // viaja por la cabecera que acepta el autorizador (HO-034.1).
+      { headers: { ...cookieHeader(officer), "x-lsw-reason-code": "SUPPORT_RESOLUTION" } },
     );
 
     expect(approved.status()).toBe(200);
