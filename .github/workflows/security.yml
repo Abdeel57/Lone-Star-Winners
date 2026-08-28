@@ -195,9 +195,16 @@ jobs:
           GITLEAKS_IMAGE: ghcr.io/gitleaks/gitleaks:v8.18.4
         run: |
           set -euo pipefail
+          # safe.directory: el contenedor corre como root sobre un checkout que
+          # pertenece al uid del runner; el git de la imagen (>= 2.35.2) se niega
+          # con "dubious ownership" y gitleaks sale con 1 SIN escanear. Se pasa
+          # por entorno (GIT_CONFIG_*) para no tocar la configuracion del host.
           docker run --rm \
             -v "${GITHUB_WORKSPACE}:/repo" \
             -w /repo \
+            -e GIT_CONFIG_COUNT=1 \
+            -e GIT_CONFIG_KEY_0=safe.directory \
+            -e GIT_CONFIG_VALUE_0=/repo \
             "${GITLEAKS_IMAGE}" \
             detect \
             --source=/repo \

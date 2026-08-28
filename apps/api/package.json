@@ -28,7 +28,7 @@
     "@lsw/security": "workspace:*",
     "@lsw/sweepstakes": "workspace:*",
     "@lsw/tpa": "workspace:*",
-    "drizzle-orm": "^0.44.4",
+    "drizzle-orm": "^0.45.2",
     "fastify": "^5.6.0",
     "pino": "^9.9.0",
     "zod": "^4.1.5"

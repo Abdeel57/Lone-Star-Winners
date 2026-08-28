@@ -39,7 +39,7 @@
   "dependencies": {
     "@lsw/security": "workspace:*",
     "@lsw/sweepstakes": "workspace:*",
-    "drizzle-orm": "^0.44.4",
+    "drizzle-orm": "^0.45.2",
     "pg": "^8.16.3"
   },
   "devDependencies": {

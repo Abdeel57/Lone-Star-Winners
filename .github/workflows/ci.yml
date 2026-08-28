@@ -97,6 +97,19 @@ jobs:
             pnpm install --no-frozen-lockfile
           fi
 
+      # POR QUE SE CONSTRUYEN LOS PAQUETES INTERNOS ANTES DEL LINT RAIZ
+      #
+      #   eslint.config.mjs usa `projectService: true` (type-aware) y todos los
+      #   paquetes internos exponen sus tipos desde `dist/` (`exports["."].types`
+      #   = ./dist/index.d.ts). Sobre un checkout limpio, sin `dist`, los imports
+      #   `@lsw/*` no resuelven tipos y las reglas `no-unsafe-*` fallan sobre
+      #   `any`: rojo en CI y verde en local, donde `dist` existe. `lint` de
+      #   turbo ya declara `dependsOn: ["^build"]`; `lint:root` es un script
+      #   suelto del raiz y no lo hereda, asi que se construye aqui a mano.
+      #   Solo packages/*: apps/web no lo necesita nadie y su build es lento.
+      - name: Construir los paquetes internos (tipos desde dist/)
+        run: pnpm exec turbo run build --filter='./packages/*'
+
       - name: eslint (raiz, type-aware)
         run: pnpm run lint:root
 
