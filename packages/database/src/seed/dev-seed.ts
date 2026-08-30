@@ -1,10 +1,17 @@
 /**
  * Semilla de DESARROLLO.
  *
- * Todos los datos son ostensiblemente ficticios: los correos usan el TLD
- * reservado `.invalid` (RFC 2606), que no existe y no puede existir, y los
- * nombres lo dicen en voz alta. Nada de esto puede confundirse con datos de
- * produccion.
+ * Las personas y las promociones son ostensiblemente ficticias: los correos
+ * usan el TLD reservado `.invalid` (RFC 2606), que no existe y no puede
+ * existir, y los nombres lo dicen en voz alta. Nada de eso puede confundirse
+ * con datos de produccion.
+ *
+ * El CATALOGO es la excepcion, y es deliberada: los articulos son los que el
+ * cliente entrego (DEC-052, DEC-053), porque un catalogo inventado no sirve
+ * para desarrollar la tienda -ni las categorias, ni los colores de la gorra,
+ * ni los cuatro paquetes existen en un catalogo de camisetas de muestra-. Lo
+ * ficticio ahi son los PRECIOS de la mercancia, y cada descripcion lo dice en
+ * los dos idiomas para que se lea tambien fuera del repositorio.
  *
  * DOS COSAS QUE ESTA SEMILLA NO PUEDE HACER, Y ES CORRECTO QUE NO PUEDA
  *
@@ -47,6 +54,7 @@ import {
   identities,
   participants,
   productTranslations,
+  productVariantTranslations,
   productVariants,
   products,
   promotionEntryNumberSequences,
@@ -66,6 +74,212 @@ export interface SeedResult {
 }
 
 const FICTITIOUS_EMAIL_DOMAIN = "example.invalid";
+
+// ---------------------------------------------------------------------------
+// Catalogo del cliente (DEC-052, DEC-053)
+//
+// NINGUN PRODUCTO DICE CUANTAS PARTICIPACIONES DA, ni en columna ni en texto
+// libre. Tampoco el nombre del paquete: "$10 entry package" es el IMPORTE, no
+// la cantidad. Quien decide cuanto vale cada tipo es
+// `purchase_entry_formula.rates` de la version de reglas, y hoy esta en `TBD`
+// (docs/LEGAL_PENDING.md). Escribir la cifra aqui seria la columna
+// `entries_per_unit` que la migracion `0026` se nego a crear, solo que sin
+// declararla.
+//
+// El copy describe MERCANCIA o un PAQUETE DE PARTICIPACIONES. Ni "boletos" ni
+// "oportunidades de ganar", en ninguno de los dos idiomas (CLAUDE.md seccion 1
+// y la nota de proceso de docs/LEGAL_PENDING.md).
+//
+// El texto que ve el participante lleva acentos -es CONTENIDO, no un comentario
+// de este archivo-: los dos idiomas son de primera clase (principio 4) y
+// "telefono" sin tilde no es espanol correcto.
+// ---------------------------------------------------------------------------
+
+/**
+ * Variante de catalogo.
+ *
+ * `name: null` es una variante SIN nombre, que es el caso normal de un producto
+ * de un solo modelo: no siembra `product_variant_translations` y la interfaz no
+ * pinta selector. Solo las gorras llevan nombre, porque son lo unico que el
+ * cliente entrego con colores.
+ *
+ * `stockQuantity: null` es "existencias no gestionadas", que no es cero.
+ */
+interface CatalogVariantSpec {
+  readonly skuSuffix: string;
+  readonly stockQuantity: number | null;
+  readonly name: { readonly en: string; readonly es: string } | null;
+}
+
+interface CatalogProductSpec {
+  readonly sku: string;
+  readonly slug: string;
+  /** DEC-052: etiqueta de catalogo. No decide nada legal. */
+  readonly kind: "MERCHANDISE" | "ENTRY_PACKAGE";
+  /** Clave de `product_categories`, sembrada por la migracion `0026`. */
+  readonly categoryKey: string;
+  readonly priceMinor: bigint;
+  readonly en: { readonly name: string; readonly description: string };
+  readonly es: { readonly name: string; readonly description: string };
+  readonly variants: readonly CatalogVariantSpec[];
+}
+
+/**
+ * Marca de honestidad del precio, DENTRO de la descripcion y en los dos
+ * idiomas.
+ *
+ * En la descripcion y no en un comentario porque el comentario no viaja: el
+ * precio se ve en la tienda, en el carrito y en el panel, y quien lo mire ahi
+ * tiene que poder saber que es de desarrollo sin abrir el repositorio.
+ *
+ * Es la misma frase para los siete articulos a proposito. La semilla no INVENTA
+ * copy comercial -"funda de silicona con argolla de acero" seria poner palabras
+ * en boca del cliente-; describe lo unico que sabe con certeza sobre estas
+ * filas, que es que el precio no esta acordado.
+ */
+const MERCHANDISE_DESCRIPTION_EN =
+  "Client catalog item. The amount shown is a fictitious development price: no price has been agreed for this item.";
+
+const MERCHANDISE_DESCRIPTION_ES =
+  "Artículo del catálogo del cliente. El importe mostrado es un precio de desarrollo ficticio: para este artículo no hay ningún precio acordado.";
+
+/** Variante unica y sin nombre: un solo modelo, sin selector que pintar. */
+function singleVariant(stockQuantity: number | null): readonly CatalogVariantSpec[] {
+  return [{ skuSuffix: "-1", stockQuantity, name: null }];
+}
+
+/**
+ * Los cinco colores de la gorra premium.
+ *
+ * Es el unico producto con variantes con nombre, y por eso el unico que siembra
+ * `product_variant_translations`. Un color a `0`: agotado es un estado normal
+ * de tienda, y `0` -sin existencias- no es `null` -sin inventario que llevar-.
+ */
+const CAP_COLOR_VARIANTS: readonly CatalogVariantSpec[] = [
+  { skuSuffix: "-BLACK", stockQuantity: 40, name: { en: "Black", es: "Negro" } },
+  { skuSuffix: "-WHITE", stockQuantity: 35, name: { en: "White", es: "Blanco" } },
+  { skuSuffix: "-RED", stockQuantity: 28, name: { en: "Red", es: "Rojo" } },
+  { skuSuffix: "-NAVY", stockQuantity: 22, name: { en: "Navy", es: "Azul marino" } },
+  { skuSuffix: "-KHAKI", stockQuantity: 0, name: { en: "Khaki", es: "Caqui" } },
+];
+
+/**
+ * Paquete de participaciones.
+ *
+ * Aqui el importe SI lo fijo el cliente ($10, $20, $50 y $100), asi que la
+ * descripcion no puede llamarlo ficticio: seria una falsedad al reves. Dice lo
+ * cierto -es el importe del cliente, cargado como precio de desarrollo- y sigue
+ * sin comprometer a nadie.
+ *
+ * Lo que no dice, en ningun idioma, es cuantas participaciones incluye.
+ */
+function entryPackageSpec(dollars: string, priceMinor: bigint): CatalogProductSpec {
+  return {
+    sku: `PKG-${dollars}`,
+    slug: `entry-package-${dollars}`,
+    kind: "ENTRY_PACKAGE",
+    categoryKey: "entry-packages",
+    priceMinor,
+    en: {
+      name: `$${dollars} entry package`,
+      description: `Entry package from the client's catalog. The $${dollars} amount is the one the client set, loaded here as a development price. How many entries it includes is decided by the promotion's rules version, not by this product.`,
+    },
+    es: {
+      name: `Paquete de participaciones de $${dollars}`,
+      description: `Paquete de participaciones del catálogo del cliente. El importe de $${dollars} es el que fijó el cliente y aquí se carga como precio de desarrollo. Cuántas participaciones incluye lo decide la versión de reglas de la promoción, no este producto.`,
+    },
+    // Sin existencias gestionadas: un paquete no tiene almacen que agotar. Lo
+    // que lo limita es el tope por participante de la version de reglas, que no
+    // es inventario y no se descuenta aqui.
+    variants: singleVariant(null),
+  };
+}
+
+/**
+ * Los once productos: siete de mercancia y los cuatro paquetes.
+ *
+ * Los `slug` y los `sku` son los mismos que usan los fixtures del escaparate
+ * (`apps/web/src/mocks/fixtures/catalog.ts`), y los importes de la mercancia
+ * tambien: asi la misma URL de ficha lleva al mismo articulo contra el mock y
+ * contra una base sembrada, y una discrepancia entre las dos vistas es un fallo
+ * de verdad y no una diferencia de fixtures.
+ */
+const CATALOG_SPECS: readonly CatalogProductSpec[] = [
+  {
+    sku: "ATH-1",
+    slug: "airtag-keychain-holder",
+    kind: "MERCHANDISE",
+    categoryKey: "airtag-holders",
+    priceMinor: 1600n,
+    en: { name: "AirTag holder keychain", description: MERCHANDISE_DESCRIPTION_EN },
+    es: { name: "Llavero holder para AirTag", description: MERCHANDISE_DESCRIPTION_ES },
+    variants: singleVariant(100),
+  },
+  {
+    sku: "PSK-1",
+    slug: "phone-stand-keychain",
+    kind: "MERCHANDISE",
+    categoryKey: "phone-holders",
+    priceMinor: 2200n,
+    en: { name: "Phone holder keychain", description: MERCHANDISE_DESCRIPTION_EN },
+    es: { name: "Llavero con soporte para teléfono", description: MERCHANDISE_DESCRIPTION_ES },
+    variants: singleVariant(100),
+  },
+  {
+    sku: "PWB-1",
+    slug: "portable-power-bank",
+    kind: "MERCHANDISE",
+    categoryKey: "power-banks",
+    priceMinor: 4800n,
+    en: { name: "Portable power bank", description: MERCHANDISE_DESCRIPTION_EN },
+    es: { name: "Power bank portátil", description: MERCHANDISE_DESCRIPTION_ES },
+    variants: singleVariant(60),
+  },
+  {
+    sku: "NBK-1",
+    slug: "notebook-and-pen",
+    kind: "MERCHANDISE",
+    categoryKey: "notebooks",
+    priceMinor: 2600n,
+    en: { name: "Notebook with pen", description: MERCHANDISE_DESCRIPTION_EN },
+    es: { name: "Libreta con pluma", description: MERCHANDISE_DESCRIPTION_ES },
+    variants: singleVariant(100),
+  },
+  {
+    sku: "NKL-1",
+    slug: "hands-free-neck-light",
+    kind: "MERCHANDISE",
+    categoryKey: "neck-lights",
+    priceMinor: 2900n,
+    en: { name: "Hands-free LED neck light", description: MERCHANDISE_DESCRIPTION_EN },
+    es: { name: "Luz LED de cuello manos libres", description: MERCHANDISE_DESCRIPTION_ES },
+    variants: singleVariant(80),
+  },
+  {
+    sku: "TMB-1",
+    slug: "insulated-tumbler",
+    kind: "MERCHANDISE",
+    categoryKey: "tumblers",
+    priceMinor: 3200n,
+    en: { name: "Insulated tumbler", description: MERCHANDISE_DESCRIPTION_EN },
+    es: { name: "Termo aislante", description: MERCHANDISE_DESCRIPTION_ES },
+    variants: singleVariant(75),
+  },
+  {
+    sku: "CAP-TX",
+    slug: "premium-cap",
+    kind: "MERCHANDISE",
+    categoryKey: "caps",
+    priceMinor: 3500n,
+    en: { name: "Premium cap", description: MERCHANDISE_DESCRIPTION_EN },
+    es: { name: "Gorra premium", description: MERCHANDISE_DESCRIPTION_ES },
+    variants: CAP_COLOR_VARIANTS,
+  },
+  entryPackageSpec("10", 1000n),
+  entryPackageSpec("20", 2000n),
+  entryPackageSpec("50", 5000n),
+  entryPackageSpec("100", 10000n),
+];
 
 /**
  * Ejecuta la semilla dentro de una unica transaccion: o queda un entorno de
@@ -204,56 +418,29 @@ export async function seedDevelopmentData(db: Database): Promise<SeedResult> {
     // -----------------------------------------------------------------------
     // Catalogo
     //
-    // El copy describe MERCANCIA. Ni "boletos" ni "oportunidades de ganar", en
-    // ninguno de los dos idiomas (CLAUDE.md seccion 1 y la nota de proceso de
-    // docs/LEGAL_PENDING.md).
+    // Las CATEGORIAS no se tocan aqui: las siembra la migracion `0026` porque
+    // son catalogo del negocio y no datos de desarrollo (mismo criterio que los
+    // feature flags de `0005`). Esta semilla solo referencia sus claves, y si
+    // alguna faltara la clave ajena lo diria en voz alta en vez de crear una
+    // segunda fuente de verdad.
     // -----------------------------------------------------------------------
-    const catalogSpecs = [
-      {
-        sku: "DEV-TEE-001",
-        slug: "dev-camiseta-lone-star",
-        priceMinor: 2500n,
-        en: {
-          name: "Development Sample T-Shirt",
-          description: "Fictitious catalog item used for local development only.",
-        },
-        es: {
-          name: "Camiseta de muestra para desarrollo",
-          description: "Articulo ficticio de catalogo, solo para desarrollo local.",
-        },
-      },
-      {
-        sku: "DEV-CAP-002",
-        slug: "dev-gorra-lone-star",
-        priceMinor: 1800n,
-        en: {
-          name: "Development Sample Cap",
-          description: "Fictitious catalog item used for local development only.",
-        },
-        es: {
-          name: "Gorra de muestra para desarrollo",
-          description: "Articulo ficticio de catalogo, solo para desarrollo local.",
-        },
-      },
-      {
-        sku: "DEV-MUG-003",
-        slug: "dev-taza-lone-star",
-        priceMinor: 1200n,
-        en: {
-          name: "Development Sample Mug",
-          description: "Fictitious catalog item used for local development only.",
-        },
-        es: {
-          name: "Taza de muestra para desarrollo",
-          description: "Articulo ficticio de catalogo, solo para desarrollo local.",
-        },
-      },
-    ] as const;
-
-    for (const spec of catalogSpecs) {
+    for (const spec of CATALOG_SPECS) {
       const [product] = await tx
         .insert(products)
-        .values({ sku: spec.sku, slug: spec.slug, status: "ACTIVE", currency: "USD" })
+        .values({
+          sku: spec.sku,
+          slug: spec.slug,
+          status: "ACTIVE",
+          kind: spec.kind,
+          categoryKey: spec.categoryKey,
+          // Las imagenes las entrega el USUARIO y todavia no existen: no hay
+          // almacen de medios (CLAUDE.md seccion 7). DEC-053 fija la FORMA del
+          // enlace -`https://...` o ruta raiz `/...`, comprobada por el CHECK
+          // de `0026`-, no el contenido, asi que sembrar `/products/x.jpg`
+          // seria sembrar enlaces rotos con aspecto de dato bueno.
+          imageUrl: null,
+          currency: "USD",
+        })
         .returning({ id: products.id });
 
       if (product === undefined) {
@@ -275,15 +462,35 @@ export async function seedDevelopmentData(db: Database): Promise<SeedResult> {
         },
       ]);
 
-      await tx.insert(productVariants).values({
-        productId: product.id,
-        sku: `${spec.sku}-STD`,
-        status: "ACTIVE",
-        priceAmountMinor: spec.priceMinor,
-        currency: "USD",
-        stockQuantity: 100,
-        position: 0,
-      });
+      // La posicion sale del orden de la lista: es el orden en que el cliente
+      // enumero los colores, y un `position` a cero para todas seria un empate
+      // que resolveria la base de datos como quisiera.
+      for (const [position, variantSpec] of spec.variants.entries()) {
+        const [variant] = await tx
+          .insert(productVariants)
+          .values({
+            productId: product.id,
+            sku: `${spec.sku}${variantSpec.skuSuffix}`,
+            status: "ACTIVE",
+            priceAmountMinor: spec.priceMinor,
+            currency: "USD",
+            stockQuantity: variantSpec.stockQuantity,
+            imageUrl: null,
+            position,
+          })
+          .returning({ id: productVariants.id });
+
+        if (variant === undefined) {
+          throw new Error(`No se pudo crear la variante ${spec.sku}${variantSpec.skuSuffix}.`);
+        }
+
+        if (variantSpec.name !== null) {
+          await tx.insert(productVariantTranslations).values([
+            { variantId: variant.id, locale: "en-US", name: variantSpec.name.en },
+            { variantId: variant.id, locale: "es-US", name: variantSpec.name.es },
+          ]);
+        }
+      }
     }
 
     // -----------------------------------------------------------------------
@@ -444,13 +651,22 @@ export async function seedDevelopmentData(db: Database): Promise<SeedResult> {
     warnings.push(
       "Ninguna cuenta administrativa tiene credencial: el hash Argon2id y el TOTP los implementa packages/security (DEC-006).",
     );
+    warnings.push(
+      "Los precios de los 7 articulos de mercancia son de DESARROLLO: el cliente no ha fijado ninguno, y cada descripcion lo dice en los dos idiomas. Los 4 paquetes llevan el importe que el cliente si fijo ($10, $20, $50 y $100).",
+    );
+    warnings.push(
+      "Ningun producto declara cuantas participaciones da, ni siquiera los paquetes: esa cifra sale de purchase_entry_formula de la version de reglas (DEC-052), y hoy esta en TBD.",
+    );
+    warnings.push(
+      "Ningun producto ni variante tiene imagen: no hay almacen de medios (CLAUDE.md seccion 7) y los ficheros los entrega el usuario. DEC-053 fija la forma del enlace (https:// o ruta raiz /...), no su contenido.",
+    );
 
     return {
       identities: 2 + adminSpecs.length,
       participants: 2,
       adminUsers: adminSpecs.length,
       promotions: promotionSpecs.length,
-      products: catalogSpecs.length,
+      products: CATALOG_SPECS.length,
       warnings,
     };
   });

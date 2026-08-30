@@ -5,6 +5,14 @@
  * de error de la capa de API tambien es 200, y esa fue exactamente la clase de
  * fallo que motivo `apps/web/scripts/smoke.mjs`. Aqui se busca texto que SOLO
  * puede venir de la base de datos.
+ *
+ * QUE NO ESTA AQUI (HO-041)
+ * -------------------------
+ * El tipo de producto, `entry_offer` y los paquetes tienen su propio fichero,
+ * `09-entry-packages.spec.mjs`: son una afirmacion sobre el MOTOR -cuantas
+ * participaciones incluye un paquete- y no sobre el catalogo. Lo que si se
+ * comprueba aqui es la ausencia que DEC-052 punto 6 exige: que el detalle de la
+ * promocion ya no publica ningun universo de participaciones.
  */
 
 import { expect, test } from "@playwright/test";
@@ -12,6 +20,7 @@ import { expect, test } from "@playwright/test";
 import { expectNoApiErrorState } from "../lib/actions.mjs";
 import {
   API_BASE_URL,
+  PACKAGE_NAME,
   PRODUCT_NAME,
   PRODUCT_SKU,
   PRODUCT_SLUG,
@@ -57,6 +66,19 @@ test("la tienda lista la mercancia sembrada con su precio", async ({ page }) => 
   await expectNoApiErrorState(page);
 });
 
+test("la tienda lista tambien el paquete de participaciones", async ({ page }) => {
+  /*
+   * Un paquete es un producto mas del catalogo (DEC-052 punto 1): aparece en la
+   * misma tienda, con el mismo precio en entero y por el mismo camino. Lo que
+   * lo distingue -su tasa- no se ve aqui, se ve en `09-entry-packages`.
+   */
+  await page.goto("/es/shop");
+
+  await expect(page.getByText(PACKAGE_NAME["es-US"]).first()).toBeVisible();
+  await expect(page.getByText("$10.00").first()).toBeVisible();
+  await expectNoApiErrorState(page);
+});
+
 test("el detalle del producto trae la variante y su precio", async ({ page }) => {
   await page.goto(`/es/products/${PRODUCT_SLUG}`);
 
@@ -91,6 +113,47 @@ test("la API sirve la promocion activa con la version de reglas del escenario", 
   expect(body.legal_timezone).toBe(fixture.legalTimezone);
   expect(body.title["es-US"]).toBe(PROMOTION_TITLE["es-US"]);
   expect(body.title["en-US"]).toBe(PROMOTION_TITLE["en-US"]);
+});
+
+test("el detalle de la promocion NO publica ningun universo de participaciones", async ({
+  request,
+}) => {
+  /*
+   * DEC-052 punto 6 retira `entry_pool`. El 10,000 nunca fue un universo total:
+   * es el tope POR PERSONA, y publicarlo como un pozo con "emitidas" y
+   * "restantes" cuenta la historia de una rifa -boletos que se acaban- que es
+   * justo lo que este producto no es (`CLAUDE.md` seccion 1).
+   *
+   * Esta es una afirmacion NEGATIVA, y por eso hace falta: un campo que
+   * reaparece en una respuesta es aditivo, no rompe a nadie y pasa todas las
+   * pruebas verdes. La equivalente sobre el esquema OpenAPI, que corre sin
+   * navegador, esta en
+   * `tests/security/src/contract/public-response-minimization.test.ts`.
+   */
+  const response = await request.get(`${API_BASE_URL}/promotions/${PROMOTION_SLUG}`);
+  expect(response.status()).toBe(200);
+
+  const detail = await response.json();
+  const serialized = JSON.stringify(detail);
+
+  expect(detail).not.toHaveProperty("entry_pool");
+  for (const forbidden of ["entry_pool", "issued", "remaining"]) {
+    expect(serialized, `la promocion publica ${forbidden}`).not.toContain(`"${forbidden}"`);
+  }
+});
+
+test("el catalogo publico no publica unidades en almacen", async ({ request }) => {
+  // Minimizacion: el escaparate publica un ESTADO de disponibilidad, no un
+  // numero de existencias. Un contador de unidades de un producto que genera
+  // participaciones vuelve a contar la historia de la escasez, y ademas regala
+  // a quien raspe la pagina la evolucion de las ventas.
+  const response = await request.get(`${API_BASE_URL}/products`);
+  expect(response.status()).toBe(200);
+
+  const serialized = JSON.stringify(await response.json());
+  for (const forbidden of ["stock_quantity", "quantity_available"]) {
+    expect(serialized, `el catalogo publica ${forbidden}`).not.toContain(`"${forbidden}"`);
+  }
 });
 
 test("la API sirve el producto con su variante y su precio en entero", async ({ request }) => {

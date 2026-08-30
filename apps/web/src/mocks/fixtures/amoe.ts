@@ -93,25 +93,89 @@ export const amoeOnlineFormConfig: AmoeConfig = {
 };
 
 /**
- * Envio por correo postal.
+ * Campos de la FICHA POSTAL, tal como los enumera §13.2.
  *
- * TRAE CAMPOS Y NO TIENE FORMULARIO, y ESE es el fixture. La API publica
- * `required_fields` en LAS CUATRO modalidades -el dominio exige esas claves en
- * cualquier envio que entre por la API-, asi que un fixture con `null` aqui
- * probaria un camino que no existe y dejaria sin probar el que si: que la
- * interfaz decide por MODALIDAD, no por "vienen campos". Un boton de envio aqui
- * sugeriria que se puede participar desde la web, que es exactamente lo
- * contrario de lo que dicen las instrucciones.
+ * Son los siete que exige el segundo borrador de las Official Rules: nombre
+ * legal, direccion, correo, telefono, fecha de nacimiento, firma presente y
+ * fecha de matasellos. Ni uno mas: un campo de mas en esta lista es recogida de
+ * datos personales que nadie autorizo (CLAUDE.md #2).
+ *
+ * `signature_present` es TEXTO y no una casilla porque quien transcribe copia
+ * lo que ve en la ficha ("yes"/"no"), y una casilla obligaria a interpretar.
+ */
+const mailInFields: readonly AmoeFieldSpec[] = [
+  { key: "full_name", type: "TEXT", required: true, label_key: "fullName", max_length: 120 },
+  {
+    key: "mailing_address",
+    type: "TEXTAREA",
+    required: true,
+    label_key: "mailingAddress",
+    max_length: 400,
+  },
+  { key: "email", type: "EMAIL", required: true, label_key: "email", max_length: 254 },
+  { key: "phone", type: "TEL", required: true, label_key: "phone", max_length: 40 },
+  { key: "date_of_birth", type: "DATE", required: true, label_key: "dateOfBirth", max_length: 10 },
+  {
+    key: "signature_present",
+    type: "TEXT",
+    required: true,
+    label_key: "signaturePresent",
+    max_length: 3,
+  },
+  { key: "postmark_date", type: "DATE", required: true, label_key: "postmarkDate", max_length: 10 },
+];
+
+/**
+ * Envio por correo postal (§13.2, DEC-054 punto 4).
+ *
+ * TRAE CAMPOS Y NO TIENE FORMULARIO PUBLICO, y ESE es el fixture. La API
+ * publica `required_fields` en LAS CUATRO modalidades -el dominio exige esas
+ * claves en cualquier envio que entre por la API-, asi que un fixture con
+ * `null` aqui probaria un camino que no existe y dejaria sin probar el que si:
+ * que la interfaz decide por MODALIDAD, no por "vienen campos". Un boton de
+ * envio aqui sugeriria que se puede participar desde la web, que es exactamente
+ * lo contrario de lo que dicen las instrucciones.
+ *
+ * Los campos SI los usa el panel, en el formulario de transcripcion: quien
+ * teclea una ficha postal introduce exactamente estos siete.
+ *
+ * LAS CIFRAS SON LAS DEL SEGUNDO BORRADOR y son PROVISIONALES: 2,000
+ * participaciones por ficha valida, cinco fichas por participante en todo el
+ * periodo, dos fichas por sobre, matasellos dentro del periodo y recepcion
+ * hasta siete dias naturales despues del cierre. Ninguna la escribe la
+ * interfaz: viven en la version de reglas y llegan por esta respuesta.
  */
 export const amoeMailInConfig: AmoeConfig = {
   ...amoeOnlineFormConfig,
   mode: "MAIL_IN_REVIEW",
+  required_fields: mailInFields,
+  entries_per_approved_submission: 2000,
+  max_per_participant_per_period: 5,
+  limit_period: "PROMOTION",
+  mail_in: {
+    max_cards_per_envelope: 2,
+    postmark_by: "2026-12-31T05:59:00.000Z",
+    received_by: "2027-01-07T05:59:00.000Z",
+  },
   instructions: {
     "en-US":
       "This text is served by the backend. In production it carries the mailing address, the required format and the limits, exactly as the Official Rules state them.\n\nNothing on this page is written by the interface.",
     "es-US":
       "Este texto lo sirve el backend. En producción lleva la dirección postal, el formato exigido y los límites, exactamente como los fijan las Reglas Oficiales.\n\nNada de esta página lo escribe la interfaz.",
   },
+};
+
+/**
+ * Modalidad postal SIN instrucciones publicadas.
+ *
+ * Es un estado real: la modalidad esta fijada y el texto del abogado todavia no
+ * ha llegado. La pantalla remite a las Reglas Oficiales en vez de redactar unas
+ * instrucciones postales, que es lo que el principio 2 prohibe. Los limites y
+ * los plazos SI se ensenan, porque son datos configurados y no prosa legal.
+ */
+export const amoeMailInWithoutInstructionsConfig: AmoeConfig = {
+  ...amoeMailInConfig,
+  instructions: null,
 };
 
 /** Codigo. Un solo campo, publicado por el backend. */

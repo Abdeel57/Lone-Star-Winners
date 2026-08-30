@@ -124,7 +124,31 @@ export interface AmoeSubmissionRepository {
   findByFingerprint(promotionId: string, fingerprint: string): Promise<AmoeSubmission | null>;
   /** Envios que cuentan para el limite: todo lo que no este rechazado ni cancelado. */
   countInPeriod(promotionId: string, participantId: string, periodBucket: string): Promise<number>;
+  /**
+   * LA COLA DE TRABAJO: lo que espera decision.
+   *
+   * No es "los envios en estado PENDING_REVIEW". Un envio recien registrado que
+   * todavia no ha pasado por revision tambien espera, asi que el adaptador de
+   * PostgreSQL devuelve `SUBMITTED` y `PENDING_REVIEW` juntos. Sigue siendo una
+   * consulta distinta de `listByStatus`, y por eso no se sustituye por ella.
+   */
   listPendingReview(promotionId: string): Promise<readonly AmoeSubmission[]>;
+  /**
+   * Envios en UN estado concreto. La consulta del filtro `?status=` de la cola.
+   *
+   * Existe porque sin ella un envio decidido -aprobado o rechazado- desaparecia
+   * de toda lectura administrativa: la cola solo devolvia lo pendiente, y con
+   * el envio se iban `granted_entries` y `applied_cap`, que son la unica
+   * explicacion de por que una aprobacion concedio menos de lo anunciado. Un
+   * expediente que no se puede volver a mirar no es auditable.
+   *
+   * Exacta, a diferencia de `listPendingReview`: `status: "SUBMITTED"` devuelve
+   * los `SUBMITTED` y nada mas.
+   */
+  listByStatus(
+    promotionId: string,
+    status: AmoeSubmissionStatus,
+  ): Promise<readonly AmoeSubmission[]>;
   listForParticipant(
     promotionId: string,
     participantId: string,
@@ -206,6 +230,19 @@ export class InMemoryAmoeSubmissionRepository implements AmoeSubmissionRepositor
         .filter(
           (submission) =>
             submission.promotionId === promotionId && submission.status === "PENDING_REVIEW",
+        )
+        .sort((a, b) => a.submittedAt.getTime() - b.submittedAt.getTime()),
+    );
+  }
+
+  public listByStatus(
+    promotionId: string,
+    status: AmoeSubmissionStatus,
+  ): Promise<readonly AmoeSubmission[]> {
+    return Promise.resolve(
+      [...this.byId.values()]
+        .filter(
+          (submission) => submission.promotionId === promotionId && submission.status === status,
         )
         .sort((a, b) => a.submittedAt.getTime() - b.submittedAt.getTime()),
     );

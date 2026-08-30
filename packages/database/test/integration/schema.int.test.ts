@@ -335,6 +335,100 @@ describe("DEC-012 - la configuracion legal como bloqueo verificable", () => {
       ),
     ).rejects.toThrow();
   });
+
+  /**
+   * DEC-054: activar es ARCHIVAR LA ANTERIOR Y ACTIVAR ESTA, en una sola
+   * transaccion, mas escribir `promotions.active_rules_version_id`.
+   *
+   * Se prueba contra PostgreSQL porque lo que hace que la secuencia sea
+   * correcta es un cerrojo del motor: el indice unico parcial
+   * `promotion_rules_versions_one_active_per_promotion`. Activando ANTES de
+   * archivar, la propia transaccion chocaria contra el indice; el test lo
+   * demuestra ejecutando el orden bueno y comprobando el estado resultante.
+   */
+  it("activar una version archiva la anterior y fija active_rules_version_id", async () => {
+    const promotionId = await createPromotion("activacion-encadenada");
+    const adminId = await createAdminUser("rules-activation-chain");
+
+    const ids: string[] = [];
+    for (const version of [1, 2]) {
+      const inserted = await app.execute<{ id: string }>(
+        sql`INSERT INTO promotion_rules_versions (promotion_id, version, config)
+            VALUES (${promotionId}, ${version}, ${JSON.stringify(FIXTURE_RESOLVED_CONFIG)}::jsonb)
+            RETURNING id`,
+      );
+      ids.push(inserted.rows[0]?.id ?? "");
+    }
+
+    const [first, second] = ids;
+
+    await app.execute(
+      sql`UPDATE promotion_rules_versions
+          SET status = 'ACTIVE', activated_at = now(), activated_by_admin_user_id = ${adminId}
+          WHERE id = ${first}`,
+    );
+    await app.execute(
+      sql`UPDATE promotions SET active_rules_version_id = ${first} WHERE id = ${promotionId}`,
+    );
+
+    // La secuencia que ejecuta `activateRulesVersion`: archivar, activar,
+    // apuntar. En este orden y en la misma transaccion.
+    await app.transaction(async (tx) => {
+      await tx.execute(
+        sql`UPDATE promotion_rules_versions
+            SET status = 'ARCHIVED', archived_at = now()
+            WHERE promotion_id = ${promotionId} AND status = 'ACTIVE'`,
+      );
+      await tx.execute(
+        sql`UPDATE promotion_rules_versions
+            SET status = 'ACTIVE', activated_at = now(), activated_by_admin_user_id = ${adminId}
+            WHERE id = ${second}`,
+      );
+      await tx.execute(
+        sql`UPDATE promotions SET active_rules_version_id = ${second} WHERE id = ${promotionId}`,
+      );
+    });
+
+    const states = await app.execute<{ id: string; status: string }>(
+      sql`SELECT id, status FROM promotion_rules_versions WHERE promotion_id = ${promotionId}`,
+    );
+    const byId = new Map(states.rows.map((row) => [row.id, row.status]));
+    expect(byId.get(first ?? "")).toBe("ARCHIVED");
+    expect(byId.get(second ?? "")).toBe("ACTIVE");
+
+    const pointer = await app.execute<{ active_rules_version_id: string | null }>(
+      sql`SELECT active_rules_version_id FROM promotions WHERE id = ${promotionId}`,
+    );
+    expect(pointer.rows[0]?.active_rules_version_id).toBe(second);
+  });
+
+  it("un PATCH sobre una version ACTIVE lo rechaza el trigger, no la aplicacion", async () => {
+    // Es el cerrojo que hace que la superficie de escritura de DEC-054 sea
+    // segura: la API traduce el 409, pero quien se niega es el motor.
+    const promotionId = await createPromotion("patch-sobre-activa");
+    const adminId = await createAdminUser("rules-patch-probe");
+
+    const inserted = await app.execute<{ id: string }>(
+      sql`INSERT INTO promotion_rules_versions (promotion_id, version, config)
+          VALUES (${promotionId}, 1, ${JSON.stringify(FIXTURE_RESOLVED_CONFIG)}::jsonb)
+          RETURNING id`,
+    );
+    const versionId = inserted.rows[0]?.id;
+
+    await app.execute(
+      sql`UPDATE promotion_rules_versions
+          SET status = 'ACTIVE', activated_at = now(), activated_by_admin_user_id = ${adminId}
+          WHERE id = ${versionId}`,
+    );
+
+    await expect(
+      app.execute(
+        sql`UPDATE promotion_rules_versions
+            SET attorney_approval_reference = 'REF-NUEVA'
+            WHERE id = ${versionId}`,
+      ),
+    ).rejects.toSatisfy(dbErrorMatching(/inmutable/iu));
+  });
 });
 
 describe("ciclo de vida de la promocion", () => {

@@ -72,7 +72,16 @@
       "authorization": "amoe.review.read",
       "requires_step_up": false,
       "tags": ["admin"],
-      "summary": "Cola de revision de envios AMOE."
+      "summary": "Cola de revision de envios AMOE, filtrable por estado."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/amoe-submissions",
+      "operation_id": "transcribeAmoeSubmission",
+      "authorization": "amoe.submission.transcribe",
+      "requires_step_up": false,
+      "tags": ["admin"],
+      "summary": "Transcribir una ficha AMOE recibida por correo."
     },
     {
       "method": "POST",
@@ -229,6 +238,24 @@
     },
     {
       "method": "GET",
+      "path": "/api/v1/admin/feature-flags",
+      "operation_id": "listFeatureFlags",
+      "authorization": "flag.read",
+      "requires_step_up": false,
+      "tags": ["admin"],
+      "summary": "Los feature flags con su postura de arranque y su dependencia legal."
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/admin/feature-flags/:key",
+      "operation_id": "updateFeatureFlag",
+      "authorization": "flag.update",
+      "requires_step_up": false,
+      "tags": ["admin"],
+      "summary": "Cambiar un flag NO legalmente material, con motivo."
+    },
+    {
+      "method": "GET",
       "path": "/api/v1/admin/orders",
       "operation_id": "listAdminOrders",
       "authorization": "order.read",
@@ -319,6 +346,33 @@
     },
     {
       "method": "GET",
+      "path": "/api/v1/admin/product-categories",
+      "operation_id": "listAdminProductCategories",
+      "authorization": "product.read",
+      "requires_step_up": false,
+      "tags": ["admin"],
+      "summary": "Categorias del catalogo, incluidas las que no tienen productos."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/product-categories",
+      "operation_id": "createAdminProductCategory",
+      "authorization": "product.write",
+      "requires_step_up": false,
+      "tags": ["admin"],
+      "summary": "Crear una categoria del catalogo."
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/admin/product-categories/:category_key",
+      "operation_id": "updateAdminProductCategory",
+      "authorization": "product.write",
+      "requires_step_up": false,
+      "tags": ["admin"],
+      "summary": "Renombrar una categoria o cambiar su orden."
+    },
+    {
+      "method": "GET",
       "path": "/api/v1/admin/products",
       "operation_id": "listAdminProducts",
       "authorization": "product.read",
@@ -364,6 +418,33 @@
     },
     {
       "method": "GET",
+      "path": "/api/v1/admin/products/:product_id/variants",
+      "operation_id": "listAdminProductVariants",
+      "authorization": "product.read",
+      "requires_step_up": false,
+      "tags": ["admin"],
+      "summary": "Variantes de un producto, archivadas incluidas."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/products/:product_id/variants",
+      "operation_id": "createAdminProductVariant",
+      "authorization": "product.write",
+      "requires_step_up": false,
+      "tags": ["admin"],
+      "summary": "Anadir una variante. Nace en DRAFT."
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/admin/products/:product_id/variants/:variant_id",
+      "operation_id": "updateAdminProductVariant",
+      "authorization": "product.write",
+      "requires_step_up": false,
+      "tags": ["admin"],
+      "summary": "Editar una variante, o archivarla."
+    },
+    {
+      "method": "GET",
       "path": "/api/v1/admin/promotions",
       "operation_id": "listAdminPromotions",
       "authorization": "promotion.read",
@@ -406,6 +487,15 @@
       "requires_step_up": true,
       "tags": ["admin"],
       "summary": "Activar una promocion. Exige motivo y segundo factor reciente."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/promotions/:promotion_id/bonus-periods",
+      "operation_id": "createBonusPeriod",
+      "authorization": "rules.version.activate",
+      "requires_step_up": true,
+      "tags": ["admin"],
+      "summary": "Atajo: clonar la version activa, anadir un periodo bonus y activarla."
     },
     {
       "method": "POST",
@@ -471,6 +561,60 @@
       "summary": "Expedientes de ganador potencial de una promocion."
     },
     {
+      "method": "GET",
+      "path": "/api/v1/admin/promotions/:promotion_id/rules-versions",
+      "operation_id": "listRulesVersions",
+      "authorization": "rules.version.read",
+      "requires_step_up": false,
+      "tags": ["admin"],
+      "summary": "Versiones de reglas de una promocion, de la mas reciente a la mas antigua."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/promotions/:promotion_id/rules-versions",
+      "operation_id": "createRulesVersion",
+      "authorization": "rules.version.create",
+      "requires_step_up": false,
+      "tags": ["admin"],
+      "summary": "Crear un borrador de version de reglas, vacio o clonado."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/promotions/:promotion_id/rules-versions/:rules_version_id",
+      "operation_id": "getRulesVersion",
+      "authorization": "rules.version.read",
+      "requires_step_up": false,
+      "tags": ["admin"],
+      "summary": "Una version de reglas con su configuracion y sus documentos."
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/admin/promotions/:promotion_id/rules-versions/:rules_version_id",
+      "operation_id": "updateRulesVersion",
+      "authorization": "rules.version.create",
+      "requires_step_up": false,
+      "tags": ["admin"],
+      "summary": "Editar un borrador de version de reglas."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/promotions/:promotion_id/rules-versions/:rules_version_id/activate",
+      "operation_id": "activateRulesVersion",
+      "authorization": "rules.version.activate",
+      "requires_step_up": true,
+      "tags": ["admin"],
+      "summary": "Activar una version de reglas. Archiva la anterior."
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/admin/promotions/:promotion_id/rules-versions/:rules_version_id/documents/:locale",
+      "operation_id": "putRulesVersionDocument",
+      "authorization": "rules.version.create",
+      "requires_step_up": false,
+      "tags": ["admin"],
+      "summary": "Redactar el texto legal de una version en un idioma."
+    },
+    {
       "method": "POST",
       "path": "/api/v1/admin/promotions/:promotion_id/schedule",
       "operation_id": "scheduleAdminPromotion",
@@ -478,6 +622,42 @@
       "requires_step_up": false,
       "tags": ["admin"],
       "summary": "Programar una promocion: DRAFT -> SCHEDULED."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/settings/change-requests",
+      "operation_id": "listSettingChangeRequests",
+      "authorization": "flag.read",
+      "requires_step_up": false,
+      "tags": ["admin"],
+      "summary": "Solicitudes de cambio de ajustes, filtrables por estado."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/settings/change-requests",
+      "operation_id": "createSettingChangeRequest",
+      "authorization": "flag.update.legally_material",
+      "requires_step_up": true,
+      "tags": ["admin"],
+      "summary": "Solicitar el cambio de un ajuste legalmente material."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/settings/change-requests/:change_request_id/approve",
+      "operation_id": "approveSettingChangeRequest",
+      "authorization": "flag.update.legally_material",
+      "requires_step_up": true,
+      "tags": ["admin"],
+      "summary": "Aprobar una solicitud de cambio y aplicarla."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/settings/change-requests/:change_request_id/reject",
+      "operation_id": "rejectSettingChangeRequest",
+      "authorization": "flag.update.legally_material",
+      "requires_step_up": true,
+      "tags": ["admin"],
+      "summary": "Rechazar una solicitud de cambio, con motivo."
     },
     {
       "method": "POST",
@@ -631,6 +811,15 @@
       "requires_step_up": false,
       "tags": ["meta"],
       "summary": "Documento OpenAPI 3.1 generado desde los esquemas Zod."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/product-categories",
+      "operation_id": "listProductCategories",
+      "authorization": "PUBLIC",
+      "requires_step_up": false,
+      "tags": ["products"],
+      "summary": "Categorias con al menos un producto a la venta."
     },
     {
       "method": "GET",

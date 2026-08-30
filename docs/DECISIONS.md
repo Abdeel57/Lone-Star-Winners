@@ -2422,3 +2422,297 @@ Affected areas: `apps/api` (`services/availability.ts`, `routes/storefront.ts`,
 
 Proposed by: backend-sweepstakes (HO-017, punto abierto)
 Agreed by: Team Lead
+
+---
+
+## DEC-052
+
+Status: Accepted
+
+Date: 2026-08-29
+
+Decision:
+**Los paquetes de participaciones son productos del catálogo con
+`kind = ENTRY_PACKAGE`; la tasa de participaciones se declara por tipo de
+producto en la versión de reglas; el tope por participante se aplica también
+al AMOE; el "universo total" de DEC-042 se retira.**
+
+1. `products.kind` (`product_kind`: `MERCHANDISE` | `ENTRY_PACKAGE`). Un
+   paquete es una fila más del catálogo: pasa por el mismo carrito, checkout,
+   pedido, reembolso y reversal que la mercancía. **Ninguna columna del
+   producto dice cuántas participaciones da** (la frontera de `0003_catalog`
+   se mantiene); lo dice la versión de reglas. `order_items.product_kind` se
+   congela en el pedido, como `sku` y `name_snapshot`.
+2. Nuevo modo de fórmula `ENTRIES_PER_CURRENCY_UNIT_BY_PRODUCT_KIND`:
+   `rates.{MERCHANDISE,ENTRY_PACKAGE} = { amount_unit_minor, entries_per_amount_unit }`
+   (cada tasa nullable; al menos una), más `rounding_policy` única. Un tipo
+   sin tasa no genera participaciones y la traza lo anota
+   (`PRODUCT_KIND_NOT_RATED`). `CalculationItemInput` gana `productKind`. Los
+   modos anteriores no cambian. `ENTRY_CALCULATION_ENGINE_VERSION` pasa a
+   **2**: los resultados de configuraciones antiguas son idénticos, pero la
+   entrada y la traza cambian de forma y un auditor debe poder distinguirlo.
+3. Los periodos de multiplicador ganan `product_kind_scope: ProductKind[] | null`
+   junto a `sku_scope` (`null` = todos; ambos presentes = intersección). Así
+   un bonus "solo paquetes" no depende de enumerar SKUs que aún no existen.
+4. Clave opcional `bonus_rules` en la versión de reglas:
+   `{ max_multiplier, applies_to_product_kinds, applies_to_amoe: false }`. La
+   API rechaza un periodo bonus que supere `max_multiplier` o salga del ámbito
+   declarado. Es un techo legal (DRAFT v2: hasta 10×), no un valor del motor.
+5. **La concesión AMOE respeta `entry_limits.per_participant_max`** cuando
+   `entry_caps_enabled` está encendido, con la misma aritmética de "espacio
+   restante" que aplica el motor a las compras: se concede `min(valor, espacio)`,
+   la transacción anota el recorte en `metadata.applied_cap`, y con espacio
+   cero la aprobación se rechaza (`AMOE_ENTRY_CAP_REACHED`). Las Official
+   Rules aplican el tope "regardless of method"; conceder 2,000 a quien ya
+   tiene 10,000 sería concederlas dos veces.
+6. **`entry_pool` se retira** del contrato, de las fixtures y de las
+   pantallas. El 10,000 de DEC-042 era el tope **por participante**, no un
+   universo total. Lo público es `entry_offer.per_participant_max`, como dato
+   de las Reglas, sin "emitidas" ni "restantes".
+7. El catálogo público publica por variante un `entry_offer` **calculado por
+   el backend** con el motor real (cantidad 1, sin topes,
+   `participantEntriesBefore = 0`): `base_entries` (sin multiplicador) y
+   `entries_now` (con los bonus vigentes si el flag lo permite). Es lo que
+   exige DRAFT v2 Opción 2: "the number of entries included in each package
+   is stated on the page where the package is offered". `null` cuando no hay
+   promoción activa, versión de reglas, tasa para ese tipo, o la
+   configuración no parsea: nunca una cifra inventada.
+
+Context:
+DRAFT v2 de las Official Rules (2026-08-29) y tres mensajes del cliente:
+1 por $1 en mercancía, 2 por $1 en paquetes de $10/$20/$50/$100, tope de
+10,000 **por persona**, AMOE postal de 2,000 por ficha (5 fichas), bonus
+2X/5X/10X con duración. El motor tenía una sola tasa por promoción, ningún
+concepto de paquete, y la concesión AMOE ignoraba el tope. Ver
+`docs/LEGAL_PENDING.md` §"Segundo borrador".
+
+Alternatives:
+A — Paquetes como entidad aparte con su propio flujo de compra (descartado:
+segundo modelo de entries y segundo checkout, prohibidos por `CLAUDE.md` §4).
+B — Tasa por SKU en `ALLOW_LIST` (descartado: cada paquete nuevo obligaría a
+una versión de reglas nueva; el tipo es revisable por una persona igual que un
+SKU). C — Cantidad de participaciones en el producto (descartado: es
+exactamente lo que `0003_catalog` prohíbe; cambiaría el pasado). D — Aplicar
+el tope al AMOE por revisión humana en vez de por código (descartado: el
+revisor no ve el saldo hasta la proyección, y el ledger debe cuadrar solo).
+
+Reason:
+Un paquete es mercancía **para el sistema** —se compra, se cobra, se
+reembolsa— y su única particularidad es la tasa, que es una regla legal y por
+tanto vive en la versión de reglas. El tope "regardless of method" solo se
+cumple si lo aplican las dos vías de escritura del ledger. El `entry_offer`
+calculado por el backend evita que el escaparate multiplique por su cuenta
+(R13 de `security`, `no-client-entry-math`).
+
+Affected areas: `packages/sweepstakes` (config, engine, AMOE, versión de
+motor), `packages/database` (migración `0026`, repositorios, seed),
+`apps/api` (carrito, pedidos, escaparate, cotización), `apps/web` (catálogo,
+portada, ficha, hero, AMOE), `docs/API_CONTRACT.md` §3/§4/§5/§13,
+`tests/e2e`, `tests/security`. Supersede parcialmente DEC-042 (universo total).
+
+Proposed by: Team Lead (a partir de DRAFT v2)
+Agreed by: backend-sweepstakes, frontend-ux, security-integration (HO-041)
+
+---
+
+## DEC-053
+
+Status: Accepted
+
+Date: 2026-08-29
+
+Decision:
+**El catálogo gana categorías, nombre de variante por idioma e imágenes por
+URL; el panel puede gestionar N variantes por producto.**
+
+- Tabla `product_categories (key, position)` +
+  `product_category_translations (category_key, locale, name)`, y
+  `products.category_key` (nullable, FK). Las siete categorías iniciales del
+  cliente se **siembran como datos** en la migración (son catálogo del
+  negocio, como los flags en `0005`), y el panel puede crear más
+  (`POST /admin/product-categories`).
+- `product_variant_translations (variant_id, locale, name)`: "Rojo" / "Red".
+  Los dos idiomas obligatorios (principio 4).
+- `products.image_url` y `product_variants.image_url` (nullable, `https:` o
+  ruta raíz `/…` del propio sitio). **No hay almacén de medios**: el proveedor
+  de almacenamiento sigue sin decidir (`CLAUDE.md` §7). Mientras tanto las
+  imágenes son ficheros estáticos en `apps/web/public/products/` que el
+  usuario entrega, y la URL es el enlace. El `alt` se deriva del nombre del
+  producto/variante; no se inventa texto.
+- Admin: `POST/PATCH /admin/products/:id/variants[/:variant_id]`; el alta de
+  producto acepta `variants[]` opcional (si falta, una variante sin nombre,
+  como hoy).
+- Escaparate: `kind`, `category`, `image_url`, `variants[].name`,
+  `variants[].image_url`, filtros `?kind=&category=`.
+
+Context:
+El cliente entregó la lista de mercancía inicial y "gorras premium en ≈5
+modelos × 5 colores". El esquema tenía variantes sin nombre y el panel solo
+creaba una; no había categorías ni imágenes (HO-019 abierto desde el primer
+e2e real).
+
+Alternatives:
+Enum de categorías en código (descartado: una categoría nueva sería una
+migración). Tabla de medios con subida de ficheros (descartado por ahora: exige
+decidir almacenamiento; DEC pendiente). Atributos JSON libres en la variante
+(descartado: el nombre por idioma es el único dato que hoy hace falta y un
+JSON libre no impone los dos idiomas).
+
+Reason:
+Es lo mínimo que hace vendible el catálogo real sin adelantar decisiones de
+infraestructura. Cierra HO-019 salvo la subida de imágenes.
+
+Affected areas: `packages/database` (migración `0026`), `apps/api` (§4, §12,
+§13), `apps/web` (tienda, ficha, panel), `docs/API_CONTRACT.md`.
+
+Proposed by: Team Lead
+Agreed by: backend-sweepstakes, frontend-ux
+
+---
+
+## DEC-054
+
+Status: Accepted
+
+Date: 2026-08-29
+
+Decision:
+**Las versiones de reglas, los periodos bonus, los feature flags y la
+transcripción de fichas postales tienen superficie de escritura en la API y
+en el panel.** Sin ella, ninguna de las reglas del cliente es operable desde
+la plataforma.
+
+1. **Versiones de reglas** (`rules.version.read` / `rules.version.create` /
+   `rules.version.activate`): listar, crear borrador (vacío o **clonado** de
+   otra versión, documentos incluidos), editar `config` y documentos mientras
+   sea `DRAFT`, y **activar** con motivo y step-up. Activar archiva la versión
+   `ACTIVE` anterior, fija `effective_at` y
+   `promotions.active_rules_version_id`, todo en una transacción; los
+   cerrojos siguen siendo los triggers de `0002` (DEC-012), la API solo
+   traduce el 409. La API valida las rebanadas que el dominio sabe parsear
+   (`calculationConfigSchema`, `amoeConfigSchema`, `bonus_rules`) y devuelve
+   422 con rutas; **no rellena ningún valor**.
+2. **Atajo "periodo bonus"** (`rules.version.activate`, motivo + step-up):
+   clona la versión activa, añade un periodo (`multiplier`, `starts_at`,
+   `ends_at`, `product_kind_scope`, `sku_scope`, `priority` siguiente) y
+   activa la nueva versión. Exige que la versión activa declare
+   `multipliers.conflict_strategy` (o que el cuerpo la aporte) y respeta
+   `bonus_rules`. Es el gesto "5X durante 12 horas" del cliente, expresado
+   como lo que DEC-012 dice que es: **una versión de reglas nueva**, con su
+   traza.
+3. **Feature flags**: `GET /admin/feature-flags` (`flag.read`) y
+   `PATCH /admin/feature-flags/:key` (`flag.update`, o
+   `flag.update.legally_material` + step-up cuando `is_legally_material`),
+   con motivo; `PATCH /admin/settings/amoe-mode`
+   (`flag.update.legally_material`). Cada cambio deja `audit_events` con
+   antes/después.
+4. **Transcripción de fichas postales**: `POST /admin/amoe-submissions`
+   (`amoe.submission.transcribe`, capacidad nueva en `packages/security`,
+   asignada a `PROMOTION_MANAGER` y `COMPLIANCE_OFFICER`). El operador teclea
+   los datos de la ficha; el participante se resuelve por email y, si no
+   existe, se crea con `identity.status = PENDING_VERIFICATION` y sin
+   credenciales, porque las Official Rules no exigen cuenta para la vía
+   gratuita. El envío entra en la misma cola de revisión (`PENDING_REVIEW`)
+   y quien transcribe **no puede aprobar su propia transcripción**
+   (`metadata.transcribed_by_admin_user_id` ≠ aprobador). La configuración
+   AMOE gana el bloque opcional
+   `mail_in { max_cards_per_envelope, postmark_by, received_by }`,
+   informativo para el revisor y el público.
+
+Context:
+HO-038 dejó escrito que la `PromotionRulesVersion` "no existe todavía como
+superficie de escritura"; los flags solo tenían lectura. El cliente pide poder
+"activar promociones temporales… configurar estos multiplicadores y su
+duración" y el AMOE postal exige que alguien meta las fichas.
+
+Alternatives:
+Editar la versión activa en sitio (descartado: DEC-012 e inmutabilidad por
+trigger). Periodos bonus en una tabla aparte fuera de la versión de reglas
+(descartado: segunda fuente de verdad sobre cuánto vale una compra, y la traza
+del motor dejaría de reproducirse con `rules_version_id`). Cargar la
+configuración por SQL (descartado: el dueño no ejecuta comandos y no deja
+traza).
+
+Reason:
+Convierte cada cambio legalmente material en una versión auditable, con
+motivo, step-up y separación de funciones ya catalogadas en
+`packages/security` (`rules.version.activate` y
+`flag.update.legally_material` pertenecen a `COMPLIANCE_OFFICER`;
+`rules.version.create` a `PROMOTION_MANAGER`). Quién ocupa cada rol es
+decisión del usuario.
+
+Affected areas: `packages/security` (capacidad nueva), `packages/sweepstakes`
+(AMOE `mail_in`, transcripción), `packages/database` (repositorios de
+versiones y flags), `apps/api` (§13), `apps/web` (panel: Reglas, Bonus, Flags,
+Transcribir), `docs/API_CONTRACT.md` §13, `tests/security`, `tests/e2e`.
+
+Proposed by: Team Lead
+Agreed by: backend-sweepstakes, frontend-ux, security-integration (HO-041)
+
+---
+
+## DEC-055
+
+Status: Accepted
+
+Date: 2026-08-29
+
+Decision:
+**Los cambios de configuración legalmente material (flags con
+`is_legally_material` y `amoe_mode`) pasan por control dual, como los
+ajustes manuales; los flags no materiales se cambian en el acto.** Dos
+caminos, uno por capacidad, en vez de una ruta cuya capacidad dependa del
+parámetro:
+
+- `PATCH /admin/feature-flags/:key` — solo flags **no** materiales,
+  capacidad estática `flag.update` (motivo, sin step-up). Sobre un flag
+  material responde `409 FLAG_LEGALLY_MATERIAL` y no toca nada.
+- `POST /admin/settings/change-requests` + `approve` / `reject` —
+  `flag.update.legally_material` (motivo + step-up), con
+  `secondApprovalEnforcedBy` declarado en la ruta y la segunda aprobación
+  impuesta por el dominio (`PENDING_APPROVAL` hasta que **otra** persona
+  aprueba) y por PostgreSQL (`setting_change_requests_approver_differs`).
+  **Nunca se aplica en el acto**: `flag.update.legally_material` es
+  `CRITICAL` y `packages/security/src/flags.ts` fija que apagar
+  `dual_approval_for_sensitive_actions_enabled` no relaja
+  `requiresSecondApproval`; ese flag, además, solo puede cambiarse por
+  solicitud (`flagRequiresDualControl`): desarmar el control dual exige
+  control dual (hallazgo S-02 de la security review de HO-041). Cada
+  aplicación deja `audit_events` con `before`/`after`; `amoe_mode` se valida
+  contra la versión de reglas activa **al aplicar**. Una solicitud decidida
+  es inmutable (trigger en `0028`, S-06).
+- `PATCH /admin/settings/amoe-mode` no existe: `amoe_mode` es material y va
+  por solicitudes.
+
+Context:
+HO-041, fase 1 de security: `flag.update.legally_material` declara
+`requiresSecondApproval: true` desde DEC-032 y el autorizador deniega toda
+ruta que no declare dónde se impone la segunda aprobación (HO-034.1). El
+contrato §13.9 original —un `PATCH` que cambiaba de capacidad según la clave—
+habría respondido 403 siempre para lo material y habría tenido una capacidad
+dinámica que la puerta no puede evaluar en `preHandler`.
+
+Alternatives:
+A — Rebajar `requiresSecondApproval` a `false` (descartado: exactamente el
+atajo que el principio 12 prohíbe; un flag como `amoe_enabled` decide si
+existe la vía gratuita). B — Una ruta con capacidad dinámica resuelta en el
+handler (descartado: la puerta dejaría pasar con `flag.update` y sin step-up
+antes de que el handler mirase la clave). C — Dos caminos con control dual
+para lo material (elegida).
+
+Reason:
+Reutiliza el mecanismo que ya existe para ajustes —ruta que declara, dominio
+que impone, CHECK que lo garantiza aunque la aplicación falle— y deja la
+capacidad de cada ruta estática y auditable. El coste operativo (dos
+personas con `COMPLIANCE_OFFICER` para encender un flag material o para
+desarmar el control dual) es el que DEC-032 fijó; quién ocupa esos roles lo
+decide el usuario.
+
+Affected areas: `packages/database` (migración `0028`,
+`src/schema/settings.ts`), `apps/api` (`routes/admin-rules.ts`,
+`services/admin-rules.ts`, `http/errors.ts`), `packages/security`
+(`capabilityForFlagUpdate`, `flag.update` sin step-up), `apps/web` (pantalla
+Flags), `docs/API_CONTRACT.md` §13.9, `tests/security`.
+
+Proposed by: security-integration (hallazgo), Team Lead (resolución)
+Agreed by: backend-sweepstakes (implementado), frontend-ux, security-integration

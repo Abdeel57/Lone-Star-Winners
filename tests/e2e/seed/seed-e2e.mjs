@@ -48,12 +48,23 @@ import { decodeSecretBoxKey, encryptSecret, generateTotpSecret, hashPassword } f
 import pg from "pg";
 
 import {
+  AMOE_CARDS_PER_ENVELOPE,
+  AMOE_ENTRIES_PER_CARD,
   AMOE_FIELD_KEYS,
+  AMOE_MAX_CARDS_PER_PARTICIPANT,
+  CAP_PARTICIPANT_EMAIL,
+  CAP_SEEDED_ENTRIES,
   COMPLIANCE_OFFICER_EMAIL,
   FAKE_PARTICIPANT_PASSWORD,
   FAKE_STAFF_PASSWORD,
   FIXTURE_FILE,
+  PACKAGE_CATEGORY_KEY,
+  PACKAGE_NAME,
+  PACKAGE_PRICE_MINOR,
+  PACKAGE_SKU,
+  PACKAGE_SLUG,
   PARTICIPANT_EMAIL,
+  PER_PARTICIPANT_MAX,
   PRODUCT_CURRENCY,
   PRODUCT_NAME,
   PRODUCT_PRICE_MINOR,
@@ -72,6 +83,25 @@ import {
  * legal. Un valor de relleno que parece definitivo es peor que un hueco.
  */
 const FILLER = "E2E FIXTURE - PROVISIONAL, SIN VALOR LEGAL. Ver docs/LEGAL_PENDING.md.";
+
+/**
+ * El mismo relleno, ETIQUETADO POR IDIOMA.
+ *
+ * Los textos que se sirven en los dos idiomas no pueden empezar igual. Las
+ * instrucciones de la via gratuita son el caso: `06-amoe` comprueba que la
+ * pagina inglesa NO trae el texto castellano, y con el mismo `FILLER` delante
+ * de los dos, cualquier comparacion por prefijo encuentra el "castellano"
+ * dentro del parrafo ingles. La afirmacion de ausencia se cumpliria sola y la
+ * prueba pasaria sin comprobar nada.
+ *
+ * La etiqueta va al PRINCIPIO, no al final: dos textos tienen que distinguirse
+ * por como empiezan, no por su longitud. Y sale de `FILLER` en vez de
+ * reescribir el literal, para que el aviso de "sin valor legal" siga teniendo
+ * una sola fuente.
+ */
+function fillerFor(languageTag) {
+  return FILLER.replace("E2E FIXTURE", `E2E FIXTURE (${languageTag})`);
+}
 
 /** Zona legal del escenario. Una zona real, para que el calculo de periodos AMOE sea real. */
 const LEGAL_TIMEZONE = "America/Chicago";
@@ -99,10 +129,30 @@ function promotionWindow(now) {
 }
 
 /**
- * Configuracion de la version de reglas.
+ * Configuracion de la version de reglas, con la FORMA de la seccion 13.2
+ * (borrador v2, HO-041).
  *
- * Las doce claves de DEC-012, todas resueltas con relleno, mas la seccion
+ * Las doce claves de DEC-012, mas `multipliers`, `bonus_rules` y la seccion
  * `amoe` que exige `amoeConfigSchema` de `packages/sweepstakes`.
+ *
+ * QUE CAMBIA RESPECTO A LA VERSION ANTERIOR DE ESTE FICHERO, Y POR QUE
+ * -------------------------------------------------------------------
+ * Antes habia UNA tasa ("2 por cada $5.00") y ningun tope. Ahora hay una tasa
+ * POR TIPO DE PRODUCTO y un tope por participante, porque eso es lo que el
+ * contrato publica y lo que la suite tiene que poder comprobar:
+ *
+ *   - un paquete de $10 da 20 participaciones (2 por dolar) y una camiseta de
+ *     $25 da 25 (1 por dolar): dos tasas distintas en el mismo carrito, con UN
+ *     solo redondeo al final;
+ *   - `entry_limits.per_participant_max` existe y vale 10,000, para que el
+ *     recorte de DEC-052 punto 5 tenga contra que recortar;
+ *   - la via gratuita es POSTAL, con 2,000 por ficha y 5 fichas por persona.
+ *
+ * SIGUE SIN DECIDIR NADA LEGAL. Las claves que el abogado no ha resuelto
+ * llevan `FILLER`, marcado en el propio dato. Las que SI llevan forma valida
+ * son las que el motor parsea -sin ellas el recorrido no arranca- y sus valores
+ * reproducen la FORMA del borrador v2, no una decision: quien fija la tasa real
+ * es el abogado (ver `docs/LEGAL_PENDING.md`).
  */
 function buildRulesConfig(window) {
   return {
@@ -110,23 +160,38 @@ function buildRulesConfig(window) {
     allowed_jurisdictions: FILLER,
     minimum_age: FILLER,
     promotion_start_end_rules: FILLER,
+
     /*
-     * Las cuatro claves que SI parsea el motor de calculo
-     * (`calculationConfigSchema` de packages/sweepstakes) llevan una forma
-     * valida y NO un relleno: con el relleno, `POST /cart/items` responde 409
-     * CALCULATION_CONFIG_INVALID y el recorrido de compra no arranca. Los
-     * VALORES siguen siendo de fixture y sin valor legal (la formula real la
-     * fija el abogado; ver docs/LEGAL_PENDING.md): "2 participaciones por cada
-     * $5.00" reproduce la forma del borrador, no una decision.
+     * TOPE POR PARTICIPANTE, no universo total (DEC-052 punto 6).
+     *
+     * `per_order_max: null` significa "sin tope por pedido declarado", que es
+     * distinto de cero y distinto de "sin decidir": el borrador v2 no declara
+     * ninguno.
      */
-    entry_limits: { per_order_max: null, per_participant_max: null },
+    entry_limits: { per_order_max: null, per_participant_max: PER_PARTICIPANT_MAX },
     product_eligibility: { mode: "ALL_PRODUCTS" },
+
+    /*
+     * Tasa POR TIPO (DEC-052 punto 2). Las dos claves son obligatorias y
+     * nullable; aqui las dos llevan tasa porque el escenario compra de los dos
+     * tipos. `amount_unit_minor: "100"` es un dolar; el redondeo es uno solo,
+     * al final, sobre la fraccion exacta del pedido.
+     */
     purchase_entry_formula: {
-      mode: "ENTRIES_PER_CURRENCY_UNIT",
-      amount_unit_minor: "500",
-      entries_per_amount_unit: { numerator: 2, denominator: 1 },
+      mode: "ENTRIES_PER_CURRENCY_UNIT_BY_PRODUCT_KIND",
+      rates: {
+        MERCHANDISE: {
+          amount_unit_minor: "100",
+          entries_per_amount_unit: { numerator: 1, denominator: 1 },
+        },
+        ENTRY_PACKAGE: {
+          amount_unit_minor: "100",
+          entries_per_amount_unit: { numerator: 2, denominator: 1 },
+        },
+      },
       rounding_policy: "FLOOR",
     },
+
     official_rules_document: FILLER,
     controlling_language: FILLER,
     winner_drawing_method: FILLER,
@@ -134,35 +199,83 @@ function buildRulesConfig(window) {
     entry_expiration: FILLER,
 
     /*
-     * Seccion AMOE. La lee `readAmoeConfig()` y la valida `amoeConfigSchema`:
-     * si falta un campo, la ruta responde 409 AMOE_CONFIG_INVALID en vez de
-     * inventarse un valor por defecto, que es la postura correcta.
+     * Multiplicadores: la ESTRATEGIA declarada y NINGUN periodo.
      *
-     * `identity_requirements` declara QUE datos se piden; `identity_fields`
+     * Los periodos los crea el panel durante la suite (seccion 13.8), que es
+     * justo lo que hay que probar. Sembrar uno aqui haria que la prueba del
+     * atajo bonus empezara con el trabajo ya hecho.
+     *
+     * `conflict_strategy` NO se puede omitir: el atajo de la seccion 13.8 exige
+     * que la version activa la declare o que el cuerpo la aporte, y no se
+     * asume ninguna (`HIGHEST_WINS` es la respuesta provisional del borrador
+     * v2, ver docs/LEGAL_PENDING.md pregunta 10).
+     */
+    multipliers: { conflict_strategy: "HIGHEST_WINS", periods: [] },
+
+    /*
+     * Techo legal de los bonus. NO es un valor del motor: es lo que la
+     * superficie de escritura comprueba antes de dejar crear un periodo. Con
+     * `applies_to_amoe: false`, un bonus nunca multiplica una ficha postal.
+     */
+    bonus_rules: {
+      max_multiplier: { numerator: 10, denominator: 1 },
+      applies_to_product_kinds: ["MERCHANDISE", "ENTRY_PACKAGE"],
+      applies_to_amoe: false,
+    },
+
+    /*
+     * Seccion AMOE, modalidad POSTAL. La lee `readAmoeConfig()` y la valida
+     * `amoeConfigSchema`: si falta un campo, la ruta responde 409
+     * AMOE_CONFIG_INVALID en vez de inventarse un valor por defecto.
+     *
+     * `identity_requirements` declara QUE datos pide la ficha; `identity_fields`
      * solo dice como se pintan. Las `label_key` salen de la lista cerrada de
      * `apps/web/src/i18n/amoe-labels.ts`: una clave desconocida se pinta con el
      * texto generico y la comprobacion perderia sentido.
+     *
+     * `limit.period` es `PROMOTION` y no `DAY`: el borrador v2 dice cinco
+     * fichas EN TODO EL PERIODO. Con `DAY`, una persona podria mandar cinco
+     * cada dia y el tope de 10,000 se alcanzaria por la via gratuita en dos
+     * jornadas.
      */
     amoe: {
-      mode: "ONLINE_FORM",
+      mode: "MAIL_IN_REVIEW",
       submission_window: {
         starts_at: window.startsAt.toISOString(),
         ends_at: window.endsAt.toISOString(),
       },
-      entries_per_approved_submission: 1,
-      // `true` a proposito: el recorrido incluye la cola de revision. Con
-      // `false` el envio se auto-aprobaria y no habria nada que revisar.
+      entries_per_approved_submission: AMOE_ENTRIES_PER_CARD,
+      // `true` obligatorio en esta modalidad: alguien tiene que leer el sobre.
+      // `amoeConfigSchema` lo impone con un `superRefine`.
       requires_review: true,
-      limit: { max_per_participant_per_period: 5, period: "DAY" },
+      limit: {
+        max_per_participant_per_period: AMOE_MAX_CARDS_PER_PARTICIPANT,
+        period: "PROMOTION",
+      },
       duplicate_policy: "FLAG_FOR_REVIEW",
       identity_requirements: AMOE_FIELD_KEYS,
       identity_fields: {
         full_name: { type: "TEXT", label_key: "fullName", max_length: 120 },
+        mailing_address: { type: "TEXTAREA", label_key: "mailingAddress", max_length: 400 },
         email: { type: "EMAIL", label_key: "email", max_length: 254 },
+        phone: { type: "TEL", label_key: "phone", max_length: 40 },
+        date_of_birth: { type: "DATE", label_key: "dateOfBirth", max_length: 10 },
+        signature_present: { type: "TEXT", label_key: "signaturePresent", max_length: 3 },
+        postmark_date: { type: "DATE", label_key: "postmarkDate", max_length: 10 },
+      },
+      /*
+       * Plazos del sobre. Informativos: el sistema no cuenta sobres ni lee
+       * matasellos. Sirven para publicarlos y para que el revisor tenga contra
+       * que comparar lo que el operador teclea.
+       */
+      mail_in: {
+        max_cards_per_envelope: AMOE_CARDS_PER_ENVELOPE,
+        postmark_by: window.endsAt.toISOString(),
+        received_by: new Date(window.endsAt.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString(),
       },
       instructions: {
-        "en-US": `${FILLER} Free entry instructions are attorney-supplied text.`,
-        "es-US": `${FILLER} Las instrucciones de la via gratuita las redacta el abogado.`,
+        "en-US": `${fillerFor("EN")} Free entry instructions -including the mailing address- are attorney-supplied text.`,
+        "es-US": `${fillerFor("ES")} Las instrucciones de la via gratuita -incluida la direccion postal- las redacta el abogado.`,
       },
     },
   };
@@ -279,14 +392,20 @@ async function seed(client) {
   });
 
   // -------------------------------------------------------------------------
-  // 3. Catalogo
+  // 3. Catalogo: una MERCANCIA y un PAQUETE DE PARTICIPACIONES
   //
-  // El copy describe MERCANCIA, en los dos idiomas. Ni "boletos" ni
+  // El copy describe mercancia y paquetes, en los dos idiomas. Ni "boletos" ni
   // "oportunidades de ganar" (CLAUDE.md seccion 1).
+  //
+  // `products.kind` llega con la migracion `0026` (DEC-052). Ninguna columna
+  // del producto dice cuantas participaciones da: el paquete se distingue por
+  // el TIPO, y cuanto vale ese tipo lo dice la version de reglas. Si esta
+  // semilla fallara con "column kind does not exist", lo que falta es la
+  // migracion, no el escenario.
   // -------------------------------------------------------------------------
   const product = await client.query(
-    `INSERT INTO products (sku, slug, status, currency)
-     VALUES ($1, $2, 'ACTIVE', $3)
+    `INSERT INTO products (sku, slug, status, currency, kind, category_key)
+     VALUES ($1, $2, 'ACTIVE', $3, 'MERCHANDISE', NULL)
      RETURNING id`,
     [PRODUCT_SKU, PRODUCT_SLUG, PRODUCT_CURRENCY],
   );
@@ -314,6 +433,41 @@ async function seed(client) {
   );
 
   const variantId = variant.rows[0].id;
+
+  /*
+   * Paquete de $10. La categoria `entry-packages` la SIEMBRA la migracion
+   * `0026` como dato del negocio (DEC-053), asi que aqui solo se referencia.
+   */
+  const packageProduct = await client.query(
+    `INSERT INTO products (sku, slug, status, currency, kind, category_key)
+     VALUES ($1, $2, 'ACTIVE', $3, 'ENTRY_PACKAGE', $4)
+     RETURNING id`,
+    [PACKAGE_SKU, PACKAGE_SLUG, PRODUCT_CURRENCY, PACKAGE_CATEGORY_KEY],
+  );
+
+  const packageProductId = packageProduct.rows[0].id;
+
+  await client.query(
+    `INSERT INTO product_translations (product_id, locale, name, description)
+     VALUES ($1, 'en-US', $2, $3), ($1, 'es-US', $4, $5)`,
+    [
+      packageProductId,
+      PACKAGE_NAME["en-US"],
+      "Fictitious entry package used only by the end-to-end suite. The number of entries comes from the rules version, never from this row.",
+      PACKAGE_NAME["es-US"],
+      "Paquete de participaciones ficticio, usado solo por la suite de punta a punta. El numero de participaciones sale de la version de reglas, nunca de esta fila.",
+    ],
+  );
+
+  const packageVariant = await client.query(
+    `INSERT INTO product_variants
+       (product_id, sku, status, price_amount_minor, currency, stock_quantity, position)
+     VALUES ($1, $2, 'ACTIVE', $3, $4, 1000, 0)
+     RETURNING id`,
+    [packageProductId, `${PACKAGE_SKU}-STD`, PACKAGE_PRICE_MINOR.toString(), PRODUCT_CURRENCY],
+  );
+
+  const packageVariantId = packageVariant.rows[0].id;
 
   // -------------------------------------------------------------------------
   // 4. Promocion, version de reglas y activacion
@@ -405,7 +559,80 @@ async function seed(client) {
   );
 
   // -------------------------------------------------------------------------
-  // 5. Feature flags
+  // 5. Participante que ya llega cerca del tope
+  //
+  // POR QUE SE SIEMBRA EL SALDO Y NO SE GANA JUGANDO
+  // ------------------------------------------------
+  // La prueba del recorte (DEC-052 punto 5) necesita a alguien con 9,000
+  // participaciones para que la ficha de 2,000 solo pueda entrar en 1,000.
+  // Conseguirlas por la interfaz costaria dos inicios de sesion de personal con
+  // segundo factor -y sus dos esperas de ventana TOTP- por cada ejecucion, para
+  // probar algo que no es lo que la prueba mide.
+  //
+  // Lo que SI se respeta es la forma: no se escribe una fila suelta de ledger,
+  // se escribe el PAR completo que deja un ajuste manual aprobado -la
+  // transaccion `MANUAL_CREDIT` y su fila de `adjustments` en `APPLIED`, con
+  // aprobador distinto del solicitante-, que es exactamente el estado que el
+  // sistema produce por la via normal (ver `specs/08-adjustment.spec.mjs`). Un
+  // ledger con un movimiento huerfano no cuadraria en la reconciliacion previa
+  // al export, y esta suite existe tambien para que eso se note.
+  // -------------------------------------------------------------------------
+  const capIdentityId = await insertIdentity(client, {
+    email: CAP_PARTICIPANT_EMAIL,
+    password: FAKE_PARTICIPANT_PASSWORD,
+  });
+
+  const capParticipant = await client.query(
+    `INSERT INTO participants (identity_id, display_name, preferred_locale, status)
+     VALUES ($1, $2, 'es-US', 'ACTIVE')
+     RETURNING id`,
+    [capIdentityId, "Participante E2E cerca del tope"],
+  );
+
+  const capParticipantId = capParticipant.rows[0].id;
+  const capAdjustmentId = randomUUID();
+
+  const capTransaction = await client.query(
+    `INSERT INTO entry_transactions
+       (promotion_id, participant_id, type, source_type, source_ref, quantity_delta,
+        effective_at, rules_version_id, engine_version, actor_type, actor_admin_user_id,
+        reason_key, reason_detail, metadata)
+     VALUES ($1, $2, 'MANUAL_CREDIT', 'ADMIN', $3, $4, now(), $5, 1, 'ADMIN', $6,
+             'SYSTEM_ERROR_CORRECTION', $7, '{}'::jsonb)
+     RETURNING id`,
+    [
+      promotionId,
+      capParticipantId,
+      `adjustment:${capAdjustmentId}`,
+      CAP_SEEDED_ENTRIES,
+      rulesVersionId,
+      promotionManager.adminUserId,
+      "Escenario de e2e: saldo de partida para probar el recorte por tope. Sin valor real.",
+    ],
+  );
+
+  await client.query(
+    `INSERT INTO adjustments
+       (id, promotion_id, participant_id, direction, quantity, reason_key, reason_detail,
+        status, requested_by_admin_user_id, requested_at, approved_by_admin_user_id,
+        approved_at, rules_version_id, entry_transaction_id)
+     VALUES ($1, $2, $3, 'CREDIT', $4, 'SYSTEM_ERROR_CORRECTION', $5, 'APPLIED', $6, now(),
+             $7, now(), $8, $9)`,
+    [
+      capAdjustmentId,
+      promotionId,
+      capParticipantId,
+      CAP_SEEDED_ENTRIES,
+      "Escenario de e2e: saldo de partida para probar el recorte por tope. Sin valor real.",
+      promotionManager.adminUserId,
+      complianceOfficer.adminUserId,
+      rulesVersionId,
+      capTransaction.rows[0].id,
+    ],
+  );
+
+  // -------------------------------------------------------------------------
+  // 6. Feature flags
   //
   // Se encienden con UPDATE, que es la unica via que el rol `app` tiene y la
   // que exige el trigger de DEC-013: motivo de 10 caracteres o mas y actor
@@ -415,10 +642,23 @@ async function seed(client) {
   //
   // Solo se enciende lo que el recorrido necesita. Un escenario que enciende
   // todo no prueba nada sobre la postura por defecto de DEC-032.
+  //
+  // `entry_caps_enabled` y `entry_multipliers_enabled` se anaden en HO-041:
+  // sin el primero, el tope de 10,000 esta declarado en la version de reglas y
+  // NO se aplica -ni a las compras ni a la concesion AMOE-, y la prueba del
+  // recorte mediria un sistema sin tope; sin el segundo, el periodo bonus se
+  // crea pero no multiplica, y `entries_now` seria siempre igual a
+  // `base_entries`.
   // -------------------------------------------------------------------------
-  const flagReason = "Escenario de e2e: habilita la via AMOE y los ajustes manuales del recorrido.";
+  const flagReason =
+    "Escenario de e2e: habilita la via AMOE, los ajustes manuales, el tope por participante y los multiplicadores del recorrido.";
 
-  for (const key of ["amoe_enabled", "manual_adjustments_enabled"]) {
+  for (const key of [
+    "amoe_enabled",
+    "manual_adjustments_enabled",
+    "entry_caps_enabled",
+    "entry_multipliers_enabled",
+  ]) {
     await client.query(
       `UPDATE feature_flags
           SET enabled = true, update_reason = $2, updated_by_admin_user_id = $3
@@ -427,9 +667,15 @@ async function seed(client) {
     );
   }
 
+  /*
+   * La modalidad AMOE tiene que COINCIDIR con la de la version de reglas
+   * (`AmoeService.readConfig` compara las dos fuentes y responde 409
+   * AMOE_CONFIG_INVALID si difieren). El borrador v2 solo contempla la via
+   * postal, asi que las dos dicen `MAIL_IN_REVIEW`.
+   */
   await client.query(
     `UPDATE feature_flag_settings
-        SET amoe_mode = 'ONLINE_FORM', update_reason = $1, updated_by_admin_user_id = $2
+        SET amoe_mode = 'MAIL_IN_REVIEW', update_reason = $1, updated_by_admin_user_id = $2
       WHERE singleton`,
     [flagReason, promotionManager.adminUserId],
   );
@@ -446,7 +692,20 @@ async function seed(client) {
       endsAt: window.endsAt.toISOString(),
     },
     product: { id: productId, slug: PRODUCT_SLUG, variantId },
+    entryPackage: {
+      id: packageProductId,
+      slug: PACKAGE_SLUG,
+      variantId: packageVariantId,
+      priceAmountMinor: PACKAGE_PRICE_MINOR.toString(),
+    },
     participant: { identityId: participantIdentityId, id: participantId, email: PARTICIPANT_EMAIL },
+    capParticipant: {
+      identityId: capIdentityId,
+      id: capParticipantId,
+      email: CAP_PARTICIPANT_EMAIL,
+      seededEntries: CAP_SEEDED_ENTRIES,
+      adjustmentId: capAdjustmentId,
+    },
     staff: {
       promotionManager: {
         email: PROMOTION_MANAGER_EMAIL,

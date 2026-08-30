@@ -27,10 +27,13 @@
  *   primera. Manda la que no se puede saltar.
  */
 
-import { and, asc, eq, gt } from "drizzle-orm";
+import { and, asc, eq, gt, inArray } from "drizzle-orm";
 import type { Database } from "@lsw/database";
 import {
+  productCategories,
+  productCategoryTranslations,
   productTranslations,
+  productVariantTranslations,
   productVariants,
   products,
   promotionTranslations,
@@ -45,16 +48,52 @@ export interface LocalizedInput {
 
 export type ProductStatus = "DRAFT" | "ACTIVE" | "ARCHIVED";
 
+/** DEC-052. Etiqueta de catalogo; la tasa por tipo vive en la version de reglas. */
+export type ProductKind = "MERCHANDISE" | "ENTRY_PACKAGE";
+
+export interface AdminVariantRow {
+  readonly id: string;
+  readonly sku: string;
+  /** `null` = variante sin nombre. El caso normal de un producto de variante unica. */
+  readonly name: LocalizedInput | null;
+  readonly priceAmountMinor: bigint;
+  readonly stockQuantity: number | null;
+  readonly status: ProductStatus;
+  readonly imageUrl: string | null;
+  readonly position: number;
+}
+
+export interface AdminCategoryRow {
+  readonly key: string;
+  readonly name: LocalizedInput;
+  readonly position: number;
+  readonly createdAt: Date;
+  readonly updatedAt: Date;
+}
+
 export interface AdminProductRow {
   readonly id: string;
   readonly sku: string;
   readonly slug: string;
   readonly status: ProductStatus;
+  readonly kind: ProductKind;
+  readonly categoryKey: string | null;
+  readonly imageUrl: string | null;
   readonly currency: string;
   readonly name: LocalizedInput;
+  /**
+   * Precio, existencias e identificador de LA PRIMERA VARIANTE.
+   *
+   * Se mantienen aunque `variants` los repita, por compatibilidad con el panel
+   * actual (contrato 13.6): la pantalla de producto los lee desde antes de que
+   * existieran las variantes multiples, y quitarlos ahora romperia una interfaz
+   * que se esta escribiendo en paralelo. Son una VISTA de `variants[0]`, no un
+   * segundo dato: nadie los escribe por separado.
+   */
   readonly priceAmountMinor: bigint | null;
   readonly stockQuantity: number | null;
   readonly variantId: string | null;
+  readonly variants: readonly AdminVariantRow[];
   readonly createdAt: Date;
   readonly updatedAt: Date;
 }
@@ -73,21 +112,75 @@ export interface AdminPromotionRow {
   readonly updatedAt: Date;
 }
 
+/**
+ * Una variante en el alta o la edicion.
+ *
+ * `sku` opcional: si falta se deriva del producto (`<sku>-<n>`), que es lo que
+ * hacia el alta antes de existir esta lista. Derivarlo mantiene la relacion
+ * legible en un albaran sin obligar a quien da de alta a inventar un segundo
+ * codigo.
+ */
+export interface VariantInput {
+  readonly sku?: string;
+  readonly name?: LocalizedInput | null;
+  readonly priceAmountMinor: bigint;
+  readonly stockQuantity: number | null;
+  readonly imageUrl?: string | null;
+  readonly position?: number;
+}
+
 export interface CreateProductInput {
   readonly sku: string;
   readonly slug: string;
   readonly currency: string;
+  /** DEC-052: obligatorio. Nadie supone que un producto nuevo es mercancia. */
+  readonly kind: ProductKind;
+  readonly categoryKey: string | null;
+  readonly imageUrl: string | null;
   readonly name: LocalizedInput;
   readonly description: { readonly "es-US": string | null; readonly "en-US": string | null };
   readonly priceAmountMinor: bigint;
   readonly stockQuantity: number | null;
+  /**
+   * `null` = una sola variante, con el precio y las existencias del nivel
+   * producto, como hacia el alta antes de DEC-053. Con lista, el precio y las
+   * existencias del nivel producto se IGNORAN: cada variante lleva los suyos, y
+   * mezclar las dos formas produciria una primera variante con datos de dos
+   * sitios distintos.
+   */
+  readonly variants: readonly VariantInput[] | null;
 }
 
 export interface UpdateProductInput {
   readonly name?: LocalizedInput;
+  readonly kind?: ProductKind;
+  readonly categoryKey?: string | null;
+  readonly imageUrl?: string | null;
   readonly priceAmountMinor?: bigint;
   readonly stockQuantity?: number | null;
   readonly status?: ProductStatus;
+}
+
+export interface UpdateVariantInput {
+  readonly sku?: string;
+  readonly name?: LocalizedInput | null;
+  readonly priceAmountMinor?: bigint;
+  readonly stockQuantity?: number | null;
+  readonly imageUrl?: string | null;
+  readonly position?: number;
+  /** No hay DELETE de variante: se archiva (contrato 13.6). */
+  readonly status?: "ACTIVE" | "ARCHIVED";
+}
+
+export interface CreateCategoryInput {
+  readonly key: string;
+  readonly name: LocalizedInput;
+  readonly position: number;
+}
+
+export interface UpdateCategoryInput {
+  readonly name?: LocalizedInput;
+  readonly position?: number;
 }
 
 export interface CreatePromotionInput {
@@ -114,6 +207,20 @@ export interface AdminCatalogRepository {
   findProduct(productId: string): Promise<AdminProductRow | null>;
   createProduct(input: CreateProductInput): Promise<AdminProductRow>;
   updateProduct(productId: string, input: UpdateProductInput): Promise<AdminProductRow | null>;
+
+  /** `null` = el producto no existe. Una lista vacia significa otra cosa. */
+  listVariants(productId: string): Promise<readonly AdminVariantRow[] | null>;
+  createVariant(productId: string, input: VariantInput): Promise<AdminVariantRow | null>;
+  updateVariant(
+    productId: string,
+    variantId: string,
+    input: UpdateVariantInput,
+  ): Promise<AdminVariantRow | null>;
+
+  listCategories(): Promise<readonly AdminCategoryRow[]>;
+  findCategory(key: string): Promise<AdminCategoryRow | null>;
+  createCategory(input: CreateCategoryInput): Promise<AdminCategoryRow>;
+  updateCategory(key: string, input: UpdateCategoryInput): Promise<AdminCategoryRow | null>;
 
   listPromotions(options: {
     limit: number;
@@ -153,43 +260,140 @@ function localized(rows: readonly { locale: string; value: string | null }[]): L
 type Reader = Pick<Database, "select">;
 
 /**
- * Producto + su PRIMERA variante.
+ * Todas las variantes de un producto, con su nombre por idioma.
  *
- * El esquema admite varias variantes por producto (tallas, colores). Esta
- * superficie expone una sola, la de `position` menor, porque un panel que exige
- * modelar N variantes antes de poder vender la primera es un panel que nadie
- * usa. Las variantes adicionales son trabajo posterior y el esquema ya las
- * soporta: lo que falta es interfaz, no columnas.
+ * Devuelve TAMBIEN las archivadas: el panel tiene que poder ver que existieron
+ * y desarchivarlas, y una lista que las esconde convierte "archivar" en
+ * "perder". El escaparate publico si las filtra, que es donde importa.
+ */
+async function readVariants(db: Reader, productId: string): Promise<AdminVariantRow[]> {
+  const rows = await db
+    .select()
+    .from(productVariants)
+    .where(eq(productVariants.productId, productId))
+    .orderBy(asc(productVariants.position), asc(productVariants.sku));
+
+  if (rows.length === 0) {
+    return [];
+  }
+
+  const names = await db
+    .select()
+    .from(productVariantTranslations)
+    .where(
+      inArray(
+        productVariantTranslations.variantId,
+        rows.map((row) => row.id),
+      ),
+    );
+
+  return rows.map((row) => {
+    const own = names.filter((translation) => translation.variantId === row.id);
+    return {
+      id: row.id,
+      sku: row.sku,
+      // Sin filas de traduccion la variante NO tiene nombre. `null` y no dos
+      // cadenas vacias: el panel tiene que distinguir "variante unica sin
+      // nombre" de "nombre que alguien dejo a medias".
+      name:
+        own.length === 0 ? null : localized(own.map((t) => ({ locale: t.locale, value: t.name }))),
+      priceAmountMinor: row.priceAmountMinor,
+      stockQuantity: row.stockQuantity,
+      status: row.status,
+      imageUrl: row.imageUrl,
+      position: row.position,
+    };
+  });
+}
+
+/**
+ * Producto con TODAS sus variantes, mas la primera proyectada al nivel
+ * producto por compatibilidad (contrato 13.6).
+ *
+ * Hasta DEC-053 esta superficie exponia una sola variante, porque un panel que
+ * exige modelar N variantes antes de poder vender la primera es un panel que
+ * nadie usa. Ese atajo sigue disponible -el alta sin `variants` crea una- pero
+ * ya no es el unico camino: las gorras del cliente son cinco colores.
  */
 async function readProduct(db: Reader, productId: string): Promise<AdminProductRow | null> {
   const [product] = await db.select().from(products).where(eq(products.id, productId)).limit(1);
   if (product === undefined) return null;
 
-  const [variant] = await db
-    .select()
-    .from(productVariants)
-    .where(eq(productVariants.productId, productId))
-    .orderBy(asc(productVariants.position))
-    .limit(1);
+  const [variants, translations] = await Promise.all([
+    readVariants(db, productId),
+    db
+      .select({ locale: productTranslations.locale, value: productTranslations.name })
+      .from(productTranslations)
+      .where(eq(productTranslations.productId, productId)),
+  ]);
 
-  const translations = await db
-    .select({ locale: productTranslations.locale, value: productTranslations.name })
-    .from(productTranslations)
-    .where(eq(productTranslations.productId, productId));
+  const first = variants[0];
 
   return {
     id: product.id,
     sku: product.sku,
     slug: product.slug,
     status: product.status,
+    kind: product.kind,
+    categoryKey: product.categoryKey,
+    imageUrl: product.imageUrl,
     currency: product.currency,
     name: localized(translations),
-    priceAmountMinor: variant?.priceAmountMinor ?? null,
-    stockQuantity: variant?.stockQuantity ?? null,
-    variantId: variant?.id ?? null,
+    priceAmountMinor: first?.priceAmountMinor ?? null,
+    stockQuantity: first?.stockQuantity ?? null,
+    variantId: first?.id ?? null,
+    variants,
     createdAt: product.createdAt,
     updatedAt: product.updatedAt,
   };
+}
+
+async function readCategory(db: Reader, key: string): Promise<AdminCategoryRow | null> {
+  const [category] = await db
+    .select()
+    .from(productCategories)
+    .where(eq(productCategories.key, key))
+    .limit(1);
+  if (category === undefined) return null;
+
+  const names = await db
+    .select({ locale: productCategoryTranslations.locale, value: productCategoryTranslations.name })
+    .from(productCategoryTranslations)
+    .where(eq(productCategoryTranslations.categoryKey, key));
+
+  return {
+    key: category.key,
+    name: localized(names),
+    position: category.position,
+    createdAt: category.createdAt,
+    updatedAt: category.updatedAt,
+  };
+}
+
+/**
+ * Escribe -o borra- el nombre de una variante en los DOS idiomas.
+ *
+ * `null` BORRA las dos filas, y esa es la unica forma de dejar una variante sin
+ * nombre despues de habersele puesto uno. Un `undefined` no llega hasta aqui:
+ * significa "no se toca", y lo filtra quien llama.
+ */
+async function writeVariantName(
+  tx: Database,
+  variantId: string,
+  name: LocalizedInput | null,
+): Promise<void> {
+  await tx
+    .delete(productVariantTranslations)
+    .where(eq(productVariantTranslations.variantId, variantId));
+
+  if (name === null) {
+    return;
+  }
+
+  await tx.insert(productVariantTranslations).values([
+    { variantId, locale: "es-US", name: name["es-US"] },
+    { variantId, locale: "en-US", name: name["en-US"] },
+  ]);
 }
 
 async function readPromotion(db: Reader, promotionId: string): Promise<AdminPromotionRow | null> {
@@ -259,6 +463,9 @@ export function createAdminCatalogRepository(db: Database): AdminCatalogReposito
             sku: input.sku,
             slug: input.slug,
             currency: input.currency,
+            kind: input.kind,
+            categoryKey: input.categoryKey,
+            imageUrl: input.imageUrl,
             // Nace en DRAFT SIEMPRE. Publicar es un acto aparte -`product.publish`
             // es una capacidad distinta de `product.write`- y crear ya publicado
             // saltaria esa separacion desde el primer minuto.
@@ -283,18 +490,35 @@ export function createAdminCatalogRepository(db: Database): AdminCatalogReposito
           },
         ]);
 
-        await tx.insert(productVariants).values({
-          productId: product.id,
-          // El SKU de variante es unico en toda la tabla. Derivarlo del producto
-          // mantiene la relacion legible en un albaran sin obligar a quien da de
-          // alta a inventarse un segundo codigo.
-          sku: `${input.sku}-1`,
-          status: "DRAFT",
-          priceAmountMinor: input.priceAmountMinor,
-          currency: input.currency,
-          stockQuantity: input.stockQuantity,
-          position: 0,
-        });
+        // Sin lista, UNA variante con el precio del nivel producto: es el atajo
+        // que existia antes de DEC-053 y sigue siendo lo razonable para un
+        // producto de variante unica.
+        const declared: readonly VariantInput[] =
+          input.variants === null || input.variants.length === 0
+            ? [{ priceAmountMinor: input.priceAmountMinor, stockQuantity: input.stockQuantity }]
+            : input.variants;
+
+        for (const [index, variant] of declared.entries()) {
+          const [created] = await tx
+            .insert(productVariants)
+            .values({
+              productId: product.id,
+              // El SKU de variante es unico en toda la tabla. Derivarlo del
+              // producto mantiene la relacion legible en un albaran sin obligar
+              // a quien da de alta a inventarse un segundo codigo.
+              sku: variant.sku ?? `${input.sku}-${index + 1}`,
+              status: "DRAFT",
+              priceAmountMinor: variant.priceAmountMinor,
+              currency: input.currency,
+              stockQuantity: variant.stockQuantity,
+              imageUrl: variant.imageUrl ?? null,
+              position: variant.position ?? index,
+            })
+            .returning({ id: productVariants.id });
+
+          if (created === undefined) throw new Error("variant_insert_returned_no_row");
+          await writeVariantName(tx, created.id, variant.name ?? null);
+        }
 
         const created = await readProduct(tx, product.id);
         if (created === null) throw new Error("product_read_after_insert_failed");
@@ -312,6 +536,22 @@ export function createAdminCatalogRepository(db: Database): AdminCatalogReposito
         if (existing === undefined) return null;
 
         const now = new Date();
+
+        if (
+          input.kind !== undefined ||
+          input.categoryKey !== undefined ||
+          input.imageUrl !== undefined
+        ) {
+          await tx
+            .update(products)
+            .set({
+              ...(input.kind === undefined ? {} : { kind: input.kind }),
+              ...(input.categoryKey === undefined ? {} : { categoryKey: input.categoryKey }),
+              ...(input.imageUrl === undefined ? {} : { imageUrl: input.imageUrl }),
+              updatedAt: now,
+            })
+            .where(eq(products.id, productId));
+        }
 
         if (input.status !== undefined) {
           await tx
@@ -363,6 +603,165 @@ export function createAdminCatalogRepository(db: Database): AdminCatalogReposito
         }
 
         return await readProduct(tx, productId);
+      });
+    },
+
+    async listVariants(productId) {
+      const [product] = await db
+        .select({ id: products.id })
+        .from(products)
+        .where(eq(products.id, productId))
+        .limit(1);
+      // `null` y no `[]`: "ese producto no existe" y "ese producto no tiene
+      // variantes" son dos respuestas distintas, y la segunda no deberia
+      // ocurrir nunca -el alta siempre crea una-.
+      return product === undefined ? null : await readVariants(db, productId);
+    },
+
+    async createVariant(productId, input) {
+      return await db.transaction(async (tx) => {
+        const [product] = await tx
+          .select()
+          .from(products)
+          .where(eq(products.id, productId))
+          .limit(1);
+        if (product === undefined) return null;
+
+        const existing = await readVariants(tx, productId);
+
+        const [created] = await tx
+          .insert(productVariants)
+          .values({
+            productId,
+            sku: input.sku ?? `${product.sku}-${existing.length + 1}`,
+            // Nace en DRAFT como el producto: publicar es `product.publish`.
+            status: "DRAFT",
+            priceAmountMinor: input.priceAmountMinor,
+            // La moneda la manda el PRODUCTO, no el cuerpo. Un trigger de
+            // `0003` rechaza la discrepancia; pasarla desde aqui evita que el
+            // panel tenga que repetirla y que pueda equivocarse.
+            currency: product.currency,
+            stockQuantity: input.stockQuantity,
+            imageUrl: input.imageUrl ?? null,
+            position: input.position ?? existing.length,
+          })
+          .returning({ id: productVariants.id });
+
+        if (created === undefined) throw new Error("variant_insert_returned_no_row");
+        await writeVariantName(tx, created.id, input.name ?? null);
+
+        const rows = await readVariants(tx, productId);
+        return rows.find((row) => row.id === created.id) ?? null;
+      });
+    },
+
+    async updateVariant(productId, variantId, input) {
+      return await db.transaction(async (tx) => {
+        const [existing] = await tx
+          .select({ id: productVariants.id })
+          .from(productVariants)
+          .where(and(eq(productVariants.id, variantId), eq(productVariants.productId, productId)))
+          .limit(1);
+        // La variante tiene que ser DE ESTE producto. Sin la segunda condicion,
+        // la ruta seria un oraculo con el que editar variantes ajenas sabiendo
+        // solo su identificador.
+        if (existing === undefined) return null;
+
+        const now = new Date();
+
+        const patch = {
+          ...(input.sku === undefined ? {} : { sku: input.sku }),
+          ...(input.priceAmountMinor === undefined
+            ? {}
+            : { priceAmountMinor: input.priceAmountMinor }),
+          ...(input.stockQuantity === undefined ? {} : { stockQuantity: input.stockQuantity }),
+          ...(input.imageUrl === undefined ? {} : { imageUrl: input.imageUrl }),
+          ...(input.position === undefined ? {} : { position: input.position }),
+          ...(input.status === undefined
+            ? {}
+            : {
+                status: input.status,
+                // Misma coherencia que en el producto: archivar deja marca,
+                // desarchivar la quita. Lo exige ademas un CHECK de `0003`.
+                archivedAt: input.status === "ARCHIVED" ? now : null,
+              }),
+          updatedAt: now,
+        };
+
+        await tx.update(productVariants).set(patch).where(eq(productVariants.id, variantId));
+
+        if (input.name !== undefined) {
+          await writeVariantName(tx, variantId, input.name);
+        }
+
+        const rows = await readVariants(tx, productId);
+        return rows.find((row) => row.id === variantId) ?? null;
+      });
+    },
+
+    async listCategories() {
+      const rows = await db
+        .select({ key: productCategories.key })
+        .from(productCategories)
+        .orderBy(asc(productCategories.position), asc(productCategories.key));
+
+      const result: AdminCategoryRow[] = [];
+      for (const row of rows) {
+        const category = await readCategory(db, row.key);
+        if (category !== null) result.push(category);
+      }
+      return result;
+    },
+
+    findCategory: (key) => readCategory(db, key),
+
+    async createCategory(input) {
+      return await db.transaction(async (tx) => {
+        await tx.insert(productCategories).values({ key: input.key, position: input.position });
+        await tx.insert(productCategoryTranslations).values([
+          { categoryKey: input.key, locale: "es-US", name: input.name["es-US"] },
+          { categoryKey: input.key, locale: "en-US", name: input.name["en-US"] },
+        ]);
+
+        const created = await readCategory(tx, input.key);
+        if (created === null) throw new Error("category_read_after_insert_failed");
+        return created;
+      });
+    },
+
+    async updateCategory(key, input) {
+      return await db.transaction(async (tx) => {
+        const [existing] = await tx
+          .select({ key: productCategories.key })
+          .from(productCategories)
+          .where(eq(productCategories.key, key))
+          .limit(1);
+        if (existing === undefined) return null;
+
+        const now = new Date();
+
+        if (input.position !== undefined) {
+          await tx
+            .update(productCategories)
+            .set({ position: input.position, updatedAt: now })
+            .where(eq(productCategories.key, key));
+        }
+
+        if (input.name !== undefined) {
+          for (const locale of ["es-US", "en-US"] as const) {
+            await tx
+              .update(productCategoryTranslations)
+              .set({ name: input.name[locale], updatedAt: now })
+              .where(
+                and(
+                  eq(productCategoryTranslations.categoryKey, key),
+                  eq(productCategoryTranslations.locale, locale),
+                ),
+              );
+          }
+        }
+
+        return await readCategory(tx, key);
       });
     },
 

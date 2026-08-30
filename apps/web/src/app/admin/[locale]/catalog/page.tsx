@@ -127,6 +127,29 @@ export default async function AdminCatalogPage({
                 cell: (row) => <span className="font-mono">{row.sku}</span>,
               },
               {
+                /*
+                 * EL TIPO SE VE EN EL LISTADO (§13.6, DEC-052).
+                 *
+                 * Decide que tasa aplica la version de reglas a cada compra del
+                 * producto, asi que un paquete mal marcado como mercancia vale
+                 * la mitad de lo que deberia y nadie lo nota hasta que alguien
+                 * reclama. Verlo en la tabla es lo que permite revisarlo de un
+                 * vistazo.
+                 *
+                 * Ausente NO se pinta como mercancia: se deja el hueco, porque
+                 * `undefined` significa que la API no lo publica y suponerlo
+                 * seria afirmar lo que vale comprar ese articulo.
+                 */
+                id: "kind",
+                header: t("columnKind"),
+                cell: (row) =>
+                  row.kind === undefined
+                    ? ""
+                    : row.kind === "ENTRY_PACKAGE"
+                      ? t("kindEntryPackage")
+                      : t("kindMerchandise"),
+              },
+              {
                 id: "price",
                 header: t("columnPrice"),
                 align: "end",

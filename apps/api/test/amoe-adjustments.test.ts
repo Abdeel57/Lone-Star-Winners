@@ -60,6 +60,8 @@ import {
 } from "./support/in-memory-repositories.js";
 
 const ADMIN_ID = "44444444-4444-4444-8444-444444444444";
+/** El segundo administrador. Quien teclea una ficha postal no la aprueba (DEC-054 punto 4). */
+const OTHER_ADMIN_ID = "45454545-4545-4545-8454-454545454545";
 const OTHER_PARTICIPANT_ID = "34343434-3434-4343-8343-343434343434";
 const PROMOTION_SLUG = "fixture-promotion";
 const NOW = new Date("2026-09-15T12:00:00.000Z");
@@ -124,7 +126,10 @@ function amoeConfigFixture(
   };
 }
 
-function rulesConfigFixture(amoe: unknown): Record<string, unknown> {
+function rulesConfigFixture(
+  amoe: unknown,
+  perParticipantMax: number | null = null,
+): Record<string, unknown> {
   return {
     product_eligibility: { mode: "ALL_PRODUCTS" },
     purchase_entry_formula: {
@@ -133,7 +138,7 @@ function rulesConfigFixture(amoe: unknown): Record<string, unknown> {
       entries_per_amount_unit: { numerator: 1, denominator: 1 },
       rounding_policy: "FLOOR",
     },
-    entry_limits: { per_order_max: null, per_participant_max: null },
+    entry_limits: { per_order_max: null, per_participant_max: perParticipantMax },
     partial_refund_rounding_policy: "FLOOR",
     order_qualification: { qualifying_payment_state: "PAID" },
     ...(amoe === undefined ? {} : { amoe }),
@@ -152,6 +157,12 @@ interface DomainHarness {
 interface HarnessOptions {
   readonly flags?: Partial<SweepstakesFlags>;
   readonly amoe?: unknown;
+  /**
+   * `entry_limits.per_participant_max` de la version de reglas. NO es una cifra
+   * legal: el tope real lo fija el abogado y el motor lo ejecuta. Aqui existe
+   * para poder provocar un recorte y comprobar que `applied_cap` lo explica.
+   */
+  readonly perParticipantMax?: number | null;
 }
 
 function buildDomain(options: HarnessOptions = {}): DomainHarness {
@@ -172,7 +183,7 @@ function buildDomain(options: HarnessOptions = {}): DomainHarness {
     endsAt: new Date("2026-12-01T06:00:00.000Z"),
     currency: "USD",
     rulesVersionId: RULES_VERSION_ID,
-    rulesConfig: rulesConfigFixture(options.amoe),
+    rulesConfig: rulesConfigFixture(options.amoe, options.perParticipantMax ?? null),
     flags: { ...DEFAULT_SWEEPSTAKES_FLAGS, ...options.flags },
     amoeMode: null,
   };
@@ -221,6 +232,21 @@ function buildDomain(options: HarnessOptions = {}): DomainHarness {
     repositories: { ledger, amoe: submissions, adjustments: adjustmentRows, unitOfWork },
     clock,
     ids,
+    // La cola de revision etiqueta cada fila con el correo ENMASCARADO del
+    // participante (`amoe.review.read` declara `touchesPii`). El doble devuelve
+    // un perfil con correo para que la ruta ejerza el enmascarado de verdad;
+    // `null` significaria "expediente sin correo", que es otro caso.
+    participants: {
+      findProfile: (participantId: string) =>
+        Promise.resolve({
+          id: participantId,
+          email: "fixture@example.com",
+          display_name: null,
+          email_verified: false,
+          language_preference: "es-US",
+          created_at: NOW.toISOString(),
+        }),
+    },
     amoe: harness.amoe,
     adjustments: harness.adjustments,
   };
@@ -228,9 +254,9 @@ function buildDomain(options: HarnessOptions = {}): DomainHarness {
   return harness;
 }
 
-function staffWith(capabilities: readonly string[]): Principal {
+function staffWith(capabilities: readonly string[], adminUserId: string = ADMIN_ID): Principal {
   return {
-    actor: { type: "ADMIN", adminUserId: ADMIN_ID },
+    actor: { type: "ADMIN", adminUserId },
     scope: "STAFF",
     capabilities: [...capabilities],
   };
@@ -501,6 +527,178 @@ describe("GET /admin/amoe-submissions", () => {
 
     expect(item).not.toHaveProperty("payload");
     expect(JSON.stringify(item)).not.toContain("ada@example.test");
+  });
+
+  /**
+   * El correo del participante SI sale, y ENMASCARADO.
+   *
+   * `amoe.review.read` declara `touchesPii` en el catalogo de `@lsw/security`:
+   * la cola de revision mira expedientes de personas por definicion. Lo que no
+   * sale es el dato completo -eso es `pii.view.full`, otra capacidad y con
+   * motivo-: el revisor necesita DISTINGUIR filas y reconocer un dominio
+   * desechable, no leer la direccion.
+   */
+  it("etiqueta la fila con el correo ENMASCARADO, nunca con el entero", async () => {
+    const domain = buildDomain({ flags: { amoe_enabled: true }, amoe: amoeConfigFixture() });
+    // El correo exige `pii.view.masked` ADEMAS de `amoe.review.read` (S-10).
+    shared.staff = staffWith(["amoe.review.read", "pii.view.masked"]);
+
+    await domain.amoe.submit({
+      promotionId: PROMOTION_ID,
+      participantId: PARTICIPANT_ID,
+      payload: { full_name: "Ada Lovelace", email: "ada@example.test" },
+    });
+
+    const app = await appAllowingPermissions();
+    const [item] = (
+      await app.inject({
+        method: "GET",
+        url: `/api/v1/admin/amoe-submissions?promotion_id=${PROMOTION_ID}`,
+      })
+    ).json<{ items: { participant_email: string | null; transcribed_by_me: boolean }[] }>().items;
+
+    // Dominio entero e inicial de la parte local: es lo que `http/pii.ts`
+    // describe para `pii.view.masked`.
+    expect(item?.participant_email).toContain("@example.com");
+    expect(item?.participant_email).not.toBe("fixture@example.com");
+    // Un envio propio del participante no lo tecleo nadie del equipo.
+    expect(item?.transcribed_by_me).toBe(false);
+  });
+
+  /**
+   * S-10: sin `pii.view.masked` no se publica el correo, y ni siquiera se lee.
+   *
+   * Que hoy todos los roles con `amoe.review.read` tengan tambien esa
+   * capacidad es una coincidencia del reparto, no una garantia: manana entra
+   * un rol de solo-cola y se llevaria el correo sin que nadie lo decidiera.
+   */
+  it("sin pii.view.masked, la cola no publica el correo del participante", async () => {
+    const domain = buildDomain({ flags: { amoe_enabled: true }, amoe: amoeConfigFixture() });
+    shared.staff = staffWith(["amoe.review.read"]);
+
+    await domain.amoe.submit({
+      promotionId: PROMOTION_ID,
+      participantId: PARTICIPANT_ID,
+      payload: { full_name: "Ada Lovelace", email: "ada@example.test" },
+    });
+
+    const app = await appAllowingPermissions();
+    const [item] = (
+      await app.inject({
+        method: "GET",
+        url: `/api/v1/admin/amoe-submissions?promotion_id=${PROMOTION_ID}`,
+      })
+    ).json<{ items: Record<string, unknown>[] }>().items;
+
+    expect(item?.participant_email).toBeNull();
+    // Y el identificador crudo del transcriptor no viaja para NADIE.
+    expect(item).not.toHaveProperty("transcribed_by_admin_user_id");
+  });
+
+  /**
+   * EL FILTRO `?status=` ES LO QUE HACE AUDITABLE UN ENVIO YA DECIDIDO.
+   *
+   * Sin el, una aprobacion sacaba la ficha de la unica lectura administrativa
+   * que existia y con ella se iban `granted_entries` y `applied_cap`: la cifra
+   * que se concedio DE VERDAD -leida del ledger- y el recorte que explica por
+   * que fue menor que la anunciada. Un registro promocional que no se puede
+   * volver a mirar no es auditable, y estos lo son por definicion.
+   *
+   * El recorrido es el de la via postal entera: se transcribe una ficha, la
+   * aprueba OTRA persona -la separacion de funciones de DEC-054 punto 4- y el
+   * tope por participante recorta la concesion.
+   */
+  it("un envio aprobado sale de la cola de trabajo y se recupera con ?status=APPROVED", async () => {
+    // Tope de 10 y 5 por ficha son FIXTURES: el tope real lo fija el abogado.
+    // Con 8 ya en el ledger, la aprobacion concede 2 y anota el recorte.
+    const domain = buildDomain({
+      flags: { amoe_enabled: true, entry_caps_enabled: true },
+      amoe: amoeConfigFixture({ mode: "MAIL_IN_REVIEW" }),
+      perParticipantMax: 10,
+    });
+    shared.staff = staffWith(["amoe.review.read"]);
+
+    await domain.grant(PARTICIPANT_ID, 8, "order:fixture-cap");
+
+    const transcribed = await domain.amoe.submitOnBehalf(
+      {
+        promotionId: PROMOTION_ID,
+        participantId: PARTICIPANT_ID,
+        payload: { full_name: "Ada Lovelace", email: "ada@example.test" },
+        envelopeReference: "SOBRE-1",
+        cardsInEnvelope: 1,
+      },
+      staffWith(["amoe.submission.transcribe"], ADMIN_ID),
+    );
+    const submissionId = transcribed.submission.id;
+
+    // Mientras espera decision, la cola SIN parametro la trae.
+    const app = await appAllowingPermissions();
+    const pending = (
+      await app.inject({
+        method: "GET",
+        url: `/api/v1/admin/amoe-submissions?promotion_id=${PROMOTION_ID}`,
+      })
+    ).json<{ items: { submission_id: string }[] }>().items;
+    expect(pending.map((row) => row.submission_id)).toContain(submissionId);
+
+    // La aprueba OTRO administrador: quien teclea no decide (409
+    // SEPARATION_OF_DUTIES si fuera el mismo).
+    await domain.amoe.approve(submissionId, staffWith(["amoe.review.approve"], OTHER_ADMIN_ID));
+
+    // La cola de trabajo ya no la trae: no espera nada.
+    const stillPending = (
+      await app.inject({
+        method: "GET",
+        url: `/api/v1/admin/amoe-submissions?promotion_id=${PROMOTION_ID}`,
+      })
+    ).json<{ items: { submission_id: string }[] }>().items;
+    expect(stillPending.map((row) => row.submission_id)).not.toContain(submissionId);
+
+    // Y con el filtro vuelve, con lo que la aprobacion hizo de verdad.
+    const response = await app.inject({
+      method: "GET",
+      url: `/api/v1/admin/amoe-submissions?promotion_id=${PROMOTION_ID}&status=APPROVED`,
+    });
+
+    expect(response.statusCode).toBe(200);
+    const approved = response
+      .json<{
+        items: {
+          submission_id: string;
+          status: string;
+          granted_entries: number | null;
+          applied_cap: Record<string, unknown> | null;
+        }[];
+      }>()
+      .items.find((row) => row.submission_id === submissionId);
+
+    expect(approved?.status).toBe("APPROVED");
+    // 2, no 5: el tope recorto. La cifra sale del LEDGER, no de la
+    // configuracion, que es justo la diferencia que hace falta poder auditar.
+    expect(approved?.granted_entries).toBe(2);
+    expect(approved?.applied_cap).toEqual({
+      kind: "PER_PARTICIPANT",
+      limit: 10,
+      requested: 5,
+      granted: 2,
+    });
+  });
+
+  it("un estado que el contrato no declara lo rechaza el esquema, no el dominio", async () => {
+    // El enum es cerrado a proposito: un `status` libre convertiria la cola en
+    // un filtro sobre una columna, y cualquier cadena devolveria una lista
+    // vacia -indistinguible de "no hay envios en ese estado"-.
+    buildDomain({ flags: { amoe_enabled: true }, amoe: amoeConfigFixture() });
+    shared.staff = staffWith(["amoe.review.read"]);
+
+    const app = await appAllowingPermissions();
+    const response = await app.inject({
+      method: "GET",
+      url: `/api/v1/admin/amoe-submissions?promotion_id=${PROMOTION_ID}&status=TODOS`,
+    });
+
+    expect(response.statusCode).toBe(422);
   });
 });
 

@@ -110,18 +110,19 @@ async function createOrder(options: {
 
 async function addLine(
   orderId: string,
-  options?: { readonly eligible?: boolean },
+  options?: { readonly eligible?: boolean; readonly productKind?: "MERCHANDISE" | "ENTRY_PACKAGE" },
 ): Promise<string> {
   return singleValue<string>(
     app,
     sql`INSERT INTO order_items (
           order_id, product_id, product_variant_id, sku, product_slug,
-          name_snapshot, quantity, unit_amount_minor, currency,
+          name_snapshot, product_kind, quantity, unit_amount_minor, currency,
           sweepstakes_eligible_snapshot
         ) VALUES (
           ${orderId}, ${fixture.productId}, ${fixture.variantId},
           'FIXTURE-SKU', 'fixture-product',
           ${JSON.stringify({ "en-US": "Fixture tee", "es-US": "Camiseta de prueba" })}::jsonb,
+          ${options?.productKind ?? "MERCHANDISE"}::product_kind,
           2, 2500, 'USD', ${options?.eligible ?? true}
         ) RETURNING id`,
   );
@@ -192,6 +193,43 @@ describe("una linea de pedido es una foto historica", () => {
     await expect(
       app.execute(sql`UPDATE order_items SET unit_amount_minor = 1 WHERE id = ${lineId}`),
     ).rejects.toThrow();
+  });
+
+  /**
+   * DEC-052: el TIPO tambien es foto.
+   *
+   * Es la columna que decide QUE TASA se aplico, asi que si se pudiera cambiar,
+   * reetiquetar un producto de mercancia a paquete alteraria lo que significo
+   * una compra de hace tres meses y el reversal dejaria de cuadrar con la
+   * concesion original.
+   */
+  it("tampoco puede cambiar el tipo de producto congelado", async () => {
+    const orderId = await createOrder({});
+    const lineId = await addLine(orderId, { productKind: "ENTRY_PACKAGE" });
+
+    await expect(
+      app.execute(
+        sql`UPDATE order_items SET product_kind = 'MERCHANDISE'::product_kind WHERE id = ${lineId}`,
+      ),
+    ).rejects.toThrow();
+  });
+
+  it("insertar una linea SIN tipo se rechaza: no hay default que lo suponga", async () => {
+    const orderId = await createOrder({});
+
+    await expect(
+      app.execute(
+        sql`INSERT INTO order_items (
+              order_id, product_id, product_variant_id, sku, product_slug,
+              name_snapshot, quantity, unit_amount_minor, currency,
+              sweepstakes_eligible_snapshot
+            ) VALUES (
+              ${orderId}, ${fixture.productId}, ${fixture.variantId},
+              'FIXTURE-NOKIND', 'fixture-product',
+              '{"en-US":"x","es-US":"x"}'::jsonb, 1, 100, 'USD', true
+            )`,
+      ),
+    ).rejects.toSatisfy(dbErrorMatching(/product_kind|not-null|null value/iu));
   });
 
   it("tampoco puede cambiar la elegibilidad congelada", async () => {
@@ -622,5 +660,129 @@ describe("DEC-009 - la reclamacion de un webhook serializa las entregas simultan
             VALUES ('mock', 'evt-dup', 'PAYMENT_SUCCEEDED', ${digest})`,
       ),
     ).rejects.toThrow();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Control dual de los ajustes legalmente materiales (0028, S-06)
+//
+// Lo que se prueba aqui NO se puede probar con un doble: son una CHECK y un
+// trigger del motor, y el criterio del repositorio es que estas cosas las
+// imponga PostgreSQL y no la aplicacion. El camino de la aplicacion ya era
+// seguro -el UPDATE solo toca filas PENDING_APPROVAL-; lo que faltaba era que
+// lo fuera tambien para cualquier otro escritor.
+// ---------------------------------------------------------------------------
+
+describe("setting_change_requests: una decision no se reescribe", () => {
+  async function createRequest(requestedBy: string): Promise<string> {
+    return singleValue<string>(
+      app,
+      sql`INSERT INTO setting_change_requests (
+            setting_kind, setting_key, requested_value, reason_code,
+            requested_by_admin_user_id
+          ) VALUES (
+            'FEATURE_FLAG', 'amoe_enabled', '{"enabled": true}'::jsonb,
+            'enable_amoe', ${requestedBy}
+          ) RETURNING id`,
+    );
+  }
+
+  it("quien la pidio no puede decidirla: lo impide la CHECK, no la aplicacion", async () => {
+    const requester = await createAdmin("setting-requester-a");
+    const id = await createRequest(requester);
+
+    await expect(
+      app.execute(
+        sql`UPDATE setting_change_requests
+            SET status = 'APPLIED', decided_by_admin_user_id = ${requester}, decided_at = now()
+            WHERE id = ${id}`,
+      ),
+    ).rejects.toThrow();
+  });
+
+  it("otra persona si puede aplicarla", async () => {
+    const requester = await createAdmin("setting-requester-b");
+    const approver = await createAdmin("setting-approver-b");
+    const id = await createRequest(requester);
+
+    await expect(
+      app.execute(
+        sql`UPDATE setting_change_requests
+            SET status = 'APPLIED', decided_by_admin_user_id = ${approver}, decided_at = now()
+            WHERE id = ${id}`,
+      ),
+    ).resolves.toBeDefined();
+  });
+
+  it("una fila ya decidida no se vuelve a tocar, ni para cambiar el veredicto", async () => {
+    const requester = await createAdmin("setting-requester-c");
+    const approver = await createAdmin("setting-approver-c");
+    const other = await createAdmin("setting-approver-c2");
+    const id = await createRequest(requester);
+
+    await app.execute(
+      sql`UPDATE setting_change_requests
+          SET status = 'APPLIED', decided_by_admin_user_id = ${approver}, decided_at = now()
+          WHERE id = ${id}`,
+    );
+
+    // APPLIED -> REJECTED: reescribir la decision.
+    await expect(
+      app.execute(
+        sql`UPDATE setting_change_requests
+            SET status = 'REJECTED', decided_by_admin_user_id = ${other}, decided_at = now()
+            WHERE id = ${id}`,
+      ),
+    ).rejects.toSatisfy(dbErrorMatching(/no se reescribe/iu));
+
+    // Y tampoco cambiar solo el decisor.
+    await expect(
+      app.execute(
+        sql`UPDATE setting_change_requests
+            SET decided_by_admin_user_id = ${other} WHERE id = ${id}`,
+      ),
+    ).rejects.toSatisfy(dbErrorMatching(/no se reescribe/iu));
+  });
+
+  it("decidir no reescribe lo que se pidio", async () => {
+    const requester = await createAdmin("setting-requester-d");
+    const approver = await createAdmin("setting-approver-d");
+    const id = await createRequest(requester);
+
+    await expect(
+      app.execute(
+        sql`UPDATE setting_change_requests
+            SET status = 'APPLIED',
+                decided_by_admin_user_id = ${approver},
+                decided_at = now(),
+                requested_value = '{"enabled": false}'::jsonb
+            WHERE id = ${id}`,
+      ),
+    ).rejects.toSatisfy(dbErrorMatching(/inmutable/iu));
+  });
+
+  it("no hay transicion a un estado que no sea APPLIED o REJECTED", async () => {
+    const requester = await createAdmin("setting-requester-e");
+    const approver = await createAdmin("setting-approver-e");
+    const id = await createRequest(requester);
+
+    await expect(
+      app.execute(
+        sql`UPDATE setting_change_requests
+            SET status = 'PENDING_APPROVAL',
+                decided_by_admin_user_id = ${approver},
+                decided_at = now()
+            WHERE id = ${id}`,
+      ),
+    ).rejects.toThrow();
+  });
+
+  it("la aplicacion no puede borrar una solicitud: una rechazada es evidencia", async () => {
+    const requester = await createAdmin("setting-requester-f");
+    const id = await createRequest(requester);
+
+    await expect(
+      app.execute(sql`DELETE FROM setting_change_requests WHERE id = ${id}`),
+    ).rejects.toSatisfy(dbErrorMatching(/permission denied|42501/iu));
   });
 });

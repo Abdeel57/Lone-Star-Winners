@@ -61,13 +61,16 @@ import {
   outOfStockCartLine,
 } from "@/mocks/fixtures/cart";
 import {
+  caps,
   catalog,
   catalogWithoutPromotion,
   eligibleProduct,
+  entryPackages,
   ineligibleProduct,
   productDetails,
   soldOutProduct,
   summaryOf,
+  tumblers,
 } from "@/mocks/fixtures/catalog";
 
 import enMessages from "../../messages/en-US.json";
@@ -158,11 +161,17 @@ describe("ProductCard", () => {
   });
 });
 
-describe("ShopFilters", () => {
+describe("ShopFilters (§13.4, DEC-052 y DEC-053)", () => {
   it("es un formulario GET: el filtro acaba en la URL y funciona sin JavaScript", () => {
     const { container } = renderIn(
       "en",
-      <ShopFilters action="/en/shop" categories={["APPAREL", "HOME"]} selectedCategory={null} />,
+      <ShopFilters
+        action="/en/shop"
+        categories={[caps, tumblers]}
+        selectedCategory={null}
+        selectedKind={null}
+        locale="en"
+      />,
     );
 
     const form = container.querySelector("form");
@@ -170,29 +179,86 @@ describe("ShopFilters", () => {
     expect(form?.getAttribute("action")).toBe("/en/shop");
   });
 
-  it("traduce las categorias que conoce y deja pasar las que no", () => {
+  it("el nombre de la categoria llega del backend y NO del diccionario", () => {
+    /*
+     * Es el cambio de DEC-053: las categorias las crea el panel, asi que su
+     * nombre no puede vivir en `messages/*.json` -obligaria a un despliegue por
+     * cada alta-. Llega localizado y se pinta con `pickLocalized`, sin traducir.
+     */
     renderIn(
       "es",
       <ShopFilters
         action="/es/shop"
-        categories={["APPAREL", "CATEGORIA_NUEVA"]}
+        categories={[caps, entryPackages]}
         selectedCategory={null}
+        selectedKind={null}
+        locale="es"
       />,
     );
 
-    expect(screen.getByRole("option", { name: esMessages.category.APPAREL })).toBeInTheDocument();
-    // Una categoria que el backend anada aparece con su clave: usable, y
-    // visiblemente pendiente de traducir. Nunca desaparece del filtro.
-    expect(screen.getByRole("option", { name: "CATEGORIA_NUEVA" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("option", { name: caps.name["es-US"] }),
+      "la categoria se pinta en espanol",
+    ).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: entryPackages.name["es-US"] })).toBeInTheDocument();
   });
 
-  it("sin categorias no se pinta un filtro vacio", () => {
-    const { container } = renderIn(
+  it("sin categorias no se pinta un filtro vacio, y las secciones se quedan", () => {
+    /*
+     * El desplegable desaparece -no hay nada que elegir- pero las tres
+     * secciones por TIPO siguen: parten el catalogo en superficies que se leen
+     * distinto, y eso no depende de que existan categorias.
+     */
+    renderIn(
       "en",
-      <ShopFilters action="/en/shop" categories={[]} selectedCategory={null} />,
+      <ShopFilters
+        action="/en/shop"
+        categories={[]}
+        selectedCategory={null}
+        selectedKind={null}
+        locale="en"
+      />,
     );
 
-    expect(container).toBeEmptyDOMElement();
+    expect(document.querySelector("form")).toBeNull();
+    expect(
+      screen.getByRole("link", { name: enMessages.shop.kindEntryPackages }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: enMessages.shop.kindMerchandise })).toBeInTheDocument();
+  });
+
+  it("la seccion elegida se anuncia con `aria-current`, no solo con color", () => {
+    renderIn(
+      "en",
+      <ShopFilters
+        action="/en/shop"
+        categories={[]}
+        selectedCategory={null}
+        selectedKind="ENTRY_PACKAGE"
+        locale="en"
+      />,
+    );
+
+    const current = screen.getByRole("link", { name: enMessages.shop.kindEntryPackages });
+    expect(current).toHaveAttribute("aria-current", "page");
+  });
+
+  it("cambiar de seccion conserva la categoria elegida", () => {
+    // Un filtro que se pierde al cambiar de pestana obliga a volver a
+    // elegirlo, y quien mira gorras sigue mirando gorras.
+    renderIn(
+      "en",
+      <ShopFilters
+        action="/en/shop"
+        categories={[caps]}
+        selectedCategory="caps"
+        selectedKind={null}
+        locale="en"
+      />,
+    );
+
+    const link = screen.getByRole("link", { name: enMessages.shop.kindMerchandise });
+    expect(link.getAttribute("href")).toContain("category=caps");
   });
 });
 

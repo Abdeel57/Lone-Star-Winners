@@ -77,6 +77,12 @@ export interface InMemoryLedgerOptions {
 
 export class InMemoryLedgerRepository implements LedgerRepository {
   private readonly rows: LedgerTransaction[] = [];
+  /** Cerrojos pedidos, en orden. El doble no serializa; solo deja constancia. */
+  private readonly locks: string[] = [];
+  /** Orden relativo de la primera peticion de cerrojo y de la primera lectura. */
+  private steps = 0;
+  private firstLockAt: number | null = null;
+  private firstReadAt: number | null = null;
   private readonly bySource = new Map<string, LedgerTransaction>();
   private readonly byId = new Map<string, LedgerTransaction>();
   private nextSequence = 1;
@@ -357,10 +363,47 @@ export class InMemoryLedgerRepository implements LedgerRepository {
     promotionId: string,
     participantId: string,
   ): Promise<readonly LedgerTransaction[]> {
+    this.steps += 1;
+    this.firstReadAt ??= this.steps;
     return Promise.resolve(
       this.rows.filter(
         (row) => row.promotionId === promotionId && row.participantId === participantId,
       ),
+    );
+  }
+
+  /**
+   * No-op deliberado.
+   *
+   * El doble en memoria es de un solo hilo: no hay concurrencia que serializar
+   * y un cerrojo simulado no probaria nada. Lo que SI se puede comprobar aqui
+   * -y se comprueba- es que la concesion lo PIDE, y que lo pide ANTES de leer
+   * el saldo: si el orden se invirtiera, el cerrojo real de PostgreSQL
+   * protegeria una lectura que ya habria ocurrido.
+   */
+  public lockParticipant(_promotionId: string, _participantId: string): Promise<void> {
+    this.steps += 1;
+    this.firstLockAt ??= this.steps;
+    this.locks.push(`${_promotionId}:${_participantId}`);
+    return Promise.resolve();
+  }
+
+  /** Cerrojos pedidos, en orden. Solo para tests. */
+  public lockCalls(): readonly string[] {
+    return this.locks;
+  }
+
+  /**
+   * Si el PRIMER cerrojo se pidio antes de la PRIMERA lectura del historial.
+   *
+   * Es lo unico que un doble de un solo hilo puede demostrar del cerrojo, y es
+   * justo lo que importa: en PostgreSQL, pedirlo despues protegeria una lectura
+   * que ya ocurrio. `true` tambien cuando no hubo lectura alguna.
+   */
+  public firstLockBeforeFirstRead(): boolean {
+    return (
+      this.firstLockAt !== null &&
+      (this.firstReadAt === null || this.firstLockAt < this.firstReadAt)
     );
   }
 

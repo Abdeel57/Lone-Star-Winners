@@ -14,11 +14,13 @@ import type {
   AdminExportSnapshotPage,
   AdminOrderPage,
   AdminParticipantPage,
+  AdminRulesVersion,
   AdminRulesVersionPage,
   AmoeConfig,
   AmoeSubmission,
   AmoeSubmissionPage,
   AmoeSubmissionResponse,
+  AmoeSubmissionStatus,
   CartWithQuote,
   CheckoutSessionResponse,
   CheckoutSessionState,
@@ -32,6 +34,7 @@ import type {
   OrderPage,
   ParticipantProfile,
   PostalAddress,
+  ProductCategoryListResponse,
   ProductDetail,
   ProductListQuery,
   ProductListResponse,
@@ -43,15 +46,35 @@ import type {
   SiteConfigResponse,
 } from "./contract";
 import type {
+  AdminAmoeTranscriptionInput,
+  AdminAmoeTranscriptionResponse,
+  AdminBonusPeriodInput,
+  AdminBonusPeriodResponse,
+  AdminFeatureFlagPatch,
+  AdminFeatureFlagRow,
+  AdminFeatureFlagsResponse,
+  AdminProductCategoryInput,
+  AdminProductCategoryListResponse,
+  AdminProductCategoryRow,
   AdminProductInput,
   AdminProductPage,
   AdminProductPatch,
   AdminProductRow,
+  AdminProductVariantInput,
+  AdminProductVariantPatch,
+  AdminProductVariantRow,
   AdminPromotionInput,
   AdminPromotionPage,
   AdminPromotionPatch,
   AdminPromotionRow,
   AdminReasonInput,
+  AdminRulesDocumentInput,
+  AdminRulesVersionInput,
+  AdminRulesVersionPatch,
+  AdminSettingChangeDecisionInput,
+  AdminSettingChangeRequest,
+  AdminSettingChangeRequestInput,
+  AdminSettingChangeRequestPage,
 } from "./admin-contract";
 import { apiGet, apiRequest, queryString, type ApiRequestOptions } from "./http";
 import { ok, type ApiResult } from "./result";
@@ -77,8 +100,18 @@ export const API_PATHS = {
   activePromotion: "/promotions/active",
   /** Listado de promociones. */
   promotions: "/promotions",
-  /** Catalogo de mercancia elegible. */
+  /** Catalogo de mercancia elegible y de paquetes de participaciones. */
   products: "/products",
+  /**
+   * Categorias con al menos un producto publicado (§13.4, PUBLIC).
+   *
+   * Existe para que el filtro de la tienda no dependa de la pagina de
+   * resultados que se este mirando: con paginacion por cursor, derivar las
+   * categorias de los productos cargados deja fuera las que solo aparecen en la
+   * pagina tres. Ademas el NOMBRE llega localizado desde el backend, que es lo
+   * unico correcto para un dato que crea el panel (DEC-030, DEC-053).
+   */
+  productCategories: "/product-categories",
   /** Carrito de servidor (DEC-023). */
   cart: "/cart",
   /** Lineas del carrito. */
@@ -162,6 +195,21 @@ export const API_PATHS = {
   adminEntryTransactions: "/admin/entry-transactions",
   adminAmoeSubmissions: "/admin/amoe-submissions",
   adminAdjustments: "/admin/entry-adjustments",
+  /** Categorias del catalogo en el panel (§13.6). */
+  adminProductCategories: "/admin/product-categories",
+  /** Feature flags con su materialidad legal (§13.9). */
+  adminFeatureFlags: "/admin/feature-flags",
+  /**
+   * Solicitudes de cambio de ajustes legalmente materiales
+   * (HO-041, resolucion fase 1).
+   *
+   * SUSTITUYE A `PATCH /admin/settings/amoe-mode`, que desaparecio del
+   * contrato. Los flags materiales y la modalidad AMOE cambian por control
+   * dual, igual que un ajuste de participaciones: se solicita, y otra persona
+   * aprueba. `PATCH /admin/feature-flags/:key` queda para los NO materiales, y
+   * sobre uno material responde 409 `FLAG_LEGALLY_MATERIAL` apuntando aqui.
+   */
+  adminSettingChangeRequests: "/admin/settings/change-requests",
   /**
    * [CONTRATO] Previsualizacion de un ajuste (seccion 11.4, `IMPLEMENTED`).
    *
@@ -278,6 +326,55 @@ export function amoeCancelPath(submissionId: string): string {
 /** Ruta de las versiones de reglas de una promocion en el panel (DEC-012). */
 export function adminRulesVersionsPath(promotionId: string): string {
   return `${API_PATHS.adminPromotions}/${encodeURIComponent(promotionId)}/rules-versions`;
+}
+
+/** Ruta de UNA version de reglas (§13.7). */
+export function adminRulesVersionPath(promotionId: string, rulesVersionId: string): string {
+  return `${adminRulesVersionsPath(promotionId)}/${encodeURIComponent(rulesVersionId)}`;
+}
+
+/** Ruta del documento de una version en un locale (§13.7). */
+export function adminRulesDocumentPath(
+  promotionId: string,
+  rulesVersionId: string,
+  locale: string,
+): string {
+  return `${adminRulesVersionPath(promotionId, rulesVersionId)}/documents/${encodeURIComponent(locale)}`;
+}
+
+/** Ruta de activacion de una version de reglas (§13.7). Motivo + step-up. */
+export function adminRulesActivatePath(promotionId: string, rulesVersionId: string): string {
+  return `${adminRulesVersionPath(promotionId, rulesVersionId)}/activate`;
+}
+
+/** Ruta del atajo "periodo bonus" (§13.8). Motivo + step-up. */
+export function adminBonusPeriodsPath(promotionId: string): string {
+  return `${API_PATHS.adminPromotions}/${encodeURIComponent(promotionId)}/bonus-periods`;
+}
+
+/** Ruta de un feature flag concreto (§13.9). Solo flags NO materiales. */
+export function adminFeatureFlagPath(key: string): string {
+  return `${API_PATHS.adminFeatureFlags}/${encodeURIComponent(key)}`;
+}
+
+/** Ruta de una solicitud de cambio de ajuste (HO-041, resolucion fase 1). */
+export function adminSettingChangeRequestPath(requestId: string): string {
+  return `${API_PATHS.adminSettingChangeRequests}/${encodeURIComponent(requestId)}`;
+}
+
+/** Ruta de las variantes de un producto (§13.6). */
+export function adminProductVariantsPath(productId: string): string {
+  return `${API_PATHS.adminProducts}/${encodeURIComponent(productId)}/variants`;
+}
+
+/** Ruta de UNA variante (§13.6). No hay DELETE: se archiva. */
+export function adminProductVariantPath(productId: string, variantId: string): string {
+  return `${adminProductVariantsPath(productId)}/${encodeURIComponent(variantId)}`;
+}
+
+/** Ruta de una categoria del catalogo (§13.6). */
+export function adminProductCategoryPath(key: string): string {
+  return `${API_PATHS.adminProductCategories}/${encodeURIComponent(key)}`;
 }
 
 /** Ruta del detalle de una promocion en el panel. */
@@ -412,10 +509,24 @@ export function fetchProducts(
     cursor: query.cursor,
     limit: query.limit,
     promotion_slug: query.promotion_slug,
-    category_key: query.category_key,
+    kind: query.kind,
+    category: query.category,
   });
 
   return apiGet<ProductListResponse>(`${API_PATHS.products}${search}`, { locale });
+}
+
+/**
+ * Categorias con productos publicados (§13.4).
+ *
+ * Un fallo aqui NO puede tumbar la tienda: el filtro es una comodidad y el
+ * catalogo se lee igual sin el. Quien llama trata el error dejando la lista
+ * vacia, que es lo mismo que "no hay categorias".
+ */
+export function fetchProductCategories(
+  locale: Locale,
+): Promise<ApiResult<ProductCategoryListResponse>> {
+  return apiGet<ProductCategoryListResponse>(API_PATHS.productCategories, { locale });
 }
 
 /** Ficha de producto. Un 404 sube y acaba en la pagina 404. */
@@ -1054,9 +1165,33 @@ export function fetchAdminParticipants(
   });
 }
 
-/** Cola de revision AMOE. */
+/**
+ * Cola de revision AMOE.
+ *
+ * `promotion_id` ES OBLIGATORIO, y el tipo lo exige (HO-041, ronda de cierre).
+ *
+ * No es una preferencia de esta funcion: el contrato lo declara asi
+ * (`GET /api/v1/admin/amoe-submissions?promotion_id=`, seccion 11) y la API lo
+ * valida con un esquema en el que el campo es requerido. La pantalla lo omitia
+ * -mandaba solo `?status=`- y la respuesta era un 422 `VALIDATION_FAILED` que
+ * tumbaba la seccion entera. Con el campo en la firma, la misma omision deja de
+ * compilar en vez de llegar al navegador.
+ *
+ * Y tiene sentido de dominio, ademas de contractual: un envio AMOE pertenece a
+ * una promocion concreta -con su ventana, su version de reglas y su tope-, asi
+ * que una cola "de todas las promociones" no seria una cola de revision sino
+ * un listado historico.
+ */
 export function fetchAdminAmoeSubmissions(
-  query: AdminPageQuery & { readonly status?: string },
+  query: AdminPageQuery & {
+    readonly promotion_id: string;
+    /**
+     * Estado por el que filtrar. Es el enum del contrato y no `string`: un
+     * valor que no sea uno de los cinco produce un 422, y eso tiene que
+     * detectarse al compilar.
+     */
+    readonly status?: AmoeSubmissionStatus;
+  },
   locale: Locale,
   session: SessionContext,
 ): Promise<ApiResult<AdminAmoeSubmissionPage>> {
@@ -1436,6 +1571,350 @@ export function closeAdminPromotion(
   session: SessionContext,
 ): Promise<ApiResult<AdminPromotionRow>> {
   return apiRequest<AdminPromotionRow>("POST", adminPromotionClosePath(promotionId), {
+    locale,
+    body: input,
+    ...sessionOptions(session),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Catalogo ampliado: variantes y categorias (§13.6, DEC-053)
+// ---------------------------------------------------------------------------
+
+/** Variantes de un producto en el panel. */
+export function fetchAdminProductVariants(
+  productId: string,
+  locale: Locale,
+  session: SessionContext,
+): Promise<ApiResult<{ readonly items: readonly AdminProductVariantRow[] }>> {
+  return apiGet<{ readonly items: readonly AdminProductVariantRow[] }>(
+    adminProductVariantsPath(productId),
+    { locale, ...sessionOptions(session) },
+  );
+}
+
+/** Alta de una variante. El SKU lo compone la API si no se manda. */
+export function createAdminProductVariant(
+  productId: string,
+  input: AdminProductVariantInput,
+  locale: Locale,
+  session: SessionContext,
+): Promise<ApiResult<AdminProductVariantRow>> {
+  return apiRequest<AdminProductVariantRow>("POST", adminProductVariantsPath(productId), {
+    locale,
+    body: input,
+    ...sessionOptions(session),
+  });
+}
+
+/**
+ * Edicion de una variante, incluido ARCHIVARLA.
+ *
+ * No hay `deleteAdminProductVariant`, y no es un olvido: un SKU vendido tiene
+ * que seguir existiendo para que los pedidos que lo contienen puedan
+ * explicarse. `status: "ARCHIVED"` es la unica forma de retirarla.
+ */
+export function updateAdminProductVariant(
+  productId: string,
+  variantId: string,
+  patch: AdminProductVariantPatch,
+  locale: Locale,
+  session: SessionContext,
+): Promise<ApiResult<AdminProductVariantRow>> {
+  return apiRequest<AdminProductVariantRow>(
+    "PATCH",
+    adminProductVariantPath(productId, variantId),
+    { locale, body: patch, ...sessionOptions(session) },
+  );
+}
+
+/** Categorias del catalogo en el panel. */
+export function fetchAdminProductCategories(
+  locale: Locale,
+  session: SessionContext,
+): Promise<ApiResult<AdminProductCategoryListResponse>> {
+  return apiGet<AdminProductCategoryListResponse>(API_PATHS.adminProductCategories, {
+    locale,
+    ...sessionOptions(session),
+  });
+}
+
+/** Alta de una categoria. 409 si la clave ya existe. */
+export function createAdminProductCategory(
+  input: AdminProductCategoryInput,
+  locale: Locale,
+  session: SessionContext,
+): Promise<ApiResult<AdminProductCategoryRow>> {
+  return apiRequest<AdminProductCategoryRow>("POST", API_PATHS.adminProductCategories, {
+    locale,
+    body: input,
+    ...sessionOptions(session),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Versiones de reglas (§13.7, DEC-054 punto 1)
+// ---------------------------------------------------------------------------
+
+/**
+ * Una version concreta, con su `config`, su validacion y sus documentos.
+ *
+ * Se pide APARTE del listado y no se busca entre las filas ya cargadas: el
+ * listado esta paginado y no publica necesariamente el `config` entero.
+ */
+export function fetchAdminRulesVersion(
+  promotionId: string,
+  rulesVersionId: string,
+  locale: Locale,
+  session: SessionContext,
+): Promise<ApiResult<AdminRulesVersion>> {
+  return apiGet<AdminRulesVersion>(adminRulesVersionPath(promotionId, rulesVersionId), {
+    locale,
+    ...sessionOptions(session),
+  });
+}
+
+/**
+ * Crea un borrador, vacio o clonando otra version.
+ *
+ * NACE `DRAFT` SIEMPRE. Activar es otra ruta, con otra capacidad, motivo y
+ * step-up: crear una version no puede ser nunca el gesto que cambia lo que
+ * significa una compra.
+ */
+export function createAdminRulesVersion(
+  promotionId: string,
+  input: AdminRulesVersionInput,
+  locale: Locale,
+  session: SessionContext,
+): Promise<ApiResult<AdminRulesVersion>> {
+  return apiRequest<AdminRulesVersion>("POST", adminRulesVersionsPath(promotionId), {
+    locale,
+    body: input,
+    ...sessionOptions(session),
+  });
+}
+
+/**
+ * Edita un borrador. Solo `DRAFT`.
+ *
+ * Sobre una version `ACTIVE` la respuesta es 409 `LIFECYCLE_REFUSED` con el
+ * mensaje del trigger de DEC-012, y la pantalla lo ensena tal cual: el cerrojo
+ * es de PostgreSQL, no de esta capa.
+ */
+export function updateAdminRulesVersion(
+  promotionId: string,
+  rulesVersionId: string,
+  patch: AdminRulesVersionPatch,
+  locale: Locale,
+  session: SessionContext,
+): Promise<ApiResult<AdminRulesVersion>> {
+  return apiRequest<AdminRulesVersion>(
+    "PATCH",
+    adminRulesVersionPath(promotionId, rulesVersionId),
+    {
+      locale,
+      body: patch,
+      ...sessionOptions(session),
+    },
+  );
+}
+
+/** Crea o reemplaza el documento de un locale. Solo `DRAFT`. */
+export function putAdminRulesDocument(
+  promotionId: string,
+  rulesVersionId: string,
+  documentLocale: string,
+  input: AdminRulesDocumentInput,
+  locale: Locale,
+  session: SessionContext,
+): Promise<ApiResult<AdminRulesVersion>> {
+  return apiRequest<AdminRulesVersion>(
+    "PUT",
+    adminRulesDocumentPath(promotionId, rulesVersionId, documentLocale),
+    { locale, body: input, ...sessionOptions(session) },
+  );
+}
+
+/**
+ * Activa una version de reglas. Motivo obligatorio y step-up.
+ *
+ * NO cambia el estado de la promocion: activar la promocion sigue siendo
+ * `POST /admin/promotions/:id/activate`. Lo que hace es archivar la version
+ * `ACTIVE` anterior y poner esta en su sitio, en una transaccion.
+ *
+ * Con claves legales sin resolver responde 409 `LIFECYCLE_REFUSED` con el
+ * mensaje del motor. La pantalla ya las lista ANTES del boton para que ese 409
+ * no sea la primera noticia.
+ */
+export function activateAdminRulesVersion(
+  promotionId: string,
+  rulesVersionId: string,
+  input: AdminReasonInput,
+  locale: Locale,
+  session: SessionContext,
+): Promise<ApiResult<AdminRulesVersion>> {
+  return apiRequest<AdminRulesVersion>(
+    "POST",
+    adminRulesActivatePath(promotionId, rulesVersionId),
+    { locale, body: input, ...sessionOptions(session) },
+  );
+}
+
+/**
+ * Atajo "periodo bonus" (§13.8).
+ *
+ * Clona la version activa, le anade el periodo y activa la nueva. La respuesta
+ * puede traer `warnings` -por ejemplo, que `entry_multipliers_enabled` esta
+ * apagado- y la pantalla los ensena: un bonus creado que no aplica es
+ * exactamente lo que hay que saber al momento.
+ */
+export function createAdminBonusPeriod(
+  promotionId: string,
+  input: AdminBonusPeriodInput,
+  locale: Locale,
+  session: SessionContext,
+): Promise<ApiResult<AdminRulesVersion & AdminBonusPeriodResponse>> {
+  return apiRequest<AdminRulesVersion & AdminBonusPeriodResponse>(
+    "POST",
+    adminBonusPeriodsPath(promotionId),
+    { locale, body: input, ...sessionOptions(session) },
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Feature flags y modalidad AMOE (§13.9, DEC-054 punto 3)
+// ---------------------------------------------------------------------------
+
+/** Flags con su materialidad legal y la modalidad AMOE vigente. */
+export function fetchAdminFeatureFlags(
+  locale: Locale,
+  session: SessionContext,
+): Promise<ApiResult<AdminFeatureFlagsResponse>> {
+  return apiGet<AdminFeatureFlagsResponse>(API_PATHS.adminFeatureFlags, {
+    locale,
+    ...sessionOptions(session),
+  });
+}
+
+/**
+ * Enciende o apaga un flag, con motivo.
+ *
+ * SI ES LEGALMENTE MATERIAL, el autorizador exige ademas
+ * `flag.update.legally_material` y step-up. Esta funcion NO lo comprueba: la
+ * pantalla lo advierte, el backend lo decide, y su 403 se pinta tal cual.
+ */
+export function updateAdminFeatureFlag(
+  key: string,
+  input: AdminFeatureFlagPatch,
+  locale: Locale,
+  session: SessionContext,
+): Promise<ApiResult<AdminFeatureFlagRow>> {
+  return apiRequest<AdminFeatureFlagRow>("PATCH", adminFeatureFlagPath(key), {
+    locale,
+    body: input,
+    ...sessionOptions(session),
+  });
+}
+
+/**
+ * Solicitudes de cambio pendientes (HO-041, resolucion fase 1).
+ *
+ * Se leen con `flag.read`, la misma capacidad que la lista de flags: quien
+ * puede ver el estado de los ajustes puede ver que cambios se han pedido.
+ * DECIDIRLOS es otra capacidad y otra ruta.
+ */
+export function fetchAdminSettingChangeRequests(
+  query: { readonly status?: string; readonly cursor?: string; readonly limit?: number },
+  locale: Locale,
+  session: SessionContext,
+): Promise<ApiResult<AdminSettingChangeRequestPage>> {
+  const search = queryString({ status: query.status, cursor: query.cursor, limit: query.limit });
+
+  return apiGet<AdminSettingChangeRequestPage>(`${API_PATHS.adminSettingChangeRequests}${search}`, {
+    locale,
+    ...sessionOptions(session),
+  });
+}
+
+/**
+ * Solicita un cambio de un ajuste legalmente material.
+ *
+ * SOLICITA, NO APLICA -salvo que el control dual este apagado, y entonces lo
+ * dice la propia respuesta con `status: "APPLIED"`-. Es el mismo criterio que
+ * `AdjustmentService`: el flag `dual_approval_for_sensitive_actions_enabled`
+ * decide si hace falta una segunda persona, y quien decide eso es el backend.
+ *
+ * La pantalla NO deduce el efecto: lee `status` de la respuesta. Suponer que
+ * siempre queda pendiente diria que no ha pasado nada cuando si ha pasado.
+ */
+export function createAdminSettingChangeRequest(
+  input: AdminSettingChangeRequestInput,
+  locale: Locale,
+  session: SessionContext,
+): Promise<ApiResult<AdminSettingChangeRequest>> {
+  return apiRequest<AdminSettingChangeRequest>("POST", API_PATHS.adminSettingChangeRequests, {
+    locale,
+    body: input,
+    ...sessionOptions(session),
+  });
+}
+
+/**
+ * Aprueba una solicitud. Motivo y step-up.
+ *
+ * QUIEN LA PIDIO NO PUEDE APROBARLA: lo garantizan el servicio y una `CHECK` de
+ * la tabla, y la respuesta es 409 `SETTING_CHANGE_SELF_APPROVAL_FORBIDDEN`. Que
+ * la interfaz no ofrezca el boton es cortesia, no el control.
+ *
+ * Al aplicar, `amoe_mode` se vuelve a validar contra la version de reglas
+ * activa: 409 `AMOE_CONFIG_INVALID` si discrepan. Se comprueba AL APLICAR y no
+ * al solicitar porque entre las dos cosas puede activarse otra version.
+ */
+export function approveAdminSettingChangeRequest(
+  requestId: string,
+  input: AdminSettingChangeDecisionInput,
+  locale: Locale,
+  session: SessionContext,
+): Promise<ApiResult<AdminSettingChangeRequest>> {
+  return apiRequest<AdminSettingChangeRequest>(
+    "POST",
+    `${adminSettingChangeRequestPath(requestId)}/approve`,
+    { locale, body: input, ...sessionOptions(session) },
+  );
+}
+
+/** Rechaza una solicitud. Mismas exigencias que aprobar. */
+export function rejectAdminSettingChangeRequest(
+  requestId: string,
+  input: AdminSettingChangeDecisionInput,
+  locale: Locale,
+  session: SessionContext,
+): Promise<ApiResult<AdminSettingChangeRequest>> {
+  return apiRequest<AdminSettingChangeRequest>(
+    "POST",
+    `${adminSettingChangeRequestPath(requestId)}/reject`,
+    { locale, body: input, ...sessionOptions(session) },
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Transcripcion de fichas postales (§13.10, DEC-054 punto 4)
+// ---------------------------------------------------------------------------
+
+/**
+ * Mete una ficha postal en la cola de revision.
+ *
+ * ENTRA POR EL MISMO CAMINO QUE UN ENVIO DEL PARTICIPANTE: misma ventana, misma
+ * huella, mismo limite y misma politica de duplicados. Lo unico que cambia es
+ * la `metadata`, que anota quien transcribio, y que quien transcribe no puede
+ * aprobar (409 `SEPARATION_OF_DUTIES`).
+ */
+export function transcribeAmoeSubmission(
+  input: AdminAmoeTranscriptionInput,
+  locale: Locale,
+  session: SessionContext,
+): Promise<ApiResult<AdminAmoeTranscriptionResponse>> {
+  return apiRequest<AdminAmoeTranscriptionResponse>("POST", API_PATHS.adminAmoeSubmissions, {
     locale,
     body: input,
     ...sessionOptions(session),

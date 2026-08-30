@@ -21,11 +21,8 @@ import {
   waitForNextTotpWindow,
   sessionCookieHeaderFrom,
 } from "../lib/actions.mjs";
-import {
-  ADMIN_DASHBOARD_ENDPOINTS_MISSING,
-  AUTHORIZER_DOES_NOT_EVALUATE_FLAGS,
-} from "../lib/blockers.mjs";
-import { API_BASE_URL, FAKE_STAFF_PASSWORD, WEB_BASE_URL, readFixture } from "../lib/fixture.mjs";
+import { ADMIN_DASHBOARD_ENDPOINTS_MISSING } from "../lib/blockers.mjs";
+import { API_BASE_URL, FAKE_STAFF_PASSWORD, readFixture } from "../lib/fixture.mjs";
 
 let fixture;
 
@@ -143,15 +140,24 @@ test("la cola de revision AMOE responde con su forma paginada", async ({ page })
   expect(Array.isArray(body.items)).toBe(true);
 
   /*
-   * LA COLA NO PUBLICA EL PAYLOAD. Lleva `participant_id` interno y las cifras
-   * de impacto, nunca lo que la persona escribio ni su correo. Es una decision
-   * de minimizacion: quien revisa no necesita la PII para decidir, y lo que no
-   * viaja no se filtra.
+   * LA COLA NO PUBLICA EL PAYLOAD, Y EL CORREO VA ENMASCARADO.
+   *
+   * Lleva `participant_id` interno y las cifras de impacto, nunca lo que la
+   * persona escribio: quien revisa decide con los numeros y con la
+   * procedencia, no leyendo la ficha.
+   *
+   * El correo si viaja desde HO-041 -sin el, dos fichas del mismo sobre son
+   * indistinguibles en pantalla- pero ENMASCARADO en la frontera, que es el
+   * patron de `apps/api/src/http/pii.ts`. La diferencia importa: enmascarado
+   * permite distinguir dos filas; completo permitiria exportar una lista de
+   * correos desde una pantalla de revision.
    */
   for (const item of body.items) {
     expect(item.participant_id).toBeTruthy();
     expect(item).not.toHaveProperty("payload");
-    expect(item).not.toHaveProperty("participant_email");
+    if (item.participant_email !== null && item.participant_email !== undefined) {
+      expect(item.participant_email, "el correo de la cola no esta enmascarado").toContain("*");
+    }
   }
 });
 
@@ -170,55 +176,23 @@ test("un participante no entra al panel aunque su cookie viaje a /admin", async 
   await expect(page.getByRole("button", { name: "Aprobar" })).toHaveCount(0);
 });
 
-test.describe("aprobacion de un envio AMOE", () => {
-  test.fixme(
-    AUTHORIZER_DOES_NOT_EVALUATE_FLAGS,
-    "amoe.review.approve depende del flag `amoe_enabled` y de un motivo; session-authorizer.ts no evalua ninguno de los dos. Ver lib/blockers.mjs.",
-  );
-
-  test("aprobar un envio otorga participaciones de origen AMOE", async ({ page, browser }) => {
-    // El envio lo hace el participante en su propio contexto.
-    // `browser.newContext()` NO hereda `use.baseURL` de la configuracion: hay
-    // que declararla, o las rutas relativas de `goto` no resuelven.
-    const participantContext = await browser.newContext({ baseURL: WEB_BASE_URL });
-    const participantPage = await participantContext.newPage();
-
-    await loginParticipant(participantPage, fixture.participant.email);
-
-    const submitted = await participantPage.request.post(
-      `${API_BASE_URL}/promotions/${fixture.promotion.id}/amoe-submissions`,
-      { data: { payload: { full_name: "Participante E2E", email: fixture.participant.email } } },
-    );
-    expect(submitted.status()).toBe(201);
-    const submissionId = (await submitted.json()).submission_id;
-
-    // La revision la hace el personal, en el suyo.
-    await waitForNextTotpWindow();
-    const staffCookie = await loginStaff(page, fixture.staff.promotionManager);
-
-    const approved = await page.request.post(
-      `${API_BASE_URL}/admin/amoe-submissions/${submissionId}/approve`,
-      {
-        headers: cookieHeader(staffCookie),
-        data: { reason_key: "AMOE_REVIEW_VERIFIED", notes: "Escenario de e2e." },
-      },
-    );
-    expect(approved.status()).toBe(200);
-    expect((await approved.json()).status).toBe("APPROVED");
-
-    // Y el saldo del participante crece POR EL ORIGEN CORRECTO: la procedencia
-    // no se pierde al unificar el universo (principio 9).
-    const summary = await participantPage.request.get(
-      `${API_BASE_URL}/account/entry-summary?promotion_id=${fixture.promotion.id}`,
-    );
-    const body = await summary.json();
-    expect(body.amoe_entries).toBe(1);
-    expect(body.purchase_entries).toBe(0);
-    expect(body.active_entries).toBe(1);
-
-    await participantContext.close();
-  });
-});
+/*
+ * LA APROBACION DE UN ENVIO AMOE SE PRUEBA AHORA EN `11-mail-in-amoe.spec.mjs`.
+ *
+ * Este fichero tenia un recorrido "el participante envia en linea, el personal
+ * aprueba, el saldo sube en 1". Ya no describe el sistema: desde el borrador v2
+ * la unica via gratuita es POSTAL (`MAIL_IN_REVIEW`, 2,000 por ficha), asi que
+ * el envio no lo hace el participante desde una pantalla, lo transcribe un
+ * operador desde el panel, y quien lo transcribe NO puede aprobarlo.
+ *
+ * Mover la prueba en vez de retocarle el numero es deliberado: lo que cambio no
+ * es la cifra, es QUIEN escribe y QUIEN aprueba, y esa es justo la parte que
+ * hay que comprobar. La coordenada nueva es
+ * `specs/11-mail-in-amoe.spec.mjs` -> "quien transcribe no aprueba".
+ *
+ * Lo que se queda aqui es lo que sigue siendo de este fichero: el segundo
+ * factor del personal y la FORMA de la cola de revision.
+ */
 
 test.describe("pantallas del panel con backend propio", () => {
   test.fixme(

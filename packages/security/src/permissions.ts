@@ -61,6 +61,10 @@ export const ROLE_CAPABILITIES: Readonly<Record<RoleId, readonly CapabilityId[]>
     "amoe.review.read",
     "amoe.review.approve",
     "amoe.review.reject",
+    // DEC-054: quien opera la promocion es quien abre los sobres. Que ademas
+    // tenga `amoe.review.approve` no rompe nada: la regla "quien transcribe no
+    // aprueba" es por ENVIO y la impone el dominio, no el catalogo de roles.
+    "amoe.submission.transcribe",
     "product.read",
     "product.write",
     "product.publish",
@@ -94,6 +98,10 @@ export const ROLE_CAPABILITIES: Readonly<Record<RoleId, readonly CapabilityId[]>
     "amoe.review.read",
     "amoe.review.approve",
     "amoe.review.reject",
+    // Tambien transcribe: en un equipo pequeno el correo puede abrirlo
+    // cualquiera de los dos roles, y la separacion que importa -no aprobar la
+    // ficha que uno mismo tecleo- la comprueba el dominio envio a envio.
+    "amoe.submission.transcribe",
     "rules.version.read",
     "rules.version.create",
     "rules.version.activate",
@@ -270,6 +278,11 @@ export const CAPABILITY_READ_COVERAGE: readonly ReadCoverageRule[] = Object.free
   { write: "participant.disqualify", read: "participant.read" },
   { write: "amoe.review.approve", read: "amoe.review.read" },
   { write: "amoe.review.reject", read: "amoe.review.read" },
+  // Quien transcribe una ficha tiene que poder VER la cola en la que acaba de
+  // meterla: sin eso no puede comprobar si el envio entro marcado
+  // (`ENVELOPE_LIMIT_EXCEEDED`) ni si el limite de 5 por participante ya se
+  // agoto, y transcribiria a ciegas la siguiente ficha del mismo sobre.
+  { write: "amoe.submission.transcribe", read: "amoe.review.read" },
   { write: "product.write", read: "product.read" },
   { write: "product.publish", read: "product.read" },
   { write: "promotion.create", read: "promotion.read" },

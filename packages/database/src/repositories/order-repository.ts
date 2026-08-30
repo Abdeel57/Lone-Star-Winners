@@ -68,6 +68,15 @@ export type ChargebackStateValue = "NONE" | "OPEN" | "WON" | "LOST";
 
 export type LocaleCodeValue = "en-US" | "es-US";
 
+/**
+ * DEC-052. Se declara aqui como union literal, no importando `ProductKind` de
+ * `@lsw/sweepstakes`, por la misma razon que el resto de los `*Value` de este
+ * archivo: los repositorios describen COLUMNAS, y una columna no debe cambiar
+ * de tipo porque el dominio reordene su enumeracion. `test/parity.test.ts`
+ * vigila que las tres declaraciones -SQL, Drizzle y dominio- no diverjan.
+ */
+export type ProductKindValue = "MERCHANDISE" | "ENTRY_PACKAGE";
+
 /** Espejo estructural de `OrderItem` de `@lsw/commerce`, mas lo que la API necesita. */
 export interface OrderItemRecord {
   readonly lineId: string;
@@ -75,6 +84,8 @@ export interface OrderItemRecord {
   readonly productVariantId: string;
   readonly sku: string;
   readonly nameSnapshot: Readonly<Partial<Record<LocaleCodeValue, string>>>;
+  /** DEC-052: el tipo CONGELADO en la compra, no el que tenga hoy el catalogo. */
+  readonly productKind: ProductKindValue;
   readonly quantity: number;
   readonly unitAmountMinor: bigint;
   readonly sweepstakesEligibleSnapshot: boolean;
@@ -119,6 +130,12 @@ export interface CreateOrderItemInput {
   readonly sku: string;
   readonly productSlug: string;
   readonly nameSnapshot: Readonly<Partial<Record<LocaleCodeValue, string>>>;
+  /**
+   * DEC-052. Sin valor por defecto: quien crea el pedido lo lee de
+   * `products.kind` en ese instante y lo congela. Suponerlo aqui haria que un
+   * paquete comprado se calculara con la tasa de la mercancia.
+   */
+  readonly productKind: ProductKindValue;
   readonly quantity: number;
   readonly unitAmountMinor: bigint;
   readonly currency: string;
@@ -225,6 +242,7 @@ function toItem(row: ItemRow): OrderItemRecord {
     sku: row.sku,
     productSlug: row.productSlug,
     nameSnapshot: nameSnapshotOf(row.nameSnapshot),
+    productKind: row.productKind,
     quantity: row.quantity,
     unitAmountMinor: row.unitAmountMinor,
     currency: row.currency,
@@ -315,6 +333,7 @@ export class DrizzleOrderRepository {
           sku: item.sku,
           productSlug: item.productSlug,
           nameSnapshot: item.nameSnapshot,
+          productKind: item.productKind,
           quantity: item.quantity,
           unitAmountMinor: item.unitAmountMinor,
           currency: item.currency,

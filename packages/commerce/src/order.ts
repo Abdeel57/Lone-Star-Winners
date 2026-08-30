@@ -40,7 +40,7 @@
  * participaciones una compra" es material de las Official Rules.
  */
 
-import type { CurrencyCode, LocaleCode, MinorAmount } from "@lsw/sweepstakes";
+import type { CurrencyCode, LocaleCode, MinorAmount, ProductKind } from "@lsw/sweepstakes";
 
 import { CommerceError } from "./errors.js";
 import type { PaymentState } from "./payment-provider.js";
@@ -164,6 +164,16 @@ export interface OrderItem {
   readonly sku: string;
   /** Nombre por locale, congelado. Los dos idiomas son de primera clase (DEC-021). */
   readonly nameSnapshot: Readonly<Partial<Record<LocaleCode, string>>>;
+  /**
+   * Tipo de producto CONGELADO (DEC-052).
+   *
+   * `@lsw/commerce` no lo usa para nada: no cambia el importe ni el estado del
+   * pedido, y ninguna transicion depende de el. Viaja en la linea porque es
+   * parte de la FOTO, igual que `sku`, y porque quien la lee despues -el motor
+   * de calculo- necesita el tipo de ENTONCES, no el que tenga hoy el catalogo.
+   * Reetiquetar un producto de mercancia a paquete cambiaria si no la tuviera.
+   */
+  readonly productKind: ProductKind;
   readonly quantity: number;
   readonly unitAmountMinor: MinorAmount;
   /**

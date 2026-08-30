@@ -113,6 +113,9 @@ export interface PromotionRepository {
 // Catalogo
 // ---------------------------------------------------------------------------
 
+/** DEC-052. Etiqueta de catalogo; la tasa por tipo vive en la version de reglas. */
+export type ProductKind = "MERCHANDISE" | "ENTRY_PACKAGE";
+
 export interface VariantRecord {
   readonly id: string;
   readonly sku: string;
@@ -121,6 +124,17 @@ export interface VariantRecord {
   readonly currency: string;
   /** `null` es "existencias no gestionadas", que no es lo mismo que cero. */
   readonly stockQuantity: number | null;
+  /** `null` = variante sin nombre, el caso normal de un producto de variante unica. */
+  readonly name: LocalizedText | null;
+  /** `null` = sin imagen propia; la interfaz cae a la del producto. */
+  readonly imageUrl: string | null;
+  readonly position: number;
+}
+
+/** Categoria comercial ya resuelta con su nombre en los dos idiomas (DEC-053). */
+export interface ProductCategoryRecord {
+  readonly key: string;
+  readonly name: LocalizedText;
   readonly position: number;
 }
 
@@ -129,19 +143,47 @@ export interface ProductRecord {
   readonly sku: string;
   readonly slug: string;
   readonly status: "DRAFT" | "ACTIVE" | "ARCHIVED";
+  readonly kind: ProductKind;
+  /** `null` = sin clasificar. No es una categoria residual llamada "otras". */
+  readonly category: ProductCategoryRecord | null;
   readonly currency: string;
   readonly name: LocalizedText;
   readonly description: LocalizedText | null;
+  readonly imageUrl: string | null;
   readonly variants: readonly VariantRecord[];
 }
 
+/**
+ * Filtros del catalogo publico (contrato 13.4).
+ *
+ * `null` significa "sin filtrar". Un valor DESCONOCIDO no llega hasta aqui: lo
+ * rechaza el handler con 422, porque `?category=inexistente` devolviendo una
+ * lista vacia seria indistinguible de "esa categoria existe y esta vacia".
+ */
+export interface CatalogFilters {
+  readonly kind: ProductKind | null;
+  readonly categoryKey: string | null;
+}
+
 export interface CatalogRepository {
-  listPublic(options: { limit: number; after: string | null }): Promise<readonly ProductRecord[]>;
+  listPublic(
+    options: { limit: number; after: string | null } & Partial<CatalogFilters>,
+  ): Promise<readonly ProductRecord[]>;
   findBySlug(slug: string): Promise<ProductRecord | null>;
   /** La variante mas el producto al que pertenece, para validar y para el SKU. */
   findVariant(
     variantId: string,
   ): Promise<{ readonly product: ProductRecord; readonly variant: VariantRecord } | null>;
+  /**
+   * Categorias con al menos un producto `ACTIVE` (contrato 13.4).
+   *
+   * Se filtra AQUI y no en el cliente: publicar una categoria vacia invita a
+   * pulsarla para no ver nada, y ademas revela que el negocio piensa vender
+   * algo que todavia no vende.
+   */
+  listCategoriesWithActiveProducts(): Promise<readonly ProductCategoryRecord[]>;
+  /** Existe la categoria, sin mirar si tiene productos. Para distinguir 422 de lista vacia. */
+  categoryExists(key: string): Promise<boolean>;
 }
 
 // ---------------------------------------------------------------------------
@@ -165,6 +207,15 @@ export interface CartLineRecord {
   readonly productSlug: string;
   readonly sku: string;
   readonly name: LocalizedText;
+  /**
+   * DEC-052: el tipo del producto padre, leido de `products.kind`.
+   *
+   * Viaja hasta aqui porque el motor de calculo lo exige por linea y porque el
+   * checkout lo congela en `order_items.product_kind`. En el CARRITO se lee del
+   * catalogo -es un borrador, todavia no hay foto-; a partir del pedido, de la
+   * foto.
+   */
+  readonly productKind: ProductKind;
   readonly quantity: number;
   readonly unitAmountMinor: bigint;
   readonly currency: string;

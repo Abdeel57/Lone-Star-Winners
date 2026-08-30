@@ -152,6 +152,36 @@ export const amoeLimitSchema = z
 
 export type AmoeLimitConfig = z.infer<typeof amoeLimitSchema>;
 
+/**
+ * Detalles de la via POSTAL (DEC-054 punto 4).
+ *
+ * ES INFORMATIVO Y NO SE APLICA SOLO. El sistema no cuenta sobres: nadie le
+ * dice cuantas cartas llegaron en un envio salvo el operador que las
+ * transcribe, y el matasellos lo lee una persona. Lo que hace este bloque es
+ * (1) publicar los plazos y el limite por sobre para que el participante los
+ * lea antes de escribir, y (2) darle al revisor un criterio contra el que
+ * comparar lo que el operador teclea: un sobre con mas fichas de las admitidas
+ * entra MARCADO, no rechazado.
+ *
+ * BLOQUE OPCIONAL, PERO SIN CLAVES OPCIONALES DENTRO. Una promocion que no sea
+ * postal no lo declara; una que lo declare a medias -"maximo dos por sobre",
+ * sin plazos- publicaria instrucciones incompletas en la unica via que no
+ * cuesta dinero.
+ *
+ * `postmark_by` y `received_by` son dos fechas distintas a proposito: el
+ * borrador v2 exige matasellos dentro del periodo Y recepcion en los siete dias
+ * siguientes. Con un solo campo habria que elegir cual se publica.
+ */
+export const amoeMailInSchema = z
+  .object({
+    max_cards_per_envelope: z.number().int().min(1),
+    postmark_by: instantSchema,
+    received_by: instantSchema,
+  })
+  .readonly();
+
+export type AmoeMailInConfig = z.infer<typeof amoeMailInSchema>;
+
 export const amoeConfigSchema = z
   .object({
     mode: z.enum(AMOE_MODES),
@@ -216,6 +246,13 @@ export const amoeConfigSchema = z
      * la unica que lo mira.
      */
     external_url: externalUrlSchema.nullish(),
+    /**
+     * Plazos y limite por sobre de la via postal. Opcional: solo la declara una
+     * promocion `MAIL_IN_REVIEW`, y el esquema NO la exige aunque la modalidad
+     * lo sea. El motivo es el de siempre: exigirla obligaria a inventar las tres
+     * cifras para poder guardar un borrador, y las tres las escribe el abogado.
+     */
+    mail_in: amoeMailInSchema.nullish(),
   })
   .superRefine((config, ctx) => {
     if (config.mode === "MAIL_IN_REVIEW" && !config.requires_review) {

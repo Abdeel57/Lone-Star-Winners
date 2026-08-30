@@ -62,8 +62,31 @@ function normalize(text: string): string {
 
 const normalizedContract = contract === null ? "" : normalize(contract);
 
+/**
+ * `:param` (manifiesto) y `{param}` (documento) son el mismo camino.
+ *
+ * EL FALSO POSITIVO QUE ESTO ARREGLA
+ *   El manifiesto siempre escribe los parametros al estilo de Fastify
+ *   (`:change_request_id`). El documento usa las DOS notaciones: las secciones
+ *   antiguas escriben `:promotion_id` y la seccion 13 escribe
+ *   `{promotion_id}`. Comparando literalmente, las diez rutas de la seccion 13
+ *   aparecian como "implementadas y no documentadas" estando documentadas, y
+ *   este gate -que existe para detectar una API que nadie acordo- habria
+ *   mandado a `backend` a arreglar algo que ya estaba bien.
+ *
+ *   Un gate que da falsos positivos se desactiva, y entonces deja de detectar
+ *   el caso real. Se comprueban las dos notaciones en vez de normalizar el
+ *   documento entero: reescribir `:algo` en todo el texto tocaria ademas las
+ *   lineas `Authorization:` y los ejemplos JSON.
+ */
+function documentedNotations(path: string): readonly string[] {
+  return [path, path.replace(/:([A-Za-z0-9_]+)/gu, "{$1}")];
+}
+
 function isDocumented(route: RouteManifestEntry): boolean {
-  return normalizedContract.includes(normalize(`${route.method} ${route.path}`));
+  return documentedNotations(route.path).some((variant) =>
+    normalizedContract.includes(normalize(`${route.method} ${variant}`)),
+  );
 }
 
 function isInfrastructure(route: RouteManifestEntry): boolean {

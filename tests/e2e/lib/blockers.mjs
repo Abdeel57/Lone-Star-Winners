@@ -110,6 +110,75 @@ export const NO_PARTICIPANT_REGISTRATION_ENDPOINT =
 // historial de bloqueos siga siendo legible desde las propias pruebas.
 export const ADMIN_DASHBOARD_ENDPOINTS_MISSING = false;
 
+/**
+ * Las 21 rutas de la seccion 13 del contrato todavia no existen en `apps/api`.
+ *
+ * EVIDENCIA (2026-08-29, HO-041): `apps/api/openapi/route-manifest.json`
+ * declara 79 rutas y NINGUNA de estas:
+ *
+ *   POST  /api/v1/admin/promotions/:promotion_id/bonus-periods        (13.8)
+ *   GET   /api/v1/admin/feature-flags                                 (13.9)
+ *   PATCH /api/v1/admin/feature-flags/:key                            (13.9)
+ *   POST  /api/v1/admin/settings/change-requests                      (13.9, control dual)
+ *   GET   /api/v1/admin/settings/change-requests                      (13.9)
+ *   POST  /api/v1/admin/settings/change-requests/:id/approve|reject   (13.9)
+ *   POST  /api/v1/admin/amoe-submissions                              (13.10)
+ *   ... y las once de reglas, categorias y variantes.
+ *
+ * Tampoco existe `entry_offer` en el catalogo publico (13.4) ni en
+ * `PromotionDetail` (13.5), asi que la cotizacion por tipo de producto no se
+ * puede comprobar ni por API; ni `AMOE_MODE_NOT_ONLINE` /
+ * `AMOE_MODE_NOT_MAIL_IN` en `apps/api/src/http/errors.ts`, que es lo que
+ * cierra la via en linea cuando el AMOE es postal (resolucion HO-041, hallazgo
+ * 2 de la fase 1 de security).
+ *
+ * Se apaga cuando `backend` publique esas rutas y regenere el manifiesto. La
+ * comprobacion equivalente, y que SI corre hoy, es
+ * `tests/security/src/permissions/section-13-routes.test.ts`: enumera cuales
+ * faltan y falla mientras falten.
+ */
+// RESUELTO en la fase 2 de HO-041: `apps/api/openapi/route-manifest.json` declara
+// las 21 rutas (100 en total) y `http/errors.ts` mas los handlers cubren los ocho
+// codigos nuevos. Se deja en `false` en vez de borrarse para que el historial de
+// bloqueos siga siendo legible desde las propias pruebas.
+export const SECTION_13_API_ROUTES_MISSING = false;
+
+/**
+ * El panel no tiene todavia las pantallas de la seccion 13 (DEC-054).
+ *
+ * EVIDENCIA (2026-08-29, HO-041): `apps/web/src/app/admin/[locale]/` contiene
+ * `adjustments`, `amoe`, `audit`, `catalog`, `draw`, `exports`, `login`, `mfa`,
+ * `orders`, `participants` y `promotions`. NO hay `rules` (versiones de
+ * reglas), no hay `flags`, no hay accion de periodo bonus y
+ * `components/admin/amoe-review.tsx` no tiene formulario de transcripcion de
+ * ficha postal.
+ *
+ * Se apaga cuando `frontend` publique las cuatro: Reglas, Bonus, Flags y
+ * Transcribir ficha.
+ */
+// RESUELTO en la fase 2 de HO-041: existen `admin/[locale]/flags/page.tsx`,
+// `admin/[locale]/promotions/[id]/rules/page.tsx` (y `[versionId]`), el formulario
+// de bonus en la ficha de la promocion y `components/admin/amoe-transcribe-form.tsx`.
+// Se deja en `false` en vez de borrarse para que el historial siga siendo legible.
+export const SECTION_13_ADMIN_SCREENS_MISSING = false;
+
+/**
+ * El escaparate todavia pinta el universo retirado y no pinta `entry_offer`.
+ *
+ * EVIDENCIA (2026-08-29, HO-041): `apps/web/src/components/promotion-hero.tsx`
+ * linea 221 lee `detail?.entry_pool`, y `apps/web/src/lib/api/contract.ts`
+ * linea 363 sigue declarando `entry_pool?: EntryPool | null`. DEC-052 punto 6
+ * lo retira, y en su lugar la ficha de un paquete tiene que mostrar "Incluye N
+ * participaciones" desde `entry_offer.base_entries`.
+ *
+ * Se apaga cuando `frontend` cambie a `entry_offer`.
+ */
+// RESUELTO en la fase 2 de HO-041: la ficha pinta `entry_offer` a traves de
+// `components/entry-package-panel.tsx` ("Incluye {entries} participaciones") y
+// `/shop` filtra por `?kind=`. Se deja en `false` en vez de borrarse para que el
+// historial siga siendo legible.
+export const SECTION_13_STOREFRONT_ENTRY_OFFER_MISSING = false;
+
 /** Todos los bloqueos, para que un solo sitio pueda enumerarlos en el informe. */
 /**
  * HO-034.1 (57ee8eb) dejo SEIS capacidades cerradas por construccion: las que
@@ -131,4 +200,7 @@ export const ALL_BLOCKERS = Object.freeze({
   WEB_EMITS_NO_SECURITY_HEADERS,
   NO_PARTICIPANT_REGISTRATION_ENDPOINT,
   ADMIN_DASHBOARD_ENDPOINTS_MISSING,
+  SECTION_13_API_ROUTES_MISSING,
+  SECTION_13_ADMIN_SCREENS_MISSING,
+  SECTION_13_STOREFRONT_ENTRY_OFFER_MISSING,
 });

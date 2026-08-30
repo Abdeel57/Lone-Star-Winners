@@ -1,61 +1,64 @@
-import { Badge, Card, CardTitle } from "@lsw/ui";
+import { Card, CardTitle } from "@lsw/ui";
 import { useTranslations } from "next-intl";
 
-import { formatInteger, formatMoney, formatZonedDateTime } from "@/i18n/formatters";
+import { formatEntryCount } from "@/i18n/formatters";
 import type { Locale } from "@/i18n/locales";
 import type { EntryOffer } from "@/lib/api";
-import { shouldShowMultiplier, type PromotionPresentation } from "@/lib/promotion-state";
+import { normalizeEntryOffer } from "@/lib/entry-offer";
+import { type PromotionPresentation } from "@/lib/promotion-state";
+
+import { BonusBadge, BonusPeriodRow, RateList } from "./entry-rate-lines";
 
 /**
- * Oferta de participaciones de la promocion.
+ * Oferta de participaciones de la promocion (§13.5, DEC-052).
  *
  * TRES COSAS QUE ESTE COMPONENTE NO HACE
  * --------------------------------------
- * 1. **No multiplica.** No calcula "5 por dolar por 2X igual a 10". Muestra el
- *    ratio y el multiplicador como dos datos distintos, porque la cifra que
- *    vale es la que produce el backend para un carrito o un pedido concreto
- *    (DEC-023, requisito R13 de `security`). Una multiplicacion hecha aqui
- *    seria una cifra de participaciones calculada en el navegador, que es
- *    exactamente lo que el sistema no puede permitirse.
- * 2. **No fija ningun ratio.** `base_entries_per_unit` y `unit_amount` llegan
- *    del contrato. Aqui no hay ni un numero (CLAUDE.md #3 y #14).
+ * 1. **No multiplica.** No calcula "2 por dolar por 5X igual a 10". Muestra las
+ *    tasas y el periodo bonus como datos distintos, porque la cifra que vale es
+ *    la que produce el backend para un carrito, un pedido o una variante
+ *    concreta (DEC-023, requisito R13 de `security`). Una multiplicacion hecha
+ *    aqui seria una cifra de participaciones calculada en el navegador.
+ * 2. **No fija ninguna tasa ni ningun tope.** Las dos tasas -1 por $1 en
+ *    mercancia, 2 por $1 en paquetes- y el tope de 10,000 por persona llegan del
+ *    contrato. Aqui no hay ni un numero (CLAUDE.md #3 y #14).
  * 3. **No promete nada.** El texto dice que las cantidades las calculan los
  *    sistemas y las rigen las Reglas Oficiales.
  *
- * EL MULTIPLICADOR TIENE TRES CERROJOS
- * ------------------------------------
- * El flag `entry_multipliers_enabled`, que el dato exista y amplifique de
- * verdad, y que la promocion admita participaciones ahora mismo. El tercero es
- * el que se olvida: anunciar "2X" sobre una promocion cerrada no es una
- * decoracion caducada, es una afirmacion falsa.
+ * QUE CAMBIA CON DEC-052
+ * ----------------------
+ * La forma anterior describia UNA tasa y UN multiplicador. El segundo borrador
+ * de las Official Rules necesita dos tasas por tipo de producto y una lista de
+ * periodos bonus anunciables, asi que este panel pasa a pintar:
  *
- * EL MULTIPLICADOR ES UNA FRACCION, NO UN NUMERO
- * ----------------------------------------------
- * DEC-010 lo hace viajar como `{ numerator, denominator }`. Aqui NO se divide
- * para convertirlo en "1.5": se imprimen los dos numeros. Un multiplicador
- * fraccionario redondeado a decimal es una cifra distinta de la que aplico el
- * motor, y en esta pantalla eso seria decir algo falso sobre la promocion.
+ *   - las TASAS declaradas, una linea por tipo con tasa;
+ *   - el TOPE POR PARTICIPANTE, y solo si `entry_caps_enabled` esta encendido.
+ *     No es un universo total y no se pinta como emitidas ni como restantes:
+ *     `entry_pool` se retiro del contrato con DEC-052 punto 6;
+ *   - el periodo bonus VIGENTE, si lo hay;
+ *   - los periodos ANUNCIADOS y aun no empezados, que es lo que las Reglas
+ *     exigen publicar por adelantado.
+ *
+ * EL BONUS TIENE TRES CERROJOS
+ * ----------------------------
+ * El flag `entry_multipliers_enabled` -que gobierna que la funcion exista-, que
+ * el backend declare un periodo vigente, y que la promocion admita
+ * participaciones ahora mismo. El tercero es el que se olvida: anunciar "5X"
+ * sobre una promocion cerrada no es una decoracion caducada, es una afirmacion
+ * falsa.
  *
  * SIN REGLAS PUBLICADAS NO SE PUBLICA LA OFERTA (DEC-044)
  * -------------------------------------------------------
- * El ratio -"5 participaciones por cada $1 de mercancia elegible"- es una
- * afirmacion sobre COMO FUNCIONA la promocion, de la misma clase que las que
- * DEC-044 retiro del hero y de la banda de anuncio. Y es la mas concreta de
- * todas: un numero que el participante puede multiplicar por su carrito. Ese
- * numero no lo fija este panel ni el catalogo, lo fija la version de reglas
- * (DEC-012); mientras no exista documento que lo gobierne, no hay nada que
- * publicar. El multiplicador cae con el, y por el mismo motivo: es el ratio
- * amplificado.
+ * Las tasas -"2 participaciones por cada $1 de paquete"- son una afirmacion
+ * sobre COMO FUNCIONA la promocion, de la misma clase que las que DEC-044
+ * retiro del hero y de la banda de anuncio. Y son las mas concretas de todas: un
+ * numero que el participante puede aplicar a su carrito. Ese numero no lo fija
+ * este panel, lo fija la version de reglas (DEC-012); mientras no exista
+ * documento que lo gobierne, no hay nada que publicar.
  *
- * El panel NO desaparece. Es la misma linea que se trazo en la banda de
- * anuncio: conserva su titulo y dice exactamente que falta. Enmudecerlo dejaria
- * un hueco sin explicacion justo donde el visitante viene a buscar la cifra.
- *
- * La senal es `rules_version_id`, leida por la pagina y pasada como prop. Es la
- * misma que consultan el hero y la banda, y llega ya resuelta por el mismo
- * motivo que `multipliersEnabled`: la decision se toma en SERVIDOR, en la misma
- * peticion que el render, y este componente no vuelve a preguntar por su
- * cuenta.
+ * El panel NO desaparece: conserva su titulo y dice exactamente que falta.
+ * Enmudecerlo dejaria un hueco sin explicacion justo donde el visitante viene a
+ * buscar la cifra.
  */
 export function EntryOfferPanel({
   offer,
@@ -64,6 +67,7 @@ export function EntryOfferPanel({
   rulesPublished,
   locale,
   timeZone,
+  nowIso,
 }: {
   readonly offer: EntryOffer | null;
   readonly presentation: PromotionPresentation;
@@ -73,18 +77,28 @@ export function EntryOfferPanel({
    * Si la promocion tiene version de Reglas Oficiales publicada (DEC-044).
    *
    * OBLIGATORIA A PROPOSITO, sin valor por defecto: un `true` implicito haria
-   * que quien anadiera un tercer sitio de uso publicara el ratio por olvido, y
+   * que quien anadiera un tercer sitio de uso publicara las tasas por olvido, y
    * el olvido caeria del lado inseguro.
    */
   readonly rulesPublished: boolean;
   readonly locale: Locale;
   readonly timeZone: string;
+  /**
+   * Instante de referencia del render, generado en SERVIDOR.
+   *
+   * Sirve solo para separar los periodos bonus vigentes de los anunciados. El
+   * reloj del navegador no decide nada aqui (DEC-011): cual es el vigente lo
+   * resuelve el motor y llega en `active_bonus`.
+   */
+  readonly nowIso: string;
 }) {
   const t = useTranslations("entryOffer");
 
+  const normalized = normalizeEntryOffer(offer, nowIso);
+
   // Sin oferta declarada no hay nada que publicar NI que retener: el panel no
   // se renderiza, con reglas o sin ellas.
-  if (offer === null) return null;
+  if (normalized === null) return null;
 
   if (!rulesPublished) {
     return (
@@ -108,17 +122,19 @@ export function EntryOfferPanel({
     );
   }
 
-  const showMultiplier = shouldShowMultiplier(multipliersEnabled, offer.multiplier, presentation);
+  /*
+   * Los tres cerrojos del bonus. `multipliersEnabled` llega como prop -leido en
+   * servidor en la misma peticion que el render- y ademas la propia oferta
+   * publica el flag: si cualquiera de los dos dice que no, no se anuncia. Que
+   * la comprobacion sea doble no es redundancia perezosa: el flag del sitio y
+   * el que aplico el motor a esta promocion pueden discrepar durante el instante
+   * en que alguien lo apaga, y en esa ventana lo correcto es callar.
+   */
+  const bonusAllowed =
+    multipliersEnabled && normalized.multipliersEnabled && presentation.acceptsEntries;
 
-  const multiplierUntil =
-    showMultiplier && offer.multiplier_ends_at !== null
-      ? formatZonedDateTime(offer.multiplier_ends_at, locale, {
-          timeZone,
-          showTimeZoneName: true,
-        })
-      : null;
-
-  const unitAmount = formatMoney(offer.unit_amount, locale);
+  const activeBonus = bonusAllowed ? normalized.activeBonus : null;
+  const upcomingBonuses = bonusAllowed ? normalized.upcomingBonuses : [];
 
   return (
     <Card as="section" elevation="flat" padding="md">
@@ -126,42 +142,47 @@ export function EntryOfferPanel({
         {t("heading")}
       </CardTitle>
 
-      <p className="mt-s3 text-body-md text-text">
-        {/* Un importe que no respeta DEC-010 se trata como oferta ausente: mas
-            vale decir que no hay oferta declarada que pintar un importe roto
-            junto a una cifra de participaciones. */}
-        {unitAmount === null
-          ? t("ratioUnavailable")
-          : t("ratio", {
-              entries: formatInteger(offer.base_entries_per_unit, locale),
-              amount: unitAmount,
-            })}
-      </p>
+      {normalized.rates.length === 0 ? (
+        <p className="mt-s3 text-body-md text-text-muted">{t("ratesUnavailable")}</p>
+      ) : (
+        <RateList rates={normalized.rates} locale={locale} className="mt-s3" />
+      )}
 
-      {showMultiplier && offer.multiplier !== null ? (
-        <div className="mt-s4 flex flex-col items-start gap-2">
-          {/* ORO (DEC-042). `accent` paso a ser el rojo de accion de compra, y
-              esto no es una accion: es una cifra de participaciones, que en
-              este sistema son siempre doradas. El tono `brand` hace lo mismo
-              que hacia el "oro intenso" anterior. */}
-          <Badge tone="brand">
-            {offer.multiplier.denominator === 1
-              ? t("multiplierBadge", {
-                  numerator: formatInteger(offer.multiplier.numerator, locale),
-                })
-              : t("multiplierFractionBadge", {
-                  numerator: formatInteger(offer.multiplier.numerator, locale),
-                  denominator: formatInteger(offer.multiplier.denominator, locale),
-                })}
-          </Badge>
+      {/* EL TOPE ES POR PERSONA. No es un universo, no lleva "emitidas" y no se
+          resta: `entry_pool` se retiro del contrato con DEC-052 punto 6. */}
+      {normalized.perParticipantMax === null ? null : (
+        <p className="mt-s4 font-display text-body-md text-brand">
+          {t("perParticipantMax", {
+            entries: formatEntryCount(normalized.perParticipantMax, locale),
+          })}
+        </p>
+      )}
 
-          {multiplierUntil === null ? null : (
-            <p className="text-body-sm text-text-muted">
-              {t("multiplierUntil", { until: multiplierUntil })}
-            </p>
-          )}
+      {normalized.perOrderMax === null ? null : (
+        <p className="mt-s2 text-body-sm text-text-muted">
+          {t("perOrderMax", { entries: formatEntryCount(normalized.perOrderMax, locale) })}
+        </p>
+      )}
+
+      {activeBonus === null ? null : (
+        <div className="mt-s4">
+          <BonusBadge period={activeBonus} locale={locale} />
         </div>
-      ) : null}
+      )}
+
+      {upcomingBonuses.length === 0 ? null : (
+        <section aria-labelledby="entry-offer-upcoming-bonus" className="mt-s5">
+          <h3 id="entry-offer-upcoming-bonus" className="text-label font-medium text-text-muted">
+            {t("bonusUpcomingHeading")}
+          </h3>
+
+          <ul className="mt-s3 flex list-none flex-col gap-s3">
+            {upcomingBonuses.map((period) => (
+              <BonusPeriodRow key={period.id} period={period} locale={locale} timeZone={timeZone} />
+            ))}
+          </ul>
+        </section>
+      )}
 
       <p className="mt-s4 text-caption text-text-subtle">{t("governedNote")}</p>
     </Card>

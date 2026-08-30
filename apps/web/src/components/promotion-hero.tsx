@@ -2,12 +2,16 @@ import { Alert, Badge, buttonVariants, cn } from "@lsw/ui";
 import Image from "next/image";
 import { useTranslations } from "next-intl";
 
-import { formatInteger, formatZonedDateTime } from "@/i18n/formatters";
+import { formatEntryCount, formatZonedDateTime } from "@/i18n/formatters";
 import type { Locale } from "@/i18n/locales";
 import { Link } from "@/i18n/navigation";
 import { pickLocalized, type PromotionDetail, type PromotionSummary } from "@/lib/api";
+import { normalizeEntryOffer } from "@/lib/entry-offer";
+import { safeImageUrl } from "@/lib/media-url";
 import { presentPromotion } from "@/lib/promotion-state";
 
+import { BonusAnnouncement } from "./bonus-announcement";
+import { RateList } from "./entry-rate-lines";
 import { PromotionCountdown } from "./promotion-countdown";
 import { PromotionStateNotice } from "./promotion-state-notice";
 import { PromotionStatusBadge } from "./promotion-status-badge";
@@ -21,7 +25,7 @@ import { PromotionStatusBadge } from "./promotion-status-badge";
  * Que hace y que NO hace:
  *
  * - No calcula nada. Ni participaciones, ni multiplicadores, ni cuantas quedan
- *   del universo. La cuenta atras cuenta, pero NO decide: el estado de la
+ *   por debajo del tope. La cuenta atras cuenta, pero NO decide: el estado de la
  *   promocion lo manda el backend y este componente lo lee de la maquina de
  *   estados (CLAUDE.md #15).
  * - No afirma nada legal. No dice quien puede participar, ni desde donde, ni
@@ -56,7 +60,8 @@ import { PromotionStatusBadge } from "./promotion-status-badge";
  *
  * Asi que sin reglas publicadas el hero pasa a un ESTADO CONTENIDO: el premio y
  * el titulo siguen viendose -son dato del backend y no afirman condiciones- y
- * desaparecen el verbo, el universo de participaciones, los chips, la cuenta
+ * desaparecen el verbo, las tasas, el tope por persona, el anuncio de bonus,
+ * los chips, la cuenta
  * atras y el boton de compra. En su sitio queda el aviso de que las Reglas
  * Oficiales todavia no estan publicadas y, como unica accion, un enlace neutro
  * a la tienda: mercancia sin promesa.
@@ -102,13 +107,15 @@ export function PromotionHero({
   locale,
   nowIso,
   amoeEnabled,
+  multipliersEnabled,
 }: {
   readonly promotion: PromotionSummary;
   /**
    * Detalle de la MISMA promocion, si la pagina consiguio pedirlo.
    *
-   * De aqui salen la fotografia del premio, su nombre y el universo de
-   * participaciones: tres cosas que `PromotionSummary` no publica. Es
+   * De aqui salen la fotografia del premio, su nombre y la oferta de
+   * participaciones -tasas, tope por persona y periodos bonus-: tres cosas que
+   * `PromotionSummary` no publica. Es
    * OPCIONAL y nulable a proposito, porque el detalle es una segunda peticion y
    * puede fallar sola: sin el, el hero se compone igual con lo que trae el
    * resumen. Un hero que dependiera del detalle convertiria un fallo de
@@ -133,6 +140,19 @@ export function PromotionHero({
    * manda el documento.
    */
   readonly amoeEnabled: boolean;
+  /**
+   * Valor de `entry_multipliers_enabled`, leido en SERVIDOR (DEC-013).
+   *
+   * OBLIGATORIO, sin valor por defecto, por el mismo motivo que `amoeEnabled`:
+   * anunciar un "5X" que el motor no aplica es una afirmacion falsa sobre lo
+   * que vale una compra, y un `true` implicito la publicaria por olvido.
+   *
+   * La oferta ademas trae su propio `multipliers_enabled`; se exigen los DOS.
+   * No es redundancia perezosa: el flag del sitio y el que aplico el motor a
+   * esta promocion pueden discrepar durante el instante en que alguien lo
+   * apaga, y en esa ventana lo correcto es callar.
+   */
+  readonly multipliersEnabled: boolean;
 }) {
   const t = useTranslations("home");
   const presentation = presentPromotion(promotion.status);
@@ -185,7 +205,23 @@ export function PromotionHero({
   const countdownTarget = showsPromotionalHero ? presentation.countdownTarget : null;
 
   const media = detail?.media ?? null;
-  const heroImage = media?.hero_url ?? null;
+
+  /*
+   * LA FOTOGRAFIA DEL PREMIO SE FILTRA ANTES DE PINTARLA
+   * (HO-041, hallazgo S-11).
+   *
+   * `media.hero_url` es un campo del contrato que escribe quien administra la
+   * promocion, y esta es la imagen mas grande y mas visible del sitio: un
+   * `http:` aqui convierte la portada en contenido mixto y manda el `Referer`
+   * de todos los visitantes a un tercero, y un `data:` incrusta un documento
+   * ajeno a sangre en el hero. La API tambien lo valida al escribir; la
+   * duplicidad es deliberada y esta razonada en `@/lib/media-url`.
+   *
+   * Filtrada, la URL vale `null` y el hero cae en la MARCA DE AGUA, que es la
+   * rama que ya existia para una promocion sin fotografia. Es decir: una URL
+   * que no se puede pintar no deja un hueco roto, deja el estado sin imagen.
+   */
+  const heroImage = safeImageUrl(media?.hero_url);
   /*
    * `alt` NULO SIGNIFICA DECORATIVA, y decorativa significa `alt=""`.
    *
@@ -207,19 +243,41 @@ export function PromotionHero({
   const title = pickLocalized(promotion.title, locale);
 
   /*
-   * SOLO EL TOPE. `entry_pool.issued` NO SE PINTA (DEC-044).
+   * EL TOPE ES POR PERSONA, Y NO HAY UNIVERSO (DEC-052 punto 6).
    *
-   * DEC-042 ya prohibia derivar "quedan X", y este hero no lo derivaba. La
-   * auditoria de copy encontro la version debil del mismo problema: pintar
-   * `cap` e `issued` juntos publica el contador de restantes POR IMPLICACION.
-   * Quien lee "universo de 10,000" y debajo "emitidas: 1,240" ya tiene la resta
-   * hecha, y da igual que la haya hecho el lector en vez del cliente.
+   * Aqui vivia `entry_pool.cap`, que la portada pintaba como "universo limitado
+   * a 10,000 participaciones". El segundo borrador de las Official Rules aclaro
+   * que ese 10,000 nunca fue un universo total: es el tope POR PARTICIPANTE,
+   * "por cualquier metodo o combinacion de metodos". Son dos afirmaciones
+   * completamente distintas -una habla de cuantas hay en total y la otra de
+   * cuantas puede tener una persona- y la primera, ademas, invitaba a la resta
+   * que DEC-044 vino a impedir.
    *
-   * El campo sigue en el contrato -es dato del backend y hara falta en el panel
-   * de administracion- y esta pantalla simplemente no lo lee.
+   * Lo que se publica ahora es el tope por persona, y solo si los topes estan
+   * ENCENDIDOS: `normalizeEntryOffer` lo devuelve `null` con `caps_enabled` en
+   * falso, porque un tope declarado que el motor no aplica no se puede anunciar.
+   * Sigue sin haber emitidas ni restantes en ninguna superficie publica.
    */
-  const entryPool = detail?.entry_pool ?? null;
-  const entryPoolCap = entryPool === null ? null : formatInteger(entryPool.cap, locale);
+  const offer = normalizeEntryOffer(detail?.entry_offer, nowIso);
+  const maxPerPerson = offer?.perParticipantMax ?? null;
+  const perParticipantMax = maxPerPerson === null ? null : formatEntryCount(maxPerPerson, locale);
+
+  /*
+   * El bonus tiene los mismos tres cerrojos que en `EntryOfferPanel`: el flag
+   * del sitio, el que declara la propia oferta, y que la promocion admita
+   * participaciones. Y uno mas aqui: las Reglas publicadas. Anunciar "5X" en el
+   * hero de una promocion sin documento que la gobierne seria la invitacion mas
+   * concreta de toda la pagina.
+   */
+  const bonusAllowed =
+    showsPromotionalHero &&
+    multipliersEnabled &&
+    offer !== null &&
+    offer.multipliersEnabled &&
+    presentation.acceptsEntries;
+
+  const activeBonus = bonusAllowed ? (offer?.activeBonus ?? null) : null;
+  const upcomingBonuses = bonusAllowed ? (offer?.upcomingBonuses ?? []) : [];
 
   return (
     <>
@@ -270,9 +328,10 @@ export function PromotionHero({
              * `sizes` un telefono se descarga una variante estrecha en vez de la
              * fotografia entera. Es la mitad del coste de esta pantalla.
              *
-             * El respaldo -la ilustracion de estudio- viaja como `data:` URI, y
-             * eso Next lo detecta y lo sirve sin optimizar. Por eso aqui hay un
-             * solo componente y no una rama por tipo de origen.
+             * Y desde S-11 el origen ya no puede ser otra cosa: `safeImageUrl`
+             * admite `https:` y rutas del propio sitio, y nada mas. El respaldo
+             * de desarrollo, que hasta ahora viajaba como `data:` URI, es hoy
+             * un fichero de `public/prizes/` por ese mismo motivo.
              *
              * `priority`: es la imagen mas grande de la primera pantalla y es lo
              * que decide cuando la portada parece cargada.
@@ -437,22 +496,35 @@ export function PromotionHero({
               )}
             </h1>
 
-            {/* Linea en itálica bajo el titular: el universo de participaciones
-                que declara la promocion. Es DATO -`entry_pool.cap`, ver
-                DEC-042- y va en ORO, que es el color con el que este sistema
-                escribe las cifras de participaciones. No dice cuantas quedan,
-                porque el frontend no resta. Y no dice cuantas se han emitido,
-                porque desde DEC-044 esa cifra no se pinta en ningun sitio.
+            {/* Linea en itálica bajo el titular: el tope POR PERSONA que
+                declara la promocion. Es DATO -`entry_offer.per_participant_max`,
+                ver DEC-052- y va en ORO, que es el color con el que este sistema
+                escribe las cifras de participaciones. No dice cuantas quedan
+                -el frontend no resta- ni cuantas se han emitido, porque desde
+                DEC-052 no existe ninguna cifra de emitidas en el contrato.
 
-                Cae ademas con el estado contenido: "universo limitado a 10,000
-                participaciones" es una afirmacion sobre COMO funciona la
-                promocion, y de eso no se dice nada mientras no exista el
-                documento que lo gobierna. El dato no desaparece del contrato;
-                desaparece de la pantalla. */}
-            {!showsPromotionalHero || entryPoolCap === null ? null : (
+                Cae con el estado contenido: "maximo 10,000 por persona" es una
+                afirmacion sobre COMO funciona la promocion, y de eso no se dice
+                nada mientras no exista el documento que lo gobierna. */}
+            {!showsPromotionalHero || perParticipantMax === null ? null : (
               <p className="mt-s4 font-display text-body-lg italic text-brand">
-                {t("hero.poolNote", { entries: entryPoolCap })}
+                {t("hero.capNote", { entries: perParticipantMax })}
               </p>
+            )}
+
+            {/* Las TASAS, en el hero y no solo en el panel de oferta. Es lo
+                primero que alguien quiere saber al llegar -que da cada dolar-
+                y, con dos tipos de producto, decirlo solo en el panel de mas
+                abajo dejaba la portada sin la mitad de la respuesta.
+
+                Cae igual con el estado contenido, y por el mismo motivo que el
+                tope: son las cifras mas concretas que la promocion declara. */}
+            {!showsPromotionalHero || offer === null || offer.rates.length === 0 ? null : (
+              <RateList
+                rates={offer.rates}
+                locale={locale}
+                className="mt-s4 max-w-narrow text-text-muted"
+              />
             )}
 
             <p className="mt-s5 max-w-narrow text-body-lg text-text-muted">
@@ -578,6 +650,29 @@ export function PromotionHero({
                 </>
               ) : null}
             </p>
+
+            {/*
+             * ANUNCIO DE BONUS, dentro del hero y debajo de la linea legal.
+             *
+             * Va aqui y no en la banda de anuncio de arriba por dos razones. La
+             * primera es de sitio: la banda es UNA linea en caja alta a todo lo
+             * ancho del sitio, y un periodo bonus necesita decir el
+             * multiplicador, sobre que aplica y hasta cuando, que son tres
+             * datos. La segunda es de alcance: la banda se ve en todas las
+             * paginas, y el bonus pertenece a la promocion.
+             *
+             * Y va DESPUES de la linea legal a proposito: lo ultimo que se lee
+             * antes del anuncio es que manda el documento.
+             */}
+            <div className="mt-s6 max-w-narrow">
+              <BonusAnnouncement
+                activeBonus={activeBonus}
+                upcomingBonuses={upcomingBonuses}
+                locale={locale}
+                timeZone={promotion.legal_timezone}
+                nowIso={nowIso}
+              />
+            </div>
           </div>
         </div>
       </section>

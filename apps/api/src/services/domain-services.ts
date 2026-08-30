@@ -92,6 +92,7 @@ function toCommerceItem(item: OrderRecord["items"][number]): OrderItem {
     productVariantId: item.productVariantId,
     sku: item.sku,
     nameSnapshot: item.nameSnapshot,
+    productKind: item.productKind,
     quantity: item.quantity,
     unitAmountMinor: minorAmountSchema.parse(item.unitAmountMinor),
     sweepstakesEligibleSnapshot: item.sweepstakesEligibleSnapshot,
@@ -128,6 +129,17 @@ export function toCommerceOrder(record: OrderRecord): Order {
 
 export interface DomainServices {
   readonly repositories: SweepstakesRepositories;
+  /**
+   * El sumidero de auditoria, expuesto para las rutas de ADMINISTRACION que no
+   * pasan por ningun servicio de dominio: flags, versiones de reglas y
+   * solicitudes de cambio de ajustes (DEC-054).
+   *
+   * Esas escrituras son legalmente materiales y tienen que dejar traza igual
+   * que un ajuste del ledger. Construir un segundo sumidero en la ruta seria
+   * una segunda cadena de auditoria sobre la misma tabla, y el cerrojo
+   * consultivo que serializa el encadenado dejaria de valer.
+   */
+  readonly audit: AuditSink;
   readonly participants: ParticipantLookup;
   readonly clock: Clock;
   readonly ids: IdGenerator;
@@ -187,6 +199,7 @@ export function createDomainServices(db: Database, options: DomainServicesOption
 
   return {
     repositories,
+    audit,
     participants: createParticipantLookup(db),
     tpaAudit: options.tpaAudit,
     auditEvents: options.auditEvents,

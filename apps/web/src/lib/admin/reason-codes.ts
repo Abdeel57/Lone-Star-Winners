@@ -94,3 +94,44 @@ export const PROMOTION_CLOSE_REASONS = [
   "EARLY_TERMINATION",
   "OTHER",
 ] as const;
+
+/**
+ * Motivos para ACTIVAR una version de reglas (§13.7, DEC-054).
+ *
+ * Activar una version es el gesto que cambia LO QUE VALE UNA COMPRA, y por eso
+ * exige motivo y step-up igual que activar la promocion. Las claves son
+ * OPERATIVAS -describen por que se publica esta version, no que dice- porque lo
+ * que dice ya esta en el propio documento, con su referencia de aprobacion.
+ */
+export const RULES_ACTIVATE_REASONS = [
+  "ATTORNEY_APPROVED_VERSION",
+  "CORRECTION_OF_PUBLISHED_VERSION",
+  "OTHER",
+] as const;
+
+/**
+ * Motivos para crear un periodo bonus (§13.8).
+ *
+ * El atajo bonus ES una version de reglas nueva, asi que lleva su propio
+ * motivo. Se separan de los de activacion porque responden a otra pregunta:
+ * alli, por que se publica una version; aqui, por que se abre una bonificacion.
+ */
+export const BONUS_PERIOD_REASONS = [
+  "PROMOTIONAL_CAMPAIGN",
+  "COMPLIANCE_DIRECTIVE",
+  "OTHER",
+] as const;
+
+/**
+ * Motivos para cambiar un feature flag o la modalidad AMOE (§13.9).
+ *
+ * Los flags legalmente materiales cambian lo que la plataforma afirma o aplica
+ * -si hay via gratuita, si los topes se imponen, si los multiplicadores
+ * cuentan-, y su traza tiene que poder explicarse sola seis meses despues.
+ */
+export const FLAG_UPDATE_REASONS = [
+  "COMPLIANCE_DIRECTIVE",
+  "OPERATIONAL_ROLLOUT",
+  "INCIDENT_MITIGATION",
+  "OTHER",
+] as const;

@@ -34,6 +34,19 @@ const TRANSLATED_FIELD_KEYS = [
   "dateOfBirth",
   "code",
   "note",
+  /*
+   * Campos de la FICHA POSTAL (§13.2, segundo borrador de las Official Rules).
+   *
+   * La direccion llega como UN campo -`mailing_address`, un area de texto- y no
+   * como las cinco lineas de arriba: la ficha es manuscrita y quien transcribe
+   * copia lo que ve, no lo reparte en campos que el abogado no pidio.
+   *
+   * `signaturePresent` no es la firma: es la comprobacion de que la ficha la
+   * lleva, que es lo que exige el documento. La firma en si no se digitaliza.
+   */
+  "mailingAddress",
+  "signaturePresent",
+  "postmarkDate",
 ] as const;
 
 type TranslatedFieldKey = (typeof TRANSLATED_FIELD_KEYS)[number];
@@ -70,6 +83,12 @@ export function useAmoeFieldLabel(): (labelKey: string) => string {
           return t("code");
         case "note":
           return t("note");
+        case "mailingAddress":
+          return t("mailingAddress");
+        case "signaturePresent":
+          return t("signaturePresent");
+        case "postmarkDate":
+          return t("postmarkDate");
       }
     }
 

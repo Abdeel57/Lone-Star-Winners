@@ -126,6 +126,11 @@ ningún otro entorno, y ninguna prueba afirma una cifra que dependa de una regla
 legal (por eso `04-cart-checkout` comprueba que la cotización viene **anclada** a
 la versión de reglas, y no cuántas participaciones da).
 
+Los textos que se sirven **en los dos idiomas** llevan el relleno etiquetado —
+`E2E FIXTURE (EN) - …` y `E2E FIXTURE (ES) - …`, vía `fillerFor()`— porque
+`06-amoe` comprueba que la página inglesa **no** trae el texto castellano. Con
+el mismo comienzo en ambos, esa comprobación se cumpliría sola.
+
 ---
 
 ## Pasos bloqueados

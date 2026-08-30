@@ -82,6 +82,10 @@ describe("createProductAction", () => {
           name_en: "Lone Star Cap",
           price: "25.50",
           stock: "100",
+          // `kind` es OBLIGATORIO desde §13.6: decide que tasa aplica la
+          // version de reglas a cada compra del producto, asi que el alta no
+          // puede componerse sin el (DEC-052).
+          kind: "MERCHANDISE",
         }),
       ),
     ).rejects.toThrow(`REDIRECT:/admin/es/catalog/${adminProducts[0]?.id ?? ""}`);
@@ -107,6 +111,7 @@ describe("createProductAction", () => {
         name_es: "Uno",
         name_en: "One",
         price: "1",
+        kind: "MERCHANDISE",
       }),
     ).catch(() => undefined);
 
@@ -125,6 +130,7 @@ describe("createProductAction", () => {
         name_es: "Uno",
         name_en: "One",
         price: "25.999",
+        kind: "MERCHANDISE",
       }),
     );
 

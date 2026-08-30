@@ -564,6 +564,14 @@ function prizeSvg({
  * escritorios de 16:9 y 16:10. Es tambien el encuadre que el README de
  * `public/prizes/` pide a quien traiga la fotografia real: sujeto centrado y
  * aire por los cuatro lados.
+ *
+ * YA NO ES EL RESPALDO DEL HERO (HO-041, hallazgo S-11). El hero filtra su
+ * imagen con `safeImageUrl` y esa funcion rechaza `data:`, que es lo que esta
+ * constante es. El respaldo pasa a ser una ruta de `public/prizes/`; ver
+ * `GMC_PRIZE_HERO_FALLBACK`. Se conserva porque sigue siendo el ejemplo REAL de
+ * `data:` URI con el que `image-sinks.test.tsx` comprueba que el hero lo
+ * descarta: un literal inventado en el test probaria el validador, no el
+ * sumidero.
  */
 export const prizeTruckWideImage = prizeSvg({
   width: 1300,

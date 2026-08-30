@@ -4,6 +4,7 @@ import { useTranslations } from "next-intl";
 import { formatInteger, formatMoney } from "@/i18n/formatters";
 import type { Locale } from "@/i18n/locales";
 import { pickLocalized, type OrderLine } from "@/lib/api";
+import { safeImageUrl } from "@/lib/media-url";
 
 /**
  * Lineas de un pedido.
@@ -36,12 +37,28 @@ export function OrderLineList({
         const unitPrice = formatMoney(line.unit_price, locale);
         const lineTotal = formatMoney(line.line_total, locale);
 
+        /*
+         * LA IMAGEN SE FILTRA ANTES DE PINTARLA (HO-041, hallazgo S-11).
+         *
+         * `image_url` lo escribio quien edita el catalogo en el panel, y aqui
+         * llega ademas CONGELADA en el pedido: es la URL que tenia el producto
+         * el dia de la compra, asi que puede sobrevivir a la correccion que se
+         * hiciera despues en el catalogo. Motivo de mas para comprobarla en el
+         * lado que construye el atributo, que es lo que ya hacen
+         * `product-card` y `add-to-cart-form` con la misma funcion.
+         *
+         * Sin este filtro, un `http:` publicado desde el catalogo convierte la
+         * pagina en contenido mixto y filtra el `Referer` a un tercero, y un
+         * `data:` incrusta contenido ajeno dentro del historial de pedidos.
+         */
+        const imageUrl = safeImageUrl(line.image_url);
+
         return (
           <li
             key={line.line_id}
             className="flex gap-s4 border-b border-border pb-s4 last:border-b-0 last:pb-0"
           >
-            {line.image_url === null ? null : (
+            {imageUrl === null ? null : (
               <div className="w-20 shrink-0 sm:w-24">
                 <MediaFrame ratio="square">
                   {/*
@@ -50,9 +67,14 @@ export function OrderLineList({
                    * el optimizador ya no reconoce como permitida. Un pedido de
                    * hace un ano no puede dejar de renderizarse porque el
                    * catalogo haya cambiado.
+                   *
+                   * `imageUrl` ya paso por `safeImageUrl`: solo `https:` o ruta
+                   * raiz del propio sitio. El fichero puede no existir -no hay
+                   * almacen de medios todavia- y ese 404 lo absorbe el marco,
+                   * que reserva el hueco igual.
                    */}
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={line.image_url} alt="" className="h-full w-full object-cover" />
+                  <img src={imageUrl} alt="" className="h-full w-full object-cover" />
                 </MediaFrame>
               </div>
             )}

@@ -52,6 +52,7 @@ export async function AmoeSubmissionRow({
   readonly locale: Locale;
   readonly selected: boolean;
 }) {
+  const t = await getTranslations({ locale, namespace: "admin.amoeReview" });
   const statusLabel = await amoeStatusLabeller(locale);
 
   return (
@@ -72,6 +73,71 @@ export async function AmoeSubmissionRow({
           {statusLabel(submission.status)}
         </Badge>
       </div>
+
+      {/*
+       * FICHA TRANSCRITA: quien la teclee no podra aprobarla.
+       *
+       * Se dice en la FILA y no solo en el panel de decision porque quien
+       * reparte la cola tiene que poder ver de un vistazo cuales no puede
+       * cerrar. El aviso es general -no dice quien fue- porque la cola publica
+       * el identificador del transcriptor y no el del que mira: el CONTROL es
+       * el 409 `SEPARATION_OF_DUTIES` del backend, y esto solo lo anticipa.
+       */}
+      {submission.transcribed_by_me ? (
+        <p className="mt-s3 text-body-sm text-warning-text">{t("transcribedByYou")}</p>
+      ) : submission.transcribed_by_admin_user_id === undefined ||
+        submission.transcribed_by_admin_user_id === null ? null : (
+        <p className="mt-s3 text-body-sm text-text-muted">{t("transcribedNotice")}</p>
+      )}
+
+      {/*
+       * EL RECORTE POR TOPE, EN LA PROYECCION (§13.3).
+       *
+       * `entries_if_approved` dice cuanto vale la ficha y
+       * `entries_if_approved_after_cap` cuanto entraria de verdad. Las dos se
+       * pintan; restarlas seria la aritmetica que R13 prohibe, y ademas con
+       * espacio CERO la aprobacion falla con `AMOE_ENTRY_CAP_REACHED` en vez de
+       * otorgar nada.
+       */}
+      {submission.cap_applies !== true ? null : (
+        <p className="mt-s2 text-body-sm text-text">
+          {submission.entries_if_approved_after_cap === undefined ||
+          submission.entries_if_approved_after_cap === null
+            ? t("capUnknown")
+            : submission.entries_if_approved_after_cap === 0
+              ? t("capNoRoom")
+              : t("capProjection", {
+                  granted: formatEntryCount(submission.entries_if_approved_after_cap, locale),
+                })}
+        </p>
+      )}
+
+      {/*
+       * SOBRE CON MAS FICHAS DE LAS ADMITIDAS (§13.10).
+       *
+       * El envio entra MARCADO y va a revision; no se rechaza solo. Que pasa
+       * con la tercera ficha de un sobre de dos es una pregunta abierta para el
+       * abogado (docs/LEGAL_PENDING.md), y el sistema no la responde por su
+       * cuenta: la decide quien revisa, y por eso la marca se ve aqui.
+       */}
+      {submission.flagged_envelope === true ? (
+        <p className="mt-s2 text-body-sm text-warning-text">{t("envelopeFlagged")}</p>
+      ) : null}
+
+      {/*
+       * YA APROBADO: lo que ENTRO, y por que no fue mas
+       * (HO-041, resolucion fase 1, punto 4). Sin esto, una ficha de 2,000 que
+       * otorgo 550 no tiene explicacion en ninguna pantalla.
+       */}
+      {submission.applied_cap === undefined || submission.applied_cap === null ? null : (
+        <p className="mt-s2 text-body-sm text-text">
+          {t("appliedCap", {
+            granted: formatEntryCount(submission.applied_cap.granted, locale),
+            requested: formatEntryCount(submission.applied_cap.requested, locale),
+            limit: formatEntryCount(submission.applied_cap.limit, locale),
+          })}
+        </p>
+      )}
     </Card>
   );
 }
@@ -102,7 +168,45 @@ export async function AmoeDecisionPanel({
   const reasonLabel = await reasonLabeller(locale);
   const statusLabel = await amoeStatusLabeller(locale);
 
+  /*
+   * LA PROPIA TRANSCRIPCION NO SE DECIDE, NI EN UN SENTIDO NI EN EL OTRO
+   * (§13.10).
+   *
+   * Quien teclea una ficha postal no puede aprobarla NI RECHAZARLA: el backend
+   * bloquea las dos rutas con 409 `SEPARATION_OF_DUTIES`. Esta pantalla llego a
+   * ofrecer el rechazo, con el argumento de que la separacion de funciones
+   * protege la concesion de participaciones y no la negativa. Es falso, y lo
+   * senalo la revision de seguridad: **rechazar una ficha valida tambien es un
+   * dano** -le niega participaciones a alguien que participo bien- y quien la
+   * transcribio es exactamente la persona que podria tapar su propio error al
+   * teclearla. La separacion cubre la DECISION entera.
+   *
+   * Retirar el formulario es cortesia -evita que alguien elija motivo, marque
+   * la casilla y descubra al final que no podia-, NO el control.
+   */
+  const ownTranscription = submission.transcribed_by_me;
+
   const allowed = decision === "approve" ? canApprove : canReject;
+
+  if (ownTranscription) {
+    return (
+      <Card elevation="raised" padding="lg">
+        <EmptyState
+          headingLevel="h2"
+          title={t("ownTranscriptionTitle")}
+          description={t("ownTranscriptionBody")}
+          action={
+            <Link
+              href={adminHref(locale, "/amoe")}
+              className={buttonVariants({ variant: "ghost", size: "sm" })}
+            >
+              {t("cancel")}
+            </Link>
+          }
+        />
+      </Card>
+    );
+  }
 
   if (!allowed) {
     return (
@@ -160,7 +264,7 @@ export async function AmoeDecisionPanel({
         <SensitiveConfirmForm
           locale={locale}
           action={decision === "approve" ? approveAmoeAction : rejectAmoeAction}
-          hiddenFields={{ submission_id: submission.id }}
+          hiddenFields={{ submission_id: submission.submission_id }}
           impact={impact}
           reasons={reasons}
           submitLabel={decision === "approve" ? t("approveSubmit") : t("rejectSubmit")}
@@ -246,6 +350,35 @@ export async function AmoeDecisionPanel({
       delta: formatSignedEntries(granted, (value) => formatEntryCount(value, locale)),
       after: balanceAfter === null ? null : formatEntryCount(balanceAfter, locale),
     });
+
+    /*
+     * FILA APARTE PARA EL RECORTE (§13.3), y no un asterisco en la de arriba.
+     *
+     * Con el tope encendido, lo que entra en el ledger no es lo que vale la
+     * ficha. Quien aprueba tiene que ver LAS DOS cifras antes de causarlas, y
+     * ninguna de las dos la puede producir esta pantalla: el "espacio restante"
+     * sale del predicado de saldo del motor (DEC-034), no de una resta.
+     *
+     * Con espacio CERO la aprobacion no otorga nada: falla con
+     * `AMOE_ENTRY_CAP_REACHED` y el envio se queda en revision. Se dice antes,
+     * porque enviar a alguien a firmar una accion que ya se sabe que va a
+     * fallar es lo que esta tabla existe para evitar.
+     */
+    if (submission.cap_applies === true) {
+      const afterCap = submission.entries_if_approved_after_cap ?? null;
+
+      rows.push({
+        label: t("impactCap"),
+        before: t("capLimitRow"),
+        delta:
+          afterCap === null
+            ? t("capUnknown")
+            : afterCap === 0
+              ? t("capNoRoom")
+              : formatSignedEntries(afterCap, (value) => formatEntryCount(value, locale)),
+        after: null,
+      });
+    }
 
     return rows;
   }

@@ -122,3 +122,26 @@ export const GMC_PRIZE_SQUARE_CANDIDATES: readonly string[] = [
   "gmc-2025-square.jpg",
   ...GMC_PRIZE_PHOTO_CANDIDATES,
 ];
+
+/**
+ * ULTIMO RESPALDO DEL HERO: una RUTA, nunca un `data:` URI
+ * (HO-041, hallazgo S-11).
+ *
+ * Aqui el fixture caia en la ilustracion de estudio de `media.ts`, que viaja
+ * embebida como `data:image/svg+xml`. Desde S-11 el hero pasa su imagen por
+ * `safeImageUrl`, que RECHAZA `data:` -y debe seguir rechazandolo: es el
+ * esquema con el que se incrusta un documento de terceros dentro de la pagina-,
+ * asi que aquella ilustracion ya no podia pintarse: el hero se quedaba con la
+ * marca de agua sin que nada fallara.
+ *
+ * Lo que ocupa su sitio es la ruta del recorte que `scripts/build-prize-assets.mjs`
+ * versiona en `public/prizes/`. No es lo mismo que el primer candidato de
+ * `GMC_PRIZE_HERO_CANDIDATES` aunque el nombre coincida: `resolvePrizePhoto`
+ * comprueba el disco relativo a `process.cwd()`, y hay entornos -un empaquetado
+ * `standalone`, por ejemplo- donde el fichero se SIRVE en esa ruta aunque desde
+ * ese directorio de trabajo no se vea. En ese caso lo correcto es enlazarlo
+ * igual; y si de verdad no existe, el 404 deja el hueco de la imagen vacio, que
+ * es lo mismo que hace cualquier otra imagen del catalogo que aun no se ha
+ * subido.
+ */
+export const GMC_PRIZE_HERO_FALLBACK = "/prizes/gmc-2025-hero.jpg";

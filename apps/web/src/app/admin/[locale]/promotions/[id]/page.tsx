@@ -6,6 +6,7 @@ import { getTranslations, setRequestLocale } from "next-intl/server";
 import { AdminChrome } from "@/components/admin/admin-chrome";
 import { openAdminScreen } from "@/components/admin/admin-screen";
 import { AdminSectionError } from "@/components/admin/admin-section-error";
+import { BonusPeriodForm } from "@/components/admin/bonus-period-form";
 import { PromotionForm } from "@/components/admin/promotion-form";
 import {
   PromotionTransitionForm,
@@ -20,12 +21,17 @@ import { type ActionResult } from "@/lib/action-result";
 import {
   activatePromotionAction,
   closePromotionAction,
+  createBonusPeriodAction,
   schedulePromotionAction,
   updatePromotionAction,
 } from "@/lib/admin/actions";
 import { can } from "@/lib/admin/capabilities";
 import { isoToZonedWallTime } from "@/lib/admin/catalog-input";
-import { PROMOTION_ACTIVATE_REASONS, PROMOTION_CLOSE_REASONS } from "@/lib/admin/reason-codes";
+import {
+  BONUS_PERIOD_REASONS,
+  PROMOTION_ACTIVATE_REASONS,
+  PROMOTION_CLOSE_REASONS,
+} from "@/lib/admin/reason-codes";
 import {
   fetchAdminPromotion,
   fetchAdminRulesVersions,
@@ -64,6 +70,8 @@ export default async function AdminPromotionDetailPage({
   setRequestLocale(locale);
 
   const t = await getTranslations({ locale, namespace: "admin.promotions" });
+  const tBonus = await getTranslations({ locale, namespace: "admin.bonus" });
+  const bonusReasonLabel = await reasonLabeller(locale);
 
   const screen = await openAdminScreen({
     locale,
@@ -207,10 +215,62 @@ export default async function AdminPromotionDetailPage({
             </div>
           </Card>
 
+          {/*
+           * ATAJO BONUS (§13.8, DEC-054 punto 2).
+           *
+           * Vive en la ficha de la promocion y no en la pantalla de Reglas
+           * porque es el gesto operativo -"pon un 5X doce horas"- y no una
+           * redaccion legal. Lo que hace por debajo SI es publicar una version
+           * de reglas nueva, y el propio formulario lo dice.
+           *
+           * Exige `rules.version.activate`, la misma capacidad que activar una
+           * version: sin ella no se pinta el formulario, se dice cual falta.
+           * Ocultarlo entero haria pensar que la funcion no existe.
+           */}
+          <Card elevation="raised" padding="lg">
+            <CardTitle as="h2" size="sm">
+              {tBonus("heading")}
+            </CardTitle>
+
+            <div className="mt-s4">
+              {promotion.data.active_rules_version_id === null ? (
+                <Alert tone="warning">{tBonus("needsActiveVersion")}</Alert>
+              ) : can(screen.actor, "rules.version.activate") ? (
+                <BonusPeriodForm
+                  locale={locale}
+                  action={createBonusPeriodAction}
+                  promotionId={promotion.data.id}
+                  reasons={BONUS_PERIOD_REASONS.map((value) => ({
+                    value,
+                    label: bonusReasonLabel(value),
+                  }))}
+                />
+              ) : (
+                <Alert tone="info">
+                  {t("transitionNoCapability", { capability: "rules.version.activate" })}
+                </Alert>
+              )}
+            </div>
+          </Card>
+
           <section aria-labelledby="promotion-rules">
-            <h2 id="promotion-rules" className="lsw-display text-heading-lg text-text">
-              {t("rulesHeading")}
-            </h2>
+            <div className="flex flex-wrap items-center justify-between gap-s3">
+              <h2 id="promotion-rules" className="lsw-display text-heading-lg text-text">
+                {t("rulesHeading")}
+              </h2>
+
+              {/* La pantalla completa de Reglas exige `rules.version.read`; el
+                  enlace solo se pinta con ella, por la misma cortesia que el
+                  resto del menu: no mandar a nadie a una puerta cerrada. */}
+              {canReadRules ? (
+                <Link
+                  href={adminHref(locale, `/promotions/${encodeURIComponent(id)}/rules`)}
+                  className={buttonVariants({ variant: "secondary", size: "sm" })}
+                >
+                  {t("rulesManageCta")}
+                </Link>
+              ) : null}
+            </div>
 
             <div className="mt-s4">
               {rulesVersions === null ? (
@@ -384,6 +444,8 @@ async function RulesVersionCard({
   const statusLabel = await rulesStatusLabeller(locale);
   const keyLabel = await rulesKeyLabeller(locale);
 
+  const unresolvedKeys = version.unresolved_required_keys;
+
   return (
     <Card elevation="flat" padding="md">
       <div className="flex flex-wrap items-center justify-between gap-s3">
@@ -394,6 +456,9 @@ async function RulesVersionCard({
             {statusLabel(version.status)}
           </Badge>
 
+          {/* `activatable` lo calcula el BACKEND (§13.7). No se deriva de que
+              la lista de claves este vacia, y no es el control: quien impide
+              activar es el trigger de DEC-012. */}
           <Badge tone={version.activatable ? "success" : "warning"} size="sm">
             {version.activatable ? t("activatable") : t("notActivatable")}
           </Badge>
@@ -406,14 +471,14 @@ async function RulesVersionCard({
         })}
       </p>
 
-      {version.missing_keys.length === 0 ? null : (
+      {unresolvedKeys.length === 0 ? null : (
         <div className="mt-s4">
           <h3 className="text-label font-medium text-text">{t("missingKeysHeading")}</h3>
 
           <p className="mt-s1 text-caption text-text-subtle">{t("missingKeysBody")}</p>
 
           <ul className="mt-s3 flex list-none flex-wrap gap-2">
-            {version.missing_keys.map((key) => (
+            {unresolvedKeys.map((key) => (
               <li key={key}>
                 <Badge tone="warning" size="sm" emphasis="subtle">
                   {keyLabel(key)}

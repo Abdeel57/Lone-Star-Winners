@@ -1,12 +1,19 @@
 import {
+  adminBonusPeriodsPath,
+  adminFeatureFlagPath,
   adminOrderPath,
   adminProductPath,
   adminProductPublishPath,
+  adminProductVariantPath,
+  adminProductVariantsPath,
   adminPromotionActivatePath,
   adminPromotionClosePath,
   adminPromotionPath,
   adminPromotionSchedulePath,
+  adminRulesActivatePath,
+  adminRulesVersionPath,
   adminRulesVersionsPath,
+  adminSettingChangeRequestPath,
   API_PATHS,
   checkoutSessionPath,
   officialRulesPath,
@@ -25,7 +32,7 @@ import {
   participant,
 } from "./fixtures/account";
 import { cartWithQuote, emptyCartWithQuote } from "./fixtures/cart";
-import { catalog, productDetails } from "./fixtures/catalog";
+import { catalog, productCategories, productDetails } from "./fixtures/catalog";
 import {
   completedCheckout,
   hostedRedirectSession,
@@ -40,13 +47,17 @@ import {
   adminDashboard,
   adminDrawAuthorizationPage,
   adminExportSnapshotPage,
+  adminFeatureFlags,
   adminOrderPage,
   adminParticipantPage,
+  adminProductCategories,
   adminProductPage,
   adminProducts,
   adminPromotionPage,
   adminPromotions,
   adminRulesVersionPage,
+  adminRulesVersions,
+  adminSettingChangeRequests,
 } from "./fixtures/admin";
 import {
   amoeDisabledConfig,
@@ -90,7 +101,13 @@ import { activePromotion, publicPromotionDetails, publicPromotions } from "./fix
  * viviendo en el frontend, que es exactamente lo que DEC-023 saca de aqui.
  */
 
-export type MockMethod = "GET" | "POST" | "PATCH" | "DELETE";
+/**
+ * Metodos que la tabla sabe declarar.
+ *
+ * `PUT` entra con §13.7, y solo lo usa una ruta: el documento de una version de
+ * reglas en un locale se CREA O REEMPLAZA entero.
+ */
+export type MockMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
 export interface MockRoute {
   readonly method: MockMethod;
@@ -137,8 +154,17 @@ export const mockRoutes: readonly MockRoute[] = [
     { method: "GET", path: officialRulesPath(promotion.slug), body: officialRules },
   ]),
 
-  // Catalogo
+  /*
+   * Catalogo.
+   *
+   * LA TABLA NO FILTRA. Un mock que interpretara `?kind=` estaria implementando
+   * el catalogo en el frontend, que es justo lo que esta tabla no hace: cada
+   * ruta devuelve un fixture fijo. Los dos listados por tipo existen como
+   * ESCENARIOS (`scenarios.products(...)`), que es donde un test pide
+   * explicitamente el que necesita.
+   */
   { method: "GET", path: API_PATHS.products, body: { items: catalog, next_cursor: null } },
+  { method: "GET", path: API_PATHS.productCategories, body: { items: productCategories } },
   ...productDetails.map((product): MockRoute => ({
     method: "GET",
     path: productPath(product.slug),
@@ -264,6 +290,122 @@ export const mockRoutes: readonly MockRoute[] = [
     { method: "GET", path: adminRulesVersionsPath(promotion.id), body: adminRulesVersionPage },
   ]),
   { method: "GET", path: API_PATHS.adminProducts, body: adminProductPage },
+  /*
+   * Versiones de reglas (§13.7). El DETALLE va antes que la activacion en la
+   * lista porque las dos tablas resuelven por orden de declaracion y
+   * `…/:id/activate` es mas especifica que `…/:id`: si el comodin del detalle
+   * fuera primero, se comeria el POST de activar.
+   */
+  ...adminPromotions.flatMap((promotion): readonly MockRoute[] =>
+    adminRulesVersions.flatMap((version): readonly MockRoute[] => [
+      {
+        method: "POST",
+        path: adminRulesActivatePath(promotion.id, version.id),
+        body: { ...version, status: "ACTIVE" },
+      },
+      { method: "GET", path: adminRulesVersionPath(promotion.id, version.id), body: version },
+      { method: "PATCH", path: adminRulesVersionPath(promotion.id, version.id), body: version },
+      {
+        method: "PUT",
+        path: `${adminRulesVersionPath(promotion.id, version.id)}/documents/:locale`,
+        body: version,
+      },
+    ]),
+  ),
+  ...adminPromotions.map((promotion): MockRoute => ({
+    method: "POST",
+    path: adminRulesVersionsPath(promotion.id),
+    body: adminRulesVersions[1],
+  })),
+  /*
+   * Atajo bonus (§13.8). Responde con `warnings` a proposito: el flag de
+   * multiplicadores esta apagado por defecto (DEC-032), asi que ese es el caso
+   * REAL, y la pantalla tiene que ensenarlo en vez de callarlo.
+   */
+  ...adminPromotions.map((promotion): MockRoute => ({
+    method: "POST",
+    path: adminBonusPeriodsPath(promotion.id),
+    body: { ...adminRulesVersions[0], warnings: ["entry_multipliers_enabled is off"] },
+  })),
+  // Catalogo ampliado (§13.6).
+  { method: "GET", path: API_PATHS.adminProductCategories, body: adminProductCategories },
+  {
+    method: "POST",
+    path: API_PATHS.adminProductCategories,
+    body: adminProductCategories.items[0],
+  },
+  ...adminProducts.flatMap((product): readonly MockRoute[] => {
+    const variants = product.variants ?? [];
+    const first = variants[0];
+
+    return [
+      { method: "GET", path: adminProductVariantsPath(product.id), body: { items: variants } },
+      ...(first === undefined
+        ? []
+        : [
+            { method: "POST", path: adminProductVariantsPath(product.id), body: first } as const,
+            ...variants.map((variant): MockRoute => ({
+              method: "PATCH",
+              path: adminProductVariantPath(product.id, variant.id),
+              body: variant,
+            })),
+          ]),
+    ];
+  }),
+  /*
+   * Flags y solicitudes de cambio (§13.9, modificado por HO-041 fase 1).
+   *
+   * `PATCH /admin/feature-flags/:key` queda solo para flags NO materiales; los
+   * materiales y `amoe_mode` van por control dual. La tabla no distingue -cada
+   * ruta devuelve un fixture fijo- y el 409 `FLAG_LEGALLY_MATERIAL` vive como
+   * escenario (`scenarios.adminFlagLegallyMaterial`), que es donde un test lo
+   * pide explicitamente.
+   */
+  { method: "GET", path: API_PATHS.adminFeatureFlags, body: adminFeatureFlags },
+  ...adminFeatureFlags.items.map((flag): MockRoute => ({
+    method: "PATCH",
+    path: adminFeatureFlagPath(flag.key),
+    body: { ...flag, enabled: !flag.enabled },
+  })),
+  {
+    method: "GET",
+    path: API_PATHS.adminSettingChangeRequests,
+    body: adminSettingChangeRequests,
+  },
+  {
+    method: "POST",
+    path: API_PATHS.adminSettingChangeRequests,
+    body: adminSettingChangeRequests.items[0],
+  },
+  ...adminSettingChangeRequests.items.flatMap((request): readonly MockRoute[] => [
+    {
+      method: "POST",
+      path: `${adminSettingChangeRequestPath(request.id)}/approve`,
+      body: { ...request, status: "APPLIED" },
+    },
+    {
+      method: "POST",
+      path: `${adminSettingChangeRequestPath(request.id)}/reject`,
+      body: { ...request, status: "REJECTED" },
+    },
+  ]),
+  /*
+   * Transcripcion de fichas postales (§13.10).
+   *
+   * `participant_created: true` es el caso que importa: quien manda una ficha
+   * no tiene por que tener cuenta, y el sistema le crea una identidad sin
+   * credenciales para poder asignarle las participaciones.
+   */
+  {
+    method: "POST",
+    path: API_PATHS.adminAmoeSubmissions,
+    body: {
+      submission_id: "amo_0000000000000009",
+      status: "PENDING_REVIEW",
+      participant_id: "par_0000000000000004",
+      participant_created: true,
+    },
+  },
   /*
    * Altas de la seccion 12. Las mutaciones devuelven el PRIMER fixture tal
    * cual: lo que el humo y los tests comprueban es que el formulario llega y

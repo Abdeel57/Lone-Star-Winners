@@ -41,6 +41,23 @@ export const ADMIN_NAV = [
     path: "/adjustments",
     capabilities: ["entry.adjust.create", "entry.adjust.approve"],
   },
+  /*
+   * INTERRUPTORES (§13.9, DEC-054 punto 3).
+   *
+   * SU ROTULO NO PUEDE SER "AJUSTES", que es como nacio: la entrada de al lado
+   * -`/adjustments`- se llama asi en espanol, y el menu quedaba con dos
+   * "Ajustes" seguidos llevando a dos pantallas que no tienen nada que ver. En
+   * ingles el par era "Settings" y "Adjustments" y no chocaba, que es por lo
+   * que el problema solo se ve mirando el menu en espanol. Ver
+   * `admin.nav.flags`.
+   *
+   * Basta `flag.read` para VERLA: quien puede leer el estado de los flags puede
+   * entrar. Cambiar algo exige otra capacidad -y los legalmente materiales,
+   * ademas, segunda aprobacion-, y eso lo decide cada bloque dentro de la
+   * pantalla. Exigir aqui la de escritura dejaria sin poder consultar el estado
+   * a quien solo tiene lectura, que es la mitad de los motivos para entrar.
+   */
+  { key: "flags", path: "/flags", capabilities: ["flag.read"] },
   { key: "exports", path: "/exports", capabilities: ["export.snapshot.read"] },
   {
     key: "draw",

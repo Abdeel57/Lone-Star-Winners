@@ -1,14 +1,15 @@
 "use client";
 
-import { Alert, Button, FormField, Input, Select } from "@lsw/ui";
+import { Alert, Button, FormField, Input, MediaFrame, Select } from "@lsw/ui";
 import { useTranslations } from "next-intl";
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 
 import { formatMoney } from "@/i18n/formatters";
 import type { Locale } from "@/i18n/locales";
 import { useAvailabilityLabel } from "@/i18n/storefront-labels";
-import { pickLocalized, type ProductDetail } from "@/lib/api";
+import { pickLocalized, type ProductDetail, type ProductVariant } from "@/lib/api";
 import { addToCartAction, type CartActionResult } from "@/lib/cart-actions";
+import { safeImageUrl } from "@/lib/media-url";
 
 /**
  * Formulario para anadir una variante al carrito.
@@ -60,6 +61,20 @@ import { addToCartAction, type CartActionResult } from "@/lib/cart-actions";
 const INITIAL: CartActionResult = { ok: false, code: null, requestId: null };
 
 /**
+ * Como se llama una variante en el selector.
+ *
+ * `name` NULO Y `name` AUSENTE SIGNIFICAN COSAS DISTINTAS EN EL CONTRATO -la
+ * variante unica sin nombre y el campo que la API no publica- pero AQUI se
+ * tratan igual, y a proposito: en los dos casos no hay nombre que enseñar, y lo
+ * unico que queda para distinguir una variante de otra es el SKU. Ramificar
+ * produciria dos etiquetas distintas para el mismo hueco.
+ */
+function variantName(variant: ProductVariant, locale: Locale): string {
+  const name = variant.name ?? null;
+  return name === null ? variant.sku : pickLocalized(name, locale);
+}
+
+/**
  * Adaptador de firma para `useActionState`.
  *
  * `useActionState` llama a la accion con `(estadoPrevio, formData)`. La accion
@@ -85,6 +100,17 @@ export function AddToCartForm({
     (variant) => variant.availability.status !== "OUT_OF_STOCK",
   );
 
+  /*
+   * EL ESTADO SE DECLARA ANTES DE LOS RETORNOS TEMPRANOS.
+   *
+   * No es estilo: un hook detras de un `return` condicional cambia el numero de
+   * hooks entre renders y React lo rechaza. El valor inicial es el mismo que
+   * tenia el `defaultValue` de antes -la primera variante que se puede pedir- y
+   * la cadena vacia cubre el producto sin variantes, que sale por el retorno de
+   * abajo antes de usarla.
+   */
+  const [selectedId, setSelectedId] = useState<string>(purchasable[0]?.id ?? "");
+
   if (product.variants.length === 0) {
     return <Alert tone="info">{t("noVariants")}</Alert>;
   }
@@ -93,7 +119,33 @@ export function AddToCartForm({
     return <Alert tone="warning">{t("unavailable")}</Alert>;
   }
 
-  const defaultVariant = purchasable[0];
+  const selected = product.variants.find((variant) => variant.id === selectedId) ?? null;
+  const selectedImage = safeImageUrl(selected?.image_url);
+
+  /*
+   * LA ETIQUETA DEL SELECTOR DEPENDE DE LO QUE HAY DENTRO.
+   *
+   * Con variantes con NOMBRE -colores, tallas- la pregunta es "que opcion";
+   * sin nombre, lo unico que las distingue es el SKU y llamar a eso "opcion"
+   * suena a que falta algo. Es la misma informacion dicha con la palabra que
+   * corresponde a los datos que hay.
+   */
+  const named = product.variants.some(
+    (variant) => variant.name !== undefined && variant.name !== null,
+  );
+  const variantLabel = named ? t("variantLabel") : t("variantLabelSku");
+
+  /*
+   * El texto alternativo NOMBRA la variante y no describe la fotografia: quien
+   * usa lector de pantalla necesita saber de que opcion es la imagen, y una
+   * descripcion del producto la acaba de leer en el titular. Sin nombre, la
+   * imagen es decorativa y el `alt` correcto es la cadena vacia.
+   */
+  const selectedName = selected === null ? null : (selected.name ?? null);
+  const selectedImageAlt =
+    selectedName === null
+      ? ""
+      : t("variantImageAlt", { name: pickLocalized(selectedName, locale) });
 
   return (
     <form action={formAction} className="flex flex-col gap-4">
@@ -103,18 +155,22 @@ export function AddToCartForm({
       {state.code === null ? null : <AddToCartError code={state.code} />}
       {state.ok ? <Alert tone="success">{t("added")}</Alert> : null}
 
-      <FormField label={t("variantLabel")} controlId="variant">
-        <Select name="variant_id" defaultValue={defaultVariant?.id ?? ""}>
+      <FormField label={variantLabel} controlId="variant">
+        <Select
+          name="variant_id"
+          value={selectedId}
+          onChange={(event) => {
+            setSelectedId(event.target.value);
+          }}
+        >
           {product.variants.map((variant) => {
             const price = formatMoney(variant.price, locale);
-            // La API publica `sku` y no `name` (HO-019): el SKU identifica la talla.
-            const name =
-              variant.name === undefined ? variant.sku : pickLocalized(variant.name, locale);
+            const name = variantName(variant, locale);
             const status = variant.availability.status;
 
-            // El estado se dice tambien cuando la talla SI se puede pedir pero
-            // queda justo lo preguntado: es informacion util antes de elegir, y
-            // el diccionario es el mismo que usa el carrito.
+            // El estado se dice tambien cuando la variante SI se puede pedir
+            // pero queda justo lo preguntado: es informacion util antes de
+            // elegir, y el diccionario es el mismo que usa el carrito.
             const suffix = status === "IN_STOCK" ? null : availabilityLabel(status);
 
             return (
@@ -125,6 +181,34 @@ export function AddToCartForm({
           })}
         </Select>
       </FormField>
+
+      {/*
+       * IMAGEN DE LA VARIANTE ELEGIDA (DEC-053).
+       *
+       * En las gorras, cinco colores comparten ficha y solo se distinguen por
+       * su fotografia: un selector con cinco nombres y una sola foto obliga a
+       * imaginarse el color, que es exactamente lo que hace devolver una gorra.
+       *
+       * ES EL UNICO ESTADO DE CLIENTE DE ESTE FORMULARIO, y por eso el
+       * formulario sigue funcionando sin JavaScript: sin bundle, el `<select>`
+       * envia igual y lo que falta es la vista previa, no la compra. El
+       * `defaultValue` que tenia antes pasa a `value` controlado para poder
+       * seguir la eleccion; el valor inicial es el mismo.
+       *
+       * La URL se filtra antes de pintarla y el fichero puede no existir
+       * todavia -no hay almacen de medios (DEC-053)-: el marco reserva el hueco
+       * y absorbe el 404 sin descuadrar la columna.
+       */}
+      {selectedImage === null ? null : (
+        <MediaFrame
+          ratio="square"
+          tone="light"
+          className="lsw-studio-light max-w-[12rem] rounded-sm"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={selectedImage} alt={selectedImageAlt} loading="lazy" />
+        </MediaFrame>
+      )}
 
       <FormField label={t("quantityLabel")} controlId="quantity" className="max-w-[10rem]">
         <Input

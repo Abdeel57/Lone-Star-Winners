@@ -63,7 +63,7 @@ describe("ProductForm (alta)", () => {
     const user = userEvent.setup();
     const capture = capturing();
 
-    renderIn("es", <ProductForm locale="es" action={capture.action} />);
+    renderIn("es", <ProductForm locale="es" action={capture.action} categories={[]} />);
 
     await user.type(screen.getByLabelText(/^SKU/u), "GORRA-LS-001");
     await user.type(screen.getByLabelText(/Dirección en la tienda/u), "gorra-lone-star");
@@ -87,7 +87,7 @@ describe("ProductForm (alta)", () => {
   });
 
   it("los dos nombres son obligatorios en el marcado", () => {
-    renderIn("en", <ProductForm locale="en" action={capturing().action} />);
+    renderIn("en", <ProductForm locale="en" action={capturing().action} categories={[]} />);
 
     expect(screen.getByLabelText(/Name in Spanish/u)).toBeRequired();
     expect(screen.getByLabelText(/Name in English/u)).toBeRequired();
@@ -108,6 +108,7 @@ describe("ProductForm (alta)", () => {
           priceText: "25.00",
           stockQuantity: null,
         }}
+        categories={[]}
       />,
     );
 
@@ -226,7 +227,7 @@ describe("PromotionTransitionForm", () => {
 
 describe("los dos idiomas", () => {
   it.each(LOCALES)("el formulario de producto se pinta entero en %s", (locale) => {
-    renderIn(locale, <ProductForm locale={locale} action={capturing().action} />);
+    renderIn(locale, <ProductForm locale={locale} action={capturing().action} categories={[]} />);
     // Ninguna clave sin traducir: next-intl las pintaria como `admin.catalog.x`.
     expect(document.body.textContent).not.toContain("admin.catalog.");
   });

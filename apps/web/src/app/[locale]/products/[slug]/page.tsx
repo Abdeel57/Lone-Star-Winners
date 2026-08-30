@@ -6,12 +6,25 @@ import { getTranslations, setRequestLocale } from "next-intl/server";
 import { AddToCartForm } from "@/components/add-to-cart-form";
 import { ApiErrorState } from "@/components/api-error-state";
 import { AvailabilityBadge } from "@/components/availability-badge";
+import { EntryPackagePanel } from "@/components/entry-package-panel";
 import { formatMoney } from "@/i18n/formatters";
 import type { Locale } from "@/i18n/locales";
 import { Link } from "@/i18n/navigation";
 import { routing } from "@/i18n/routing";
-import { useCategoryLabel, useIneligibilityReason } from "@/i18n/storefront-labels";
-import { fetchProduct, pickLocalized, type ProductDetail } from "@/lib/api";
+import { useIneligibilityReason } from "@/i18n/storefront-labels";
+import {
+  fetchActivePromotion,
+  fetchProduct,
+  fetchPromotion,
+  pickLocalized,
+  type BonusPeriod,
+  type ProductCategory,
+  type ProductDetail,
+} from "@/lib/api";
+import { normalizeEntryOffer } from "@/lib/entry-offer";
+import { isFeatureEnabled } from "@/lib/flags";
+import { loadFeatureFlags } from "@/lib/flags-server";
+import { safeImageUrl } from "@/lib/media-url";
 import { priceFrom } from "@/lib/product-price";
 import { productAvailabilityStatus } from "@/lib/product-availability";
 
@@ -69,6 +82,17 @@ export default async function ProductDetailPage({
   const price = formatMoney(priceFrom(product), locale);
   const shippingNote = product.shipping_note ?? null;
 
+  /*
+   * EL BONUS VIGENTE, SOLO PARA PODER NOMBRARLO.
+   *
+   * Las cifras del paquete llegan ya evaluadas en el propio producto; lo que no
+   * llega ahi es como se llama el periodo que produjo `entries_now` ni cuando
+   * termina. Se pide solo para los paquetes -la mercancia no declara
+   * participaciones incluidas- y es informacion adicional: si falla, el bloque
+   * pinta las cifras igual.
+   */
+  const bonus = product.kind === "ENTRY_PACKAGE" ? await fetchActiveBonus(locale) : null;
+
   return (
     <div className="lsw-container py-s10 pb-s16">
       <Link href="/shop" className={BACK_LINK}>
@@ -80,8 +104,12 @@ export default async function ProductDetailPage({
 
         <div className="flex flex-col gap-s6 lg:pt-s2">
           <div>
-            {product.category_key === undefined ? null : (
-              <ProductCategory categoryKey={product.category_key} />
+            {/* La categoria llega con su NOMBRE localizado desde el backend
+                (DEC-053): el panel puede crear categorias, asi que su texto no
+                puede vivir en el diccionario del frontend. Se pinta tal cual y
+                no se traduce (DEC-030). */}
+            {product.category === undefined || product.category === null ? null : (
+              <ProductCategoryLine category={product.category} locale={locale} />
             )}
 
             <h1 className="lsw-display mt-s3 text-display-md text-text sm:text-display-lg">
@@ -112,6 +140,18 @@ export default async function ProductDetailPage({
           </div>
 
           <EligibilityNotice product={product} />
+
+          {/* EL BLOQUE DE PARTICIPACIONES VA ANTES DEL FORMULARIO, y no es un
+              detalle de orden: las Official Rules exigen que el numero incluido
+              se declare en la pagina donde se ofrece el paquete, y declararlo
+              DEBAJO del boton de compra seria declararlo despues de la
+              decision. Para la mercancia este componente no pinta nada. */}
+          <EntryPackagePanel
+            product={product}
+            locale={locale}
+            activeBonus={bonus?.period ?? null}
+            timeZone={bonus?.timeZone ?? "UTC"}
+          />
 
           <AddToCartForm product={product} locale={locale} />
         </div>
@@ -180,8 +220,26 @@ function ProductGallery({
   const t = useTranslations("product");
   const name = pickLocalized(product.name, locale);
 
+  /*
+   * LA GALERIA SE FILTRA ANTES DE PINTARLA.
+   *
+   * Las URL las escribe quien edita el catalogo en el panel, y un `src` con un
+   * esquema que no sea `https:` -o una ruta que no sea del propio sitio- es
+   * contenido de terceros incrustado en la pagina. La API tambien lo valida al
+   * escribir (§13.4); se comprueba igualmente en el lado que construye el
+   * atributo. Ver `@/lib/media-url`.
+   *
+   * A la galeria se suman las imagenes POR VARIANTE (DEC-053): en las gorras,
+   * cada color trae la suya, y sin esto la ficha ensenaria una sola foto para
+   * cinco colores distintos. Se descartan las repetidas -la principal suele ser
+   * tambien la de la primera variante- conservando el orden.
+   */
   const gallery = product.images ?? [];
-  const images = gallery.length > 0 ? gallery : nonNull(product.image_url ?? null);
+  const declared = gallery.length > 0 ? gallery : nonNull(product.image_url ?? null);
+  const variantImages = product.variants.map((variant) => variant.image_url ?? null);
+  const images = [...new Set([...declared, ...variantImages])]
+    .map((image) => safeImageUrl(image))
+    .filter((image): image is string => image !== null);
 
   if (images.length === 0) {
     return (
@@ -239,9 +297,56 @@ function nonNull(value: string | null): readonly string[] {
   return value === null ? [] : [value];
 }
 
-function ProductCategory({ categoryKey }: { readonly categoryKey: string }) {
-  const categoryLabel = useCategoryLabel();
-  return <p className="text-overline uppercase text-text-subtle">{categoryLabel(categoryKey)}</p>;
+/**
+ * Categoria del producto.
+ *
+ * SU NOMBRE ES DATO DEL BACKEND (DEC-030, DEC-053), no una clave del
+ * diccionario: las categorias las crea el panel, y traducirlas aqui obligaria a
+ * un despliegue por cada alta. Se pinta con `pickLocalized` y no se traduce.
+ */
+function ProductCategoryLine({
+  category,
+  locale,
+}: {
+  readonly category: ProductCategory;
+  readonly locale: Locale;
+}) {
+  return (
+    <p className="text-overline uppercase text-text-subtle">
+      {pickLocalized(category.name, locale)}
+    </p>
+  );
+}
+
+/**
+ * Periodo bonus vigente de la promocion activa, con su zona legal.
+ *
+ * DOS CERROJOS: el flag `entry_multipliers_enabled` leido en servidor (DEC-013)
+ * y el que declara la propia oferta. Con cualquiera de los dos apagado no se
+ * nombra ningun bonus, aunque el backend siga publicando el periodo.
+ *
+ * Devuelve `null` ante cualquier fallo: es informacion adicional y su ausencia
+ * solo acorta una frase.
+ */
+async function fetchActiveBonus(
+  locale: Locale,
+): Promise<{ readonly period: BonusPeriod; readonly timeZone: string } | null> {
+  const [promotionResult, flags] = await Promise.all([
+    fetchActivePromotion(locale),
+    loadFeatureFlags(locale),
+  ]);
+
+  if (!promotionResult.ok || promotionResult.data === null) return null;
+  if (promotionResult.data.rules_version_id === null) return null;
+  if (!isFeatureEnabled(flags, "entry_multipliers_enabled")) return null;
+
+  const detail = await fetchPromotion(promotionResult.data.slug, locale);
+  if (!detail.ok) return null;
+
+  const offer = normalizeEntryOffer(detail.data.entry_offer, new Date().toISOString());
+  if (offer === null || !offer.multipliersEnabled || offer.activeBonus === null) return null;
+
+  return { period: offer.activeBonus, timeZone: promotionResult.data.legal_timezone };
 }
 
 /**

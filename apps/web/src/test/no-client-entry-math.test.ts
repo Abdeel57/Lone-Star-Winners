@@ -63,7 +63,25 @@ const ENTRY_FIELDS = [
   "quantity_delta",
   "entries_after",
   "entries_before",
-  "base_entries_per_unit",
+  /*
+   * Los campos que entran con §13 (DEC-052, DEC-054, HO-041 fase 1).
+   *
+   * `base_entries` y `entries_now` son las DOS cifras que el backend calcula
+   * por variante: la tentacion concreta es multiplicar la primera por el bonus
+   * para obtener la segunda -o por la cantidad del carrito- y esta lista es lo
+   * que la convierte en un fallo de test en vez de en una cifra plausible.
+   *
+   * `entries_if_approved_after_cap` y `granted_entries` son el recorte por
+   * tope: restarlos de `entries_if_approved` para enseniar "se perdieron N"
+   * seria la misma aritmetica, y ademas el motor puede recortar por mas de un
+   * motivo a la vez.
+   */
+  "base_entries",
+  "entries_now",
+  "entries_if_approved_after_cap",
+  "granted_entries",
+  "entries_per_approved_submission",
+  "per_participant_max",
   /*
    * Los nombres que cerro HO-031. `entries_awarded` es el mismo dato en las tres
    * formas AMOE, y los tres de la cola de revision son la PROYECCION que calcula

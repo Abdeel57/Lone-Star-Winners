@@ -43,6 +43,7 @@ import {
   fulfillmentStateEnum,
   orderStatusEnum,
   paymentStateEnum,
+  productKindEnum,
 } from "./enums.js";
 import { participants } from "./identity.js";
 import { promotionRulesVersions, promotions } from "./promotions.js";
@@ -134,6 +135,15 @@ export const orderItems = pgTable(
     productSlug: text("product_slug").notNull(),
     /** DEC-021: los dos idiomas congelados, no uno con fallback. */
     nameSnapshot: jsonb("name_snapshot").notNull(),
+    /**
+     * DEC-052: el tipo CONGELADO en la compra, como `sku` y `name_snapshot`.
+     *
+     * Sin `DEFAULT`, a proposito: insertar una linea obliga a decir el tipo.
+     * Es lo que decide que tasa se aplico, asi que un valor supuesto por
+     * omision seria una cifra de participaciones equivocada, y reetiquetar el
+     * producto despues cambiaria lo que significo una compra pasada.
+     */
+    productKind: productKindEnum("product_kind").notNull(),
     quantity: integer("quantity").notNull(),
     unitAmountMinor: bigint("unit_amount_minor", { mode: "bigint" }).notNull(),
     currency: char("currency", { length: 3 }).notNull(),

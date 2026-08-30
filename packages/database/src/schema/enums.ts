@@ -59,6 +59,12 @@ export const rulesVersionStatusEnum = pgEnum("rules_version_status", [
 
 export const productStatusEnum = pgEnum("product_status", ["DRAFT", "ACTIVE", "ARCHIVED"]);
 
+/**
+ * DEC-052 - migracion 0026. Etiqueta de catalogo, NO una cantidad de
+ * participaciones: cuanto vale cada tipo lo dice `PromotionRulesVersion`.
+ */
+export const productKindEnum = pgEnum("product_kind", ["MERCHANDISE", "ENTRY_PACKAGE"]);
+
 export const localeCodeEnum = pgEnum("locale_code", ["en-US", "es-US"]);
 
 // ---------------------------------------------------------------------------

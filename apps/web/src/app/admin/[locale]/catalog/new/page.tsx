@@ -9,6 +9,7 @@ import { ProductForm } from "@/components/admin/product-form";
 import { adminHref } from "@/i18n/admin-routing";
 import { isLocale } from "@/i18n/locales";
 import { createProductAction } from "@/lib/admin/actions";
+import { fetchAdminProductCategories } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
 
@@ -45,6 +46,16 @@ export default async function AdminNewProductPage({
 
   if (!screen.ok) return screen.node;
 
+  /*
+   * LAS CATEGORIAS SON UNA COMODIDAD, NO UN REQUISITO.
+   *
+   * Si la lectura falla, el desplegable llega vacio y el producto se crea sin
+   * categoria -que es un valor legitimo del contrato-. Un fallo del catalogo de
+   * categorias no puede impedir dar de alta un producto.
+   */
+  const categories = await fetchAdminProductCategories(locale, screen.session);
+  const categoryOptions = categories.ok ? categories.data.items : [];
+
   return (
     <AdminChrome
       locale={locale}
@@ -62,7 +73,7 @@ export default async function AdminNewProductPage({
       }
     >
       <Card elevation="raised" padding="lg">
-        <ProductForm locale={locale} action={createProductAction} />
+        <ProductForm locale={locale} action={createProductAction} categories={categoryOptions} />
       </Card>
 
       <p className="mt-s4 text-caption text-text-subtle">{t("noEntriesNote")}</p>

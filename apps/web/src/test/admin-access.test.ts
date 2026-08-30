@@ -28,6 +28,9 @@ import {
 import { scenarios } from "@/mocks/handlers";
 import { mockApiServer } from "@/mocks/node";
 
+import enMessages from "../../messages/en-US.json";
+import esMessages from "../../messages/es-US.json";
+
 /**
  * ACCESO AL PANEL, PROBADO EN NEGATIVO (HO-027, DEC-048).
  *
@@ -245,5 +248,36 @@ describe("navegacion por capacidad", () => {
       expect(item.path.startsWith("/es"), `entrada ${item.key}`).toBe(false);
       expect(item.path.startsWith("/admin"), `entrada ${item.key}`).toBe(false);
     }
+  });
+
+  it.each([
+    ["en", enMessages],
+    ["es", esMessages],
+  ] as const)("dos entradas del menu nunca se llaman igual (%s)", (_locale, messages) => {
+    /*
+     * HO-041, RONDA DE CIERRE E2E.
+     *
+     * `/adjustments` y `/flags` se rotulaban las dos "Ajustes" en espanol, y el
+     * menu tenia dos entradas con el mismo nombre llevando a sitios que no se
+     * parecen: una mueve participaciones del ledger de una persona y la otra
+     * cambia el comportamiento de la plataforma. En ingles el par era
+     * "Adjustments" y "Settings" y no chocaba, que es por lo que el fallo no se
+     * veia leyendo el diccionario en un solo idioma.
+     *
+     * Se comprueban LOS DOS idiomas por eso mismo: la colision puede existir en
+     * uno y no en el otro, y basta con que exista en uno para que ese menu sea
+     * ambiguo para quien lo usa.
+     */
+    const entries = ADMIN_NAV.map((item) => ({
+      key: item.key,
+      label: messages.admin.nav[item.key],
+    }));
+
+    for (const entry of entries) {
+      expect(entry.label, `la entrada ${entry.key} no tiene texto`).toBeTruthy();
+    }
+
+    const labels = entries.map((entry) => entry.label);
+    expect(new Set(labels).size, `rotulos repetidos: ${labels.join(", ")}`).toBe(labels.length);
   });
 });

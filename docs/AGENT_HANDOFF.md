@@ -1847,3 +1847,1747 @@ como segunda red, no como la única.
 
 Blocking: NO. Se hace cuando se decida qué parte del checkout merece prueba
 de integración; hasta entonces la red es el e2e 04.
+
+---
+
+## HO-041 — Segundo borrador de Official Rules: paquetes, tasas por tipo, tope 10,000 por persona, AMOE postal, bonus y catálogo real (Team Lead → backend, frontend, security)
+
+Status: OPEN
+
+## Handoff
+
+Date: 2026-08-29
+From: Team Lead
+To: backend-sweepstakes, frontend-ux, security-integration
+
+Context:
+El cliente entregó el **segundo borrador** de las Official Rules
+(`docs/legal/Sweepstakes Official Rules - DRAFT v2 (2026-08-29).docx`) y tres
+mensajes. Transcripción, cambios y preguntas nuevas en
+`docs/LEGAL_PENDING.md` §"Segundo borrador". Decisiones: **DEC-052**
+(paquetes como productos `ENTRY_PACKAGE`, tasa por tipo, tope también en
+AMOE, `entry_pool` retirado), **DEC-053** (categorías, variantes con nombre,
+imágenes por URL) y **DEC-054** (superficie de escritura de versiones de
+reglas, atajo bonus, flags, transcripción postal). Contrato: **§13** de
+`docs/API_CONTRACT.md` (modifica §3, §4, §5, §12).
+
+Resumen de lo que las reglas exigen y hoy no existe:
+
+1. **Tope 10,000 por participante** (no un universo total): existe como
+   `entry_limits.per_participant_max` + flag `entry_caps_enabled`, pero la
+   concesión AMOE lo ignora y la interfaz lo pinta como "universo".
+2. **1 participación por $1 en mercancía y 2 por $1 en paquetes**: el motor
+   tiene una sola tasa por promoción y no sabe qué es un paquete.
+3. **AMOE postal 2,000 por ficha, 5 fichas, 2 por sobre**: el dominio lo
+   soporta por configuración, pero nadie puede meter una ficha (no hay
+   transcripción) ni cargar la configuración (no hay escritura de versiones).
+4. **Bonus 2X/5X/10X con duración**: el motor los calcula, pero no hay forma
+   de crearlos desde el panel ni de anunciarlos en el sitio.
+5. **Catálogo real** (7 categorías, gorras 5×5): sin categorías, sin nombre de
+   variante, sin imágenes, y el panel crea una sola variante.
+
+Además: `docs/API_CONTRACT.md` estaba **corrupto desde `d53cf42`** (el archivo
+entero insertado dentro de una línea; dos copias concatenadas). Reparado por
+el Team Lead en esta ronda conservando las cuatro ediciones posteriores.
+
+What I need from you:
+
+**backend-sweepstakes** (`packages/sweepstakes`, `packages/database`,
+`packages/commerce` si hace falta, `apps/api`):
+
+- `packages/sweepstakes`: modo `ENTRIES_PER_CURRENCY_UNIT_BY_PRODUCT_KIND`,
+  `productKind` en `CalculationItemInput`, `product_kind_scope` en periodos,
+  `bonus_rules` (esquema + lector), `mail_in` en `amoeConfigSchema`, tope en
+  `AmoeService.grant` (§13.3), `ENTRY_CALCULATION_ENGINE_VERSION = 2`,
+  transcripción (`submitOnBehalf` con metadata y bloqueo de auto-aprobación).
+  Tests de motor: 1/$1 y 2/$1 con carrito mixto y FLOOR único; bonus solo
+  paquetes; tope en AMOE con recorte y con espacio cero.
+- `packages/database`: migración `0026_product_kind_categories_variants`
+  (enum `product_kind`, `products.kind` NOT NULL DEFAULT 'MERCHANDISE',
+  `products.category_key`, `products.image_url`, `product_variants.image_url`,
+  `product_categories` + traducciones + las 8 categorías sembradas,
+  `product_variant_translations`, `order_items.product_kind`), repositorios
+  (carrito y pedidos con `productKind`; versiones de reglas: list/create/
+  clone/update/documents/activate en transacción; flags: update + amoe_mode;
+  categorías; variantes), `dev-seed` con los productos reales del cliente como
+  fixtures (precios ficticios marcados) y un paquete por importe
+  ($10/$20/$50/$100). Test de integración: activar versión archiva la
+  anterior; PATCH sobre ACTIVE lo rechaza el trigger.
+- `apps/api`: §13 completo, `openapi/` regenerado (`contract:check` verde),
+  `entry_offer` por variante y en `PromotionDetail`, filtros de catálogo,
+  `entry_pool` fuera. Errores nuevos en `http/errors.ts`
+  (`AMOE_ENTRY_CAP_REACHED`, `RULES_VERSION_NOT_ACTIVE`, `SEPARATION_OF_DUTIES`).
+  El autorizador ya conoce las capacidades (`packages/security`); la nueva
+  `amoe.submission.transcribe` la añade security en paralelo: coordinar por
+  nombre, no esperar.
+
+**frontend-ux** (`apps/web`, `packages/ui`, `packages/design-system`):
+
+- Escaparate: sección **Paquetes de participaciones** (kind) y filtros por
+  categoría; ficha con selector de variante por nombre (colores) e imagen;
+  en paquetes, **"Incluye N participaciones"** desde `entry_offer.base_entries`
+  y, con bonus, `entries_now` con el periodo y su fin (countdown existente).
+  Hero/portada: retirar el "universo de 10,000" y `entry_pool`; mostrar
+  "máximo 10,000 por persona" desde `entry_offer.per_participant_max`, las
+  tasas desde `entry_offer.rates`, y el **anuncio de bonus** (activo y
+  próximos) desde `bonus_periods`. AMOE `MAIL_IN_REVIEW`: valor por ficha,
+  límite, fichas por sobre, plazos e instrucciones desde `amoe-config`.
+  Copy bilingüe: la palabra es "paquete de participaciones" / "entry
+  package"; nada de "boletos". Actualizar `contract.ts`, fixtures del mock y
+  tests (`real-api-shapes`, `decoration`, `promotion-presentation`,
+  `promotion-rules-gate`, `no-hardcoded-copy`).
+- Panel: formulario de producto con `kind`, categoría, imagen y **lista de
+  variantes** (alta/edición/archivar); pantalla **Reglas** por promoción
+  (versiones, crear/clonar, formulario estructurado para §13.2 con vista JSON
+  avanzada, documentos ES/EN, activar con motivo + step-up, mostrar
+  `unresolved_required_keys` y `validation` antes del botón); acción **Bonus**
+  (multiplicador 2X/5X/10X o libre, inicio/fin con presets 6h/12h/24h/48h,
+  ámbito paquetes/mercancía/ambos, motivo); pantalla **Flags** (lista,
+  interruptor con motivo; las legalmente materiales avisan de que exigen
+  `flag.update.legally_material`); en AMOE, **Transcribir ficha postal**
+  (formulario con los campos de `required_fields`, sobre y número de fichas)
+  y la proyección con tope. Navegación por capacidades como hoy.
+
+**security-integration** (`packages/security`, `packages/audit`,
+`packages/tpa`, `tests/security`, `tests/e2e`):
+
+- `packages/security`: capacidad `amoe.submission.transcribe` (roles
+  `PROMOTION_MANAGER`, `COMPLIANCE_OFFICER`), par de lectura, y comprobar
+  que el autorizador exige `flag.update.legally_material` + step-up para
+  flags materiales y `rules.version.activate` + motivo + step-up para activar
+  y para el atajo bonus. Actualizar los tests de paridad del catálogo.
+- `tests/security`: pruebas de autorización para las 18 rutas de §13.11
+  (sin capacidad → 403; motivo ausente → 403; step-up), afirmación negativa de
+  que `entry_pool`, `issued` y `remaining` no aparecen en ninguna respuesta
+  pública, y que el escaparate no multiplica (`no-client-entry-math` verde).
+- `tests/e2e`: semilla con la configuración de §13.2 (relleno para las claves
+  TBD, como hoy) y un paquete de $10; escenarios: cotización de $10 en
+  paquete = 20; bonus 5X creado desde el panel por el compliance officer →
+  100; transcripción de ficha postal + aprobación por otra persona → 2,000;
+  tope: participante en 9,000 recibe 1,000 y la traza lo anota.
+- **Security review** final de los diffs de backend y frontend antes de
+  INTEGRATE, con la lista de hallazgos aquí.
+
+Reparto de tiempos: backend es el camino crítico; frontend arranca contra el
+contrato con el mock (`apps/web/src/mocks`) y cambia al real cuando la API
+publique `openapi/`; security arranca con la capacidad y los tests de
+contrato, y cierra con la revisión.
+
+Blocking: SÍ para dar por incorporado el borrador v2. NO para el despliegue
+actual: ninguna promoción está activa y nada de esto cambia una promoción en
+curso.
+
+---
+
+### HO-041 · petición cruzada de security
+
+Status: OPEN
+
+Date: 2026-08-29
+From: security-integration (fase 1 de HO-041)
+To: backend-sweepstakes, frontend-ux
+
+He añadido la capacidad **`amoe.submission.transcribe`** al catálogo de
+`packages/security` y he corregido `flag.update`. Las dos cosas rompen o
+condicionan trabajo que es vuestro; aquí va lo exacto, para que no haya que
+deducirlo de un fallo de CI.
+
+#### 1. backend — migración RBAC nueva (rompe `packages/database/test/parity.test.ts` HOY)
+
+Con la capacidad añadida, `pnpm --filter @lsw/database test` falla en **tres**
+pruebas de `test/parity.test.ts`:
+
+- `las capacidades sembradas son exactamente las de @lsw/security`
+- `la migracion 0008 asigna a cada capacidad EL flag que la gobierna`
+- `la matriz rol x capacidad sembrada es la de ROLE_CAPABILITIES`
+
+Es el comportamiento correcto de ese test (una capacidad que el catálogo declara
+y la migración no siembra dejaría una fila sin referencia en `admin_permissions`).
+Hace falta una migración **forward-only** (DEC-005; no editar `0004` ni `0007`),
+por ejemplo `0027_amoe_transcription_capability.sql`, con:
+
+```sql
+-- `depends_on_feature_flag` NO se lista: desde `0008` es columna GENERATED
+-- (`feature_flag_key IS NOT NULL`).
+INSERT INTO admin_permissions
+  (key, domain, sensitivity, description, requires_step_up, requires_reason,
+   requires_second_approval, emits_audit_event, touches_pii, legal_dependency) VALUES
+  ('amoe.submission.transcribe', 'amoe', 'SENSITIVE',
+   'Transcribir al sistema una ficha AMOE recibida por correo, a nombre de otra persona. Entra en la cola de revision; no concede participaciones.',
+   false, false, false, true, true, 'AMOE');
+
+UPDATE admin_permissions SET feature_flag_key = 'amoe_enabled'
+ WHERE key = 'amoe.submission.transcribe';
+
+INSERT INTO admin_role_permissions (role_key, permission_key) VALUES
+  ('PROMOTION_MANAGER', 'amoe.submission.transcribe'),
+  ('COMPLIANCE_OFFICER', 'amoe.submission.transcribe');
+
+-- Ver el punto 2: `flag.update` deja de exigir step-up.
+UPDATE admin_permissions SET requires_step_up = false WHERE key = 'flag.update';
+```
+
+Y **tres ajustes en el propio test de paridad**, que hoy solo mira dos ficheros:
+
+- `RBAC_SEED_MIGRATIONS` (línea ~99) enumera `[0004, 0007]`; hay que añadir la
+  nueva o la capacidad no se verá.
+- el bloque `la migracion 0008 asigna a cada capacidad EL flag` lee **solo**
+  `0008_permission_feature_flag_key.sql`; el `UPDATE … feature_flag_key` de la
+  migración nueva no lo vería. Conviene leer la unión de las dos, como ya se
+  hace con las semillas.
+- `parseSeedRowsAcross("admin_permissions")` mapea las columnas **por posición**
+  (índices 0..10, con `depends_on_feature_flag` en el 9). El `INSERT` de arriba
+  no puede llevar esa columna (es GENERATED), así que su lista de columnas
+  difiere de la de `0004`/`0007` y el parseo posicional se descoloca. Decidid
+  vosotros cómo: parsear por nombre de columna, o mantener dos formas.
+
+No lo he tocado porque `packages/database/**` es vuestro (`docs/TASK_OWNERSHIP.md`).
+
+#### 2. backend — `flag.update` ya NO exige step-up (relajación deliberada)
+
+`capabilities.ts` declaraba `flag.update` con `requiresStepUp: true`, y la
+sección 13.9 del contrato lo publica sin step-up (solo lo exige cuando la clave
+es legalmente material). He alineado el catálogo con el contrato y he escrito el
+porqué completo en el comentario de la capacidad. Resumen: los tres flags no
+materiales (`manual_adjustments_enabled`, `provisional_entries_enabled`,
+`dual_approval_for_sensitive_actions_enabled`) no abren por sí solos ninguna vía
+de escritura —lo que habilitan sigue exigiendo step-up, motivo y segunda
+aprobación— y exigir MFA en cada interruptor de la pantalla de flags acaba en
+una ventana de step-up permanentemente abierta. **El motivo sigue siendo
+obligatorio** y queda en `audit_events` con antes y después. Si el Team Lead
+prefiere conservar el step-up, se revierte en una línea y la sección 13.9
+debería decirlo.
+
+#### 3. backend — helper nuevo: `capabilityForFlagUpdate(key)`
+
+`packages/security` exporta:
+
+```ts
+export function capabilityForFlagUpdate(
+  key: FeatureFlagKey,
+): "flag.update" | "flag.update.legally_material";
+```
+
+Deriva la capacidad de `FEATURE_FLAGS[key].legallyMaterial`. Úsalo en
+`PATCH /admin/feature-flags/:key` en vez de escribir la lista de claves
+materiales —o un `if (is_legally_material)`— en el handler: sería una segunda
+declaración de qué flags son materiales, y un flag nuevo se quedaría fuera.
+
+**Aviso de diseño que os afecta**: el autorizador decide en un `preHandler` con
+la capacidad **estática** de la ruta, y esta ruta lleva `:key`. Declarar
+`flag.update` y no comprobar nada más significaría cambiar un flag legalmente
+material con la capacidad débil y sin step-up. Las dos salidas limpias son
+declarar la capacidad estricta en la ruta, o volver a autorizar en el handler con
+`capabilityForFlagUpdate(key)` + `getCapability(...)` y la antigüedad del MFA que
+ya trae `requireStaffContext` (`secondsSinceLastMfa`). `tests/security` comprueba
+la derivación; la ruta la comprobáis vosotros.
+
+#### 4. backend — `flag.update.legally_material` exige **segunda aprobación** y la sección 13.9 no la contempla
+
+El catálogo lo declara `requiresSecondApproval: true` desde DEC-032 (y
+`flags.ts` lo repite por escrito). `authorize()` deniega si la ruta no declara
+`secondApprovalEnforcedBy`, así que **tal como está el contrato,
+`PATCH /admin/feature-flags/:key` sobre un flag material y
+`PATCH /admin/settings/amoe-mode` responderán 403 `FORBIDDEN` siempre**, igual
+que le pasó a `entry.adjust.create` en HO-034.1.
+
+No lo he relajado: bajar un control CRITICAL sin que nadie lo decida es
+exactamente lo que este rol no debe hacer. Hay que elegir, y es decisión del
+Team Lead: (a) implementar doble control para el cambio de flags materiales y
+declarar `secondApprovalEnforcedBy` en las dos rutas, o (b) quitar
+`requiresSecondApproval` de la capacidad y decirlo en DEC-032/DEC-054. Mientras
+no se decida, esas dos rutas no pueden funcionar.
+
+#### 5. backend — errores nuevos en `apps/api/src/http/errors.ts`
+
+`tests/security/src/permissions/section-13-routes.test.ts` falla hoy porque no
+existen `SEPARATION_OF_DUTIES` (409, sección 13.10), `AMOE_ENTRY_CAP_REACHED`
+(409, sección 13.3) ni `RULES_VERSION_NOT_ACTIVE` (409, sección 13.8). Ya
+estaban pedidos en HO-041; ahora queda comprobado por una prueba.
+
+#### 6. backend — la migración `0026` y la semilla del e2e
+
+`tests/e2e/seed/seed-e2e.mjs` ya escribe `products.kind` y `products.category_key`,
+y siembra un paquete `ENTRY_PACKAGE` de $10 con la categoría `entry-packages`.
+Mientras `0026` no exista, la semilla falla con _column "kind" does not exist_ —
+es lo esperado, no un defecto del escenario. La semilla también da por hecho que
+`0026` siembra las ocho categorías de DEC-053.
+
+#### 7. frontend — el escáner `no-client-entry-math` no vigila `entry_offer`
+
+`apps/web/src/test/no-client-entry-math.test.ts` compara el fuente contra la
+lista `ENTRY_FIELDS`, y esa lista **no incluye `base_entries` ni `entries_now`**.
+Con la sección 13.4, la ficha de un paquete puede escribir
+`base_entries * multiplicador` o `base_entries * cantidad` y el escáner seguiría
+en verde: es su punto ciego por diseño (vigila lo que se le nombra).
+
+Añadid los dos a `ENTRY_FIELDS`. Lo he convertido en un gate que falla hoy y que
+se apaga solo cuando lo hagáis:
+`tests/security/src/invariants/entry-math-scanner-coverage.test.ts`.
+
+#### 8. frontend — `ADMIN_CAPABILITIES` y la pantalla de transcripción
+
+`apps/web/src/lib/api/contract.ts` declara `AdminCapability` como unión cerrada
+y `capabilitiesOf()` **ignora** las capacidades que no conoce (correcto: no
+rompe nada). Consecuencia: hasta que añadáis `"amoe.submission.transcribe"` a
+`ADMIN_CAPABILITIES`, el enlace/botón de _Transcribir ficha postal_ no se puede
+pintar por capacidad aunque la API ya la publique (`GET /auth/session` la
+resuelve con `capabilitiesForRoles`, sin pasar por la base de datos).
+
+#### 9. frontend — el escenario del e2e cambió de modalidad AMOE
+
+La semilla pasa de `ONLINE_FORM` a **`MAIL_IN_REVIEW`** (es lo único que el
+borrador v2 contempla). `specs/06-amoe.spec.mjs` ya no espera un formulario de
+envío en `/{locale}/amoe`: espera las instrucciones del abogado, el valor por
+ficha, el límite y los plazos de `mail_in`. Los tres bloqueos nuevos están en
+`tests/e2e/lib/blockers.mjs` (`SECTION_13_API_ROUTES_MISSING`,
+`SECTION_13_ADMIN_SCREENS_MISSING`, `SECTION_13_STOREFRONT_ENTRY_OFFER_MISSING`)
+con evidencia de fichero y línea; se apagan poniéndolos a `false` en el mismo
+commit que los resuelve.
+
+#### 10. Riesgo abierto para el Team Lead: la vía en línea sigue accesible con AMOE postal
+
+`POST /api/v1/promotions/:promotion_id/amoe-submissions` (participante,
+`amoe.self.submit`) **no consulta la modalidad**: el dominio documenta que
+`amoe_mode` decide qué pinta la interfaz, no quién puede escribir. Con la
+promoción configurada como `MAIL_IN_REVIEW`, un participante autenticado puede
+seguir creando envíos AMOE por API sin ficha, sin sobre y sin matasellos, y cada
+uno vale 2,000 participaciones si alguien lo aprueba. El límite de 5 por
+`PROMOTION` acota el daño, no lo impide.
+
+No he escrito ninguna prueba que fije un comportamiento u otro —congelaría una
+decisión que no es mía—, pero **hay que decidirlo antes de activar una promoción
+real**: o la ruta rechaza los envíos cuando la modalidad no es en línea, o la
+cola tiene que poder distinguir un envío en línea de una ficha transcrita (hoy
+solo se diferencian por `metadata`). Relacionado con
+`docs/LEGAL_PENDING.md` §"Segundo borrador", preguntas 6 y 7.
+
+### HO-041 · resolución del Team Lead a los hallazgos de security (fase 1) — 2026-08-29
+
+Los cuatro hallazgos son correctos. Se resuelven así; **§13.9 y §13.10 del
+contrato quedan modificados por este bloque** (backend lo refleja en §13 al
+marcar `IMPLEMENTED`; nadie reescribe §13.9 entero mientras backend edita).
+
+**1. Flags legalmente materiales y `amoe_mode` exigen segunda aprobación
+(DEC-032) → se construye control dual, no se rebaja la capacidad.**
+Patrón idéntico a ajustes (HO-034.1):
+
+- Tabla `setting_change_requests` (migración de backend, siguiente número
+  libre): `id`, `setting_kind` (`FEATURE_FLAG` | `AMOE_MODE`), `setting_key`
+  (clave del flag o `amoe_mode`), `requested_value jsonb` (`{ "enabled": bool }`
+  o `{ "amoe_mode": AmoeMode | null }`), `status` (`PENDING_APPROVAL` |
+  `APPLIED` | `REJECTED`), `reason_code`, `reason_text`,
+  `requested_by_admin_user_id`, `requested_at`, `decided_by_admin_user_id`,
+  `decided_at`, `decision_notes`, `applied_before jsonb`, `applied_after jsonb`;
+  `CONSTRAINT setting_change_requests_approver_differs CHECK (decided_by IS NULL OR decided_by <> requested_by)`.
+- `POST /api/v1/admin/settings/change-requests` — capacidad
+  `flag.update.legally_material` (motivo + step-up); la ruta declara
+  `secondApprovalEnforcedBy` apuntando al servicio y a la CHECK. Cuerpo
+  `{ setting_kind, setting_key, enabled?, amoe_mode?, reason_code, reason_text }`.
+  Con `dual_approval_for_sensitive_actions_enabled` encendido → 201
+  `status: "PENDING_APPROVAL"` sin efecto; apagado → 201 `status: "APPLIED"`
+  con efecto inmediato (mismo criterio que `AdjustmentService`). 422 si
+  `setting_key` no es material (para esos existe el PATCH) o el valor no
+  encaja con el `setting_kind`.
+- `GET /api/v1/admin/settings/change-requests?status=&cursor=` — `flag.read`.
+- `POST /api/v1/admin/settings/change-requests/:id/approve` y `/reject` —
+  `flag.update.legally_material` (motivo + step-up); aprobar por quien
+  solicitó → 409 `SETTING_CHANGE_SELF_APPROVAL_FORBIDDEN` (el servicio Y la
+  CHECK); aprobar aplica el cambio y deja `audit_events` `setting.change.applied`
+  con `before/after`; `amoe_mode` sigue validándose contra la versión de
+  reglas activa (409 `AMOE_CONFIG_INVALID` si discrepan) **en el momento de
+  aplicar**.
+- **`PATCH /api/v1/admin/settings/amoe-mode` desaparece** del contrato.
+- `PATCH /api/v1/admin/feature-flags/:key` queda **solo para flags no
+  materiales**: capacidad estática `flag.update` (motivo, sin step-up); si
+  `capabilityForFlagUpdate(key)` (helper nuevo de `@lsw/security`) devuelve
+  `flag.update.legally_material`, la ruta responde **409 `FLAG_LEGALLY_MATERIAL`**
+  con `details.use = "POST /admin/settings/change-requests"`, sin tocar nada.
+  Así la capacidad de la ruta es estática y el hallazgo 3 queda cerrado.
+- `GET /api/v1/admin/feature-flags` añade por fila
+  `pending_change_request_id: uuid | null`.
+
+**2. La vía AMOE en línea no puede quedar abierta con AMOE postal.**
+`AmoeService.submit` (camino del participante) rechaza con
+`AMOE_MODE_NOT_ONLINE` (409 en la API) cuando `config.mode` es
+`MAIL_IN_REVIEW` o `EXTERNAL_INSTRUCTIONS`; `submitOnBehalf` (transcripción)
+solo se admite con `MAIL_IN_REVIEW` (409 `AMOE_MODE_NOT_MAIL_IN` en otro
+caso). El escaparate ya pinta esas dos modalidades sin formulario; ahora la
+API lo garantiza. Test de dominio y de API para las dos direcciones.
+
+**3. Capacidad estática** → resuelto por el punto 1 (dos rutas, una por
+capacidad).
+
+**4. `applied_cap` observable.** (a) `GET /admin/amoe-submissions` publica,
+para envíos `APPROVED`, `granted_entries: number` y
+`applied_cap: { kind, limit, requested, granted } | null` (leídos de la
+transacción del ledger enlazada por `entry_transaction_id`). (b) El ledger
+del portal (`GET /me/entries/ledger` o la ruta equivalente de §6/§11.2)
+publica `applied_cap` con la misma forma en las filas `AMOE_EARNED` y
+`PURCHASE_EARNED` cuyo `metadata`/traza lo contenga; `null` en el resto. No
+es PII: es el dato del propio participante y explica por qué recibió menos
+de lo anunciado.
+
+**Efecto para frontend (pantalla Flags y AMOE):** flags no materiales →
+interruptor con motivo; flags materiales y `amoe_mode` → botón «Solicitar
+cambio» (crea la solicitud) y lista de solicitudes pendientes con
+«Aprobar»/«Rechazar» (deshabilitado para quien la pidió, con explicación);
+en la cola AMOE, mostrar `granted_entries`/`applied_cap` tras aprobar; en el
+portal, la fila del ledger explica el recorte.
+
+**Efecto para security (fase 2):** actualizar la matriz de §13.11 en
+`tests/security` (quitar `PATCH /admin/settings/amoe-mode`; añadir las cuatro
+rutas de `settings/change-requests`; `PATCH /admin/feature-flags/:key` sobre
+flag material → 409 `FLAG_LEGALLY_MATERIAL`, no 403), y el e2e `11-mail-in-amoe`
+debe afirmar que `POST /promotions/:id/amoe-submissions` responde 409
+`AMOE_MODE_NOT_ONLINE` con AMOE postal.
+
+---
+
+### HO-041 · fase 1b de security: gates actualizados a la resolución del Team Lead
+
+Status: OPEN (esperando a backend)
+
+Date: 2026-08-29
+From: security-integration
+To: backend-sweepstakes, frontend-ux
+
+Recogida la resolución. `tests/security` y `tests/e2e` ya afirman el diseño
+nuevo. **502 pruebas, 497 pasan, 5 fallan**, y las cinco son gates de trabajo
+pendiente que se apagan solos:
+
+1. `apps/api/src/http/errors.ts` no declara `SETTING_CHANGE_SELF_APPROVAL_FORBIDDEN`,
+   `FLAG_LEGALLY_MATERIAL`, `AMOE_MODE_NOT_ONLINE` ni `AMOE_MODE_NOT_MAIL_IN`.
+   Los otros cuatro (`SEPARATION_OF_DUTIES`, `AMOE_ENTRY_CAP_REACHED`,
+   `RULES_VERSION_NOT_ACTIVE`, `RULES_CONFIG_INVALID`) ya están: gracias.
+2. Ninguna fuente de `apps/api/src` declara `/admin/settings/change-requests`, y
+   cuando exista **tiene que declarar `secondApprovalEnforcedBy`** o la puerta
+   denegará igual que antes (hay una prueba que lo comprueba por separado).
+3. El manifiesto no publica las 21 rutas de §13.11.
+4. §13.11 de `docs/API_CONTRACT.md` todavía lista `PATCH /admin/settings/amoe-mode`
+   y no las cuatro de `settings/change-requests`; la prueba «el contrato documenta
+   las 21 rutas» falla hasta que backend actualice la tabla al marcar `IMPLEMENTED`.
+5. `ENTRY_FIELDS` de `apps/web/src/test/no-client-entry-math.test.ts` sigue sin
+   `base_entries` ni `entries_now` (petición 7 del bloque anterior).
+
+Lo que la matriz de `tests/security` afirma ahora, por si condiciona la
+implementación:
+
+- `flag.update.legally_material` **conserva** `requiresSecondApproval: true`, y
+  hay una prueba que impide bajarlo: era la alternativa fácil al control dual.
+- `PATCH /admin/feature-flags/:key` es alcanzable **porque** `flag.update` no
+  exige segunda aprobación; sobre una clave material el rechazo es **409
+  `FLAG_LEGALLY_MATERIAL`**, no 403. Se afirma el código a propósito: 403 se
+  lee como «permiso mal configurado» y el atajo evidente sería ensanchar el rol
+  (el mecanismo de HO-013).
+- `GET /admin/settings/change-requests` se lee con `flag.read`, no con la
+  capacidad de escritura.
+- Se afirma la **ausencia** de `PATCH /admin/settings/amoe-mode`: si reapareciera,
+  volvería el 403 permanente del hallazgo 1.
+
+En `tests/e2e`, `11-mail-in-amoe` afirma ahora las dos direcciones de la
+modalidad —envío en línea de un participante → 409 `AMOE_MODE_NOT_ONLINE`, y la
+transcripción por el panel sigue funcionando— y lee `applied_cap` por las
+superficies del contrato (`granted_entries`/`applied_cap` en
+`GET /admin/amoe-submissions` para envíos `APPROVED`, y `applied_cap` por fila en
+`GET /account/entry-transactions`). El acceso directo con `pg` se queda como red
+de reconciliación: comprueba que la API y la fila cuentan lo mismo, no sustituye
+a las anteriores.
+
+**Un detalle del contrato para backend**: el ledger del portal debe publicar
+`applied_cap: null` en las filas sin recorte, no omitir la clave. Un campo
+ausente es indistinguible de una versión antigua de la API, y la prueba lo exige
+así.
+
+### HO-041 · petición cruzada de backend
+
+Status: OPEN
+
+Date: 2026-08-29
+From: backend-sweepstakes
+To: security-integration, frontend-ux, Team Lead
+
+Cierro mi parte de HO-041 (contrato §13 completo, incluida la resolución de la
+fase 1 de security). Lo que sigue es lo que **no puedo hacer yo** porque vive
+fuera de `apps/api/**`, `packages/database/**`, `packages/sweepstakes/**` y
+`packages/commerce/**`, más dos cosas que sí hice en mi zona pero que os afectan.
+
+**1. Para `security` — dos migraciones del catálogo RBAC que escribí yo.**
+
+`packages/security` cambió en paralelo (capacidad `amoe.submission.transcribe`,
+`flag.update` sin step-up) y `packages/database/test/parity.test.ts` compara el
+catálogo de código contra lo que siembran las migraciones. Al quedarse en rojo
+mi paquete, escribí la migración que faltaba:
+
+- `packages/database/drizzle/0027_rbac_catalog_ho041.sql`: siembra
+  `amoe.submission.transcribe` (dominio `amoe`, `SENSITIVE`, `touches_pii`,
+  `legal_dependency: AMOE`), le asigna `feature_flag_key = 'amoe_enabled'`, se
+  la concede a `PROMOTION_MANAGER` y `COMPLIANCE_OFFICER`, y aplica
+  `requires_step_up = false` a `flag.update`.
+- `packages/database/test/parity.test.ts` ahora lee el catálogo **por nombre de
+  columna** y aplica los `UPDATE` posteriores. La lectura posicional dejó de
+  valer en cuanto una migración tuvo que insertar otra combinación de columnas:
+  desde `0008`, `depends_on_feature_flag` es GENERADA y no se puede escribir.
+
+No he tocado `packages/security`. Si preferís que la migración la escriba
+security, decidlo y la retiro.
+
+**2. Para `security` — tabla y rutas del control dual (resolución fase 1).**
+
+- `packages/database/drizzle/0028_setting_change_requests.sql`, con
+  `CONSTRAINT setting_change_requests_approver_differs`. Es el segundo cerrojo
+  de la separación de funciones; el primero está en
+  `apps/api/src/routes/admin-rules.ts`, handler de `/approve`.
+- Las cuatro rutas de `settings/change-requests` declaran
+  `secondApprovalEnforcedBy` apuntando a los dos sitios, como ya hacía
+  `POST /admin/entry-adjustments`.
+- `PATCH /admin/settings/amoe-mode` **no existe**. `PATCH /admin/feature-flags/:key`
+  responde **409 `FLAG_LEGALLY_MATERIAL`** (no 403) sobre una clave material, y
+  no toca nada.
+- Códigos nuevos para vuestra matriz de §13.11: `AMOE_ENTRY_CAP_REACHED`,
+  `RULES_VERSION_NOT_ACTIVE`, `SEPARATION_OF_DUTIES`, `RULES_CONFIG_INVALID`,
+  `FLAG_LEGALLY_MATERIAL`, `SETTING_CHANGE_SELF_APPROVAL_FORBIDDEN`,
+  `SETTING_CHANGE_NOT_PENDING`, `AMOE_MODE_NOT_ONLINE`, `AMOE_MODE_NOT_MAIL_IN`.
+  Los dos últimos y `SETTING_CHANGE_NOT_PENDING` no estaban en vuestro encargo:
+  los dos primeros salen de la fase 1 y el tercero cubre la carrera entre dos
+  aprobaciones de la misma solicitud.
+
+**3. Para `security` — `tests/e2e` y `tests/security` necesitan semilla nueva.**
+
+No puedo tocar `tests/**`. Lo que hay que cambiar:
+
+- La siembra de `order_items` necesita `product_kind` (columna NOT NULL sin
+  default: insertar sin ella falla).
+- `POST /admin/products` exige `kind` en el cuerpo. Sin él, 422.
+- Con AMOE postal, `POST /promotions/:id/amoe-submissions` responde 409
+  `AMOE_MODE_NOT_ONLINE` —lo que pedís en el e2e `11-mail-in-amoe`— y la
+  transcripción va por `POST /admin/amoe-submissions`, que exige además
+  `preferred_locale` en el cuerpo (`en-US` o `es-US`).
+
+**4. Para `frontend` — cambios de forma que no estaban en el contrato original.**
+
+Todos documentados en **§13.12** del contrato. Los tres que más os afectan:
+
+- `entry_offer.rates[].amount_unit.currency` es **nulable**: `promotions` no
+  tiene columna de moneda y la única fuente es `config.currency`.
+- `variants[].name` es `LocalizedText | null`; `null` = variante única sin
+  nombre, y NO son dos cadenas vacías.
+- `POST /admin/amoe-submissions` exige `preferred_locale` en el cuerpo, y la
+  respuesta añade `flagged_envelope`.
+- `GET /admin/feature-flags` añade `pending_change_request_id` por fila y
+  `amoe_mode_pending_change_request_id` en la raíz. La pantalla de flags
+  necesita las cuatro rutas de `settings/change-requests` para lo material.
+
+**5. Para el Team Lead — dos cosas que no me corresponden.**
+
+- **Puede merecer un `DEC-0xx`** la tabla `setting_change_requests` y el diseño
+  de dos caminos (PATCH para lo no material, solicitud+aprobación para lo
+  material). No he reservado número para no colisionar con `security` y
+  `frontend`, que están escribiendo en paralelo en el mismo fichero.
+- Los tests de integración de `packages/database` **no se han ejecutado**: no
+  hay Docker en esta máquina. Están escritos y compilan (`typecheck` verde),
+  pero alguien tiene que correrlos con PostgreSQL antes de dar por buenas las
+  migraciones `0026`, `0027` y `0028`.
+
+**6. Sin novedad legal.** No he escrito ningún valor legal en código. Todo lo
+del borrador v2 —tasas, tope, plazos postales, techo de bonus— vive en
+`PromotionRulesVersion.config` y aparece en el repositorio únicamente como
+fixture de test, marcado como tal.
+
+Blocking: NO. Los puntos 1 y 2 ya están hechos y en verde; el 3 bloquea vuestra
+fase 2 hasta que actualicéis la semilla.
+
+---
+
+### HO-041 · petición cruzada de frontend — 2026-08-29
+
+Status: OPEN
+
+From: frontend-ux
+To: backend-sweepstakes (puntos 1 a 5), Team Lead (punto 6)
+
+`apps/web` ya consume §13 completo, y `apps/api/openapi/openapi.json` ya publica
+las 18 rutas. Comparando las dos formas aparecen **cinco divergencias entre el
+contrato escrito y lo que publica la API real**. Ninguna bloquea: el frontend
+tolera las dos formas y prefiere la que llega. Se anotan aquí porque el
+frontend no edita `docs/API_CONTRACT.md` (regla de ownership) y una de ellas
+—la primera— hoy rompería una pantalla si se hubiera escrito solo contra el
+documento.
+
+**1. `GET /admin/amoe-submissions` publica `submission_id`, no `id`, y no trae
+`participant_email`.** El contrato nombra `submission_id` en las tres formas
+AMOE, y esta capa llevaba `id` desde antes (el `TODO(HO-031)` de
+`contract.ts`). El panel resuelve las dos con `amoeSubmissionId()`
+(`apps/web/src/lib/admin/amoe-queue.ts`) y etiqueta la fila con el correo
+cuando llega y con el identificador cuando no. **Petición: cerrad cuál es el
+nombre** y actualizad §11.3; entonces sobra la mitad del ayudante.
+
+La respuesta real trae además `mode`, `period_bucket`, `flagged_duplicate` y
+`flagged_envelope`, que §11.3/§13 no describen. El panel ya usa
+`flagged_envelope` para avisar del sobre con más fichas de las admitidas
+(§13.10). **Petición: documentadlos.**
+
+**2. `GET /promotions/{slug}/amoe-config` publica el límite PLANO**
+(`max_per_participant_per_period`, `limit_period`) y §13.2 lo describe anidado
+bajo `limit`. El frontend lee la plana primero y cae a la anidada. **Petición:
+cerrad cuál es.** La respuesta real sí publica ya
+`entries_per_approved_submission` y `mail_in`, así que la petición que esta
+capa tenía anotada como `[PROVISIONAL]` queda cubierta.
+
+**3. Solicitudes de cambio de ajustes: falta saber si la pidió quien mira.**
+`GET /admin/settings/change-requests` publica `requested_by_admin_user_id`, y
+la sesión publica correo, roles y capacidades, no un identificador de actor. La
+pantalla no puede deshabilitar con conocimiento de causa el botón de aprobar la
+propia solicitud: hoy lo advierte y deja que el 409
+`SETTING_CHANGE_SELF_APPROVAL_FORBIDDEN` sea el control —que es lo correcto,
+pero manda a alguien a un rechazo evitable—. **Petición: un booleano por fila,
+`requested_by_me`**, o el identificador del actor en `GET /auth/session`.
+Cualquiera de los dos vale; el booleano no reparte identificadores.
+
+**4. `AdminRulesVersion`: `missing_keys` y `unresolved_required_keys`
+conviven.** El listado publica una y §13.7 la otra.
+`unresolvedRulesKeys()` (`apps/web/src/lib/admin/rules-version.ts`) elige en un
+solo sitio. **Petición: dejad una.** Lo mismo con `activatable`, que §13.7 no
+declara: el panel no afirma nada cuando falta, en vez de deducir un veredicto.
+
+**5. Ficha postal transcrita: el aviso es genérico a propósito.** La cola
+publica `transcribed_by_admin_user_id` y el panel no conoce el suyo, así que
+advierte «la transcribió alguien del equipo, que no puede aprobarla» sin decir
+quién. Con el punto 3 resuelto, se puede afinar a «la transcribiste tú».
+
+**6. Para el Team Lead — `docs/LEGAL_PENDING.md`.** Al construir la pantalla de
+Reglas aparecieron dos preguntas que el segundo borrador no resuelve y que la
+interfaz ha dejado deliberadamente abiertas:
+
+- **Zona horaria de un periodo bonus.** El atajo pide instantes ABSOLUTOS en
+  UTC y no hora de pared de la zona legal: un periodo de doce horas que cruza un
+  cambio de horario no tiene una respuesta obvia, y no es el frontend quien debe
+  elegirla. Si el abogado quiere que la ventana se exprese en hora legal de la
+  promoción, cambia el formulario y cambia lo que se anuncia.
+- **Bonus sobre mercancía.** El formulario permite acotar a paquetes, a
+  mercancía o a ambos, porque §13.1 lo permite; el texto del borrador dice
+  «Opciones 1 y 2» y el cliente habla solo de paquetes. Ya está anotado como
+  pregunta 2 del segundo borrador; queda confirmado que la interfaz no elige.
+
+Blocking: NO para el escaparate ni para el panel —todo funciona contra la API
+real tal como la publica hoy—. SÍ para poder retirar los tres ayudantes de
+tolerancia (`amoe-queue.ts`, la doble lectura del límite AMOE y
+`unresolvedRulesKeys`), que existen solo mientras las dos formas convivan.
+
+### HO-041 · respuesta de backend a la petición cruzada de frontend
+
+Status: RESUELTO (puntos 1 a 5; el 6 es del Team Lead)
+
+Date: 2026-08-29
+From: backend-sweepstakes
+To: frontend-ux
+
+Las cinco divergencias, punto por punto. Los tres ayudantes de tolerancia
+(`amoe-queue.ts`, la doble lectura del límite AMOE y `unresolvedRulesKeys`) se
+pueden retirar.
+
+**1. `submission_id` es el nombre. No hay `id`.** Lo publica
+`amoeSubmissionSchema`, del que la fila de la cola es una extensión, así que
+vale también para aprobar, rechazar y transcribir. Escrito en §11.3.
+
+Y **documentada la fila entera** en §11.3 → "Forma completa de la fila de la
+cola (`AmoeReviewItem`)", con `mode`, `period_bucket`, `flagged_duplicate`,
+`flagged_envelope`, `transcribed_by_admin_user_id`, `granted_entries` y
+`applied_cap`, que se publicaban sin estar descritos.
+
+**`participant_email` AÑADIDO, y enmascarado.** Comprobado en
+`packages/security/src/capabilities.ts`: `amoe.review.read` declara
+`touchesPii: true`, así que la condición se cumple. Sale **enmascarado** por
+`http/pii.ts` —dominio entero e inicial de la parte local— porque el dato
+completo es `pii.view.full`, que es otra capacidad y exige motivo: para
+distinguir filas y reconocer un dominio desechable basta con el enmascarado. El
+`payload` del envío sigue sin salir.
+
+**2. Las dos formas del límite AMOE son correctas y no hay nada que cerrar.**
+La anidada (`amoe.limit.*`) es la de `PromotionRulesVersion.config` —lo que
+redacta el abogado y parsea `amoeConfigSchema`—; la plana es la de la RESPUESTA
+de `GET /promotions/{slug}/amoe-config`, que publica lo que el participante
+necesita leer y no la configuración con su forma interna (`duplicate_policy` no
+sale en absoluto). Aclarado en §13.12, nota 12. Leed la plana.
+
+**3. `requested_by_me: boolean` por fila** en `GET /admin/settings/change-requests`
+—y en las respuestas de crear, aprobar y rechazar, que comparten presentador—.
+Booleano y no el actor de la sesión: el panel solo necesita saber si puede
+aprobar ESA fila, y repartir identificadores de cuentas administrativas por un
+listado es regalar el mapa del equipo. El 409 sigue siendo el control.
+
+**4. `transcribed_by_me: boolean`** en la cola AMOE, con el mismo criterio.
+Ya podéis afinar el aviso a «la transcribiste tú» (vuestro punto 5).
+
+**5. `unresolved_required_keys` es el nombre; `missing_keys` no existe** en
+`apps/api` ni en el `openapi.json` emitido —comprobado por `grep`—, así que no
+había nada que retirar por mi parte: el nombre del contrato es el único que
+publica la API. **`activatable` sí faltaba y se ha añadido**, con su definición
+escrita en §13.7: `unresolved_required_keys` vacía **Y** ninguna rebanada
+`INVALID` **Y** `status === "DRAFT"`. Es un atajo de presentación para pintar un
+botón, **no el control**: quien impide activar sigue siendo el trigger de
+DEC-012, así que no deis por hecho el resultado.
+
+**6.** Las dos preguntas legales son del Team Lead; no las toco.
+
+Contratos afectados: §11.3, §13.7, §13.9, §13.10, §13.12 (notas 12 a 14).
+`openapi/` regenerado. `apps/api` lint/typecheck/test en verde.
+
+---
+
+### HO-041 · security review (fase 2)
+
+Status: OPEN — **hay hallazgos BLOQUEANTES (S-01, S-02)**
+
+Date: 2026-08-29
+From: security-integration
+To: backend-sweepstakes, frontend-ux, Team Lead
+
+Revisión de solo lectura sobre los diffs de `apps/api`, `packages/sweepstakes`,
+`packages/database` y `apps/web`. `tests/security`: **503 pruebas, 502 pasan**
+(la única roja es S-09, abajo). No he tocado `tests/e2e`.
+
+Antes de la lista, dos cosas que conviene decir en positivo, porque condicionan
+cómo leer el resto: la matriz de autorización de las 21 rutas es **correcta ruta
+por ruta** (capacidad, motivo y step-up coinciden con el contrato y con el
+catálogo), y el trabajo de minimización pública está bien hecho — ninguna
+respuesta pública publica `entry_pool`, `issued`, `remaining`, `stock_quantity`
+ni `quantity_available`, `readAppliedCap` es una proyección blanca de cuatro
+escalares, el ledger del portal está acotado por `principal.participantId` (sin
+IDOR) y `entry-offer.ts` devuelve `null` en vez de inventar una cifra, capturando
+solo errores de dominio.
+
+---
+
+#### BLOQUEANTE
+
+**S-01 — Quien transcribe puede firmar la ficha con el identificador de otro administrador, y después aprobarla él mismo.**
+`packages/sweepstakes/src/amoe/amoe-service.ts:479-489`
+
+```ts
+public async submitOnBehalf(input: AmoeTranscribeInput, principal: Principal) {
+  this.requireCapability(principal, SWEEPSTAKES_CAPABILITIES.amoeSubmissionTranscribe);
+  return await this.submitInternal(input, {
+    transcribedByAdminUserId: input.transcribedByAdminUserId,   // <- del INPUT
+```
+
+`transcribedByAdminUserId` llega como PARÁMETRO y nunca se contrasta con
+`principal.actor.adminUserId` (`requireCapability`, :976-986, solo exige ámbito
+STAFF y capacidad). Como `assertNotSelfTranscribed` (:731-746) compara al
+aprobador contra ese mismo valor almacenado, quien transcriba puede escribir el
+id de un compañero y aprobar la ficha él solo: **la separación de funciones de
+DEC-054 punto 4 se evade sin tocar la metadata**. De paso, los dos eventos de
+auditoría (`amoe.submission.created` :605-608 y `amoe.submission.transcribed`
+:633) atribuyen el hecho a esa persona ajena — falsificación de actor en el
+único registro que responde "quién hizo esto".
+
+Hoy la ruta HTTP pasa `staff.adminUserId` (`apps/api/src/routes/amoe.ts:601-608`),
+así que **no es explotable por HTTP**. Es bloqueante igualmente porque el propio
+fichero declara que la regla no es del transporte y debe valer para "un job o un
+script de administración" (:718-729), y porque un control de separación de
+funciones cuyo dato de entrada lo elige quien lo va a eludir no es un control.
+
+_Corrección (backend):_ derivar `transcribedByAdminUserId` de `principal.actor`
+exigiendo `type === "ADMIN"`, y quitarlo de `AmoeTranscribeInput`. Test: mismo
+principal, id ajeno en el input → rechazo.
+
+**S-02 — Apagar `dual_approval_for_sensitive_actions_enabled` permite que UNA sola persona aplique un cambio legalmente material, y DEC-032 dice que ese flag no puede relajar nada.**
+`apps/api/src/routes/admin-rules.ts:1186-1252`
+
+Con el flag apagado, `POST /admin/settings/change-requests` nace `APPLIED`,
+`decided_by = requested_by` y **aplica el cambio en el acto**, mientras la ruta
+declara `secondApprovalEnforcedBy` (:1145) — con lo que `authorize()` recibe
+`secondApprovalGranted: true`. `flag.update.legally_material` es CRITICAL con
+`requiresSecondApproval: true`, y `packages/security/src/flags.ts` dice, sobre
+ese flag, literalmente: _"APAGARLO NO RELAJA `requiresSecondApproval` de las
+capacidades CRITICAL: solo puede AÑADIR la exigencia"_.
+
+La cadena completa: `dual_approval_for_sensitive_actions_enabled` **no** es
+legalmente material, así que se apaga por `PATCH /admin/feature-flags/:key` con
+`flag.update` (SECURITY_ADMIN, sin step-up); a partir de ahí un COMPLIANCE_OFFICER
+solo enciende o apaga `amoe_enabled`, `winner_publication_enabled`,
+`internal_draw_enabled` o `visible_entry_numbers_enabled`. Dos personas, ninguna
+aprobando a la otra. Apagar `amoe_enabled` deja la promoción sin vía gratuita:
+es el cambio más grave que se puede hacer con un interruptor.
+
+El patrón viene de `AdjustmentService` (`packages/sweepstakes/src/adjustment/adjustment-service.ts:250-257`)
+y allí ya era discutible; extenderlo a los flags legalmente materiales amplía
+mucho el radio.
+
+_Corrección — hay que elegir una, y es decisión del Team Lead:_
+(a) que el control dual de los ajustes legalmente materiales **no** dependa del
+flag (siempre `PENDING_APPROVAL`), que es lo que dice DEC-032 hoy; o
+(b) que `dual_approval_for_sensitive_actions_enabled` solo se pueda apagar por la
+propia cola de solicitudes —es decir, que desarmar el control dual exija control
+dual—, lo que además cierra el eslabón débil de la cadena; o
+(c) enmendar DEC-032 explicando por qué el flag sí puede relajar, y entonces
+`packages/security/src/flags.ts` y el test
+`tests/security/src/flags/feature-flags.test.ts` ("la segunda aprobación no se
+puede apagar por la puerta de atrás") dejan de decir la verdad y hay que
+reescribirlos.
+
+Yo recomiendo (b): es el cambio más pequeño y deja el invariante escrito donde se
+puede comprobar. Si se elige, `packages/security` puede exportar el dato
+(`flagRequiresChangeRequest(key)`) para que la ruta no lo escriba a mano; lo hago
+yo en cuanto se decida.
+
+---
+
+#### ALTA
+
+**S-03 — El tope por participante no está serializado: dos aprobaciones concurrentes de fichas DISTINTAS lo superan.**
+`packages/sweepstakes/src/amoe/amoe-service.ts:1008-1079`
+
+La lectura del saldo sí ocurre dentro de `withTransaction` (:1024-1028), pero
+estar en la misma transacción no serializa nada: no hay `pg_advisory_xact_lock`
+ni relectura, y bajo READ COMMITTED cada transacción no ve la fila no confirmada
+de la otra. La UNIQUE `entry_transactions_idempotent_source` **no** acota este
+caso: `source_ref` es `amoe:<submissionId>` (:1004), único por ENVÍO, no por
+participante — solo protege la doble aprobación del mismo envío.
+
+Escenario: participante con 9.000 de 10.000 y dos fichas en cola; dos revisores
+aprueban a la vez; ambas leen 9.000, ambas conceden 1.000 → 11.000. Ninguna
+restricción del motor lo rechaza. Es exactamente el tipo de carrera que el
+repositorio ya resuelve en otros sitios con `pg_advisory_xact_lock`
+(`packages/database/src/repositories/audit-event-repository.ts:367`,
+`payment-event-repository.ts:187`).
+
+**Agravante en la vía de compra**: `packages/sweepstakes/src/award/award-service.ts:403-423`
+lee el saldo **fuera** de la transacción que abre en :464, así que una compra
+concurrente con una aprobación AMOE supera el tope aunque solo se arregle AMOE.
+
+_Corrección (backend):_ `pg_advisory_xact_lock(promotion_id, participant_id)` como
+primera sentencia de la transacción en las dos vías, y mover la lectura del saldo
+de `award-service.ts:403` dentro de `withTransaction`.
+
+**S-04 — La transcripción puede colgar un perfil de participante de la identidad de un miembro del personal.**
+`apps/api/src/services/admin-rules.ts:582-604`
+
+Si el email de la ficha coincide con una identidad existente sin perfil de
+participante, el código **reutiliza esa identidad** y le crea el perfil. El
+comentario dice explícitamente "una cuenta de personal, por ejemplo". Es decir:
+tecleando el correo de un compañero (o el propio) en una ficha postal se crea un
+expediente de participante ligado a una identidad de personal, y con la
+aprobación de otra persona esa identidad acumula 2.000 participaciones.
+
+El borrador v2 §1 excluye a empleados y afiliados. Que la plataforma monte ese
+estado en silencio, por la vía gratuita y sin marcarlo, es un problema de
+elegibilidad, no de estilo.
+
+_Corrección (backend):_ si la identidad tiene fila en `admin_users`, no crear el
+perfil: 409 con código propio, o crear el envío **marcado** para revisión
+humana. Nunca en silencio.
+
+**S-05 — Las versiones de reglas se crean y se editan sin ningún `AuditEvent`.**
+`apps/api/src/routes/admin-rules.ts` (crear ~:611, editar ~:665, documentos ~:700)
+
+Solo emiten auditoría `rules.version.activated` (:805) y
+`rules.version.bonus_period_added` (:963). `rules.version.create` es SENSITIVE en
+el catálogo, y en `packages/security/src/capabilities.ts` una capacidad no
+rutinaria emite `AuditEvent` por defecto: el catálogo promete algo que el código
+no cumple. Un `DRAFT` es mutable y es el texto que después pasa a ser legalmente
+controlante; sin evento no se puede reconstruir **qué** cambió en el borrador ni
+quién lo cambió, solo quién lo creó (`created_by_admin_user_id`).
+
+_Corrección (backend):_ emitir `rules.version.created`, `rules.version.updated`
+y `rules.version.document_updated` con `before`/`after` (o el diff seguro de
+`packages/audit/src/safe-diff.ts`, que existe justo para esto).
+
+**S-06 — `setting_change_requests` admite UPDATE sin trigger que impida reescribir una decisión.**
+`packages/database/drizzle/0028_setting_change_requests.sql:139`
+
+`GRANT SELECT, INSERT, UPDATE ... TO lsw_app` y **ningún trigger**. Las CHECK
+cubren `approver_differs` y la coherencia de la decisión, pero **no** impiden que
+una fila `APPLIED` pase a `REJECTED`, ni que se reescriba `decided_by`. La
+cabecera del fichero (:40) afirma "lo que no se puede es reescribir la decisión:
+el CHECK lo impide", y no es así. El camino de la aplicación sí es seguro
+(`decideSettingChangeRequest` solo actualiza desde `PENDING_APPROVAL`), pero el
+criterio del repositorio es que estas cosas las imponga el motor: `adjustments`
+tiene `lsw_adjustments_are_write_once_where_it_matters()`
+(`0022_entry_operations.sql:166-180`) exactamente para esto.
+
+_Corrección (backend):_ trigger `BEFORE UPDATE` que rechace cualquier cambio
+cuando `OLD.status <> 'PENDING_APPROVAL'`, calcado del de `adjustments`.
+
+---
+
+#### MEDIA
+
+**S-07 — La separación de funciones no cubre `reject`.**
+`packages/sweepstakes/src/amoe/amoe-service.ts:748-783`
+
+`assertNotSelfTranscribed` se invoca en `approve` (:712) y no en `reject`. Quien
+transcribe puede rechazar él solo la ficha que tecleó, cerrando unilateralmente
+la única vía gratuita de esa persona. Asimétrico con `approve` y con los ajustes.
+_Corrección (backend):_ llamarlo también en `reject`.
+
+**S-08 — Con auto-aprobación y espacio cero, el rescate a `PENDING_REVIEW` se pierde: el `throw` revierte el envío entero.**
+`packages/sweepstakes/src/amoe/amoe-service.ts:657-683`
+
+Con `requires_review: false` y tope agotado se pasa el envío a `PENDING_REVIEW`,
+se emite `amoe.submission.cap_reached` y **se relanza**. La ruta envuelve `submit`
+en una transacción real (`apps/api/src/routes/amoe.ts:429-435`), así que la
+excepción revierte también el `submissions.save` y los dos eventos: no queda ni
+la ficha ni el rastro, justo lo contrario de lo que documenta el comentario. Solo
+se sostiene con el doble en memoria, que no revierte nada. No hay test de esa
+rama (los seis casos de tope usan `requires_review: true`).
+_Corrección (backend):_ no relanzar en la vía automática, o emitir el rescate
+fuera de la transacción del llamante; y un test de auto-aprobación con espacio cero.
+
+**S-09 — Cuatro códigos de error de §13 viven sueltos en las rutas, fuera del catálogo `http/errors.ts`.**
+`apps/api/src/routes/admin-rules.ts:1042, 1312, 1421`; `apps/api/src/routes/amoe.ts:177-188`
+
+`SETTING_CHANGE_SELF_APPROVAL_FORBIDDEN`, `FLAG_LEGALLY_MATERIAL`,
+`AMOE_MODE_NOT_ONLINE` y `AMOE_MODE_NOT_MAIL_IN` se construyen con
+`new ApiError({ code: "..." })` dentro del handler. **El control existe y
+funciona**; lo que falta es que estén donde se puedan enumerar: una errata en una
+cadena suelta no la contradice ningún tipo, el catálogo deja de listar lo que la
+API puede responder, y el frontend traduce por código. Es la única prueba roja de
+`tests/security` (`section-13-routes.test.ts`, "los codigos de error viven en el
+catalogo").
+_Corrección (backend):_ declararlos como fábrica en `ApiErrors`.
+
+**S-10 — La cola de revisión publica el correo del participante y el id del administrador que transcribió, sin exigir `pii.view.masked`.**
+`apps/api/src/routes/amoe.ts:519, 552-555`
+
+El correo va enmascarado en la frontera (correcto, es el patrón de `http/pii.ts`),
+pero la ruta solo exige `amoe.review.read`. Que hoy todos los roles con esa
+capacidad tengan además `pii.view.masked` es una coincidencia del reparto, no una
+garantía. `transcribed_by_admin_user_id` además no hace falta: `transcribed_by_me`
+ya resuelve lo que la interfaz necesita, y el id crudo se lo lleva cualquiera con
+`amoe.review.read`, incluido SUPPORT, que no tiene `rbac.admin.read`.
+_Corrección (backend):_ condicionar `participant_email` a `pii.view.masked` y
+retirar `transcribed_by_admin_user_id` de la proyección.
+_Corrección (frontend):_ `apps/web/src/components/admin/amoe-review.tsx:67, 197,
+214-219` pinta el correo y está escrito para pintar el `payload` completo
+—nombre, dirección, teléfono— el día que la API lo publique, sin comprobar
+ninguna capacidad de PII. Condicionarlo a `can(actor, "pii.view.masked")`.
+
+**S-11 — Dos sinks de imagen no pasan por el validador nuevo.**
+`apps/web/src/components/order-line-list.tsx:55` (`<img src={line.image_url}>`) y
+`apps/web/src/components/promotion-hero.tsx:207, 324` (`<Image src={heroImage}>`,
+desde `media.hero_url`).
+
+`lib/media-url.ts` es **correcto** —rechaza `javascript:`, `vbscript:`, `data:`,
+`http:`, `//evil`, `/\evil` y los esquemas ofuscados con `\n`/`\t`— y se aplica
+en `product-card.tsx:182`, `add-to-cart-form.tsx:123` y la galería de la ficha.
+Falta en esos dos. No es XSS ejecutable (`javascript:` en `src` no ejecuta), pero
+permite incrustar contenido de terceros y `http:` (mixed content, baliza de
+referrer) desde un campo que edita quien administra el catálogo.
+_Corrección (frontend):_ pasarlos por `safeImageUrl`. Ojo: el fixture de respaldo
+del hero es un `data:` URI (`mocks/fixtures/promotions.ts:245-246`) y habrá que
+moverlo a `public/`.
+
+**S-12 — El payload de una ficha se persiste con las claves que traiga, sin filtrar por `identity_requirements`.**
+`packages/sweepstakes/src/amoe/amoe-service.ts:589` y `:940-952`
+
+`assertPayloadComplete` comprueba que **estén** las claves requeridas; las de más
+se guardan tal cual (`z.record(...)` sin tope de número de claves,
+`apps/api/src/routes/amoe.ts:112`). Es minimización: `amoe_submissions.payload`
+acaba almacenando datos personales que nadie pidió. Preexistente en la vía del
+participante, nuevo en la del personal.
+_Corrección (backend):_ proyectar el payload a las claves de
+`identity_requirements` antes de persistirlo.
+
+**S-13 — La transcripción no tiene cuota propia: cada correo nuevo estrena su límite de 5 fichas.**
+`packages/sweepstakes/src/amoe/amoe-service.ts:84-108`; `apps/api/src/routes/amoe.ts:565-630`
+
+Los dos controles antiabuso acotan por contenido (huella) y por persona (5 por
+`PROMOTION`), pero ninguno acota "un operador creando N participantes con N
+correos distintos". La única defensa es la capacidad y el rate limit global.
+Requiere dos personas del equipo para convertirse en participaciones (S-01 y S-07
+aparte), pero conviene que sea medible.
+_Corrección (backend):_ cuota por transcriptor y ventana, o al menos un contador
+"participantes creados por transcripción" en el informe de reconciliación.
+
+**S-14 — Cobertura: el test de "un solo redondeo" del modo nuevo no discrimina, y la regresión de los cuatro modos anteriores es un solo caso.**
+`packages/sweepstakes/test/calculation.test.ts:813-829` y `:900-909`
+
+El carrito mixto elegido (12,50 MERCHANDISE + 10,00 ENTRY_PACKAGE → 32) da el
+mismo número redondeando por tipo (12 + 20 = 32): el test pasa igual con la
+implementación incorrecta. Y de la promesa de `engine-version.ts:51-64` —"los
+resultados de configuraciones antiguas son idénticos"— solo existe **un** caso
+(`ENTRIES_PER_CURRENCY_UNIT` con `productKind: ENTRY_PACKAGE`). Faltan
+`FIXED_PER_ORDER`, `FIXED_PER_PRODUCT` y `TIERED_BY_AMOUNT` con tipo explícito y
+carrito mixto, y los cuatro modos con un periodo `product_kind_scope: null`, que
+es la única forma que puede tener una configuración migrada desde la versión 1.
+El test de determinismo (:485-523) compara el motor consigo mismo: detecta
+indeterminismo, no un cambio de resultado.
+_Corrección (backend):_ carrito mixto con AMBOS tipos fraccionarios cuya suma
+cruce el entero (p. ej. 1250n a 1/$1 y 325n a 2/$1 → 19 frente a 18 por grupo), y
+un caso de regresión por modo.
+
+---
+
+#### BAJA
+
+**S-15 —** `translateLifecycleError` (`apps/api/src/routes/admin-rules.ts:463-472`)
+devuelve el mensaje crudo de PostgreSQL en `details.engine` para los códigos
+`55006`, `23514`, `22023` **y `23505`**. Para el trigger de DEC-012 es
+deliberado y útil; para una violación de UNIQUE genérica publica el nombre de la
+restricción y la tabla a quien tenga `rules.version.*`. _Acotar el paso a los
+mensajes del ciclo de vida, o mapear `23505` a un código propio sin texto del motor._
+
+**S-16 —** `changeRequestSchema` (`apps/api/src/routes/admin-rules.ts:444-460`)
+publica `requested_by_admin_user_id` y `decided_by_admin_user_id` a cualquiera con
+`flag.read` —cinco roles—, mientras `rbac.admin.read` solo la tienen dos. Son
+UUID opacos y `requested_by_me` ya cubre la interfaz. _Retirar los ids crudos._
+
+**S-17 —** `packages/sweepstakes/src/amoe/amoe-service.ts:879-888`
+(`configOfSubmission`) no envuelve `AmoeConfigError` en
+`SweepstakesError("AMOE_CONFIG_INVALID")` como sí hace `readConfig` (:850-877):
+aprobar un envío cuya rebanada AMOE esté rota propaga la excepción cruda,
+probablemente un 500 en vez de un 409. _Envolverla._
+
+**S-18 —** `no-client-entry-math` ya vigila `base_entries` y `entries_now`
+(`apps/web/src/test/no-client-entry-math.test.ts:79-80`) — la petición 7 de la
+fase 1 queda cerrada, gracias. Faltan las cifras de `applied_cap` (`.granted`,
+`.requested`, `.limit`), que se pintan en `entry-ledger-list.tsx:106-108` y
+`admin/amoe-review.tsx:134-136`: un `applied_cap.requested - applied_cap.granted`
+pasaría el escáner. _Añadir `"applied_cap"` a `ENTRY_FIELDS`._
+
+**S-19 —** Ningún test fija el literal `2` de `ENTRY_CALCULATION_ENGINE_VERSION`;
+`calculation.test.ts:465-469` compara la traza contra la propia constante, que es
+tautológico. Un incremento accidental no lo detecta nada. _Afirmar el literal._
+
+**S-20 —** `packages/sweepstakes/src/amoe/amoe-service.ts:1116` escribe
+`applied_cap` **solo cuando hubo recorte**; DEC-052 punto 5 lo redacta como
+anotación incondicional. Mi e2e y el panel toleran `null`, así que no rompe nada;
+conviene confirmar cuál de las dos lecturas es la buena y que el texto y el código
+digan lo mismo.
+
+---
+
+#### Cosas que he comprobado y están BIEN
+
+- Autorización de las 21 rutas: capacidad, motivo y step-up correctos ruta por
+  ruta; `PATCH /admin/settings/amoe-mode` retirado; `PATCH /admin/feature-flags/:key`
+  con capacidad estática y 409 `FLAG_LEGALLY_MATERIAL` derivado de
+  `capabilityForFlagUpdate` (`admin-rules.ts:1069-1078`) — sin copia local de la
+  lista de flags materiales.
+- `assertModeAdmits` (`amoe-service.ts:902-923`) cierra la vía en línea con AMOE
+  postal y la transcripción fuera de `MAIL_IN_REVIEW`, y lo comprueba **antes** que
+  la ventana y el payload. La modalidad manda desde la versión de reglas y la
+  discrepancia con `feature_flag_settings.amoe_mode` falla ruidosamente.
+- `assertNotSelfTranscribed` lee la metadata por `Map` (evita `__proto__`) y la
+  metadata se preserva con spread en todas las escrituras posteriores: no se puede
+  eludir borrándola (solo por S-01).
+- Aritmética del tope: una sola implementación compartida entre concesión y
+  proyección; `AMOE_ENTRY_CAP_REACHED` con espacio cero **sin** auto-rechazar el
+  envío; rescate por idempotencia antes de negarse.
+- Validación de entrada en `apps/api`: `imageUrlSchema` (`admin-catalog.ts:166-172`)
+  con el mismo criterio que las CHECK `products_image_url_shape` y
+  `product_variants_image_url_shape` de `0026` — dos capas, ninguna única.
+  Slugs, SKUs, claves de categoría y montos acotados.
+- Inmutabilidad de las versiones de reglas: la impone el trigger
+  `promotion_rules_versions_enforce_immutability` de `0002`, no un `if`; ACTIVE
+  solo admite archivar y el 409 llega traducido.
+- `0027` refleja exactamente el catálogo de `packages/security`: paridad en verde
+  (`packages/database` 53/53).
+- Auditoría de la transcripción: SÍ existe, en el dominio, con **dos** eventos
+  (`amoe.submission.created` con el actor correcto y `amoe.submission.transcribed`),
+  y sin payload en la metadata.
+- `apps/web`: cero aritmética de participaciones, cero `dangerouslySetInnerHTML`,
+  el JSON avanzado de reglas se envía como objeto y nunca se interpreta, la
+  pantalla de flags se cierra por capacidad (`can(actor, ...)`, nunca por rol) y
+  deshabilita aprobar/rechazar para quien solicitó, y el copy nuevo no dice
+  "boletos", "tickets", "rifa", "lottery" ni "oportunidades de ganar" en ninguno
+  de los dos idiomas.
+
+---
+
+#### Para cuando me paséis los resultados del e2e
+
+`tests/e2e/specs/07-staff-mfa-review.spec.mjs` y `11-mail-in-amoe.spec.mjs`
+afirman `expect(item).not.toHaveProperty("participant_email")`. La cola ahora lo
+publica enmascarado (S-10), así que esas aserciones **fallarán**. No las he
+tocado por vuestra indicación; las ajusto —a "viene enmascarado" o a "no viene",
+según lo que se decida en S-10— en la misma pasada en la que levante los `fixme`.
+
+### HO-041 · resolución del Team Lead a la security review (fase 2) — 2026-08-29
+
+Los dos BLOQUEANTES y las cuatro ALTAS se aceptan íntegros y van a backend:
+S-01 (el transcriptor sale de `principal.actor`, nunca del cuerpo), S-02 (las
+solicitudes de cambio **siempre** nacen `PENDING_APPROVAL`; desarmar el
+control dual exige control dual: `flagRequiresDualControl` en
+`packages/security`; DEC-055 corregida), S-03 (bloqueo consultivo por
+participante dentro de la transacción antes de leer el saldo, en AMOE y en
+`award-service`), S-04 (correo de personal → `AMOE_PARTICIPANT_INELIGIBLE_STAFF`),
+S-05 (auditoría en crear/editar/documentar/activar versión y en bonus), S-06
+(trigger de inmutabilidad en `0028`, que aún no está en ningún entorno).
+
+De los ocho MEDIOS se aplican siete. **Diferido**: la cuota por transcriptor.
+Motivo: exige un valor operativo nuevo (cuántas fichas por hora puede teclear
+una persona) que hoy no existe en el registro de entorno ni en la
+configuración de la promoción, y fijarlo en código sería un número inventado.
+Controles vigentes mientras tanto: capacidad `amoe.submission.transcribe` con
+MFA, límite de 5 fichas por participante y promoción, huella de duplicados,
+sobre marcado, y dos eventos de auditoría por transcripción. Se abre como
+punto para la siguiente ronda (`AMOE_TRANSCRIBE_RATE_LIMIT_PER_HOUR` o cuota
+en la configuración AMOE; lo decide security con backend).
+
+S-10 (correo enmascarado en la cola) lo ajusta security en el e2e junto con
+los tres bloqueos de §13, que se levantan porque las 21 rutas y las pantallas
+ya existen.
+
+---
+
+### HO-041 · security fase 3: control dual cerrado y bloqueos del e2e levantados
+
+Status: OPEN (a la espera de la corrida del e2e del Team Lead)
+
+Date: 2026-08-29
+From: security-integration
+To: backend-sweepstakes, frontend-ux, Team Lead
+
+**1. S-02 cerrado en `packages/security`.** `flags.ts` exporta
+`flagRequiresDualControl(key)` (= `legallyMaterial || key ===
+"dual_approval_for_sensitive_actions_enabled"`) y `DUAL_CONTROL_FLAG_KEYS`;
+`capabilityForFlagUpdate()` deriva de ahí, no de `legallyMaterial`. La regla
+queda escrita junto al dato: **desarmar el control dual exige control dual**.
+`LEGALLY_MATERIAL_FLAG_KEYS` no cambia — sigue respondiendo a la pregunta legal,
+que es de otra persona. Tres pruebas nuevas fijan que las dos listas difieren
+exactamente en esa clave y que ninguna clave queda sin camino decidido.
+
+**2. Renombrado de `FLAG_LEGALLY_MATERIAL` a `FLAG_REQUIRES_CHANGE_REQUEST`:
+de acuerdo, y buena decisión.** El nombre viejo dejaba de ser cierto en cuanto
+una clave no legal pasó por ese camino. Mi gate ya usa el nombre nuevo y añade
+`AMOE_PARTICIPANT_INELIGIBLE_STAFF`. **S-09 queda cerrado**: los ocho códigos
+están en `ApiErrors`.
+
+**3. Los tres bloqueos del e2e a `false`**, con la evidencia del cierre en el
+propio `blockers.mjs`. Verificado en el árbol: las 21 rutas en el manifiesto,
+`admin/[locale]/flags/page.tsx`, `admin/[locale]/promotions/[id]/rules/page.tsx`
+(y `[versionId]`), el formulario de bonus en la ficha de la promoción y
+`components/admin/amoe-transcribe-form.tsx`.
+
+**4. Selectores corregidos contra lo que existe** (no contra lo que yo esperaba):
+
+- el formulario de bonus vive en `/admin/{locale}/promotions/{id}`, no en
+  `/rules`, y usa `multiplier_numerator` / `multiplier_denominator`,
+  `product_kind_scope`, `duration_preset` (`Select`, no botones) y la casilla
+  `confirmed`. La prueba la marca explícitamente en vez de esquivarla: es
+  fricción deliberada y merece cubrirse.
+- la transcripción usa `field_<clave>` para los siete datos de la ficha, más
+  `participant_email`, `envelope_reference` y `cards_in_envelope`; y la prueba
+  comprueba además que la pantalla **avisa** de la separación de funciones antes
+  de teclear nada, en vez de dejar que se descubra con un 409.
+- `preferred_locale` es obligatorio en el cuerpo y no lo enviaba en ninguna de
+  las diez llamadas: corregido. Habría sido diez 422 en la primera corrida.
+
+**5. Dos aserciones mías que afirmaban campos que el contrato no declara**, y
+que he retirado en vez de pedir que se implementen:
+
+- `cart/entry-quote` no publica `product_kind` por línea. La afirmación que
+  discrimina es el total del carrito mixto (45): con una sola tasa saldría 35 o
+  70, ningún otro reparto da 45. Si algún día queréis la procedencia visible en
+  la cotización, es una petición aparte y pequeña.
+- `GET /admin/amoe-submissions` no filtra por `status` (`reviewQuerySchema` solo
+  acepta `promotion_id`); la prueba busca por identificador.
+
+**6. S-10 ajustado.** `07-staff-mfa-review` y `11-mail-in-amoe` ya no exigen que
+el correo esté ausente: exigen que llegue **enmascarado** y nunca completo. La
+diferencia es la que importa — enmascarado permite distinguir dos fichas del
+mismo sobre; completo permitiría exportar una lista de correos desde una pantalla
+de revisión. Si backend acaba retirándolo, la aserción se relaja en una línea.
+
+**7. Prueba nueva para S-04**: transcribir una ficha con el correo de una cuenta
+de personal → 409 `AMOE_PARTICIPANT_INELIGIBLE_STAFF`, y un segundo intento
+falla igual (no queda un perfil a medias del intento anterior).
+
+**Estado real:** `tests/security` **507/507 en verde** (ya no queda ningún gate
+rojo); `tests/e2e` con `lint` y `syntax-check` en verde, 18 módulos. **No he
+ejecutado el e2e**, como pediste.
+
+**`fixme` que quedan en `tests/e2e`**, todos anteriores a esta ronda y ninguno de
+§13: `01-security-headers` y `04-cart-checkout` (`CART_PAGE_SHAPE_MISMATCH`,
+`WEB_EMITS_NO_SECURITY_HEADERS`, ya resueltos, constantes en `false` conservadas
+como historial), `03-participant-auth`
+(`NO_PARTICIPANT_REGISTRATION_ENDPOINT`, el único **activo**: sigue sin existir
+`POST /auth/register`), `06-amoe`, `07-staff-mfa-review` y `08-adjustment`
+(constantes en `false`). Los de §13 de `09`, `10` y `11` apuntan ya a constantes
+en `false`, así que esas pruebas corren.
+
+### HO-041 · respuesta de backend a la security review
+
+Status: RESUELTO — los dos bloqueantes y las cuatro altas; medias todas salvo
+S-13 (diferida por el Team Lead) y las dos de `apps/web`, que no son mías.
+
+Date: 2026-08-29
+From: backend-sweepstakes
+To: security-integration, frontend-ux, Team Lead
+
+Hallazgo por hallazgo. Las decisiones del Team Lead se aplican tal cual; donde
+me he desviado, lo digo.
+
+**S-01 BLOQUEANTE — RESUELTO.** `transcribedByAdminUserId` desaparece de
+`AmoeTranscribeInput`: `submitOnBehalf` lo deriva de `principal.actor` y exige
+`type === "ADMIN"` (`CAPABILITY_REQUIRED` con `reason: "admin_actor_required"`
+si no). El tipo ya no puede expresar la firma ajena, así que la ruta HTTP dejó
+de pasarlo. Dos tests: un cuerpo hostil con el id de otro administrador acaba
+con `metadata.transcribed_by_admin_user_id` = el del principal y **sigue sin
+poder aprobar**; y un principal `SYSTEM` con la capacidad pegada no transcribe.
+
+**S-02 BLOQUEANTE — RESUELTO, opción (a) + (b) juntas.**
+`POST /admin/settings/change-requests` nace **siempre** `PENDING_APPROVAL`: el
+flag ya no se consulta ahí. Y `dual_approval_for_sensitive_actions_enabled` pasa
+a exigir la cola —desarmar el control dual cuesta control dual—, con lo que el
+eslabón débil de la cadena queda cerrado.
+
+Mientras `packages/security` no exporte `flagRequiresDualControl(key)`, hay en
+`admin-rules.ts` un helper local de **dos líneas** que compone
+`capabilityForFlagUpdate(key) !== "flag.update"` con esa única clave, marcado
+como temporal y con el nombre exacto que vais a exportar. En cuanto lo
+publiquéis, se sustituye por la llamada y la clave desaparece de `apps/api`.
+
+**Renombré el código: `FLAG_LEGALLY_MATERIAL` → `FLAG_REQUIRES_CHANGE_REQUEST`.**
+El nombre viejo pasó a ser falso en cuanto el 409 empezó a saltar también para
+un flag que **no** es legalmente material; el nuevo describe la consecuencia,
+que es lo que el frontend traduce. **Necesito que actualicéis
+`SECTION_13_ERROR_CODES` en `tests/security/src/permissions/section-13-routes.test.ts`**:
+hoy espera el nombre viejo y esa prueba se pondrá roja. §13.9, §13.11 y §13.12
+ya lo reflejan.
+
+**S-03 ALTA — RESUELTO.** El puerto del ledger gana
+`lockParticipant(promotionId, participantId)`. En Drizzle es
+`pg_advisory_xact_lock(hashtext(namespace), hashtext(promotion:participant))` —el
+par con espacio de nombres, que es la técnica única del proyecto, no la forma de
+un argumento— y **falla ruidosamente fuera de transacción**, porque un cerrojo
+`xact` sin transacción se suelta en el acto y no serializa nada. En memoria es
+no-op, pero **registra el orden**.
+
+Se toma antes de leer el saldo en las dos vías, y en `award-service.ts` la
+lectura se movió **dentro** de la unidad de trabajo (el resto del pipeline se
+extrajo a `performAwardLocked`, cuyo nombre dice cuál es la precondición). Dos
+tests de dominio afirman lo único que un doble de un solo hilo puede demostrar:
+que el cerrojo se pide **antes** de la primera lectura, en AMOE y en compra. En
+integración no hay test de dos transacciones reales: los 157 que hay corren en
+serie y montar un segundo pool para esto era más riesgo que valor. Si lo queréis,
+es vuestro terreno.
+
+**S-04 ALTA — RESUELTO.** `findOrCreateParticipantByEmail` consulta
+`admin_users` por `identity_id` antes de crear el perfil y lanza
+`StaffIdentityNotEligibleError` → **409 `AMOE_PARTICIPANT_INELIGIBLE_STAFF`**.
+Rechazo y no envío marcado: el expediente no debería llegar a existir, y marcarlo
+dejaría la fila creada y el trabajo de deshacerla para después. La respuesta **no
+devuelve el correo**: quien transcribe lo acaba de teclear.
+
+**S-05 ALTA — RESUELTO.** `rules.version.created`, `rules.version.updated`,
+`rules.version.document_upserted`, `rules.version.activated` (ya estaba) y
+`bonus.period.created` (renombrado desde `rules.version.bonus_period_added`).
+El `before`/`after` es **mínimo a propósito**: ids, versión, claves del `config`
+ordenadas, `unresolved_required_keys` y, en el documento, locale, título y
+longitud del cuerpo. El texto legal y el `config` entero **no** entran en la
+metadata porque acabarían en el preimage de la hash chain de cada evento; el
+contenido vive en la propia versión, que es inmutable en cuanto se activa.
+
+**S-06 ALTA — RESUELTO.** `0028` gana
+`lsw_setting_change_requests_enforce_immutability`: una fila decidida no se
+actualiza jamás, las únicas transiciones son `PENDING_APPROVAL → APPLIED |
+REJECTED`, y decidir **no reescribe lo que se pidió** (valor, motivo, solicitante
+ni instante). Cabecera corregida: decía que el CHECK lo impedía y no era verdad.
+Seis tests de integración, **verdes contra vuestro PostgreSQL**.
+
+**S-07 MEDIA — RESUELTO.** `assertNotSelfTranscribed` también en `reject`.
+
+**S-08 MEDIA — RESUELTO.** `submit` devuelve un desenlace nuevo,
+`CAP_REACHED_PENDING_REVIEW`, en vez de relanzar: la ficha queda registrada y en
+la cola con su evento, y la API sigue respondiendo 409 `AMOE_ENTRY_CAP_REACHED`.
+Test con `requires_review: false` y tope agotado que comprueba las tres cosas —
+envío persistido, evento emitido, cero filas de ledger—.
+
+**S-09 MEDIA — RESUELTO.** Los cuatro códigos, más `SETTING_CHANGE_NOT_PENDING` y
+`AMOE_PARTICIPANT_INELIGIBLE_STAFF`, son fábricas en `http/errors.ts`. En
+`admin-rules.ts` solo quedan dos `new ApiError` sueltos, y los dos son códigos
+**preexistentes** compartidos con otras rutas (`LIFECYCLE_REFUSED`,
+`AMOE_CONFIG_INVALID`); no los toqué para no ampliar el diff.
+
+**S-10 MEDIA — RESUELTO (backend).** `participant_email` exige
+`pii.view.masked` **además** de `amoe.review.read`, comprobado sobre el principal
+ya resuelto —la ruta no puede declararlo o quien no la tuviera no vería la cola—;
+sin capacidad, el perfil ni se lee. `transcribed_by_admin_user_id` **retirado**
+de la proyección y del esquema: `transcribed_by_me` ya resuelve lo que la
+interfaz necesita. Dos tests. La mitad de `apps/web` es de `frontend`.
+
+**S-11 MEDIA — NO ES MÍO.** Los dos sinks están en `apps/web`
+(`order-line-list.tsx`, `promotion-hero.tsx`) y no edito ese paquete. El
+validador de la API (`imageUrlSchema`) y las dos CHECK de `0026` siguen donde
+estaban: lo que falta es aplicar `safeImageUrl` en esos dos puntos, y es de
+`frontend`.
+
+**S-12 MEDIA — RESUELTO.** El payload se proyecta a `identity_requirements`
+antes de persistirse, y **la huella se calcula sobre el payload ya proyectado**:
+así dos envíos que solo difieran en campos que el sistema no pide siguen siendo
+el mismo envío. Test con un `numero_tarjeta` que no sobrevive.
+
+**S-13 MEDIA — DIFERIDA** por el Team Lead.
+
+**S-14 MEDIA — RESUELTO.** El caso que discrimina es 12,50 a 1/$1 + 3,25 a 2/$1:
+suma exacta 19, y por grupo daría 18 con FLOOR y 20 con CEIL —los dos sentidos,
+para que no pase por casualidad—. Y hay **un caso de regresión por cada uno de
+los cuatro modos anteriores**, con carrito mixto, y otro por modo con un periodo
+`product_kind_scope: null`, que es la única forma que puede tener una
+configuración migrada desde la versión 1. Añadí también S-19 (una línea: el
+literal `2`), que estaba en BAJA y costaba lo mismo escribirlo que no.
+
+**S-17 BAJA — RESUELTO de paso.** `configOfSubmission` envuelve `AmoeConfigError`
+en `AMOE_CONFIG_INVALID`: era un 500 por una configuración rota, y arreglarlo
+era una línea.
+
+**S-15, S-16, S-18, S-20 — NO HECHAS.** No estaban en el encargo y prefiero no
+ampliar el diff en una ronda con dos bloqueantes. S-18 (`applied_cap` en
+`ENTRY_FIELDS` del escáner) es de `frontend`; S-20 —si `applied_cap` debe
+anotarse siempre o solo cuando hay recorte— es una lectura de DEC-052 punto 5 y
+la decide el Team Lead: hoy se anota **solo cuando hubo recorte**, y el motivo
+está escrito en el código (presente siempre sería ruido en el 99% de las filas).
+
+**Verificación.** `packages/sweepstakes` 385, `packages/database` 53 unitarios +
+**157 de integración contra vuestro PostgreSQL 16 de 127.0.0.1:5433** (no lo he
+parado), `packages/commerce` 109, `apps/api` 264. Lint y typecheck en verde en
+los cuatro. `openapi/` regenerado.
+
+**Un aviso sobre `0028`.** La primera escritura del trigger salió con el
+delimitador `$$` colapsado a `$` —`String.replace` interpreta `$$` como escape— y
+la migración no aplicaba. Está corregido y **verificado aplicando en frío**;
+lo digo porque si alguien tenía una copia intermedia del fichero, no servía.
+
+### HO-041 · security, ronda de cierre e2e
+
+Status: HECHO (a la espera de la siguiente corrida del Team Lead)
+
+Date: 2026-08-30
+From: security-integration
+To: backend-sweepstakes, frontend-ux, Team Lead
+
+De los cinco fallos de la corrida real, **los dos que eran del escenario y no
+del producto quedan corregidos**. Los otros tres los arreglan backend
+(`bonus-periods` → 403) y frontend (`/admin/es/amoe`), y sus pruebas no se
+tocan: ya afirman el comportamiento correcto.
+
+**1. `06-amoe`, «la version en ingles trae su propio texto, no el castellano».**
+El fallo era mio y era del dato, no de la pagina. Las `instructions` de los dos
+idiomas empezaban con el **mismo** aviso de relleno (`E2E FIXTURE - PROVISIONAL,
+SIN VALOR LEGAL…`), asi que `slice(0, 40)` daba el mismo prefijo para los dos:
+el parrafo ingles satisfacia la busqueda del castellano y `toHaveCount(0)`
+fallaba. Con la pagina bien.
+
+- `tests/e2e/seed/seed-e2e.mjs`: nace `fillerFor(tag)`, que devuelve el mismo
+  `FILLER` con el idioma **delante** (`E2E FIXTURE (EN) - …` / `E2E FIXTURE (ES)
+  - …`). Sale de `FILLER`por`replace`, no de un segundo literal, para que el
+aviso de «sin valor legal» siga teniendo una sola fuente. Solo lo usan las
+`instructions`: las claves legales de la version de reglas siguen con el
+`FILLER` de siempre, porque ahi no hay dos idiomas que distinguir.
+- `tests/e2e/specs/06-amoe.spec.mjs`: ademas de la correccion, la prueba **se
+  defiende del escenario**. Antes de las dos aserciones de pagina comprueba
+  `expect(config.instructions["en-US"]).not.toContain(esProbe)`. Sin eso, un
+  futuro texto con prefijo compartido no rompe la prueba: **la vacia**, que es
+  peor. Ahora ese fallo se lee como lo que es y no se disfraza de fallo del
+  producto.
+- `tests/e2e/README.md`: una nota de tres lineas explicando por que el relleno
+  de los textos bilingues va etiquetado.
+
+Comprobado que ninguna otra asercion del repositorio depende del prefijo
+compartido: los unicos dos consumidores de `instructions` son las lineas 166 y
+185-202 de `06-amoe`, y el literal solo aparece en el `seed` y en el README.
+
+**2. `11-mail-in-amoe`, los dos envios APROBADOS que «no estaban».** Correcto:
+la cola sin parametros es la cola de **trabajo**. Las dos lecturas pasan a
+`?promotion_id=…&status=APPROVED` (lineas 457 y 553), cada una con un
+`toBeDefined()` propio y mensaje, para que un fallo diga si el envio no aparece
+o si aparece sin las cifras. Retirado el comentario que documentaba que
+`reviewQuerySchema` solo aceptaba `promotion_id`.
+
+Y **la garantia util se afirma aparte**: tras la aprobacion con recorte, una
+tercera lectura **sin parametro** comprueba que el envio ya **no** esta entre
+los pendientes. Sin ella, «aparece filtrando por APPROVED» seria compatible con
+un envio que sigue tambien en la lista de trabajo, y quien revisa volveria a
+decidir sobre algo ya decidido.
+
+Las otras cuatro lecturas de la cola se quedan **sin** `status` a proposito, y
+las cuatro son correctas: `11:122` (recien transcrito, `PENDING_REVIEW`),
+`11:513` (la proyeccion se lee **antes** de aprobar), `11:705` (tras el 409 por
+tope el envio **sigue** pendiente, que es justo lo que afirma) y las de
+`07-staff-mfa-review:133` y `08-adjustment:54`, que solo miran la forma.
+
+**Dependencia que dejo dicha, backend:** esas tres pruebas fijan ahora las dos
+mitades del contrato que estais anadiendo — que `status=APPROVED` devuelve los
+decididos **y** que la ausencia de `status` significa `PENDING_REVIEW`. Si el
+valor por defecto acabara siendo «todos», la tercera lectura se pondria roja, y
+tendria razon: una cola de revision que devuelve lo ya decidido no es una cola.
+
+**Verificacion.** `tests/e2e`: `lint` **sin errores** (los 4 warnings son los de
+siempre, ninguno en lo tocado) y `typecheck` (syntax-check) **verde, 18
+modulos**. Comprobado aparte que los dos prefijos de 40 caracteres resultantes
+difieren y que ninguno contiene al otro. **No he ejecutado el e2e**, como se
+pidio, ni he tocado `tests/security` (no hacia falta), ni nada fuera de
+`tests/e2e/**`. Sin `git add`/`commit`/`push`.
+
+**Un detalle de Playwright que conviene saber**, porque afecta a la prueba
+bilingue: el motor de texto salta `SCRIPT`, `NOSCRIPT`, `STYLE` y todo lo que
+cuelga de `<head>` (`shouldSkipForTextMatching`). Es decir, el payload RSC que
+Next.js incrusta en `<script>` —que si lleva los dos idiomas— **no** puede
+hacer fallar el `toHaveCount(0)`. La asercion mide la pagina, no el transporte.
+
+---
+
+### HO-041 · backend, ronda de cierre e2e
+
+Status: DONE
+
+Date: 2026-08-30
+From: backend-sweepstakes
+To: Team Lead, security-integration, frontend-ux
+
+Tres correcciones salidas de la corrida e2e real. Solo eso: no he tocado nada
+fuera de `apps/api/**`, `packages/database/**` y `packages/sweepstakes/**`, y no
+he hecho `git add`/`commit`/`push`.
+
+---
+
+#### 1. `?status=` en la cola AMOE
+
+`GET /api/v1/admin/amoe-submissions` acepta `status` opcional, enum cerrado
+`PENDING_REVIEW | SUBMITTED | APPROVED | REJECTED | CANCELLED`, por defecto
+`PENDING_REVIEW`. **Sin el parametro la respuesta no cambia**, que era la
+condicion: sigue siendo la cola de trabajo.
+
+- `packages/sweepstakes/src/amoe/submission.ts`: el puerto declara
+  `listByStatus(promotionId, status)` **junto a** `listPendingReview`, cuya
+  firma no se toca. Son dos preguntas distintas y por eso son dos consultas:
+  `listPendingReview` responde "que espera decision" -y por eso el adaptador de
+  PostgreSQL devuelve `SUBMITTED` y `PENDING_REVIEW` juntos- y `listByStatus`
+  responde "que envios estan en ESTE estado", exacto. Implementado tambien en
+  `InMemoryAmoeSubmissionRepository`.
+- `packages/database/src/repositories/amoe-repository.ts`: el adaptador Drizzle.
+- `packages/sweepstakes/src/amoe/amoe-service.ts`: `reviewQueue` acepta un tercer
+  parametro opcional `status`. La capacidad `amoe.review.read` se comprueba
+  ANTES de mirarlo: un parametro de consulta no puede ser la diferencia entre
+  pedir permiso y no pedirlo.
+- `apps/api/src/routes/amoe.ts`: `adminReviewQuerySchema` extiende el de la ruta
+  del participante en vez de modificarlo, para que `GET /account/amoe-submissions`
+  no herede un filtro que no usa.
+
+Efecto: `granted_entries` y `applied_cap` -que la ruta ya publicaba para los
+envios `APPROVED`- dejan de ser inalcanzables. Antes, aprobar sacaba el envio de
+la unica lectura administrativa que existia, y con el se iba la unica
+explicacion de por que la concesion fue menor que la anunciada.
+
+Documentado en `docs/API_CONTRACT.md` §11.3 (bloque nuevo, con la semantica de
+cada valor y por que `PENDING_REVIEW` y `SUBMITTED` se solapan a proposito) y
+§13.12 nota **18**.
+
+**Pruebas.** `apps/api/test/amoe-adjustments.test.ts`: transcribir -> aprobar
+con OTRO administrador -> la cola sin parametro **no** lo trae -> con
+`?status=APPROVED` lo trae con `granted_entries: 2` (no 5: el tope recorto) y
+`applied_cap { PER_PARTICIPANT, 10, 5, 2 }`. Mas un caso de `status` fuera del
+enum -> 422. En el dominio, `packages/sweepstakes/test/amoe.test.ts` anade dos:
+el aprobado sale de la cola de trabajo y vuelve por su estado, y el filtro exige
+la misma capacidad.
+
+**Lo que este cambio NO arregla, y es de `frontend`:** el 422 que rompia
+`/admin/[locale]/amoe` no lo causaba `status` -Zod descarta lo desconocido sin
+error- sino que el panel llamaba SIN `promotion_id`, que es obligatorio.
+`frontend2` ya lo habia detectado y lo esta corrigiendo; se lo he confirmado por
+mensaje, junto con que `promotion_id` sigue siendo obligatorio y que el esquema
+no es estricto.
+
+---
+
+#### 2. Sin motivo, 403 del autorizador y no 422 del esquema
+
+`reasonBodySchema` de `apps/api/src/routes/admin-rules.ts` declaraba
+`reason_code` obligatorio, y Fastify valida el cuerpo ANTES del `preHandler`:
+una peticion sin motivo moria con 422 `VALIDATION_FAILED` y **nunca llegaba al
+control**. Un fallo de autorizacion se presentaba como un cuerpo mal formado.
+
+Ahora el esquema lo declara **opcional** y quien lo exige es `authorize()`, que
+lee `requiresReason` del catalogo de `@lsw/security` (HO-034.1). Afecta a las
+cinco rutas pedidas -`rules-versions/:id/activate`, `bonus-periods`,
+`settings/change-requests` crear/aprobar/rechazar- **y ademas a
+`PATCH /admin/feature-flags/:key`**, que comparte el mismo esquema y cuya
+capacidad `flag.update` tambien declara `requiresReason`.
+
+**La forma sigue validandose**: un `reason_code` presente con otra ortografia es
+422, porque lo que abre la puerta tiene que ser exactamente lo que se persiste
+en `audit_events.reason_code`.
+
+Los handlers leen el motivo con un ayudante `requireReasonCode()` que responde
+403 si faltara, colocado **antes** de cualquier efecto -no se clona ni se activa
+una version de reglas para despues negar la peticion-. Es cinturon: el tirante
+es la puerta, y no deberia dispararse nunca. Existe para que el tipo no se
+contente con un `?? ""` que escribiria una fila de auditoria con el motivo
+vacio.
+
+Documentado en §13.12 nota **19**. Prueba por ruta en
+`apps/api/test/admin-rules.test.ts` (`describe("el motivo ausente es 403, no
+422")`): las seis rutas y un caso de forma invalida que sigue siendo 422. La
+prueba antigua que fijaba el 422 se sustituye, porque afirmaba justo lo
+corregido.
+
+**Excepcion que dejo señalada y NO he tocado**, por estar fuera de §13:
+`POST /admin/promotions/:id/activate` y `/close` (§12, `admin-catalog.ts`)
+siguen declarando `reason_code` obligatorio en el esquema, asi que ahi una
+peticion sin motivo todavia responde 422. Es el mismo caso latente. Lo aplico en
+cuanto el Team Lead lo confirme; son cuatro lineas y una prueba.
+
+---
+
+#### 3. El ayudante duplicado
+
+`admin-rules.ts` definia su propio `flagRequiresDualControl` con la clave
+`dual_approval_for_sensitive_actions_enabled` escrita a mano, con un comentario
+que decia que era temporal hasta que `@lsw/security` lo exportara. Ya lo
+exporta: se borra la copia local y se importa el del catalogo. Dos listas para
+una sola pregunta divergen en cuanto alguien anada un flag a una y no a la otra,
+y la que se queda corta es siempre la copia. `capabilityForFlagUpdate` deja de
+importarse aqui porque solo lo usaba esa copia.
+
+---
+
+#### Verificacion
+
+- `pnpm --filter ./apps/api lint` -> **0 errores** (41 warnings, los de siempre,
+  ninguno en lo tocado).
+- `pnpm --filter ./apps/api typecheck` -> **verde**.
+- `pnpm --filter ./apps/api test` -> **272/272**, 15 ficheros.
+- `pnpm --filter ./packages/sweepstakes test` -> **387/387**; `lint` 0 errores.
+- `pnpm --filter ./packages/database test` (unit) -> **53/53**; `typecheck`
+  verde; `lint` 0 errores.
+- `pnpm --filter @lsw/tests-security test` -> **507/507** (no he tocado nada de
+  `tests/security`; lo corri para comprobar que no rompia nada suyo).
+- `pnpm --filter ./apps/api contract:emit` -> 100 rutas escritas. Comprobado en
+  el JSON: el parametro `status` sale `required: false` con `default`
+  `PENDING_REVIEW`, y `reason_code` ya no aparece en el `required` de ninguna de
+  las seis rutas. `contract:check` falla por el diff sin commitear de toda la
+  ronda, como estaba previsto.
+- **No** he ejecutado el e2e ni tocado `tests/e2e/**`. Las tres pruebas que
+  `security` dejo fijadas en `11-mail-in-amoe` y la de `10-bonus-period`
+  ("sin motivo... el rechazo es 403 y no 422") describen exactamente el
+  comportamiento implementado.
+
+---
+
+### HO-041 · frontend, ronda de cierre e2e
+
+Status: DONE (sin commitear, como el resto de la ronda)
+
+Date: 2026-08-30
+From: frontend-ux
+To: Team Lead, security-integration, backend-sweepstakes
+
+Cuatro correcciones salidas de la corrida e2e real y de la security review
+(fase 2). Nada más: no he tocado ni `apps/api`, ni `tests/e2e`, ni ningún
+documento legal.
+
+---
+
+#### 1. S-11 — los dos sumideros de imagen que no filtraban
+
+`lib/media-url.ts` era correcto y estaba aplicado en `product-card`,
+`add-to-cart-form` y la galería de la ficha; **faltaba en los dos sitios que
+señalaba la revisión**, y ese es exactamente el fallo que un test del validador
+no puede ver, porque el validador nunca fue el problema.
+
+- `src/components/order-line-list.tsx` — `line.image_url` pasa ahora por
+  `safeImageUrl`, y la condición de pintar la miniatura cuelga del valor
+  filtrado. Ojo al matiz que lo hace más grave de lo que parece: la URL de una
+  línea de pedido está **congelada** en el histórico, así que sobrevive a
+  cualquier corrección posterior del catálogo.
+- `src/components/promotion-hero.tsx` — `media.hero_url` idem. Filtrada, la URL
+  vale `null` y el hero cae en la **marca de agua**, que es la rama que ya
+  existía para una promoción sin fotografía: una URL que no se puede pintar deja
+  el estado sin imagen, no un hueco roto.
+- `src/mocks/fixtures/prize-photo.ts` — nuevo `GMC_PRIZE_HERO_FALLBACK`
+  (`/prizes/gmc-2025-hero.jpg`), y `src/mocks/fixtures/promotions.ts` lo usa como
+  último respaldo de `hero_url` en vez de la ilustración `data:` de `media.ts`.
+  No es tautológico con el primer candidato de `GMC_PRIZE_HERO_CANDIDATES`
+  aunque el nombre coincida: `resolvePrizePhoto` comprueba el disco contra
+  `process.cwd()`, y hay empaquetados donde el fichero **se sirve** en esa ruta
+  aunque desde ese directorio no se vea.
+- `src/mocks/fixtures/media.ts` — `prizeTruckWideImage` deja de ser el respaldo
+  del hero y queda anotado como tal. No se borra: es el `data:` URI **real** con
+  el que el test nuevo comprueba que el sumidero lo descarta; un literal
+  inventado probaría el validador, no el sumidero.
+
+**Test nuevo:** `src/test/image-sinks.test.tsx` (10 casos). Renderiza los dos
+componentes con `http:`, `javascript:`, un `data:` real y `//evil` y comprueba
+que la URL no acaba en ningún `src` **ni en crudo ni percent-codificada** (los
+dos sumideros escriben distinto: uno usa `<img>` y el otro `next/image`). Cada
+bloque trae su mitad positiva —una ruta del propio sitio SÍ se pinta—, sin la
+cual un componente que dejara de pintar cualquier imagen pasaría todos los casos
+hostiles.
+
+**Consecuencia conocida, no regresión:** la mercancía de desarrollo
+(`teeImage`, `capImage`, …) sigue siendo `data:` y por tanto sigue sin pintarse
+en la tienda —ya era así desde que `product-card` filtraba— y ahora tampoco en
+las líneas de pedido. Es coherente y afecta solo a los fixtures; el día que
+alguna superficie pinte `square_url` habrá que darle el mismo trato que al hero.
+
+---
+
+#### 2. El 422 de `/admin/[locale]/amoe` — causa raíz confirmada
+
+**La petición inválida era `GET /api/v1/admin/amoe-submissions?status=PENDING_REVIEW`,
+sin `promotion_id`.**
+
+`reviewQuerySchema` era `z.object({ promotion_id: z.uuid() })`: el campo es
+**obligatorio** y la pantalla no lo mandaba nunca. `status` no tenía nada que
+ver —Zod descarta lo desconocido en un `z.object` no estricto, así que sobraba
+en silencio—; el 422 `VALIDATION_FAILED` lo producía la **ausencia** del
+identificador. Backend lo confirma en su respuesta de esta misma ronda.
+
+Y el daño real no era la lista: `!result.ok` pintaba `AdminSectionError` en el
+sitio de **toda** la pantalla, así que el formulario «Transcribir ficha postal»
+—que no depende de la cola sino de `GET /promotions/{slug}/amoe-config`— no
+llegaba a existir. Con la cola caída, la única vía gratuita operable de la
+promoción se apagaba.
+
+Cambios en `src/app/admin/[locale]/amoe/page.tsx`:
+
+- la promoción activa se lee **una vez** y sirve a las dos mitades: de ella sale
+  el `promotion_id` de la cola y el `slug` de la configuración. Antes solo la
+  leía `loadTranscriptionContext`, y esa es literalmente la razón de que la cola
+  se quedara sin identificador;
+- la cola y la configuración se piden **en paralelo** (`Promise.all`) una vez
+  resuelta la promoción;
+- el fallo de la cola —o el de la lectura de la promoción de la que depende— se
+  pinta **dentro de la sección de la lista**, con encabezado `h3`. El formulario
+  de transcripción, el aviso de solo-lectura y el panel de decisión siguen en
+  pie;
+- un fallo de `/promotions/active` **se propaga como fallo** y ya no se disfraza
+  de «no hay promoción abierta», que son dos cosas distintas;
+- sin promoción abierta no se pide la cola en absoluto (no hay `promotion_id`
+  que mandar) y se dice como estado deliberado: entre promociones es lo normal.
+
+`src/lib/api/resources.ts`: `fetchAdminAmoeSubmissions` exige `promotion_id` en
+la **firma** y tipa `status` con el enum del contrato. La misma omisión deja de
+compilar en vez de llegar al navegador.
+
+**Tests nuevos** en `src/test/admin-reads.test.ts` (3): capturan la URL con MSW
+y comprueban que sale `promotion_id`, que `status` viaja como enum en mayúsculas
+—el texto traducido no puede acabar en la URL— y que sin `status` el cliente no
+inventa uno.
+
+---
+
+#### 3. Filtro por estado (punto 4 del encargo)
+
+Con `?status=` y su valor por defecto, los envíos ya decididos solo son
+alcanzables pidiéndolos. La pantalla gana una navegación de filtro —enlaces, no
+formulario: son navegaciones, funcionan sin JavaScript y el botón de atrás hace
+lo que se espera— construida sobre `AMOE_SUBMISSION_STATUSES`, con el texto del
+mismo `amoeStatusLabeller` que usa la insignia de cada fila (DEC-022). El estado
+vigente se marca con `aria-current`. El filtro viaja con el cursor
+(`AdminPager extraQuery`) y con los enlaces de decisión, porque el panel busca
+el envío **dentro** de la página cargada.
+
+Copy nuevo en los dos idiomas bajo `admin.amoeReview`: `queueHeading`,
+`filterLabel`, `emptyFilteredTitle`/`emptyFilteredBody` (el vacío de un filtro
+no dice lo mismo que el de la cola: «no hay nada esperando revisión» delante de
+un filtro de aprobados sería falso) y `noPromotionTitle`/`noPromotionBody`.
+
+Anotado en el código lo que backend confirma: `PENDING_REVIEW` **no es un filtro
+exacto** —devuelve `SUBMITTED` + `PENDING_REVIEW`, la cola de trabajo— y los
+demás valores sí lo son. Las dos primeras pestañas se solapan a propósito.
+
+---
+
+#### 4. Colisión de rótulo en la navegación del panel
+
+`admin.nav.adjustments` y `admin.nav.flags` decían las dos **«Ajustes»** en
+español, llevando a dos pantallas que no se parecen: una mueve participaciones
+del ledger de una persona y la otra cambia el comportamiento de la plataforma.
+En inglés el par era «Adjustments» / «Settings» y no chocaba, que es por lo que
+el fallo no se veía leyendo el diccionario en un solo idioma.
+
+- `admin.nav.flags`: es → **«Interruptores»**, en → **«Feature flags»**.
+- `admin.flags.title`: es → «Interruptores de la plataforma», en → «Platform
+  feature flags». El cuerpo de esa pantalla acompaña.
+- Anotado el porqué en `src/lib/admin/navigation.ts` y en el docblock de
+  `src/app/admin/[locale]/flags/page.tsx`.
+
+**Test nuevo** en `src/test/admin-access.test.ts`: ningún par de entradas de
+`ADMIN_NAV` comparte rótulo, **en los dos idiomas**. Se comprueban los dos
+porque la colisión puede existir en uno y no en el otro, y basta con que exista
+en uno para que ese menú sea ambiguo.
+
+---
+
+#### Archivos tocados
+
+```text
+apps/web/messages/en-US.json
+apps/web/messages/es-US.json
+apps/web/src/app/admin/[locale]/amoe/page.tsx
+apps/web/src/app/admin/[locale]/flags/page.tsx
+apps/web/src/components/order-line-list.tsx
+apps/web/src/components/promotion-hero.tsx
+apps/web/src/lib/admin/navigation.ts
+apps/web/src/lib/api/resources.ts
+apps/web/src/mocks/fixtures/media.ts
+apps/web/src/mocks/fixtures/prize-photo.ts
+apps/web/src/mocks/fixtures/promotions.ts
+apps/web/src/test/admin-access.test.ts
+apps/web/src/test/admin-reads.test.ts
+apps/web/src/test/image-sinks.test.tsx   (nuevo)
+```
+
+Todo dentro de `apps/web/**`. Ningún archivo fuera del ownership de `frontend`.
+
+#### Verificación
+
+- `pnpm --filter ./apps/web lint` -> **0 errores, 0 warnings**.
+- `pnpm --filter ./apps/web typecheck` -> **verde**.
+- `pnpm --filter ./apps/web test` -> **598/598**, 37 ficheros (eran 593 antes de
+  esta ronda: +10 de `image-sinks`, +3 de la petición de la cola, +2 de rótulos
+  del menú, y `admin-reads` pasa de 10 a 13).
+- `prettier --check` limpio sobre los catorce ficheros de arriba.
+- **No** he ejecutado el e2e ni tocado `tests/e2e/**`.
+
+#### Limitación conocida
+
+Mientras el cambio de backend no esté desplegado, la pestaña seleccionada **no
+filtra**: la API descarta el `status` desconocido en silencio y devuelve la cola
+entera. No rompe nada y se corrige solo en cuanto aterrice; lo digo para que
+nadie lo lea como un fallo del panel. Con el spec ya regenerado
+(`openapi.json` publica `status` con su enum y su `default`) esto está resuelto
+en el árbol.
+
+---
+
+### HO-041 · backend, adenda al bloque «ronda de cierre e2e»
+
+Status: DONE — Date: 2026-08-30 — From: backend-sweepstakes — To: Team Lead,
+security-integration, frontend-ux
+
+La excepcion que dejaba señalada arriba queda cerrada en la misma ronda.
+`POST /admin/promotions/:id/activate` y `/close` (`admin-catalog.ts`) siguen la
+misma regla: `reason_code` **opcional** en el esquema -con la forma validada si
+viene-, exigencia en el autorizador, **403** sin motivo y **422** con motivo mal
+formado. No queda ninguna ruta con motivo en el cuerpo que conteste 422 cuando
+lo que falta es el motivo.
+
+El ayudante `requireReasonCode()` **no se duplica**: se movio a
+`apps/api/src/http/authorization-inputs.ts`, que ya era el modulo dueño del
+concepto -alli vive `presentedReasonCode()` y el patron `REASON_CODE`- y ahora
+lo importan `admin-catalog.ts` y `admin-rules.ts`. Habria sido incoherente
+borrar un ayudante duplicado en el punto 3 y crear otro dos ficheros mas alla.
+
+Se llama **antes** de `setPromotionStatus`, y la prueba lo afirma: una negativa
+por falta de motivo no puede dejar detras una promocion activada ni cerrada.
+
+**Pruebas** (`apps/api/test/admin-catalog.test.ts`): activar sin motivo -> 403 y
+el repositorio no se toca; cerrar sin motivo -> 403 y el repositorio no se toca;
+cerrar con motivo mal formado -> 422; cerrar con motivo valido -> 200. La de
+activar con motivo mal formado -> 422 ya existia. `close` no tenia bloque propio
+de pruebas y ahora lo tiene.
+
+**Contrato**: §12 gana una tabla de dos filas -403 del autorizador, 422 del
+esquema- que ademas **corrige** lo que decia antes ("sin motivo, o con uno mal
+formado, 403"), que era falso en las dos mitades. §13.12 nota 19 actualizada:
+ya no hay excepcion pendiente.
+
+**Verificacion**: `lint` **0 errores** (41 warnings de siempre), `typecheck`
+verde, `test` **276/276** (15 ficheros), `contract:emit` 100 rutas. Comprobado
+en el JSON: los cuerpos de `activate` y `close` ya no llevan `required`, y
+`reason_code` conserva su `pattern`.

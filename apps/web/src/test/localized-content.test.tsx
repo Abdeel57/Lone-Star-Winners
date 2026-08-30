@@ -151,6 +151,7 @@ describe("DEC-030: contenido dinamico localizado", () => {
         locale="en"
         nowIso={NOW}
         amoeEnabled={false}
+        multipliersEnabled={false}
       />,
     );
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
@@ -167,6 +168,7 @@ describe("DEC-030: contenido dinamico localizado", () => {
         locale="es"
         nowIso={NOW}
         amoeEnabled={false}
+        multipliersEnabled={false}
       />,
     );
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(

@@ -158,4 +158,29 @@ export interface LedgerRepository {
 
   /** Reversals ya emitidos contra una transaccion. Necesario para no sobre-revertir. */
   listReversalsOf(transactionId: string): Promise<readonly LedgerTransaction[]>;
+
+  /**
+   * Serializa las concesiones de UN participante en UNA promocion.
+   *
+   * POR QUE HACE FALTA, Y POR QUE NO BASTA LA TRANSACCION
+   *
+   *   El tope por participante se calcula leyendo el saldo y restando. Estar
+   *   dentro de la misma transaccion no serializa nada: bajo READ COMMITTED,
+   *   dos transacciones concurrentes NO ven la fila no confirmada de la otra,
+   *   asi que ambas leen 9.000, ambas conceden 1.000 y el participante acaba
+   *   con 11.000 sobre un tope de 10.000.
+   *
+   *   La unicidad de `entry_transactions_idempotent_source` tampoco lo acota:
+   *   `source_ref` es unico por ENVIO -o por pedido-, no por participante, asi
+   *   que solo protege la doble concesion del MISMO envio.
+   *
+   *   El cerrojo consultivo si serializa, y es el mismo mecanismo que el
+   *   repositorio ya usa para la cadena de auditoria y para los eventos de
+   *   pago. Se toma como PRIMERA sentencia de la transaccion y se libera solo
+   *   al confirmar o revertir: nadie tiene que acordarse de soltarlo.
+   *
+   * DEBE llamarse DENTRO de una unidad de trabajo. Fuera de transaccion el
+   * cerrojo se tomaria y se soltaria en el acto, que es no tomar ninguno.
+   */
+  lockParticipant(promotionId: string, participantId: string): Promise<void>;
 }

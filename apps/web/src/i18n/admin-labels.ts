@@ -225,6 +225,14 @@ const TRANSLATED_REASONS = [
   "PROMOTION_LAUNCH_APPROVED",
   "ENTRY_PERIOD_ENDED",
   "EARLY_TERMINATION",
+  /* HO-041: motivos de las superficies nuevas -versiones de reglas, periodos
+   * bonus y ajustes-. Todas son OPERATIVAS: ninguna afirma nada sobre
+   * elegibilidad ni condiciones de participacion (CLAUDE.md #2). */
+  "ATTORNEY_APPROVED_VERSION",
+  "CORRECTION_OF_PUBLISHED_VERSION",
+  "PROMOTIONAL_CAMPAIGN",
+  "OPERATIONAL_ROLLOUT",
+  "INCIDENT_MITIGATION",
   "OTHER",
 ] as const;
 
@@ -271,6 +279,16 @@ export async function reasonLabeller(locale: Locale): Promise<(key: string) => s
         return t("ENTRY_PERIOD_ENDED");
       case "EARLY_TERMINATION":
         return t("EARLY_TERMINATION");
+      case "ATTORNEY_APPROVED_VERSION":
+        return t("ATTORNEY_APPROVED_VERSION");
+      case "CORRECTION_OF_PUBLISHED_VERSION":
+        return t("CORRECTION_OF_PUBLISHED_VERSION");
+      case "PROMOTIONAL_CAMPAIGN":
+        return t("PROMOTIONAL_CAMPAIGN");
+      case "OPERATIONAL_ROLLOUT":
+        return t("OPERATIONAL_ROLLOUT");
+      case "INCIDENT_MITIGATION":
+        return t("INCIDENT_MITIGATION");
       case "OTHER":
         return t("OTHER");
     }
@@ -360,6 +378,76 @@ export async function drawBlockerLabeller(locale: Locale): Promise<(key: string)
         return t("SECOND_APPROVAL_MISSING");
       case "SAME_ACTOR_APPROVAL":
         return t("SAME_ACTOR_APPROVAL");
+    }
+  };
+}
+
+/**
+ * Nombre legible de un feature flag (§13.9, DEC-032).
+ *
+ * LA CONVENCION ES `flags.<camelCase de la clave>`: `amoe_enabled` se traduce
+ * con `amoeEnabled`. Es mecanica a proposito -la clave del contrato es
+ * `snake_case` y las de traduccion son `camelCase`- y la conversion se hace
+ * aqui, en un solo sitio.
+ *
+ * LA LISTA ES CERRADA Y EL FALLBACK ENSENA LA CLAVE EN CRUDO. Un flag nuevo
+ * aparece con su identificador tecnico, que delante de quien opera es util:
+ * es lo que hay que citar para pedir que se traduzca, y desde luego es mejor
+ * que no aparecer. Delante de un cliente esto seria inaceptable; esta pantalla
+ * no es para clientes.
+ */
+const TRANSLATED_FLAG_KEYS = [
+  "amoe_enabled",
+  "visible_entry_numbers_enabled",
+  "internal_draw_enabled",
+  "state_eligibility_enforcement_enabled",
+  "age_gate_enabled",
+  "entry_multipliers_enabled",
+  "entry_caps_enabled",
+  "entry_expiration_enabled",
+  "winner_publication_enabled",
+  "manual_adjustments_enabled",
+  "provisional_entries_enabled",
+  "dual_approval_for_sensitive_actions_enabled",
+] as const;
+
+type TranslatedFlagKey = (typeof TRANSLATED_FLAG_KEYS)[number];
+
+function isTranslatedFlagKey(value: string): value is TranslatedFlagKey {
+  return (TRANSLATED_FLAG_KEYS as readonly string[]).includes(value);
+}
+
+export async function flagLabeller(locale: Locale): Promise<(key: string) => string> {
+  const t = await getTranslations({ locale, namespace: "admin.flags.keys" });
+
+  return (key) => {
+    if (!isTranslatedFlagKey(key)) return key;
+
+    switch (key) {
+      case "amoe_enabled":
+        return t("amoeEnabled");
+      case "visible_entry_numbers_enabled":
+        return t("visibleEntryNumbersEnabled");
+      case "internal_draw_enabled":
+        return t("internalDrawEnabled");
+      case "state_eligibility_enforcement_enabled":
+        return t("stateEligibilityEnforcementEnabled");
+      case "age_gate_enabled":
+        return t("ageGateEnabled");
+      case "entry_multipliers_enabled":
+        return t("entryMultipliersEnabled");
+      case "entry_caps_enabled":
+        return t("entryCapsEnabled");
+      case "entry_expiration_enabled":
+        return t("entryExpirationEnabled");
+      case "winner_publication_enabled":
+        return t("winnerPublicationEnabled");
+      case "manual_adjustments_enabled":
+        return t("manualAdjustmentsEnabled");
+      case "provisional_entries_enabled":
+        return t("provisionalEntriesEnabled");
+      case "dual_approval_for_sensitive_actions_enabled":
+        return t("dualApprovalForSensitiveActionsEnabled");
     }
   };
 }

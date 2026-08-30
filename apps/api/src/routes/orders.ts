@@ -278,6 +278,9 @@ export function buildOrdersRoutes(dependencies: AppDependencies): RouteDefinitio
         items: order.items.map((item) => ({
           lineId: item.lineId,
           sku: item.sku,
+          // DEC-052: el tipo CONGELADO en la linea del pedido, no el que tenga
+          // hoy `products.kind`. Es lo que decide con que tasa se calcula.
+          productKind: item.productKind,
           quantity: item.quantity,
           unitAmountMinor: item.unitAmountMinor,
         })),
@@ -445,6 +448,10 @@ export function buildOrdersRoutes(dependencies: AppDependencies): RouteDefinitio
             sku: line.sku,
             productSlug: line.productSlug,
             nameSnapshot: { "en-US": line.name["en-US"], "es-US": line.name["es-US"] },
+            // DEC-052: el tipo se congela AQUI, junto al resto de la foto. A
+            // partir de este instante, reetiquetar el producto en el catalogo
+            // no cambia lo que significo esta compra.
+            productKind: line.productKind,
             quantity: line.quantity,
             unitAmountMinor: line.unitAmountMinor,
             currency: line.currency,

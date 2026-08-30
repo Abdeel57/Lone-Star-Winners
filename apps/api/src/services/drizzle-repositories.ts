@@ -27,7 +27,10 @@ import {
   carts,
   featureFlagSettings,
   featureFlags,
+  productCategories,
+  productCategoryTranslations,
   productTranslations,
+  productVariantTranslations,
   productVariants,
   products,
   promotionRulesDocuments,
@@ -44,6 +47,7 @@ import type {
   ConfigRepository,
   EntryBalanceRepository,
   LocalizedText,
+  ProductCategoryRecord,
   ProductRecord,
   PromotionRecord,
   PromotionRepository,
@@ -210,6 +214,46 @@ function createPromotionRepository(db: Database): PromotionRepository {
 // ---------------------------------------------------------------------------
 
 function createCatalogRepository(db: Database): CatalogRepository {
+  /**
+   * Categorias de un conjunto de claves, con su nombre en los dos idiomas.
+   *
+   * Se resuelve en una consulta aparte y no con un JOIN a la tabla de
+   * traducciones porque el JOIN multiplicaria las filas de producto por locale,
+   * y despues habria que deduplicarlas a mano. Con dos consultas el mapeo es
+   * directo y el numero de viajes sigue siendo constante.
+   */
+  async function categoriesOf(
+    keys: readonly string[],
+  ): Promise<Map<string, ProductCategoryRecord>> {
+    const unique = [...new Set(keys)];
+    if (unique.length === 0) {
+      return new Map();
+    }
+
+    const [rows, names] = await Promise.all([
+      db.select().from(productCategories).where(inArray(productCategories.key, unique)),
+      db
+        .select()
+        .from(productCategoryTranslations)
+        .where(inArray(productCategoryTranslations.categoryKey, unique)),
+    ]);
+
+    return new Map(
+      rows.map((row) => [
+        row.key,
+        {
+          key: row.key,
+          name: localized(
+            names
+              .filter((translation) => translation.categoryKey === row.key)
+              .map((t) => ({ locale: t.locale, value: t.name })),
+          ),
+          position: row.position,
+        },
+      ]),
+    );
+  }
+
   async function hydrate(
     rows: readonly (typeof products.$inferSelect)[],
   ): Promise<ProductRecord[]> {
@@ -219,7 +263,7 @@ function createCatalogRepository(db: Database): CatalogRepository {
 
     const ids = rows.map((row) => row.id);
 
-    const [translations, variants] = await Promise.all([
+    const [translations, variants, categories] = await Promise.all([
       db.select().from(productTranslations).where(inArray(productTranslations.productId, ids)),
       db
         .select()
@@ -232,7 +276,21 @@ function createCatalogRepository(db: Database): CatalogRepository {
           ),
         )
         .orderBy(asc(productVariants.position), asc(productVariants.sku)),
+      categoriesOf(rows.flatMap((row) => (row.categoryKey === null ? [] : [row.categoryKey]))),
     ]);
+
+    const variantNames =
+      variants.length === 0
+        ? []
+        : await db
+            .select()
+            .from(productVariantTranslations)
+            .where(
+              inArray(
+                productVariantTranslations.variantId,
+                variants.map((variant) => variant.id),
+              ),
+            );
 
     return rows.map((row) => {
       const own = translations.filter((translation) => translation.productId === row.id);
@@ -243,31 +301,54 @@ function createCatalogRepository(db: Database): CatalogRepository {
         sku: row.sku,
         slug: row.slug,
         status: row.status,
+        kind: row.kind,
+        category: row.categoryKey === null ? null : (categories.get(row.categoryKey) ?? null),
         currency: row.currency,
         name: localized(own.map((t) => ({ locale: t.locale, value: t.name }))),
         description: hasDescription
           ? localized(own.map((t) => ({ locale: t.locale, value: t.description })))
           : null,
+        imageUrl: row.imageUrl,
         variants: variants
           .filter((variant) => variant.productId === row.id)
-          .map((variant): VariantRecord => ({
-            id: variant.id,
-            sku: variant.sku,
-            status: variant.status,
-            priceAmountMinor: variant.priceAmountMinor,
-            currency: variant.currency,
-            stockQuantity: variant.stockQuantity,
-            position: variant.position,
-          })),
+          .map((variant): VariantRecord => {
+            const names = variantNames.filter(
+              (translation) => translation.variantId === variant.id,
+            );
+            return {
+              id: variant.id,
+              sku: variant.sku,
+              status: variant.status,
+              priceAmountMinor: variant.priceAmountMinor,
+              currency: variant.currency,
+              stockQuantity: variant.stockQuantity,
+              // Sin filas de traduccion, la variante NO tiene nombre. `null` y
+              // no un objeto con dos cadenas vacias: la interfaz tiene que
+              // poder distinguir "variante unica sin nombre" de "nombre que
+              // alguien dejo a medias".
+              name:
+                names.length === 0
+                  ? null
+                  : localized(names.map((t) => ({ locale: t.locale, value: t.name }))),
+              imageUrl: variant.imageUrl,
+              position: variant.position,
+            };
+          }),
       };
     });
   }
 
   return {
-    listPublic: async ({ limit, after }) => {
+    listPublic: async ({ limit, after, kind, categoryKey }) => {
       const conditions = [eq(products.status, "ACTIVE"), isNull(products.archivedAt)];
       if (after !== null) {
         conditions.push(gt(products.slug, after));
+      }
+      if (kind !== undefined && kind !== null) {
+        conditions.push(eq(products.kind, kind));
+      }
+      if (categoryKey !== undefined && categoryKey !== null) {
+        conditions.push(eq(products.categoryKey, categoryKey));
       }
 
       const rows = await db
@@ -278,6 +359,38 @@ function createCatalogRepository(db: Database): CatalogRepository {
         .limit(limit);
 
       return hydrate(rows);
+    },
+
+    listCategoriesWithActiveProducts: async () => {
+      // `EXISTS` y no un `JOIN` con `DISTINCT`: lo que se pregunta es si HAY al
+      // menos un producto, no cuantos, y un JOIN obligaria a deduplicar.
+      const rows = await db
+        .select()
+        .from(productCategories)
+        .where(
+          sql`EXISTS (
+            SELECT 1 FROM ${products}
+             WHERE ${products.categoryKey} = ${productCategories.key}
+               AND ${products.status} = 'ACTIVE'
+               AND ${products.archivedAt} IS NULL
+          )`,
+        )
+        .orderBy(asc(productCategories.position), asc(productCategories.key));
+
+      const resolved = await categoriesOf(rows.map((row) => row.key));
+      return rows.flatMap((row) => {
+        const record = resolved.get(row.key);
+        return record === undefined ? [] : [record];
+      });
+    },
+
+    categoryExists: async (key) => {
+      const [row] = await db
+        .select({ key: productCategories.key })
+        .from(productCategories)
+        .where(eq(productCategories.key, key))
+        .limit(1);
+      return row !== undefined;
     },
 
     findBySlug: async (slug) => {
@@ -313,15 +426,24 @@ function createCatalogRepository(db: Database): CatalogRepository {
         return null;
       }
 
+      // El nombre y la imagen se toman de la variante YA hidratada del
+      // producto cuando esta ahi. `hydrate` solo trae variantes `ACTIVE`, asi
+      // que una variante en borrador o archivada cae al camino de abajo, donde
+      // no hay nombre que resolver: quien pregunta por ella lo hace para
+      // validar una compra, no para pintarla.
+      const hydrated = product.variants.find((candidate) => candidate.id === variant.id);
+
       return {
         product,
-        variant: {
+        variant: hydrated ?? {
           id: variant.id,
           sku: variant.sku,
           status: variant.status,
           priceAmountMinor: variant.priceAmountMinor,
           currency: variant.currency,
           stockQuantity: variant.stockQuantity,
+          name: null,
+          imageUrl: variant.imageUrl,
           position: variant.position,
         },
       };
@@ -361,6 +483,9 @@ function createCartRepository(db: Database): CartRepository {
         stockQuantity: productVariants.stockQuantity,
         productId: products.id,
         productSlug: products.slug,
+        // DEC-052: el tipo lo aporta el CATALOGO mientras la linea es un
+        // borrador. Al convertirse en pedido se congela y deja de leerse de aqui.
+        productKind: products.kind,
       })
       .from(cartItems)
       .innerJoin(productVariants, eq(productVariants.id, cartItems.productVariantId))
@@ -402,6 +527,7 @@ function createCartRepository(db: Database): CartRepository {
             .filter((translation) => translation.productId === line.productId)
             .map((t) => ({ locale: t.locale, value: t.name })),
         ),
+        productKind: line.productKind,
         quantity: line.quantity,
         unitAmountMinor: line.unitAmountMinor,
         currency: line.currency,

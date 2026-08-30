@@ -329,11 +329,18 @@ describe("media del premio", () => {
     expect(resolvePrizePhoto(["no-existe.jpg", "README.md"])).toBe("/prizes/README.md");
   });
 
-  it("el universo de participaciones llega como dato, no como texto", () => {
-    // El tope lo fija la configuracion de la promocion (DEC-042, CLAUDE.md
-    // #14). Si alguna vez apareciera escrito en el diccionario, cambiarlo
-    // exigiria un despliegue y dejaria de ser configuracion.
-    expect(activePromotionDetail.entry_pool?.cap).toBe(10000);
+  it("el tope de participaciones llega como dato, no como texto", () => {
+    /*
+     * EL TOPE ES POR PERSONA, NO UN UNIVERSO (DEC-052 punto 6).
+     *
+     * Este test comprobaba `entry_pool.cap`, que ya no existe: el 10,000 nunca
+     * fue un total, es el maximo por participante "por cualquier metodo o
+     * combinacion de metodos". La red que importa no cambia: la cifra la fija
+     * la configuracion de la promocion (CLAUDE.md #14) y si apareciera escrita
+     * en el diccionario, cambiarla exigiria un despliegue y dejaria de ser
+     * configuracion.
+     */
+    expect(activePromotionDetail.entry_offer?.per_participant_max).toBe(10000);
 
     const dictionaries = JSON.stringify(enMessages) + JSON.stringify(esMessages);
     expect(dictionaries).not.toContain("10,000");

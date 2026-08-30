@@ -1,7 +1,7 @@
 import { cn } from "@lsw/ui";
 import type { ReactNode } from "react";
 
-import { ProductCard } from "@/components/product-card";
+import { ProductCard, type CardBonus } from "@/components/product-card";
 import type { Locale } from "@/i18n/locales";
 import type { ProductSummary } from "@/lib/api";
 
@@ -60,6 +60,7 @@ export function MerchandiseBand({
   empty,
   className,
   gridClassName,
+  bonus,
 }: {
   readonly products: readonly ProductSummary[];
   readonly locale: Locale;
@@ -82,6 +83,19 @@ export function MerchandiseBand({
   /** Ritmo vertical de la banda. */
   readonly className?: string;
   readonly gridClassName?: string;
+  /**
+   * Periodo bonus vigente de la promocion, si la pagina lo tiene (§13.5).
+   *
+   * VIENE DE ARRIBA Y NO LO PIDE LA TARJETA. Cada tarjeta trae su propia oferta
+   * ya evaluada por el backend -`base_entries` y `entries_now`- pero no sabe
+   * COMO SE LLAMA el bonus que produjo la diferencia ni cuando termina: eso vive
+   * en la promocion. Que lo pidiera cada tarjeta seria una peticion por
+   * articulo para el mismo dato.
+   *
+   * Opcional: sin el, la tarjeta sigue pintando las dos cifras y se calla el
+   * "5X hasta el ...". Nunca al reves.
+   */
+  readonly bonus?: CardBonus | null;
 }) {
   return (
     <section
@@ -102,6 +116,7 @@ export function MerchandiseBand({
                   product={product}
                   locale={locale}
                   {...(headingLevel === undefined ? {} : { headingLevel })}
+                  {...(bonus === undefined || bonus === null ? {} : { bonus })}
                 />
               ))}
             </ul>

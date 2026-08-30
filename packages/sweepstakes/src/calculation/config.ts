@@ -24,6 +24,7 @@
 
 import { z } from "zod";
 
+import { PRODUCT_KINDS, type ProductKind } from "../enums.js";
 import { ROUNDING_POLICIES } from "./rounding.js";
 
 /** Entero grande como cadena de digitos. `bigint` no sobrevive a `JSON.parse`. */
@@ -95,12 +96,55 @@ export const amountTierSchema = z
 export type AmountTierConfig = z.infer<typeof amountTierSchema>;
 
 /**
+ * Una tasa "entries por unidad de importe", sin decir a que se aplica.
+ *
+ * Se extrae a su propio esquema porque `ENTRIES_PER_CURRENCY_UNIT_BY_PRODUCT_KIND`
+ * declara UNA POR TIPO DE PRODUCTO y el modo original declara una sola. Los dos
+ * campos significan exactamente lo mismo en los dos sitios, y duplicarlos
+ * abriria la puerta a que uno de los dos evolucionara sin el otro.
+ */
+export const entryRateSchema = z
+  .object({
+    /** Tamano de la unidad de importe, en unidad menor. 100 = un dolar. */
+    amount_unit_minor: positiveBigint,
+    entries_per_amount_unit: rationalSchema,
+  })
+  .readonly();
+
+export type EntryRateConfig = z.infer<typeof entryRateSchema>;
+
+/**
+ * Tasa por TIPO de producto (DEC-052).
+ *
+ * LAS DOS CLAVES SON OBLIGATORIAS Y NULLABLE, no opcionales. `null` significa
+ * "este tipo no genera participaciones por esta via", que es una decision
+ * legal que alguien ha tomado; una clave AUSENTE significaria "nadie lo ha
+ * pensado", y el motor no puede distinguir una de otra si las dos se escriben
+ * igual. Es el mismo criterio que `entry_limits`.
+ *
+ * El tipo se declara sobre `ProductKind` y el esquema enumera las claves: si
+ * algun dia se anadiera un tipo de producto, el esquema dejaria de satisfacer
+ * al tipo y el paquete no compilaria. Sin eso, "una tasa por tipo" se
+ * convertiria en "una tasa por cada tipo que existia cuando se escribio esto",
+ * y el tipo nuevo generaria cero participaciones en silencio.
+ */
+export type EntryRatesByProductKind = Readonly<Record<ProductKind, EntryRateConfig | null>>;
+
+const entryRatesByProductKindSchema = z
+  .object({
+    MERCHANDISE: entryRateSchema.nullable(),
+    ENTRY_PACKAGE: entryRateSchema.nullable(),
+  })
+  .readonly() satisfies z.ZodType<EntryRatesByProductKind>;
+
+/**
  * Como se convierte una compra elegible en entries.
  *
- * Las cuatro formas cubren lo que el cliente ha descrito sin comprometerse con
- * ninguna: "X entries por cada dolar", "N entries por unidad de producto",
- * "N entries por pedido" y "N entries a partir de tal importe". Cual aplica lo
- * dira el abogado; el motor no elige.
+ * Las cinco formas cubren lo que el cliente ha descrito sin comprometerse con
+ * ninguna: "X entries por cada dolar", "X entries por cada dolar SEGUN EL TIPO
+ * de producto", "N entries por unidad de producto", "N entries por pedido" y
+ * "N entries a partir de tal importe". Cual aplica lo dira el abogado; el motor
+ * no elige.
  *
  * `ENTRIES_PER_CURRENCY_UNIT` NO se expresa como "entries por dolar" sino como
  * `entries_per_amount_unit` sobre `amount_unit_minor`. La diferencia importa:
@@ -140,6 +184,29 @@ export const purchaseEntryFormulaSchema = z
       rounding_policy: roundingPolicySchema,
     }),
     z.object({
+      mode: z.literal("ENTRIES_PER_CURRENCY_UNIT_BY_PRODUCT_KIND"),
+      /**
+       * Una tasa por tipo de producto. Al menos una no nula: una configuracion
+       * con las dos a `null` declara que NADA genera participaciones por
+       * compra, que no es una tasa sino la ausencia de esta via, y para eso el
+       * abogado tiene otras formas de decirlo (una `ALLOW_LIST` vacia, otro
+       * modo). Aceptarla aqui produciria promociones activas que cobran y no
+       * conceden nada sin que ningun control lo notara.
+       */
+      rates: entryRatesByProductKindSchema,
+      /**
+       * UNA SOLA politica de redondeo para el pedido entero, no una por tipo.
+       *
+       * El redondeo del motor ocurre UNA VEZ, al final, sobre la fraccion
+       * exacta acumulada de todas las lineas (ver `engine.ts`). Una politica
+       * por tipo obligaria a redondear por grupo y luego sumar, y entonces
+       * "cuantas participaciones da este carrito" dependeria de como se
+       * agrupase, que es exactamente la propiedad que el motor existe para
+       * evitar.
+       */
+      rounding_policy: roundingPolicySchema,
+    }),
+    z.object({
       mode: z.literal("TIERED_BY_AMOUNT"),
       /**
        * SEMANTICA FIJA: gana el escalon MAS ALTO cuyo umbral no supere el
@@ -158,6 +225,18 @@ export const purchaseEntryFormulaSchema = z
     }),
   ])
   .superRefine((formula, ctx) => {
+    if (formula.mode === "ENTRIES_PER_CURRENCY_UNIT_BY_PRODUCT_KIND") {
+      const declared = PRODUCT_KINDS.filter((kind) => formula.rates[kind] !== null);
+      if (declared.length === 0) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["rates"],
+          error: "at_least_one_product_kind_rate_required",
+        });
+      }
+      return;
+    }
+
     if (formula.mode !== "TIERED_BY_AMOUNT") {
       return;
     }
@@ -191,6 +270,20 @@ export const multiplierPeriodSchema = z
     priority: z.number().int().min(0),
     /** `null` = toda la mercancia elegible. */
     sku_scope: z.array(z.string().min(1)).min(1).nullable(),
+    /**
+     * `null` = todos los tipos de producto. Con `sku_scope` presente a la vez,
+     * aplica la INTERSECCION: el periodo cubre lo que esta en los dos ambitos.
+     *
+     * OBLIGATORIA Y NULLABLE, SIN VALOR POR DEFECTO. Un `.default(null)` seria
+     * comodo y significaria "quien no lo escriba quiere decir todos", que es
+     * una suposicion sobre el alcance de un bonus -o sea, sobre cuanto vale una
+     * compra- tomada por un ingeniero. Escribirla cuesta seis palabras; darla
+     * por supuesta cuesta una discrepancia de participaciones.
+     *
+     * Existe ademas de `sku_scope` porque un bonus "solo paquetes" no puede
+     * depender de enumerar SKUs que todavia no se han creado (DEC-052 punto 3).
+     */
+    product_kind_scope: z.array(z.enum(PRODUCT_KINDS)).min(1).nullable(),
   })
   .refine((period) => Date.parse(period.ends_at) > Date.parse(period.starts_at), {
     error: "period_must_end_after_it_starts",
@@ -216,6 +309,75 @@ export const multiplierConfigSchema = z
 export type MultiplierConfig = z.infer<typeof multiplierConfigSchema>;
 
 /**
+ * Techo legal de los periodos bonus (DEC-052 punto 4).
+ *
+ * NO ES UN VALOR DEL MOTOR, y por eso no entra en `calculationConfigSchema`:
+ * el motor aplica el periodo que la configuracion declare, sin opinar sobre si
+ * ese periodo deberia haberse creado. Esto es lo que valida la superficie de
+ * ESCRITURA -el atajo "periodo bonus" de §13.8- antes de escribir una version
+ * de reglas nueva. Son dos preguntas distintas: "que se aplica" y "que se
+ * puede llegar a declarar", y mezclarlas haria que un cambio del techo alterara
+ * el resultado de calculos ya hechos.
+ *
+ * Las tres claves son OBLIGATORIAS cuando el bloque esta presente. El bloque
+ * entero es opcional -una promocion sin techo declarado no bloquea nada-, pero
+ * media respuesta ("hay techo, y es 10x, pero no se sobre que se aplica") no
+ * es una respuesta que se pueda comprobar.
+ */
+export const bonusRulesSchema = z
+  .object({
+    /** `2X` es `2/1`; `10X` es `10/1`. Par de enteros (DEC-010), nunca decimal. */
+    max_multiplier: rationalSchema,
+    /** Sobre que tipos de producto se admite declarar un bonus. */
+    applies_to_product_kinds: z.array(z.enum(PRODUCT_KINDS)).min(1),
+    /**
+     * Si el techo admite bonus sobre la via GRATUITA.
+     *
+     * Sin valor por defecto: `false` es lo que dice el borrador v2, pero
+     * escribirlo aqui como default convertiria una lectura del abogado en una
+     * constante del motor. Que la configuracion lo diga.
+     */
+    applies_to_amoe: z.boolean(),
+  })
+  .readonly();
+
+export type BonusRulesConfig = z.infer<typeof bonusRulesSchema>;
+
+export class BonusRulesConfigError extends Error {
+  public readonly code = "BONUS_RULES_CONFIG_INVALID";
+  public readonly issues: readonly unknown[];
+
+  public constructor(issues: readonly unknown[]) {
+    super("BONUS_RULES_CONFIG_INVALID");
+    this.name = "BonusRulesConfigError";
+    this.issues = issues;
+  }
+}
+
+const bonusRulesSliceSchema = z.object({ bonus_rules: z.unknown().optional() });
+
+/**
+ * Extrae `bonus_rules` de `PromotionRulesVersion.config`.
+ *
+ * `null` cuando la clave no esta: es opcional, asi que su ausencia no bloquea
+ * la activacion de la promocion. Lo que significa es "no hay techo declarado",
+ * y quien escribe un periodo bonus decide que hacer con eso; aqui no se
+ * inventa un techo (principio 2).
+ */
+export function readBonusRules(rawConfig: unknown): BonusRulesConfig | null {
+  const slice = bonusRulesSliceSchema.safeParse(rawConfig);
+  const raw = slice.success ? slice.data.bonus_rules : undefined;
+  if (raw === undefined || raw === null) {
+    return null;
+  }
+  const parsed = bonusRulesSchema.safeParse(raw);
+  if (!parsed.success) {
+    throw new BonusRulesConfigError(parsed.error.issues);
+  }
+  return parsed.data;
+}
+
+/**
  * Topes. `null` significa "sin tope declarado", que NO es lo mismo que cero y
  * tampoco es "sin tope decidido": mientras la clave siga en `TBD` la promocion
  * no puede activarse (DEC-012), asi que aqui `null` solo aparece cuando el
@@ -229,6 +391,57 @@ export const entryLimitsSchema = z
   .readonly();
 
 export type EntryLimitsConfig = z.infer<typeof entryLimitsSchema>;
+
+export class EntryLimitsConfigError extends Error {
+  public readonly code = "ENTRY_LIMITS_CONFIG_INVALID";
+  public readonly issues: readonly unknown[];
+
+  public constructor(issues: readonly unknown[]) {
+    super("ENTRY_LIMITS_CONFIG_INVALID");
+    this.name = "EntryLimitsConfigError";
+    this.issues = issues;
+  }
+}
+
+const perParticipantMaxSliceSchema = z.object({
+  entry_limits: z
+    .object({ per_participant_max: nonNegativeInt.nullable() })
+    // El resto de `entry_limits` no se mira aqui a proposito: quien lee esta
+    // rebanada solo necesita el tope por persona.
+    .optional(),
+});
+
+/**
+ * El tope por participante de una version de reglas, y NADA MAS.
+ *
+ * ---------------------------------------------------------------------------
+ * POR QUE UNA REBANADA MINIMA Y NO `parseCalculationConfig`
+ * ---------------------------------------------------------------------------
+ *
+ * Quien necesita este dato fuera del motor es la concesion AMOE (DEC-052 punto
+ * 5), y una participacion AMOE NO pasa por el motor de calculo: su cantidad es
+ * un valor de la configuracion, no el resultado de una formula. Exigirle la
+ * configuracion de calculo entera -formula, elegibilidad, politica de
+ * redondeo- para poder leer un entero significaria que una promocion cuya via
+ * de compra estuviera mal configurada bloquearia ademas la via GRATUITA, que es
+ * justo la que no debe depender de la otra.
+ *
+ * `null` significa "esta version no declara tope por persona", y con el no se
+ * recorta nada. No es una suposicion: `entry_limits` es clave requerida de
+ * DEC-012, asi que una version activa la declara, y `null` ahi solo aparece
+ * cuando el abogado ha dicho expresamente que no hay tope.
+ *
+ * Una rebanada MALFORMADA si es un fallo, y lanza. Tratarla como "sin tope"
+ * convertiria un error de configuracion en participaciones concedidas de mas,
+ * que es el fallo caro de los dos.
+ */
+export function readPerParticipantMax(rawConfig: unknown): number | null {
+  const parsed = perParticipantMaxSliceSchema.safeParse(rawConfig);
+  if (!parsed.success) {
+    throw new EntryLimitsConfigError(parsed.error.issues);
+  }
+  return parsed.data.entry_limits?.per_participant_max ?? null;
+}
 
 /**
  * Configuracion completa que el motor necesita.

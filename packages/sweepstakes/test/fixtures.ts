@@ -31,6 +31,7 @@ import {
   SequentialIdGenerator,
   type IanaTimeZone,
   type PromotionContext,
+  type QualifyingOrderItem,
   type SweepstakesFlags,
 } from "../src/index.js";
 
@@ -152,12 +153,7 @@ export function qualifiedOrder(
     readonly orderId?: string;
     readonly participantId?: string;
     readonly qualifiedAt?: Date;
-    readonly items?: readonly {
-      readonly lineId: string;
-      readonly sku: string;
-      readonly quantity: number;
-      readonly unitAmountMinor: bigint;
-    }[];
+    readonly items?: readonly QualifyingOrderItem[];
   } = {},
 ) {
   return {
@@ -167,7 +163,15 @@ export function qualifiedOrder(
     currency: "USD",
     qualifiedAt: overrides.qualifiedAt ?? NOW,
     items: overrides.items ?? [
-      { lineId: "line-1", sku: "TEE-BLACK-M", quantity: 2, unitAmountMinor: 2500n },
+      {
+        lineId: "line-1",
+        sku: "TEE-BLACK-M",
+        // Dato de prueba. El tipo lo congela `order_items.product_kind`
+        // (DEC-052); aqui se escribe explicito porque el motor no lo supone.
+        productKind: "MERCHANDISE" as const,
+        quantity: 2,
+        unitAmountMinor: 2500n,
+      },
     ],
   };
 }

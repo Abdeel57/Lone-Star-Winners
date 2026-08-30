@@ -152,6 +152,13 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
 
   const amoeEnabled = isFeatureEnabled(uiConfig.flags, "amoe_enabled");
 
+  /*
+   * Los multiplicadores se leen UNA vez y bajan como prop a los dos sitios que
+   * los necesitan -el hero y el panel de oferta-. Consultarlos dos veces daria
+   * el mismo resultado, pero dejaria dos sitios donde olvidarse de comprobarlos.
+   */
+  const multipliersEnabled = isFeatureEnabled(uiConfig.flags, "entry_multipliers_enabled");
+
   /**
    * Copy de un paso, resuelto con `switch` exhaustivo.
    *
@@ -223,6 +230,7 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
           locale={locale}
           nowIso={nowIso}
           amoeEnabled={amoeEnabled}
+          multipliersEnabled={multipliersEnabled}
         />
       )}
 
@@ -247,10 +255,11 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
             <EntryOfferPanel
               offer={detail?.entry_offer ?? null}
               presentation={presentation}
-              multipliersEnabled={isFeatureEnabled(uiConfig.flags, "entry_multipliers_enabled")}
+              multipliersEnabled={multipliersEnabled}
               rulesPublished={promotion.rules_version_id !== null}
               locale={locale}
               timeZone={promotion.legal_timezone}
+              nowIso={nowIso}
             />
 
             {/* Con `amoe_enabled` apagado no se renderiza nada: ocultar es aqui

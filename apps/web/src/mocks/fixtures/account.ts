@@ -266,13 +266,24 @@ export const entryTransactions: readonly EntryTransaction[] = [
     reverses_transaction_id: null,
   },
   {
+    /*
+     * FICHA POSTAL RECORTADA POR EL TOPE
+     * (HO-041, resolucion fase 1, punto 4).
+     *
+     * La ficha valia 2,000 y entraron 550 porque el participante ya estaba
+     * cerca del maximo por persona. `quantity_delta` es lo que ENTRO y
+     * `applied_cap` explica por que no fue mas: las cuatro cifras llegan del
+     * backend, ninguna se deriva aqui, y sin ellas la unica explicacion posible
+     * seria una resta hecha en el cliente.
+     */
     id: "etx_0000000000000002",
     type: "AMOE_EARNED",
     source_type: "AMOE",
-    quantity_delta: 200,
+    quantity_delta: 550,
     reason_key: "AMOE_APPROVED",
     effective_at: "2026-09-04T09:40:00.000Z",
     reverses_transaction_id: null,
+    applied_cap: { kind: "PER_PARTICIPANT", limit: 10_000, requested: 2_000, granted: 550 },
   },
   {
     id: "etx_0000000000000003",

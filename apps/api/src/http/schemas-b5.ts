@@ -179,6 +179,23 @@ export const entryTransactionSchema = z.object({
   /** `null` = no caduca. Con el flag de caducidad apagado es siempre `null`. */
   expires_at: z.string().nullable(),
   reverses_transaction_id: z.uuid().nullable(),
+  /**
+   * El recorte por tope que se aplico a ESTA fila, o `null`.
+   *
+   * NO es PII y no es informacion de negocio: es el dato del propio
+   * participante, y es lo unico que explica por que recibio menos de lo
+   * anunciado. Sin el, una ficha AMOE de 2,000 que concedio 1,000 aparece en su
+   * historial como una fila de 1,000 sin motivo aparente, y la unica forma de
+   * entenderla seria preguntar a soporte.
+   */
+  applied_cap: z
+    .object({
+      kind: z.string(),
+      limit: z.number().int(),
+      requested: z.number().int(),
+      granted: z.number().int(),
+    })
+    .nullable(),
 });
 
 export const entryNumberBatchSchema = z.object({
@@ -308,6 +325,24 @@ export const amoeConfigSchema = z.object({
   requires_review: z.boolean().nullable(),
   max_per_participant_per_period: z.number().int().nullable(),
   limit_period: z.enum(["DAY", "WEEK", "MONTH", "PROMOTION"]).nullable(),
+  /**
+   * Plazos y limite por sobre de la via POSTAL, o `null` (contrato 13.2).
+   *
+   * ES INFORMATIVO. El sistema no cuenta sobres: nadie le dice cuantas cartas
+   * llegaron salvo el operador que las transcribe, y el matasellos lo lee una
+   * persona. Se publica para que quien vaya a escribir sepa los plazos antes de
+   * hacerlo, y para que el revisor tenga contra que comparar.
+   *
+   * `null` significa "la version de reglas no declara bloque postal", nunca
+   * "no hay plazos": el sistema no se los inventa.
+   */
+  mail_in: z
+    .object({
+      max_cards_per_envelope: z.number().int(),
+      postmark_by: z.string(),
+      received_by: z.string(),
+    })
+    .nullable(),
 });
 
 export const amoeSubmissionSchema = z.object({
@@ -348,6 +383,76 @@ export const amoeReviewItemSchema = amoeSubmissionSchema.extend({
   entries_before: z.number().int(),
   entries_if_approved: z.number().int().nullable(),
   entries_after_if_approved: z.number().int().nullable(),
+  /**
+   * Si el tope por participante gobierna ESTA aprobacion (contrato 13.3).
+   *
+   * `true` cuando `entry_caps_enabled` esta encendido Y la version de reglas
+   * del envio declara `entry_limits.per_participant_max`. Viaja explicito
+   * porque con solo las cifras, un envio que cabe entero y uno que no esta
+   * sujeto a tope se verian igual, y el revisor no sabria si manana podria
+   * recortarse.
+   */
+  cap_applies: z.boolean(),
+  /**
+   * Lo que otorgaria el envio DESPUES del tope. Es la unica cifra que el
+   * revisor debe leer como "lo que va a pasar": `entries_if_approved` existe
+   * para que se vea el recorte, no para prometerlo.
+   */
+  entries_if_approved_after_cap: z.number().int().nullable(),
+  /**
+   * Correo del participante, ENMASCARADO (dominio entero, inicial de la parte
+   * local). `null` si el expediente no tiene correo.
+   *
+   * Se publica porque `amoe.review.read` declara `touchesPii` en el catalogo de
+   * `@lsw/security`: la cola de revision es, por definicion, una pantalla que
+   * mira expedientes de personas. Va ENMASCARADO y no entero porque ver el dato
+   * completo es `pii.view.full`, que es otra capacidad y exige motivo; lo que
+   * el revisor necesita aqui es poder DISTINGUIR una fila de otra y reconocer
+   * un dominio desechable, no leer la direccion.
+   *
+   * El `payload` del envio sigue sin salir por esta ruta: ahi va la ficha
+   * entera -nombre legal, direccion postal, fecha de nacimiento- y eso no es
+   * material de listado.
+   */
+  participant_email: z.string().nullable(),
+  /**
+   * `true` si la tecleo QUIEN ESTA MIRANDO. Es lo que permite al panel
+   * deshabilitar el boton de aprobar con conocimiento de causa en vez de
+   * mandar a alguien contra un 409 evitable.
+   *
+   * Un booleano y no el identificador del actor en la sesion: el panel no
+   * necesita saber QUIEN es cada uno, solo si esta fila es suya, y repartir
+   * identificadores de cuentas administrativas por una respuesta de listado es
+   * regalar el mapa del equipo.
+   */
+  transcribed_by_me: z.boolean(),
+  /** `true` si el sobre traia mas fichas de las que admite `mail_in`. */
+  flagged_envelope: z.boolean(),
+  /**
+   * Lo que la aprobacion CONCEDIO de verdad, leido de la transaccion del
+   * ledger. `null` mientras no haya aprobacion.
+   *
+   * Convive con `entries_awarded` porque son la misma cifra por dos caminos
+   * -aquel viene del mismo sitio- y se conserva el nombre nuevo junto al
+   * `applied_cap` para que la pareja "cuanto se concedio" / "por que menos" se
+   * lea junta.
+   */
+  granted_entries: z.number().int().nullable(),
+  /**
+   * El recorte por tope, tal y como quedo anotado en la transaccion.
+   *
+   * `null` cuando no hubo recorte, que es el caso normal. Publicarlo importa:
+   * sin el, un envio de 2,000 que concedio 1,000 se veria como un envio de
+   * 1,000, y ni el revisor ni el participante podrian explicar la diferencia.
+   */
+  applied_cap: z
+    .object({
+      kind: z.string(),
+      limit: z.number().int(),
+      requested: z.number().int(),
+      granted: z.number().int(),
+    })
+    .nullable(),
 });
 
 // ---------------------------------------------------------------------------

@@ -39,8 +39,10 @@
  */
 
 import { computeBalanceAt } from "../balance/predicate.js";
+import { EntryLimitsConfigError, readPerParticipantMax } from "../calculation/config.js";
+import type { AmoeSubmissionStatus } from "../enums.js";
 import { SWEEPSTAKES_CAPABILITIES } from "../capabilities.js";
-import { SweepstakesError } from "../errors.js";
+import { isSweepstakesError, SweepstakesError } from "../errors.js";
 import type { JsonObject } from "../json.js";
 import { ENTRY_REASON_KEYS, entrySourceRef } from "../ledger.js";
 import {
@@ -63,6 +65,7 @@ import {
   AmoeConfigError,
   type AmoeConfig,
   type AmoeInstructions,
+  type AmoeMailInConfig,
   type AmoeRequiredField,
 } from "./config.js";
 import { periodBucket } from "./period.js";
@@ -79,8 +82,45 @@ export interface AmoeSubmitInput {
   readonly payload: AmoePayload;
 }
 
+/**
+ * Una ficha postal tecleada por un operador (DEC-054 punto 4).
+ *
+ * `participantId` ya viene resuelto: quien llama busca al participante por el
+ * email de la ficha y, si no existe, lo crea. Esa resolucion es de identidad y
+ * no de participaciones, asi que no ocurre aqui.
+ */
+export interface AmoeTranscribeInput extends AmoeSubmitInput {
+  /**
+   * Referencia del sobre tal y como la anota el operador. Texto libre y opaco
+   * para el sistema: sirve para que un revisor pueda volver al papel.
+   */
+  readonly envelopeReference: string | null;
+  /**
+   * Cuantas fichas venian en ese sobre, segun el operador.
+   *
+   * El sistema NO cuenta sobres: nadie mas que quien lo abrio sabe cuantas
+   * cartas traia. Lo que hace con este numero es compararlo con
+   * `mail_in.max_cards_per_envelope` y MARCAR el envio si lo supera, para que
+   * una persona decida. `null` = el operador no lo anoto.
+   */
+  readonly cardsInEnvelope: number | null;
+}
+
 export type AmoeSubmitOutcome =
   | { readonly status: "PENDING_REVIEW"; readonly submission: AmoeSubmission }
+  /**
+   * El envio se registro y la concesion AUTOMATICA no cupo en el tope.
+   *
+   * Es un desenlace y no una excepcion porque las dos cosas son ciertas a la
+   * vez: la ficha existe y esta en la cola, y no se concedio nada. Con una
+   * excepcion, la transaccion del llamante revertiria tambien el registro
+   * del envio, que es exactamente lo que no debe pasar.
+   */
+  | {
+      readonly status: "CAP_REACHED_PENDING_REVIEW";
+      readonly submission: AmoeSubmission;
+      readonly details: JsonObject;
+    }
   | {
       readonly status: "APPROVED";
       readonly submission: AmoeSubmission;
@@ -126,6 +166,15 @@ export interface AmoeConfigView {
    */
   readonly instructions: AmoeInstructions | null;
   readonly externalUrl: string | null;
+  /**
+   * Plazos y limite por sobre de la via postal, o `null`.
+   *
+   * Se publica en las cuatro modalidades por la misma razon que
+   * `requiredFields`: quien decide que pinta la interfaz es la interfaz. Una
+   * promocion que no sea postal simplemente no lo declara, y `null` significa
+   * "no hay plazos publicados", nunca "no hay plazos".
+   */
+  readonly mailIn: AmoeMailInConfig | null;
 }
 
 /**
@@ -147,6 +196,58 @@ export interface AmoeApprovalProjection {
   readonly entriesIfApproved: number | null;
   /** `entriesBefore + entriesIfApproved`, o `null` por el mismo motivo. */
   readonly entriesAfterIfApproved: number | null;
+  /**
+   * Si el tope por participante gobierna ESTA aprobacion (DEC-052 punto 5).
+   *
+   * Es `true` cuando `entry_caps_enabled` esta encendido Y la version de reglas
+   * del envio declara `entry_limits.per_participant_max`. Viaja explicito para
+   * que la interfaz pueda distinguir "no se recorta nada" de "no hay tope": con
+   * solo las cifras, un envio que cabe entero y uno que no esta sujeto a tope
+   * se verian igual, y el revisor no sabria si mañana podria recortarse.
+   */
+  readonly capApplies: boolean;
+  /**
+   * Lo que otorgaria este envio DESPUES de aplicar el tope. `null` por el mismo
+   * motivo que `entriesIfApproved`. Con `capApplies: false` coincide con el.
+   *
+   * Es la unica cifra que el revisor deberia leer como "lo que va a pasar": la
+   * de antes del tope existe para que se vea el recorte, no para prometerlo.
+   */
+  readonly entriesIfApprovedAfterCap: number | null;
+}
+
+/**
+ * El tope por participante aplicable a una concesion, ya resuelto.
+ *
+ * `limit: null` cubre los DOS casos en los que no se recorta nada -flag
+ * apagado, o version de reglas sin tope declarado- porque para quien concede
+ * son el mismo caso: no hay techo que respetar. Distinguirlos importa en la
+ * PROYECCION, y alli se distingue con `capApplies`.
+ */
+interface EntryCapState {
+  readonly limit: number | null;
+}
+
+/**
+ * Recorte por tope por participante. La MISMA aritmetica que el motor.
+ *
+ * Vive en una funcion con nombre y no repetida en dos sitios porque la
+ * concesion y la proyeccion tienen que dar exactamente el mismo numero: si la
+ * pantalla del revisor dijera 2,000 y la aprobacion concediera 1,000, el
+ * revisor estaria decidiendo sobre una cifra que no existe.
+ */
+function applyPerParticipantCap(
+  requested: number,
+  entriesBefore: number,
+  limit: number | null,
+): { readonly granted: number; readonly trimmed: boolean } {
+  if (limit === null) {
+    return { granted: requested, trimmed: false };
+  }
+  const headroom = Math.max(0, limit - entriesBefore);
+  return headroom < requested
+    ? { granted: headroom, trimmed: true }
+    : { granted: requested, trimmed: false };
 }
 
 export interface AmoeServiceDependencies {
@@ -194,6 +295,7 @@ export class AmoeService {
         requiredFields: null,
         instructions: null,
         externalUrl: null,
+        mailIn: null,
       };
     }
     const config = this.readConfig(context);
@@ -216,6 +318,7 @@ export class AmoeService {
       // el cable, no una la ausencia del campo y otra su nulidad.
       instructions: config.instructions ?? null,
       externalUrl: config.external_url ?? null,
+      mailIn: config.mail_in ?? null,
     };
   }
 
@@ -245,6 +348,7 @@ export class AmoeService {
     const now = this.deps.clock.now();
     const balances = new Map<string, number>();
     const grants = new Map<string, number | null>();
+    const caps = new Map<string, EntryCapState | null>();
     const projections = new Map<string, AmoeApprovalProjection>();
 
     for (const submission of submissions) {
@@ -270,11 +374,28 @@ export class AmoeService {
         grants.set(submission.rulesVersionId, entriesIfApproved);
       }
 
+      const capKey = `${submission.promotionId} ${submission.rulesVersionId}`;
+      let cap = caps.get(capKey);
+      if (cap === undefined) {
+        cap = await this.readableCapState(submission.promotionId, submission.rulesVersionId);
+        caps.set(capKey, cap);
+      }
+
       projections.set(submission.id, {
         entriesBefore,
         entriesIfApproved,
         entriesAfterIfApproved:
           entriesIfApproved === null ? null : entriesBefore + entriesIfApproved,
+        // Una configuracion de topes ilegible se pinta como `false`. Es
+        // deliberado: la aprobacion de esa fila va a fallar de todos modos, y
+        // lo que el revisor necesita ver es que no hay cifra que prometer
+        // -`entriesIfApprovedAfterCap: null`-, no un "hay tope, valor
+        // desconocido" que no le sirve para decidir nada.
+        capApplies: cap !== null && cap.limit !== null,
+        entriesIfApprovedAfterCap:
+          entriesIfApproved === null || cap === null
+            ? null
+            : applyPerParticipantCap(entriesIfApproved, entriesBefore, cap.limit).granted,
       });
     }
 
@@ -303,18 +424,136 @@ export class AmoeService {
     }
   }
 
+  /**
+   * Estado del tope por participante para una concesion concreta.
+   *
+   * DOS FUENTES, LEIDAS EN ESTE ORDEN Y NO EN OTRO:
+   *
+   *   1. `entry_caps_enabled` del contexto de la promocion (DEC-032). Con el
+   *      flag apagado no hay tope que aplicar, y la version de reglas ni se
+   *      lee: leerla igualmente convertiria una configuracion rota en un fallo
+   *      de una via que en ese momento no depende de ella.
+   *   2. `entry_limits.per_participant_max` de la version de reglas DEL ENVIO,
+   *      no de la vigente. Es el mismo principio que gobierna la cantidad
+   *      concedida: si entre el envio y la revision se publicara una version
+   *      con otro tope, aplicar el nuevo cambiaria retroactivamente lo que
+   *      valia un envio ya hecho.
+   */
+  private async capState(promotionId: string, rulesVersionId: string): Promise<EntryCapState> {
+    const context = await this.requireContext(promotionId);
+    if (!context.flags.entry_caps_enabled) {
+      return { limit: null };
+    }
+    const raw = await this.deps.promotions.getRulesConfig(rulesVersionId);
+    return { limit: readPerParticipantMax(raw) };
+  }
+
+  /**
+   * Igual que `capState`, pero `null` en vez de excepcion si la rebanada de
+   * topes no se puede leer.
+   *
+   * Es para la COLA DE REVISION, por el mismo motivo que
+   * `grantSizeUnderRulesVersion`: una fila con la configuracion rota no puede
+   * dejar al revisor sin pantalla. La aprobacion de esa fila seguira fallando,
+   * que es donde el fallo importa.
+   */
+  private async readableCapState(
+    promotionId: string,
+    rulesVersionId: string,
+  ): Promise<EntryCapState | null> {
+    try {
+      return await this.capState(promotionId, rulesVersionId);
+    } catch (error) {
+      if (error instanceof EntryLimitsConfigError) {
+        return null;
+      }
+      throw error;
+    }
+  }
+
   public async submit(input: AmoeSubmitInput): Promise<AmoeSubmitOutcome> {
+    return await this.submitInternal(input, null);
+  }
+
+  /**
+   * Transcripcion de una ficha postal por un operador (DEC-054 punto 4).
+   *
+   * REUTILIZA `submit` ENTERO, y eso es lo importante: misma ventana, misma
+   * huella, mismo limite por periodo y misma politica de duplicados. Una
+   * segunda via de escritura con sus propios controles seria una via por la que
+   * saltarselos, y ademas exactamente el "segundo modelo de entries" que
+   * `CLAUDE.md` seccion 4 prohibe.
+   *
+   * Lo unico que anade es procedencia: quien la tecleo, de que sobre salio y
+   * cuantas fichas venian. Ese primer dato no es decorativo -decide quien NO
+   * puede aprobarla-, y por eso viaja en `metadata` y no en un log.
+   */
+  public async submitOnBehalf(
+    input: AmoeTranscribeInput,
+    principal: Principal,
+  ): Promise<AmoeSubmitOutcome> {
+    this.requireCapability(principal, SWEEPSTAKES_CAPABILITIES.amoeSubmissionTranscribe);
+
+    // QUIEN TECLEA SALE DEL PRINCIPAL, NUNCA DEL CUERPO.
+    //
+    // Este identificador no es un dato mas de la ficha: es el que decide quien
+    // NO puede aprobarla despues (`assertNotSelfTranscribed`). Aceptarlo como
+    // parametro dejaria que quien transcribe escribiera el id de un companero
+    // y aprobara la ficha el solo, es decir, que el dato de entrada de un
+    // control lo eligiera justo quien va a eludirlo. Ademas falsificaria el
+    // actor en los dos eventos de auditoria, que son el unico registro que
+    // responde "quien hizo esto".
+    if (principal.actor.type !== "ADMIN") {
+      throw new SweepstakesError("CAPABILITY_REQUIRED", {
+        capability: SWEEPSTAKES_CAPABILITIES.amoeSubmissionTranscribe,
+        reason: "admin_actor_required",
+      });
+    }
+
+    return await this.submitInternal(input, {
+      transcribedByAdminUserId: principal.actor.adminUserId,
+      envelopeReference: input.envelopeReference,
+      cardsInEnvelope: input.cardsInEnvelope,
+    });
+  }
+
+  private async submitInternal(
+    input: AmoeSubmitInput,
+    transcription: {
+      readonly transcribedByAdminUserId: string;
+      readonly envelopeReference: string | null;
+      readonly cardsInEnvelope: number | null;
+    } | null,
+  ): Promise<AmoeSubmitOutcome> {
     const context = await this.requireContext(input.promotionId);
     if (!context.flags.amoe_enabled) {
       throw new SweepstakesError("AMOE_NOT_ENABLED", { promotion_id: input.promotionId });
     }
     const config = this.readConfig(context);
+
+    // La MODALIDAD decide quien puede escribir por esta via, y se comprueba
+    // antes que nada. Con `MAIL_IN_REVIEW` la participacion llega en un sobre y
+    // la teclea un operador con `amoe.submission.transcribe`; con
+    // `EXTERNAL_INSTRUCTIONS` ocurre fuera del sistema. Aceptar un envio propio
+    // en esos casos crearia participaciones por un metodo que las Official
+    // Rules vigentes no ofrecen.
+    this.assertModeAdmits(config, transcription !== null, input.promotionId);
+
     const now = this.deps.clock.now();
 
     this.assertWindowOpen(config, now);
     this.assertPayloadComplete(config, input.payload);
 
-    const fingerprint = amoeFingerprint(input.promotionId, config.mode, input.payload);
+    // MINIMIZACION: solo se guarda lo que las Official Rules PIDEN.
+    //
+    // assertPayloadComplete comprueba que ESTEN las claves requeridas; las
+    // de mas se guardaban tal cual, y la tabla acababa almacenando datos
+    // personales que nadie pidio. La huella se calcula sobre el payload YA
+    // proyectado, para que dos envios que solo difieran en campos que el
+    // sistema no pide sigan siendo el mismo envio.
+    const payload = this.projectPayload(config, input.payload);
+
+    const fingerprint = amoeFingerprint(input.promotionId, config.mode, payload);
     const duplicateOf = await this.deps.submissions.findByFingerprint(
       input.promotionId,
       fingerprint,
@@ -344,16 +583,38 @@ export class AmoeService {
       }
     }
 
+    // Un sobre con mas fichas de las admitidas NO se rechaza: entra marcado y
+    // lo mira una persona. Las Official Rules dicen cuantas fichas caben en un
+    // sobre, no que fichas anular cuando llegan de mas, y el sistema no elige
+    // por su cuenta cual de las tres sobra (pregunta 6 de `LEGAL_PENDING.md`).
+    const envelopeLimit = config.mail_in?.max_cards_per_envelope ?? null;
+    const cardsInEnvelope = transcription?.cardsInEnvelope ?? null;
+    const flaggedEnvelope =
+      cardsInEnvelope !== null && envelopeLimit !== null && cardsInEnvelope > envelopeLimit;
+
     // Un duplicado marcado va SIEMPRE a revision humana, aunque la
     // configuracion no exija revision para los envios normales: la politica
     // `FLAG_FOR_REVIEW` no tendria ningun efecto si el envio marcado se
     // aprobara solo.
     const flaggedDuplicate = duplicateOf !== null;
-    const needsReview = config.requires_review || flaggedDuplicate;
+    const needsReview = config.requires_review || flaggedDuplicate || flaggedEnvelope;
 
-    const metadata: JsonObject = flaggedDuplicate
-      ? { duplicate_of_submission_id: duplicateOf.id, duplicate_policy: config.duplicate_policy }
-      : {};
+    const metadata: JsonObject = {
+      ...(flaggedDuplicate
+        ? {
+            duplicate_of_submission_id: duplicateOf.id,
+            duplicate_policy: config.duplicate_policy,
+          }
+        : {}),
+      ...(transcription === null
+        ? {}
+        : {
+            transcribed_by_admin_user_id: transcription.transcribedByAdminUserId,
+            envelope_reference: transcription.envelopeReference,
+            cards_in_envelope: transcription.cardsInEnvelope,
+          }),
+      ...(flaggedEnvelope ? { flag: "ENVELOPE_LIMIT_EXCEEDED" } : {}),
+    };
 
     const submission = await this.deps.submissions.save({
       id: this.deps.ids.next(),
@@ -363,7 +624,7 @@ export class AmoeService {
       status: needsReview ? "PENDING_REVIEW" : "SUBMITTED",
       fingerprint,
       periodBucket: bucket,
-      payload: input.payload,
+      payload,
       submittedAt: now,
       rulesVersionId: context.rulesVersionId,
       reviewedByAdminUserId: null,
@@ -376,7 +637,13 @@ export class AmoeService {
 
     await this.deps.audit.emit({
       action: "amoe.submission.created",
-      actor: { type: "PARTICIPANT", participantId: input.participantId },
+      // Una transcripcion la hace un ADMINISTRADOR sobre el expediente de otra
+      // persona. Registrarla como si la hubiera enviado el participante seria
+      // falsear el actor en el unico registro que responde "quien hizo esto".
+      actor:
+        transcription === null
+          ? { type: "PARTICIPANT", participantId: input.participantId }
+          : { type: "ADMIN", adminUserId: transcription.transcribedByAdminUserId },
       promotionId: input.promotionId,
       targetEntityType: "AMOESubmission",
       targetEntityId: submission.id,
@@ -388,8 +655,35 @@ export class AmoeService {
         requires_review: needsReview,
         flagged_duplicate: flaggedDuplicate,
         period_bucket: bucket,
+        transcribed: transcription !== null,
       },
     });
+
+    if (transcription !== null) {
+      // Evento PROPIO ademas del anterior, y no en lugar de el. `created` es el
+      // hecho del envio -lo que cuenta para el limite y para la cola-;
+      // `transcribed` es el hecho administrativo, y es el que un revisor de
+      // cumplimiento busca cuando pregunta "cuantas fichas de papel entraron y
+      // quien las tecleo". Con un solo evento habria que filtrar por metadata
+      // para responder eso.
+      await this.deps.audit.emit({
+        action: "amoe.submission.transcribed",
+        actor: { type: "ADMIN", adminUserId: transcription.transcribedByAdminUserId },
+        promotionId: input.promotionId,
+        targetEntityType: "AMOESubmission",
+        targetEntityId: submission.id,
+        reasonKey: null,
+        reasonDetail: null,
+        occurredAt: now,
+        metadata: {
+          envelope_reference: transcription.envelopeReference,
+          cards_in_envelope: transcription.cardsInEnvelope,
+          max_cards_per_envelope: envelopeLimit,
+          flagged_envelope: flaggedEnvelope,
+          participant_id: input.participantId,
+        },
+      });
+    }
 
     if (needsReview) {
       return { status: "PENDING_REVIEW", submission };
@@ -398,18 +692,77 @@ export class AmoeService {
     // Sin revision configurada, la aprobacion es automatica y la ejecuta el
     // sistema. Se registra como actor SYSTEM, no como el participante: no fue
     // una persona quien la aprobo, y la auditoria no debe sugerir lo contrario.
-    return await this.grant(submission, config, { type: "SYSTEM" }, null, null);
+    try {
+      return await this.grant(submission, config, { type: "SYSTEM" }, null, null);
+    } catch (error) {
+      if (!isSweepstakesError(error, "AMOE_ENTRY_CAP_REACHED")) {
+        throw error;
+      }
+      // El tope impide la concesion AUTOMATICA, no el envio. La ficha es valida
+      // y ya esta registrada; lo que no puede hacer el sistema es decidir solo
+      // que se queda sin efecto. Pasa a la cola y el error se propaga para que
+      // quien la envio sepa que no se concedio nada todavia.
+      // EL RESCATE TIENE QUE PERSISTIR, ASI QUE NO SE RELANZA.
+      //
+      // Antes se relanzaba, y con una transaccion REAL en el llamante esa
+      // excepcion revertia tambien el save del envio y sus dos eventos: no
+      // quedaba ni la ficha ni el rastro, justo lo contrario de lo que el
+      // comentario prometia. Solo se sostenia con el doble en memoria, que
+      // no revierte nada.
+      //
+      // Ahora se devuelve un desenlace propio: las dos cosas son ciertas a
+      // la vez -la ficha existe y esta en la cola, y no se concedio nada- y
+      // quien llama decide como lo presenta.
+      const pending = await this.deps.submissions.update({
+        ...submission,
+        status: "PENDING_REVIEW",
+      });
+      await this.deps.audit.emit({
+        action: "amoe.submission.cap_reached",
+        actor: { type: "SYSTEM" },
+        promotionId: input.promotionId,
+        targetEntityType: "AMOESubmission",
+        targetEntityId: pending.id,
+        reasonKey: null,
+        reasonDetail: null,
+        occurredAt: now,
+        metadata: { ...error.details },
+      });
+      return {
+        status: "CAP_REACHED_PENDING_REVIEW",
+        submission: pending,
+        details: error.details,
+      };
+    }
   }
 
   /**
    * Cola de revision. Exige `amoe.review.read`.
+   *
+   * SIN FILTRO ES LA COLA DE TRABAJO, Y ESE SIGUE SIENDO EL CASO NORMAL
+   *
+   *   `status === null` -y `"PENDING_REVIEW"`, que es su valor por defecto en
+   *   la ruta- devuelven lo que ESPERA DECISION: `SUBMITTED` y
+   *   `PENDING_REVIEW`. Es la lectura que abre el revisor, y no cambia.
+   *
+   * CON FILTRO ES UNA CONSULTA DE EXPEDIENTE, NO UNA COLA
+   *
+   *   Cualquier otro estado consulta ese estado exacto. Sin esta via, un envio
+   *   decidido desaparecia de toda lectura administrativa y con el se iban
+   *   `granted_entries` y `applied_cap` -lo unico que explica por que una
+   *   aprobacion concedio menos de lo anunciado-. La capacidad exigida es la
+   *   misma porque la pregunta es la misma: mirar expedientes AMOE.
    */
   public async reviewQueue(
     promotionId: string,
     principal: Principal,
+    status: AmoeSubmissionStatus | null = null,
   ): Promise<readonly AmoeSubmission[]> {
     this.requireCapability(principal, SWEEPSTAKES_CAPABILITIES.amoeReviewRead);
-    return await this.deps.submissions.listPendingReview(promotionId);
+    if (status === null || status === "PENDING_REVIEW") {
+      return await this.deps.submissions.listPendingReview(promotionId);
+    }
+    return await this.deps.submissions.listByStatus(promotionId, status);
   }
 
   /**
@@ -427,8 +780,40 @@ export class AmoeService {
   ): Promise<AmoeSubmitOutcome> {
     this.requireCapability(principal, SWEEPSTAKES_CAPABILITIES.amoeReviewApprove);
     const submission = await this.requireReviewable(submissionId);
+    this.assertNotSelfTranscribed(submission, principal.actor);
     const config = await this.configOfSubmission(submission);
     return await this.grant(submission, config, principal.actor, notes, submission.rulesVersionId);
+  }
+
+  /**
+   * Quien transcribio una ficha postal no la aprueba (DEC-054 punto 4).
+   *
+   * NO ES UNA REGLA DE RUTA, y por eso no vive en el autorizador de `apps/api`:
+   * depende de un dato del registro -quien lo tecleo- que la ruta no conoce.
+   * Es la misma separacion de funciones que ya rige los ajustes manuales
+   * (`ADJUSTMENT_SELF_APPROVAL_FORBIDDEN`), y por el mismo motivo: sin ella,
+   * una sola persona podria pasar de escribir una ficha inventada a concederse
+   * participaciones sin que nadie mas la viera.
+   *
+   * Solo aplica a las transcripciones. Un envio propio del participante no
+   * lleva `transcribed_by_admin_user_id`, y ahi la separacion la garantiza el
+   * ambito: un participante no puede aprobar nada.
+   */
+  private assertNotSelfTranscribed(submission: AmoeSubmission, actor: Principal["actor"]): void {
+    if (actor.type !== "ADMIN") {
+      return;
+    }
+    // Se recorre a un `Map` antes de consultar, por el mismo motivo que
+    // `assertPayloadComplete`: `metadata` es JSON de origen externo y un acceso
+    // indexado directo leeria la cadena de prototipos ante una clave hostil.
+    const metadata = new Map(Object.entries(submission.metadata));
+    const transcribedBy = metadata.get("transcribed_by_admin_user_id");
+    if (typeof transcribedBy === "string" && transcribedBy === actor.adminUserId) {
+      throw new SweepstakesError("SEPARATION_OF_DUTIES", {
+        submission_id: submission.id,
+        transcribed_by_admin_user_id: transcribedBy,
+      });
+    }
   }
 
   public async reject(
@@ -442,6 +827,10 @@ export class AmoeService {
       throw new SweepstakesError("REASON_KEY_REQUIRED", { field: "reasonKey" });
     }
     const submission = await this.requireReviewable(submissionId);
+    // Rechazar tambien es DECIDIR. Quien teclea una ficha no puede cerrarla el
+    // solo: seria cerrar unilateralmente la unica via gratuita de esa persona,
+    // y la asimetria con approve no tendria ninguna justificacion.
+    this.assertNotSelfTranscribed(submission, principal.actor);
     const now = this.deps.clock.now();
 
     const rejected = await this.deps.submissions.update({
@@ -564,13 +953,62 @@ export class AmoeService {
 
   private async configOfSubmission(submission: AmoeSubmission): Promise<AmoeConfig> {
     const raw = await this.deps.promotions.getRulesConfig(submission.rulesVersionId);
-    const config = readAmoeConfig(raw);
+
+    // Se envuelve como en readConfig: una rebanada AMOE rota en la version del
+    // envio es un 409 explicable -"esa promocion se activo con AMOE a medio
+    // configurar"- y no una excepcion cruda que acabe en un 500.
+    let config: AmoeConfig | null;
+    try {
+      config = readAmoeConfig(raw);
+    } catch (error) {
+      if (error instanceof AmoeConfigError) {
+        throw new SweepstakesError("AMOE_CONFIG_INVALID", {
+          rules_version_id: submission.rulesVersionId,
+        });
+      }
+      throw error;
+    }
     if (config === null) {
       throw new SweepstakesError("AMOE_MODE_NOT_CONFIGURED", {
         rules_version_id: submission.rulesVersionId,
       });
     }
     return config;
+  }
+
+  /**
+   * Que via de escritura admite cada modalidad.
+   *
+   *   ONLINE_FORM            envio propio del participante.
+   *   CODE                   envio propio del participante.
+   *   MAIL_IN_REVIEW         SOLO transcripcion: el envio existe en papel.
+   *   EXTERNAL_INSTRUCTIONS  ninguna de las dos: ocurre fuera del sistema.
+   *
+   * La tabla se escribe aqui y no en la ruta porque es una regla del DOMINIO
+   * -depende de la version de reglas, no del transporte- y porque un job o un
+   * script de administracion tampoco deberian poder saltarsela.
+   */
+  private assertModeAdmits(
+    config: AmoeConfig,
+    isTranscription: boolean,
+    promotionId: string,
+  ): void {
+    if (isTranscription) {
+      if (config.mode !== "MAIL_IN_REVIEW") {
+        throw new SweepstakesError("AMOE_MODE_NOT_MAIL_IN", {
+          promotion_id: promotionId,
+          mode: config.mode,
+        });
+      }
+      return;
+    }
+
+    if (config.mode === "MAIL_IN_REVIEW" || config.mode === "EXTERNAL_INSTRUCTIONS") {
+      throw new SweepstakesError("AMOE_MODE_NOT_ONLINE", {
+        promotion_id: promotionId,
+        mode: config.mode,
+      });
+    }
   }
 
   private assertWindowOpen(config: AmoeConfig, now: Date): void {
@@ -586,6 +1024,25 @@ export class AmoeService {
         ends_at: config.submission_window.ends_at,
       });
     }
+  }
+
+  /**
+   * El payload recortado a las claves que declara identity_requirements.
+   *
+   * Se recorre a un Map antes de consultar por clave, por el mismo motivo
+   * que assertPayloadComplete: con acceso indexado directo, una clave
+   * __proto__ leeria la cadena de prototipos en vez del dato.
+   */
+  private projectPayload(config: AmoeConfig, payload: AmoePayload): AmoePayload {
+    const provided = new Map(Object.entries(payload));
+    const projected: Record<string, string> = {};
+    for (const key of config.identity_requirements) {
+      const value = provided.get(key);
+      if (typeof value === "string") {
+        projected[key] = value;
+      }
+    }
+    return projected;
   }
 
   private assertPayloadComplete(config: AmoeConfig, payload: AmoePayload): void {
@@ -654,8 +1111,87 @@ export class AmoeService {
     const now = this.deps.clock.now();
     const sourceRef = entrySourceRef("amoe", submission.id);
     const columns = actorColumns(actor);
+    const rulesVersionId = reviewedUnderRulesVersionId ?? submission.rulesVersionId;
 
     return await this.deps.unitOfWork.withTransaction(async () => {
+      // ---- Tope por participante (DEC-052 punto 5) -------------------------
+      //
+      // Las Official Rules aplican el maximo "regardless of method". Conceder
+      // 2,000 a quien ya tiene 10,000 seria concederselas dos veces, asi que la
+      // via gratuita hace exactamente la misma aritmetica de espacio restante
+      // que el motor aplica a las compras. Dejarselo a la revision humana no
+      // vale: el revisor no ve el saldo hasta la proyeccion, y el ledger tiene
+      // que cuadrar aunque nadie mire.
+      const requested = config.entries_per_approved_submission;
+      const cap = await this.capState(submission.promotionId, rulesVersionId);
+
+      // EL CERROJO VA ANTES DE LEER EL SALDO, y ese orden es la garantia
+      // entera. Estar dentro de la transaccion no serializa: bajo READ
+      // COMMITTED dos aprobaciones concurrentes de fichas DISTINTAS del mismo
+      // participante leen las dos el mismo saldo y conceden las dos, y la
+      // unicidad de source_ref no lo acota porque es unica por ENVIO. Tomar el
+      // cerrojo despues de leer protegeria una lectura que ya ocurrio.
+      if (cap.limit !== null) {
+        await this.deps.ledger.lockParticipant(submission.promotionId, submission.participantId);
+      }
+
+      let granted = requested;
+      let appliedCap: JsonObject | null = null;
+
+      if (cap.limit !== null) {
+        const history = await this.deps.ledger.listForParticipant(
+          submission.promotionId,
+          submission.participantId,
+        );
+        const entriesBefore = computeBalanceAt(
+          history,
+          submission.promotionId,
+          submission.participantId,
+          now,
+        ).activeEntries;
+        const outcome = applyPerParticipantCap(requested, entriesBefore, cap.limit);
+        granted = outcome.granted;
+        if (outcome.trimmed) {
+          appliedCap = {
+            kind: "PER_PARTICIPANT",
+            limit: cap.limit,
+            requested,
+            granted,
+          };
+        }
+
+        if (granted === 0) {
+          // Antes de negarse, comprobar si la concesion YA EXISTE. Sin esto, un
+          // reintento sobre un envio ya concedido leeria un saldo que incluye
+          // su propia concesion, veria espacio cero y respondería "tope
+          // alcanzado" en lugar de devolver lo que ya se concedio. La
+          // idempotencia no puede depender de que el saldo no haya cambiado.
+          const already = await this.deps.ledger.findBySource({
+            promotionId: submission.promotionId,
+            sourceType: "AMOE",
+            sourceRef,
+          });
+          if (already !== null) {
+            const stored = await this.deps.submissions.findById(submission.id);
+            return {
+              status: "APPROVED",
+              submission: stored ?? submission,
+              transaction: already,
+              entries: already.quantityDelta,
+            } as const;
+          }
+
+          throw new SweepstakesError("AMOE_ENTRY_CAP_REACHED", {
+            submission_id: submission.id,
+            promotion_id: submission.promotionId,
+            participant_id: submission.participantId,
+            limit: cap.limit,
+            entries_before: entriesBefore,
+            requested,
+          });
+        }
+      }
+
       let transaction: LedgerTransaction;
       try {
         transaction = await this.deps.ledger.append({
@@ -666,7 +1202,7 @@ export class AmoeService {
           // Principio 9: mismo universo, procedencia conservada.
           sourceType: "AMOE",
           sourceRef,
-          quantityDelta: config.entries_per_approved_submission,
+          quantityDelta: granted,
           status: "POSTED",
           // El envio entra en vigor cuando se ENVIO, no cuando se reviso: si no,
           // el retraso de la cola de revision decidiria en que ventana temporal
@@ -677,7 +1213,7 @@ export class AmoeService {
           // encienda, esta linea es el punto donde entra `resolveExpiresAt`.
           expiresAt: null,
           recordedAt: now,
-          rulesVersionId: reviewedUnderRulesVersionId ?? submission.rulesVersionId,
+          rulesVersionId,
           engineVersion: ENTRY_CALCULATION_ENGINE_VERSION,
           // No hay snapshot de calculo: la cantidad es un valor de la
           // configuracion, no el resultado de una formula. Guardar un snapshot
@@ -689,7 +1225,14 @@ export class AmoeService {
           actorParticipantId: columns.actorParticipantId,
           reasonKey: ENTRY_REASON_KEYS.amoeApproved,
           reasonDetail: notes,
-          metadata: { submission_id: submission.id, mode: submission.mode },
+          metadata: {
+            submission_id: submission.id,
+            mode: submission.mode,
+            // Solo cuando hubo recorte. Presente siempre, seria ruido en el
+            // 99% de las filas; ausente cuando lo hubo, seria una entry cuyo
+            // importe no se puede explicar leyendo su propia fila.
+            ...(appliedCap === null ? {} : { applied_cap: appliedCap }),
+          },
         });
       } catch (error) {
         if (isIdempotencyConflict(error)) {

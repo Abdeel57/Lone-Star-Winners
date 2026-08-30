@@ -1,7 +1,11 @@
 import { http, HttpResponse, type JsonBodyType, type RequestHandler } from "msw";
 
 import {
+  adminAmoeApprovePath,
+  adminFeatureFlagPath,
+  adminRulesVersionPath,
   adminRulesVersionsPath,
+  adminSettingChangeRequestPath,
   amoeConfigPath,
   amoeSubmissionsPath,
   API_PATHS,
@@ -66,6 +70,7 @@ export function errorEnvelope(code: string, details?: unknown): ApiErrorEnvelope
 const BY_METHOD: Record<MockMethod, typeof http.get> = {
   GET: http.get,
   POST: http.post,
+  PUT: http.put,
   PATCH: http.patch,
   DELETE: http.delete,
 };
@@ -115,6 +120,22 @@ export const scenarios = {
 
   products: (body: JsonBodyType) =>
     http.get(url(API_PATHS.products), () => HttpResponse.json(body)),
+
+  /** Categorias del catalogo (§13.4). */
+  productCategories: (body: JsonBodyType) =>
+    http.get(url(API_PATHS.productCategories), () => HttpResponse.json(body)),
+
+  /**
+   * El listado de categorias falla.
+   *
+   * Es un escenario que hay que cubrir: el filtro es una comodidad y la tienda
+   * tiene que seguir en pie sin el. Una pantalla que muriera aqui haria que un
+   * fallo del filtro tumbara el catalogo entero.
+   */
+  productCategoriesUnavailable: () =>
+    http.get(url(API_PATHS.productCategories), () =>
+      HttpResponse.json(errorEnvelope("INTERNAL_ERROR"), { status: 500 }),
+    ),
 
   product: (slug: string, body: JsonBodyType) =>
     http.get(url(productPath(slug)), () => HttpResponse.json(body)),
@@ -350,6 +371,21 @@ export const scenarios = {
    * `AMOE_PERIOD_LIMIT_REACHED` y `AMOE_PAYLOAD_INVALID`. Mientras no se cierre
    * cual es, la interfaz tiene que sobrevivir a los dos.
    */
+  /**
+   * Envio en linea sobre una modalidad POSTAL (HO-041, resolucion fase 1).
+   *
+   * La API rechaza con 409 `AMOE_MODE_NOT_ONLINE` cuando la modalidad es
+   * `MAIL_IN_REVIEW` o `EXTERNAL_INSTRUCTIONS`. El escaparate ya no pinta
+   * formulario en esas dos, asi que este camino no deberia alcanzarse desde la
+   * interfaz; el escenario existe porque "no deberia alcanzarse" no es "no puede
+   * alcanzarse", y el texto del error tiene que estar escrito antes de hacer
+   * falta.
+   */
+  amoeSubmitNotOnline: (promotionId: string) =>
+    http.post(url(amoeSubmissionsPath(promotionId)), () =>
+      HttpResponse.json(errorEnvelope("AMOE_MODE_NOT_ONLINE"), { status: 409 }),
+    ),
+
   amoeSubmitRejected: (promotionId: string, code: string, status = 409) =>
     http.post(url(amoeSubmissionsPath(promotionId)), () =>
       HttpResponse.json(errorEnvelope(code), { status }),
@@ -374,6 +410,82 @@ export const scenarios = {
 
   adminRulesVersions: (promotionId: string, body: JsonBodyType) =>
     http.get(url(adminRulesVersionsPath(promotionId)), () => HttpResponse.json(body)),
+
+  /** Una version concreta, con su `config` y sus documentos (§13.7). */
+  adminRulesVersion: (promotionId: string, rulesVersionId: string, body: JsonBodyType) =>
+    http.get(url(adminRulesVersionPath(promotionId, rulesVersionId)), () =>
+      HttpResponse.json(body),
+    ),
+
+  /** Flags con su materialidad legal (§13.9). */
+  adminFeatureFlags: (body: JsonBodyType) =>
+    http.get(url(API_PATHS.adminFeatureFlags), () => HttpResponse.json(body)),
+
+  /**
+   * Un cambio de flag rechazado por el autorizador.
+   *
+   * Ocurre cuando falta la capacidad o el step-up reciente. La pantalla lo
+   * pinta como estado deliberado -no como averia- y sigue enseñando la lista.
+   */
+  adminFlagForbidden: (key: string) =>
+    http.patch(url(adminFeatureFlagPath(key)), () =>
+      HttpResponse.json(errorEnvelope("FORBIDDEN"), { status: 403 }),
+    ),
+
+  /**
+   * `PATCH` sobre un flag LEGALMENTE MATERIAL (HO-041, resolucion fase 1).
+   *
+   * No es un 403: la ruta existe y la capacidad es estatica; lo que pasa es que
+   * ese flag no se cambia por ahi. La API responde 409 `FLAG_LEGALLY_MATERIAL`
+   * con `details.use` apuntando a la ruta correcta, y la pantalla lo ensena tal
+   * cual en vez de traducirlo a "no tienes permiso", que seria falso.
+   */
+  adminFlagLegallyMaterial: (key: string) =>
+    http.patch(url(adminFeatureFlagPath(key)), () =>
+      HttpResponse.json(
+        errorEnvelope("FLAG_LEGALLY_MATERIAL", {
+          use: "POST /admin/settings/change-requests",
+        }),
+        { status: 409 },
+      ),
+    ),
+
+  /** Solicitudes de cambio de ajustes (HO-041, resolucion fase 1). */
+  adminSettingChangeRequests: (body: JsonBodyType) =>
+    http.get(url(API_PATHS.adminSettingChangeRequests), () => HttpResponse.json(body)),
+
+  /** Alta de una solicitud. El cuerpo dice si quedo pendiente o se aplico. */
+  adminSettingChangeRequested: (body: JsonBodyType) =>
+    http.post(url(API_PATHS.adminSettingChangeRequests), () =>
+      HttpResponse.json(body, { status: 201 }),
+    ),
+
+  /**
+   * Aprobar la propia solicitud.
+   *
+   * El CONTROL son el servicio y una `CHECK` de la tabla; la interfaz solo
+   * deshabilita el boton. Este escenario existe para probar que, cuando se
+   * llama igualmente, el 409 se pinta y no se traduce a un fallo generico.
+   */
+  adminSettingChangeSelfApproval: (requestId: string) =>
+    http.post(url(`${adminSettingChangeRequestPath(requestId)}/approve`), () =>
+      HttpResponse.json(errorEnvelope("SETTING_CHANGE_SELF_APPROVAL_FORBIDDEN"), { status: 409 }),
+    ),
+
+  /** Transcripcion de una ficha postal aceptada (§13.10). */
+  adminTranscribe: (body: JsonBodyType) =>
+    http.post(url(API_PATHS.adminAmoeSubmissions), () => HttpResponse.json(body, { status: 201 })),
+
+  /**
+   * Aprobacion rechazada por separacion de funciones (§13.10).
+   *
+   * Quien transcribio una ficha no puede aprobarla. La pantalla lo advierte
+   * antes, pero el CONTROL es este 409 y hay que saber pintarlo.
+   */
+  adminSeparationOfDuties: (submissionId: string) =>
+    http.post(url(adminAmoeApprovePath(submissionId)), () =>
+      HttpResponse.json(errorEnvelope("SEPARATION_OF_DUTIES"), { status: 409 }),
+    ),
 
   adminAmoeSubmissions: (body: JsonBodyType) =>
     http.get(url(API_PATHS.adminAmoeSubmissions), () => HttpResponse.json(body)),

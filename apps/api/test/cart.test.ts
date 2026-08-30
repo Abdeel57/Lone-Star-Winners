@@ -470,7 +470,10 @@ describe("GET /api/v1/cart/entry-quote - DEC-023", () => {
     }>();
 
     expect(body.rules_version_id).toBe("22222222-2222-4222-8222-222222222222");
-    expect(body.engine_version).toBe(1);
+    // DEC-052: el motor paso a la version 2. La cifra no cambia para las
+    // formulas anteriores; lo que cambia es la forma de la entrada y de la
+    // traza, y por eso un auditor tiene que poder distinguirlas.
+    expect(body.engine_version).toBe(2);
     expect(body.evaluated_at).toMatch(/^\d{4}-\d{2}-\d{2}T.*Z$/u);
     await app.close();
   });
@@ -652,6 +655,8 @@ describe("CartWithQuote: los cuatro campos de HO-017", () => {
         priceAmountMinor: 2500n,
         currency: "USD",
         stockQuantity: 5 as number | null,
+        name: null,
+        imageUrl: null,
         position: 0,
       };
       const app = await appWithPrincipal(PARTICIPANT, {
@@ -787,6 +792,146 @@ describe("CartWithQuote: los cuatro campos de HO-017", () => {
     // aritmetica de participaciones.
     expect(body.item_count).toBe(2);
     expect(body.entry_quote?.final_entries).toBe(50);
+    await app.close();
+  });
+});
+
+/**
+ * DEC-052: la tasa depende del TIPO de producto, y el carrito lo lleva.
+ *
+ * Las cifras -1 por dolar de mercancia, 2 por dolar de paquete- son las del
+ * borrador v2 escritas a mano como fixture. El sistema no lleva ninguna dentro;
+ * el propio hecho de tener que declararlas aqui lo demuestra.
+ */
+describe("cotizacion con tasa por tipo de producto (DEC-052)", () => {
+  const PACKAGE_PRODUCT_ID = "a1a1a1a1-a1a1-4a1a-8a1a-a1a1a1a1a1a1";
+  const PACKAGE_VARIANT_ID = "b1b1b1b1-b1b1-4b1b-8b1b-b1b1b1b1b1b1";
+
+  const BY_KIND_CONFIG = {
+    product_eligibility: { mode: "ALL_PRODUCTS" },
+    purchase_entry_formula: {
+      mode: "ENTRIES_PER_CURRENCY_UNIT_BY_PRODUCT_KIND",
+      rates: {
+        MERCHANDISE: {
+          amount_unit_minor: "100",
+          entries_per_amount_unit: { numerator: 1, denominator: 1 },
+        },
+        ENTRY_PACKAGE: {
+          amount_unit_minor: "100",
+          entries_per_amount_unit: { numerator: 2, denominator: 1 },
+        },
+      },
+      rounding_policy: "FLOOR",
+    },
+    entry_limits: { per_order_max: null, per_participant_max: null },
+    partial_refund_rounding_policy: "FLOOR",
+  } as const;
+
+  const PACKAGE_PRODUCT = {
+    id: PACKAGE_PRODUCT_ID,
+    sku: "PKG-10",
+    slug: "entry-package-10",
+    status: "ACTIVE" as const,
+    kind: "ENTRY_PACKAGE" as const,
+    category: null,
+    currency: "USD",
+    name: { "en-US": "$10 entry package", "es-US": "Paquete de participaciones de $10" },
+    description: null,
+    imageUrl: null,
+    variants: [
+      {
+        id: PACKAGE_VARIANT_ID,
+        sku: "PKG-10-1",
+        status: "ACTIVE" as const,
+        priceAmountMinor: 1000n,
+        currency: "USD",
+        stockQuantity: null,
+        name: null,
+        imageUrl: null,
+        position: 0,
+      },
+    ],
+  };
+
+  it("un paquete de $10 a 2 por dolar cotiza 20 participaciones", async () => {
+    const app = await appWithPrincipal(PARTICIPANT, {
+      products: [PACKAGE_PRODUCT],
+      rulesVersion: {
+        id: "22222222-2222-4222-8222-222222222222",
+        version: 1,
+        effectiveAt: new Date("2026-09-01T05:00:00.000Z"),
+        config: BY_KIND_CONFIG,
+        documents: [],
+      },
+    });
+
+    await app.inject({
+      method: "POST",
+      url: "/api/v1/cart/items",
+      payload: { variant_id: PACKAGE_VARIANT_ID, quantity: 1 },
+    });
+
+    const quote = (await app.inject({ method: "GET", url: "/api/v1/cart/entry-quote" })).json<{
+      final_entries: number;
+      engine_version: number;
+    }>();
+
+    expect(quote.final_entries).toBe(20);
+    expect(quote.engine_version).toBe(2);
+    await app.close();
+  });
+
+  it("un carrito mixto redondea UNA vez sobre la suma exacta de los dos tipos", async () => {
+    // 12.50 de mercancia a 1/$1 = 12.5 y 10.00 de paquete a 2/$1 = 20.
+    // 32.5 -> FLOOR -> 32. Redondeando por linea daria 12 + 20 = 32 tambien,
+    // pero el numerador exacto solo cuadra si se acumulo entero.
+    const merch = {
+      ...FIXTURE_PRODUCT,
+      id: "c1c1c1c1-c1c1-4c1c-8c1c-c1c1c1c1c1c1",
+      sku: "TEE-1250",
+      slug: "fixture-tee-1250",
+      variants: [
+        {
+          id: "d1d1d1d1-d1d1-4d1d-8d1d-d1d1d1d1d1d1",
+          sku: "TEE-1250-M",
+          status: "ACTIVE" as const,
+          priceAmountMinor: 1250n,
+          currency: "USD",
+          stockQuantity: 10,
+          name: null,
+          imageUrl: null,
+          position: 0,
+        },
+      ],
+    };
+
+    const app = await appWithPrincipal(PARTICIPANT, {
+      products: [PACKAGE_PRODUCT, merch],
+      rulesVersion: {
+        id: "22222222-2222-4222-8222-222222222222",
+        version: 1,
+        effectiveAt: new Date("2026-09-01T05:00:00.000Z"),
+        config: BY_KIND_CONFIG,
+        documents: [],
+      },
+    });
+
+    await app.inject({
+      method: "POST",
+      url: "/api/v1/cart/items",
+      payload: { variant_id: PACKAGE_VARIANT_ID, quantity: 1 },
+    });
+    await app.inject({
+      method: "POST",
+      url: "/api/v1/cart/items",
+      payload: { variant_id: "d1d1d1d1-d1d1-4d1d-8d1d-d1d1d1d1d1d1", quantity: 1 },
+    });
+
+    const quote = (await app.inject({ method: "GET", url: "/api/v1/cart/entry-quote" })).json<{
+      final_entries: number;
+    }>();
+
+    expect(quote.final_entries).toBe(32);
     await app.close();
   });
 });

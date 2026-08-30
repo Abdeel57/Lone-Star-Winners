@@ -34,11 +34,14 @@
  */
 
 import { ENTRY_CALCULATION_ENGINE_VERSION } from "../engine-version.js";
+import type { ProductKind } from "../enums.js";
 import {
   parseCalculationConfig,
   type CalculationConfig,
   type AmountTierConfig,
+  type EntryRateConfig,
   type MultiplierPeriodConfig,
+  type PurchaseEntryFormulaConfig,
   type RationalConfig,
 } from "./config.js";
 import { divideWithRounding, type RoundingPolicy } from "./rounding.js";
@@ -51,6 +54,16 @@ export interface CalculationItemInput {
   /** Identificador estable de la linea. Fija el orden de proceso. */
   readonly lineId: string;
   readonly sku: string;
+  /**
+   * Tipo de producto de la linea (DEC-052). OBLIGATORIO, sin valor por defecto.
+   *
+   * Un `?? "MERCHANDISE"` seria comodo y estaria mal: la tasa de un paquete es
+   * el doble que la de la mercancia en el borrador v2, asi que un tipo
+   * supuesto por omision es una cifra de participaciones equivocada. Quien
+   * llama lo lee de `order_items.product_kind` -congelado en el pedido- o de
+   * `products.kind` para el carrito; en ningun caso lo adivina el motor.
+   */
+  readonly productKind: ProductKind;
   readonly quantity: number;
   /** DEC-010: unidad menor, entero. */
   readonly unitAmountMinor: bigint;
@@ -85,6 +98,16 @@ export interface CalculationInput {
 export interface EligibleItemBreakdown {
   readonly lineId: string;
   readonly sku: string;
+  /**
+   * El tipo con el que se calculo esta linea (DEC-052).
+   *
+   * Se anota en la traza porque es lo que decide QUE TASA se aplico, y un
+   * auditor que reconstruya el calculo dentro de dos anos no puede depender de
+   * que el catalogo siga diciendo lo mismo: `products.kind` es editable y
+   * `order_items.product_kind` congela el del pedido, pero la traza tiene que
+   * poder leerse sola.
+   */
+  readonly productKind: ProductKind;
   readonly quantity: number;
   readonly lineSubtotalMinor: string;
   /** Aporte exacto de esta linea, como fraccion sin redondear. */
@@ -96,7 +119,9 @@ export interface EligibleItemBreakdown {
 export interface IneligibleItemBreakdown {
   readonly lineId: string;
   readonly sku: string;
-  readonly reasonKey: "PRODUCT_NOT_ELIGIBLE" | "ZERO_QUANTITY";
+  /** Igual que en las lineas elegibles: sin el, `PRODUCT_KIND_NOT_RATED` no se explica. */
+  readonly productKind: ProductKind;
+  readonly reasonKey: "PRODUCT_NOT_ELIGIBLE" | "ZERO_QUANTITY" | "PRODUCT_KIND_NOT_RATED";
 }
 
 export interface AppliedMultiplier {
@@ -320,6 +345,59 @@ function isProductEligible(config: CalculationConfig, sku: string): boolean {
 }
 
 // ---------------------------------------------------------------------------
+// Tasa aplicable a una linea
+// ---------------------------------------------------------------------------
+
+/**
+ * Que tasa gobierna una linea.
+ *
+ * Es un union explicito y no `EntryRateConfig | null` porque hay TRES
+ * respuestas y no dos: hay tasa, no hace falta ninguna (los modos que no se
+ * expresan por importe), o el tipo de esta linea no tiene tasa declarada. La
+ * tercera no es un fallo del sistema: es una decision legal -"los paquetes no
+ * generan participaciones por compra"- y produce una linea inelegible con su
+ * motivo, no una excepcion. Colapsarla con la segunda haria que esa linea
+ * generase cero entries en silencio y sin quedar anotada en la traza.
+ */
+type RateResolution =
+  | { readonly outcome: "RATE"; readonly rate: EntryRateConfig }
+  | { readonly outcome: "NO_RATE_NEEDED" }
+  | { readonly outcome: "PRODUCT_KIND_NOT_RATED" };
+
+const NO_RATE_NEEDED: RateResolution = Object.freeze({ outcome: "NO_RATE_NEEDED" });
+const PRODUCT_KIND_NOT_RATED: RateResolution = Object.freeze({
+  outcome: "PRODUCT_KIND_NOT_RATED",
+});
+
+function resolveRate(
+  formula: PurchaseEntryFormulaConfig,
+  productKind: ProductKind,
+): RateResolution {
+  switch (formula.mode) {
+    case "ENTRIES_PER_CURRENCY_UNIT":
+      return {
+        outcome: "RATE",
+        rate: {
+          amount_unit_minor: formula.amount_unit_minor,
+          entries_per_amount_unit: formula.entries_per_amount_unit,
+        },
+      };
+    case "ENTRIES_PER_CURRENCY_UNIT_BY_PRODUCT_KIND": {
+      const rate = formula.rates[productKind];
+      return rate === null ? PRODUCT_KIND_NOT_RATED : { outcome: "RATE", rate };
+    }
+    case "FIXED_PER_ORDER":
+    case "FIXED_PER_PRODUCT":
+    case "TIERED_BY_AMOUNT":
+      return NO_RATE_NEEDED;
+    default: {
+      const exhaustive: never = formula;
+      throw new Error(`Modo de formula desconocido: ${JSON.stringify(exhaustive)}`);
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Multiplicadores
 // ---------------------------------------------------------------------------
 
@@ -330,12 +408,33 @@ function periodIsActive(period: MultiplierPeriodConfig, evaluatedAt: number): bo
   return Date.parse(period.starts_at) <= evaluatedAt && evaluatedAt < Date.parse(period.ends_at);
 }
 
-function periodCoversSku(period: MultiplierPeriodConfig, sku: string): boolean {
-  return period.sku_scope === null || period.sku_scope.includes(sku);
+/**
+ * Si un periodo cubre una linea concreta.
+ *
+ * Los dos ambitos se combinan por INTERSECCION (DEC-052 punto 3): un periodo
+ * que declara `sku_scope` y `product_kind_scope` cubre lo que esta en los dos.
+ * `null` en cualquiera de ellos significa "sin restringir por ahi", nunca
+ * "ninguno": un periodo sin ambitos cubre toda la mercancia elegible, que es lo
+ * que un bonus general debe hacer.
+ */
+function periodCovers(
+  period: MultiplierPeriodConfig,
+  sku: string,
+  productKind: ProductKind,
+): boolean {
+  const coversSku = period.sku_scope === null || period.sku_scope.includes(sku);
+  const coversKind =
+    period.product_kind_scope === null || period.product_kind_scope.includes(productKind);
+  return coversSku && coversKind;
+}
+
+/** Un periodo sin NINGUN ambito de linea: el unico que puede aplicarse a un pedido entero. */
+function periodIsOrderScoped(period: MultiplierPeriodConfig): boolean {
+  return period.sku_scope === null && period.product_kind_scope === null;
 }
 
 /**
- * Resuelve que multiplicadores aplican a un SKU concreto.
+ * Resuelve que multiplicadores aplican a una linea concreta.
  *
  * La estrategia es CONFIGURACION (DEC-012). El motor no elige: aplica la que
  * las Official Rules aprobadas hayan fijado, y si esa estrategia es
@@ -344,7 +443,33 @@ function periodCoversSku(period: MultiplierPeriodConfig, sku: string): boolean {
 function resolveMultipliers(
   config: CalculationConfig,
   sku: string,
+  productKind: ProductKind,
   evaluatedAt: number,
+): readonly MultiplierPeriodConfig[] {
+  return resolveMultipliersMatching(
+    config,
+    evaluatedAt,
+    (period) => periodCovers(period, sku, productKind),
+    { sku, product_kind: productKind },
+  );
+}
+
+/**
+ * Los periodos vigentes que cumplen un predicado, ya resueltos por la
+ * estrategia de conflicto declarada.
+ *
+ * Existe separado de `resolveMultipliers` para que el ANUNCIO de un bonus
+ * -"5X hasta las 12", que publica la pagina de la promocion- salga de la MISMA
+ * seleccion que el calculo, y no de una segunda implementacion. Un anuncio que
+ * eligiera el periodo por su cuenta acabaria prometiendo un multiplicador que
+ * el motor no aplica en cuanto las dos reglas divergieran.
+ */
+function resolveMultipliersMatching(
+  config: CalculationConfig,
+  evaluatedAt: number,
+  matches: (period: MultiplierPeriodConfig) => boolean,
+  /** Que ambito se estaba resolviendo. Solo viaja en el error de EXCLUSIVE. */
+  scopeDetails: Readonly<Record<string, unknown>>,
 ): readonly MultiplierPeriodConfig[] {
   const multipliers = config.multipliers;
   if (multipliers === undefined) {
@@ -352,7 +477,7 @@ function resolveMultipliers(
   }
 
   const candidates = multipliers.periods
-    .filter((period) => periodIsActive(period, evaluatedAt) && periodCoversSku(period, sku))
+    .filter((period) => periodIsActive(period, evaluatedAt) && matches(period))
     // Orden total explicito: sin el, el resultado dependeria del orden del JSON.
     .sort((a, b) =>
       a.priority === b.priority ? a.id.localeCompare(b.id) : a.priority - b.priority,
@@ -371,7 +496,7 @@ function resolveMultipliers(
       return firstByPriority(candidates);
     case "EXCLUSIVE":
       throw new CalculationError("MULTIPLIER_CONFLICT_UNRESOLVED", {
-        sku,
+        ...scopeDetails,
         period_ids: candidates.map((period) => period.id),
         strategy: "EXCLUSIVE",
       });
@@ -434,33 +559,59 @@ export function calculateEntries(input: CalculationInput, rawConfig: unknown): C
 
   // ---- 2. Elegibilidad ----------------------------------------------------
 
-  const eligible: CalculationItemInput[] = [];
+  const formula = config.purchase_entry_formula;
+
+  /**
+   * Cada linea elegible con SU tasa ya resuelta.
+   *
+   * La tasa se resuelve aqui y no en el bucle de calculo porque una linea cuyo
+   * tipo no tiene tasa es INELEGIBLE, y eso cambia el subtotal elegible del
+   * pedido. Resolverla mas tarde obligaria a restar despues, y un subtotal que
+   * se corrige a posteriori es un subtotal del que hay que fiarse dos veces.
+   */
+  const eligible: { readonly item: CalculationItemInput; readonly rate: EntryRateConfig | null }[] =
+    [];
   const ineligibleItems: IneligibleItemBreakdown[] = [];
 
   for (const item of orderedItems) {
     if (item.quantity === 0) {
-      ineligibleItems.push({ lineId: item.lineId, sku: item.sku, reasonKey: "ZERO_QUANTITY" });
+      ineligibleItems.push({
+        lineId: item.lineId,
+        sku: item.sku,
+        productKind: item.productKind,
+        reasonKey: "ZERO_QUANTITY",
+      });
       continue;
     }
     if (!isProductEligible(config, item.sku)) {
       ineligibleItems.push({
         lineId: item.lineId,
         sku: item.sku,
+        productKind: item.productKind,
         reasonKey: "PRODUCT_NOT_ELIGIBLE",
       });
       continue;
     }
-    eligible.push(item);
+    const resolution = resolveRate(formula, item.productKind);
+    if (resolution.outcome === "PRODUCT_KIND_NOT_RATED") {
+      ineligibleItems.push({
+        lineId: item.lineId,
+        sku: item.sku,
+        productKind: item.productKind,
+        reasonKey: "PRODUCT_KIND_NOT_RATED",
+      });
+      continue;
+    }
+    eligible.push({ item, rate: resolution.outcome === "RATE" ? resolution.rate : null });
   }
 
   let eligibleSubtotalMinor = 0n;
-  for (const item of eligible) {
+  for (const { item } of eligible) {
     eligibleSubtotalMinor += item.unitAmountMinor * BigInt(item.quantity);
   }
 
   // ---- 3. Aporte exacto de cada linea, con su multiplicador ---------------
 
-  const formula = config.purchase_entry_formula;
   const eligibleItems: EligibleItemBreakdown[] = [];
   const multiplierUsage = new Map<string, { period: MultiplierPeriodConfig; lineIds: string[] }>();
 
@@ -496,9 +647,10 @@ export function calculateEntries(input: CalculationInput, rawConfig: unknown): C
 
   if (formula.mode === "FIXED_PER_ORDER" || formula.mode === "TIERED_BY_AMOUNT") {
     // Las dos formulas de ambito de PEDIDO. Ninguna se reparte entre lineas,
-    // asi que solo las afectan los periodos SIN ambito de SKU: un multiplicador
-    // que solo cubre una camiseta no puede multiplicar un importe que no es de
-    // la camiseta.
+    // asi que solo las afectan los periodos SIN ambito de linea -ni SKU ni
+    // tipo-: un multiplicador que solo cubre una camiseta, o solo los paquetes,
+    // no puede multiplicar un importe que no es ni de la camiseta ni de los
+    // paquetes.
     //
     // `eligible.length > 0` como condicion, y no el subtotal: una promocion
     // puede regalar mercancia elegible a coste cero, y "no hay nada elegible en
@@ -522,10 +674,11 @@ export function calculateEntries(input: CalculationInput, rawConfig: unknown): C
         : base;
     }
 
-    for (const item of eligible) {
+    for (const { item } of eligible) {
       eligibleItems.push({
         lineId: item.lineId,
         sku: item.sku,
+        productKind: item.productKind,
         quantity: item.quantity,
         lineSubtotalMinor: (item.unitAmountMinor * BigInt(item.quantity)).toString(10),
         contributionNumerator: "0",
@@ -534,23 +687,31 @@ export function calculateEntries(input: CalculationInput, rawConfig: unknown): C
       });
     }
   } else {
-    for (const item of eligible) {
+    for (const { item, rate } of eligible) {
       const lineSubtotal = item.unitAmountMinor * BigInt(item.quantity);
 
-      const base: Fraction =
-        formula.mode === "FIXED_PER_PRODUCT"
-          ? {
-              numerator: BigInt(formula.entries_per_unit) * BigInt(item.quantity),
-              denominator: 1n,
-            }
-          : {
-              numerator: lineSubtotal * BigInt(formula.entries_per_amount_unit.numerator),
-              denominator:
-                formula.amount_unit_minor * BigInt(formula.entries_per_amount_unit.denominator),
-            };
+      let base: Fraction;
+      if (formula.mode === "FIXED_PER_PRODUCT") {
+        // El unico modo por linea que no se expresa por importe.
+        base = {
+          numerator: BigInt(formula.entries_per_unit) * BigInt(item.quantity),
+          denominator: 1n,
+        };
+      } else if (rate !== null) {
+        base = {
+          numerator: lineSubtotal * BigInt(rate.entries_per_amount_unit.numerator),
+          denominator: rate.amount_unit_minor * BigInt(rate.entries_per_amount_unit.denominator),
+        };
+      } else {
+        // Inalcanzable con los modos de hoy: el paso 2 declara inelegible toda
+        // linea sin tasa y los dos modos de ambito de pedido no llegan a este
+        // bucle. Se deja explicito -en vez de un `!`- para que un modo nuevo
+        // mal cableado falle ruidosamente en lugar de aportar cero en silencio.
+        throw new Error(`Linea sin tasa resuelta en el modo ${formula.mode}: ${item.lineId}`);
+      }
 
       const periods = input.flags.entryMultipliersEnabled
-        ? resolveMultipliers(config, item.sku, evaluatedAt)
+        ? resolveMultipliers(config, item.sku, item.productKind, evaluatedAt)
         : [];
 
       const contribution = applyMultipliers(reduce(base), item.lineId, periods);
@@ -559,6 +720,7 @@ export function calculateEntries(input: CalculationInput, rawConfig: unknown): C
       eligibleItems.push({
         lineId: item.lineId,
         sku: item.sku,
+        productKind: item.productKind,
         quantity: item.quantity,
         lineSubtotalMinor: lineSubtotal.toString(10),
         contributionNumerator: contribution.numerator.toString(10),
@@ -664,11 +826,17 @@ export function calculateEntries(input: CalculationInput, rawConfig: unknown): C
 }
 
 /**
- * Multiplicadores de ambito de pedido (los que no acotan SKU).
+ * Multiplicadores de ambito de pedido (los que no acotan NI SKU NI TIPO).
  *
  * Vive aparte porque `FIXED_PER_ORDER` no tiene lineas a las que atribuir el
  * multiplicador, y meter ese caso dentro del bucle por linea obligaria a
  * inventar una linea ficticia solo para poder recorrerla.
+ *
+ * `product_kind_scope` excluye igual que `sku_scope`, y por el mismo motivo: un
+ * bonus "solo paquetes" no puede multiplicar una cifra de participaciones que
+ * el pedido genera EN BLOQUE, porque nadie puede decir que parte de ese bloque
+ * corresponde a los paquetes. Aplicarlo entero seria regalar el bonus a la
+ * mercancia; repartirlo exigiria una regla de reparto que nadie ha aprobado.
  */
 function applyOrderLevelMultipliers(
   base: Fraction,
@@ -682,7 +850,7 @@ function applyOrderLevelMultipliers(
   }
 
   const candidates = multipliers.periods
-    .filter((period) => period.sku_scope === null && periodIsActive(period, evaluatedAt))
+    .filter((period) => periodIsOrderScoped(period) && periodIsActive(period, evaluatedAt))
     .sort((a, b) =>
       a.priority === b.priority ? a.id.localeCompare(b.id) : a.priority - b.priority,
     );

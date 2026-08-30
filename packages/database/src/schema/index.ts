@@ -19,3 +19,6 @@ export * from "./draw.js";
 // orden en que se fueron anadiendo dominios, y reordenarlo produce conflictos
 // en cada rebase sin cambiar nada.
 export * from "./audit-events.js";
+// HO-041 (DEC-032, DEC-054): control dual de flags legalmente materiales y de
+// la modalidad AMOE. Al final por el mismo motivo que los bloques de arriba.
+export * from "./settings.js";

@@ -26,6 +26,9 @@ export const moneySchema = z.object({
   currency: z.string().length(3),
 });
 
+/** DEC-052. Etiqueta de catalogo: NO dice cuantas participaciones da nada. */
+export const productKindSchema = z.enum(["MERCHANDISE", "ENTRY_PACKAGE"]);
+
 export const promotionStatusSchema = z.enum([
   "DRAFT",
   "SCHEDULED",
@@ -58,6 +61,96 @@ export const promotionSummarySchema = z.object({
   prize_value: moneySchema.nullable(),
 });
 
+/** Un par de enteros (DEC-010). `2X` es `2/1`; nunca un decimal. */
+const rationalSchema = z.object({
+  numerator: z.number().int(),
+  denominator: z.number().int(),
+});
+
+/**
+ * Un periodo bonus tal y como se ANUNCIA. Los mismos campos que declara la
+ * version de reglas, sin nada derivado: el frontend pinta, no interpreta.
+ */
+export const bonusPeriodSchema = z.object({
+  id: z.string(),
+  multiplier: rationalSchema,
+  starts_at: z.string(),
+  ends_at: z.string(),
+  product_kind_scope: z.array(productKindSchema).nullable(),
+  sku_scope: z.array(z.string()).nullable(),
+});
+
+/**
+ * Lo que la promocion ofrece, en cifras que el frontend NO calcula (13.5).
+ *
+ * DOS COSAS QUE ESTE OBJETO NO ES
+ *
+ *   1. NO es `entry_pool`. DEC-052 retiro el "universo total" de DEC-042: el
+ *      10,000 del borrador v2 es el tope POR PERSONA, y publicarlo como
+ *      emitidas/restantes seria describir un producto distinto del que
+ *      aprueba el abogado. `per_participant_max` se pinta como "maximo N por
+ *      persona" y nunca como cuantas quedan.
+ *
+ *   2. NO es la fuente de la configuracion AMOE. `amoe` es un RESUMEN para la
+ *      portada; la fuente completa sigue siendo
+ *      `GET /promotions/{slug}/amoe-config`. Duplicar la configuracion entera
+ *      aqui produciria dos sitios que contestan lo mismo.
+ */
+export const promotionEntryOfferSchema = z.object({
+  rules_version_id: z.uuid(),
+  /**
+   * Deriva de `purchase_entry_formula`. Con el modo por tipo, una entrada por
+   * tipo CON tasa declarada; con `ENTRIES_PER_CURRENCY_UNIT`, una sola con
+   * `product_kind: null`; con los demas modos, lista vacia -esas formulas no se
+   * expresan como "X por dolar" y fingir que si seria inventar una tasa-.
+   */
+  rates: z.array(
+    z.object({
+      product_kind: productKindSchema.nullable(),
+      entries_per_amount_unit: rationalSchema,
+      /**
+       * `currency` es NULABLE, y no es un descuido del contrato.
+       *
+       * `promotions` no tiene columna de moneda y la formula no la declara: la
+       * unica fuente es `config.currency`, si las Official Rules la escriben.
+       * Cuando no esta, la respuesta honesta es `null` -"la unidad de importe
+       * son 100, y la moneda no la dice la configuracion"- y no un `USD`
+       * puesto por el backend porque "es lo obvio". Es el mismo criterio que ya
+       * aplica `promotion-context-repository`.
+       */
+      amount_unit: z.object({
+        amount_minor: z.string(),
+        currency: z.string().length(3).nullable(),
+      }),
+    }),
+  ),
+  per_participant_max: z.number().int().nullable(),
+  per_order_max: z.number().int().nullable(),
+  caps_enabled: z.boolean(),
+  multipliers_enabled: z.boolean(),
+  /**
+   * El periodo vigente que el MOTOR aplicaria, con la estrategia declarada.
+   * `null` si no hay ninguno o el flag esta apagado. Sale de la misma seleccion
+   * que el calculo: un anuncio que eligiera por su cuenta acabaria prometiendo
+   * un multiplicador que el motor no aplica.
+   */
+  active_bonus: bonusPeriodSchema.nullable(),
+  /**
+   * Todos los periodos de la version activa que no han terminado, ordenados por
+   * inicio. Las Official Rules exigen anunciar los bonus ANTES de que empiecen.
+   */
+  bonus_periods: z.array(bonusPeriodSchema),
+  amoe: z
+    .object({
+      enabled: z.boolean(),
+      mode: z.enum(["ONLINE_FORM", "MAIL_IN_REVIEW", "CODE", "EXTERNAL_INSTRUCTIONS"]).nullable(),
+      entries_per_approved_submission: z.number().int().nullable(),
+      max_per_participant_per_period: z.number().int().nullable(),
+      limit_period: z.enum(["DAY", "WEEK", "MONTH", "PROMOTION"]).nullable(),
+    })
+    .nullable(),
+});
+
 export const promotionDetailSchema = promotionSummarySchema.extend({
   rules_version: z
     .object({
@@ -72,6 +165,8 @@ export const promotionDetailSchema = promotionSummarySchema.extend({
       has_controlling_document: z.boolean(),
     })
     .nullable(),
+  /** `null` sin version de reglas activa, o si su configuracion no parsea. */
+  entry_offer: promotionEntryOfferSchema.nullable(),
 });
 
 export const officialRulesSchema = z.object({
@@ -109,10 +204,49 @@ export const availabilitySchema = z.object({
   status: z.enum(["IN_STOCK", "LOW_STOCK", "OUT_OF_STOCK"]),
 });
 
+/**
+ * Lo que una unidad de esta variante genera hoy (contrato 13.4).
+ *
+ * LO CALCULA EL BACKEND CON EL MOTOR REAL, y esa es toda la razon de que
+ * exista. DRAFT v2 Opcion 2 exige que "the number of entries included in each
+ * package is stated on the page where the package is offered", y la unica
+ * forma honesta de decirlo es ejecutar el mismo motor que ejecutara la compra.
+ * Que lo multiplicara el escaparate seria una segunda implementacion de la
+ * formula sobre datos parciales -sin topes, sin elegibilidad, sin periodos- y
+ * es justo lo que el escaner `no-client-entry-math` del frontend impide.
+ *
+ * `base_entries` se evalua con los multiplicadores APAGADOS y `entries_now` con
+ * el flag real. Los dos viajan porque el anuncio de un bonus necesita ensenar
+ * de cuanto se sube: con una sola cifra, "5X" seria una afirmacion que el
+ * participante no puede comprobar.
+ */
+export const entryOfferSchema = z.object({
+  base_entries: z.number().int(),
+  entries_now: z.number().int(),
+  multiplier_ids: z.array(z.string()),
+  evaluated_at: z.string(),
+  rules_version_id: z.uuid(),
+});
+
 export const variantSchema = z.object({
   id: z.uuid(),
   sku: z.string(),
+  /**
+   * `null` = variante sin nombre, el caso normal de un producto de variante
+   * unica. NO son dos cadenas vacias: la interfaz tiene que poder distinguir
+   * "no hay nombre que pintar" de "el nombre esta a medias".
+   */
+  name: localizedTextSchema.nullable(),
   price: moneySchema,
+  /** `null` = sin imagen propia; la interfaz cae a la del producto. */
+  image_url: z.string().nullable(),
+  /**
+   * `null` cuando no hay promocion activa, no hay version de reglas activa, el
+   * tipo de este producto no tiene tasa, el producto no es elegible o la
+   * configuracion no parsea. NUNCA una cifra inventada: preferimos no decir
+   * nada a decir un numero que la compra no va a cumplir.
+   */
+  entry_offer: entryOfferSchema.nullable(),
   /**
    * `stock_quantity` EN CRUDO YA NO SE PUBLICA.
    *
@@ -128,14 +262,33 @@ export const variantSchema = z.object({
   availability: availabilitySchema,
 });
 
+/** Categoria comercial ya resuelta con su nombre en los dos idiomas (DEC-053). */
+export const productCategorySchema = z.object({
+  key: z.string(),
+  name: localizedTextSchema,
+});
+
 export const productSummarySchema = z.object({
   id: z.uuid(),
   sku: z.string(),
   slug: z.string(),
+  kind: productKindSchema,
+  /** `null` = sin clasificar. No es una categoria residual llamada "otras". */
+  category: productCategorySchema.nullable(),
   name: localizedTextSchema,
   description: localizedTextSchema.nullable(),
   currency: z.string().length(3),
+  /**
+   * Enlace, no fichero. No hay almacen de medios todavia (`CLAUDE.md` 7): lo
+   * que se guarda es una URL `https:` o una ruta raiz del propio sitio, y el
+   * frontend vuelve a comprobar la forma antes de pintarla.
+   */
+  image_url: z.string().nullable(),
   variants: z.array(variantSchema),
+});
+
+export const productCategoryListSchema = z.object({
+  items: z.array(productCategorySchema.extend({ position: z.number().int() })),
 });
 
 export const cartLineSchema = z.object({

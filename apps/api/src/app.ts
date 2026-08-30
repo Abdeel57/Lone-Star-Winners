@@ -43,6 +43,7 @@ import { buildAdjustmentRoutes } from "./routes/adjustments.js";
 // existian (dashboard, pedidos, participantes y traza de auditoria).
 import { buildAdminAuditRoutes } from "./routes/admin-audit.js";
 import { buildAdminCatalogRoutes } from "./routes/admin-catalog.js";
+import { buildAdminRulesRoutes } from "./routes/admin-rules.js";
 import { buildAdminDashboardRoutes } from "./routes/admin-dashboard.js";
 import { buildAdminOrdersRoutes } from "./routes/admin-orders.js";
 import { buildAdminParticipantRoutes } from "./routes/admin-participants.js";
@@ -116,6 +117,7 @@ export function collectRouteDefinitions(dependencies: AppDependencies): RouteDef
     ...buildAdminParticipantRoutes(dependencies),
     ...buildAdminAuditRoutes(dependencies),
     ...buildAdminCatalogRoutes(dependencies),
+    ...buildAdminRulesRoutes(dependencies),
   ];
 
   const metaRoutes = buildMetaRoutes({
@@ -152,6 +154,7 @@ export function collectContractRouteDefinitions(dependencies: AppDependencies): 
     ...buildAdminParticipantRoutes(dependencies),
     ...buildAdminAuditRoutes(dependencies),
     ...buildAdminCatalogRoutes(dependencies),
+    ...buildAdminRulesRoutes(dependencies),
   ];
   routes.push(
     ...buildMetaRoutes({ serverUrl: dependencies.config.http.publicUrl, allRoutes: () => routes }),

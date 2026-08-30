@@ -15,7 +15,7 @@
  * `emitsAuditEvent` marca lo que un tercero debe poder reconstruir despues.
  */
 
-import { type FeatureFlagKey } from "./flags.js";
+import { flagRequiresDualControl, type FeatureFlagKey } from "./flags.js";
 
 export const CAPABILITY_DOMAINS = [
   "session",
@@ -351,6 +351,48 @@ export const CAPABILITIES = Object.freeze({
     "Rechazar una participacion AMOE. El motivo es obligatorio y el historico se conserva.",
     { requiresReason: true, featureFlag: "amoe_enabled", legalDependency: "AMOE" },
   ),
+  /**
+   * Transcripcion de una ficha postal (DEC-054 punto 4; contrato seccion 13.10).
+   *
+   * POR QUE NO VALE NINGUNA DE LAS QUE YA HABIA
+   *   `amoe.self.submit` es "mando MI participacion": la concede el rol
+   *   PARTICIPANT y el envio se atribuye a quien tiene la sesion. Quien teclea
+   *   una ficha llegada por correo no esta enviando la suya, esta metiendo en
+   *   la cola un envio que existe en papel a nombre de un tercero.
+   *   `amoe.review.approve` es lo contrario: RESOLVER la cola. Reutilizar
+   *   cualquiera de las dos habria dado a la misma persona la escritura y la
+   *   resolucion del mismo objeto, que es justo lo que DEC-054 separa.
+   *
+   * MOTIVO OPCIONAL Y SIN STEP-UP, A PROPOSITO
+   *   Esto NO escribe en el ledger: crea un envio `PENDING_REVIEW`. Lo que
+   *   concede participaciones sigue siendo `amoe.review.approve`, que exige
+   *   motivo y depende del flag. Ademas es trabajo de cola y de volumen -un
+   *   sobre trae hasta dos fichas y llegan por lotes-, asi que exigir MFA por
+   *   ficha acabaria en una ventana de step-up permanentemente abierta, que es
+   *   peor control que el actual. Es el mismo razonamiento ya escrito para
+   *   `amoe.review.approve` / `.reject` en `authorization-matrix.test.ts`.
+   *
+   * EL PAR DE SEPARACION DE FUNCIONES NO SE DECLARA EN EL CATALOGO
+   *   "Quien transcribe no aprueba" es una regla POR ENVIO, no por rol: el
+   *   mismo COMPLIANCE_OFFICER puede transcribir la ficha A y aprobar la B sin
+   *   que nadie se revise a si mismo. Un par en `SEPARATION_OF_DUTIES` dejaria
+   *   sin NINGUNA de las dos capacidades a quien tuviera las dos -asi funciona
+   *   `authorize()`-, que es exactamente lo contrario de lo que pide DEC-054.
+   *   Lo impone el dominio comparando `metadata.transcribed_by_admin_user_id`
+   *   con el aprobador (409 `SEPARATION_OF_DUTIES`).
+   *
+   * DEPENDE DE `amoe_enabled` como el resto de la seccion. Con la via gratuita
+   * apagada, meter fichas en la cola crearia envios de un metodo que las
+   * Official Rules vigentes no ofrecen, y alguien tendria que decidir despues
+   * que hacer con ellos.
+   */
+  "amoe.submission.transcribe": define(
+    "amoe.submission.transcribe",
+    "amoe",
+    "SENSITIVE",
+    "Transcribir al sistema una ficha AMOE recibida por correo, a nombre de otra persona. Entra en la cola de revision; no concede participaciones.",
+    { touchesPii: true, featureFlag: "amoe_enabled", legalDependency: "AMOE" },
+  ),
 
   // ---------------------------------------------------------------------
   // Promocion y reglas (DEC-012). Cero constantes legales en codigo.
@@ -396,12 +438,41 @@ export const CAPABILITIES = Object.freeze({
     { requiresStepUp: true, requiresReason: true, legalDependency: "OFFICIAL_RULES" },
   ),
   "flag.read": define("flag.read", "flag", "ROUTINE", "Leer el estado de los feature flags."),
+  /**
+   * SIN STEP-UP DESDE HO-041, y el cambio merece explicacion porque RELAJA un
+   * control.
+   *
+   * Lo que gobierna esta capacidad son los flags NO legalmente materiales, que
+   * hoy son exactamente tres: `manual_adjustments_enabled`,
+   * `provisional_entries_enabled` y
+   * `dual_approval_for_sensitive_actions_enabled`. Ninguno de los tres cambia
+   * por si solo lo que se le promete al participante -eso es la definicion de
+   * `legallyMaterial`- y ninguno abre por si solo una via de escritura: lo que
+   * `manual_adjustments_enabled` habilita sigue exigiendo step-up, motivo y
+   * segunda aprobacion de OTRO actor en `entry.adjust.create`/`.approve`, y
+   * `dual_approval_for_sensitive_actions_enabled` solo puede ANADIR exigencias
+   * (ver la nota del flag en `flags.ts`). Encender un flag no basta para mover
+   * una participacion.
+   *
+   * Enfrente estaba el coste: el contrato (seccion 13.9) publica una pantalla de
+   * flags con un interruptor por fila, y exigir MFA reciente en cada
+   * conmutacion de las no materiales lleva a una ventana de step-up
+   * permanentemente abierta -que es el argumento ya escrito para las dos
+   * capacidades de resolucion de la cola AMOE-. Una ventana siempre abierta es
+   * un control peor que ninguno, porque ademas parece que existe.
+   *
+   * Lo que NO cambia: el motivo sigue siendo obligatorio (queda en
+   * `audit_events` con antes y despues), y todo flag legalmente material sigue
+   * pasando por `flag.update.legally_material`, que si exige step-up. Quien
+   * decide por que camino va cada clave es `capabilityForFlagUpdate()`, no el
+   * handler.
+   */
   "flag.update": define(
     "flag.update",
     "flag",
     "SENSITIVE",
     "Cambiar un feature flag no legalmente material.",
-    { requiresStepUp: true, requiresReason: true },
+    { requiresReason: true },
   ),
   "flag.update.legally_material": define(
     "flag.update.legally_material",
@@ -600,4 +671,42 @@ export function isCapabilityId(value: string): value is CapabilityId {
 
 export function getCapability(id: CapabilityId): CapabilityDefinition {
   return CAPABILITIES[id];
+}
+
+/**
+ * Que capacidad exige cambiar UN flag concreto (DEC-054 punto 3, seccion 13.9).
+ *
+ * POR QUE VIVE AQUI Y NO EN EL HANDLER DE `PATCH /admin/feature-flags/:key`
+ *   Porque la respuesta se DERIVA de `flagRequiresDualControl(key)`, y ese dato
+ *   es de este paquete. La alternativa era que `apps/api` escribiera la lista
+ *   de claves en el handler, y entonces habria dos declaraciones de "que flags
+ *   no puede cambiar una sola persona" que pueden divergir. Un flag nuevo
+ *   marcado material queda cubierto sin tocar la ruta.
+ *
+ * NO ES LO MISMO QUE "LEGALMENTE MATERIAL" (HO-041, hallazgo S-02)
+ *   `dual_approval_for_sensitive_actions_enabled` no cambia ninguna promesa
+ *   hecha al participante -no es materia legal- y aun asi sale por la via de
+ *   `flag.update.legally_material`, porque es el interruptor que apaga el
+ *   control dual de todos los demas. Desarmar el control dual exige control
+ *   dual; el porque completo esta en `flags.ts`, junto al dato.
+ *
+ * LO QUE DEVUELVE Y LO QUE ARRASTRA
+ *   La capacidad, no un booleano de step-up. El step-up, el motivo y la segunda
+ *   aprobacion salen despues de `getCapability(...)`, que es la unica fuente de
+ *   esos metadatos; devolver aqui un `requiresStepUp` suelto seria una segunda
+ *   copia de la misma regla.
+ *
+ * COMO SE USA EN UNA RUTA
+ *   El autorizador corre en un `preHandler` y decide con la capacidad DECLARADA
+ *   por la ruta, que es estatica. Con `:key` en la url, la ruta no puede
+ *   declarar una sola capacidad que sea correcta para las dos clases de flag.
+ *   La forma segura es declarar la ESTRICTA para la ruta o volver a autorizar
+ *   en el handler con esta funcion; lo que no vale es declarar `flag.update` y
+ *   no comprobar nada mas, porque entonces un flag material se cambiaria con la
+ *   capacidad debil y sin step-up. Ver la peticion cruzada de HO-041.
+ */
+export function capabilityForFlagUpdate(
+  key: FeatureFlagKey,
+): Extract<CapabilityId, "flag.update" | "flag.update.legally_material"> {
+  return flagRequiresDualControl(key) ? "flag.update.legally_material" : "flag.update";
 }

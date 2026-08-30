@@ -193,4 +193,114 @@ export const ApiErrors = {
 
   cartCurrencyMismatch: (): ApiError =>
     new ApiError({ statusCode: 409, code: "CART_CURRENCY_MISMATCH" }),
+
+  // -------------------------------------------------------------------------
+  // Codigos de la seccion 13 del contrato (DEC-052, DEC-054)
+  // -------------------------------------------------------------------------
+
+  /**
+   * El participante ya esta en el tope por persona (contrato 13.3).
+   *
+   * 409 y no 422: el envio es valido y sigue en la cola. Lo que no cabe son las
+   * participaciones, y eso puede dejar de ser cierto manana -un reembolso
+   * revierte saldo-, asi que el envio NO se rechaza solo: decide el revisor.
+   */
+  amoeEntryCapReached: (details: Readonly<Record<string, unknown>>): ApiError =>
+    new ApiError({ statusCode: 409, code: "AMOE_ENTRY_CAP_REACHED", details }),
+
+  /**
+   * La promocion no tiene version de reglas ACTIVE (contrato 13.8).
+   *
+   * El atajo bonus CLONA la version activa; sin ninguna que clonar no hay nada
+   * que hacer, y responder 404 sugeriria que la promocion no existe.
+   */
+  rulesVersionNotActive: (promotionId: string): ApiError =>
+    new ApiError({
+      statusCode: 409,
+      code: "RULES_VERSION_NOT_ACTIVE",
+      details: { promotion_id: promotionId },
+    }),
+
+  /**
+   * Quien transcribio una ficha postal no puede aprobarla (contrato 13.10).
+   *
+   * Lo decide el DOMINIO comparando `metadata.transcribed_by_admin_user_id` con
+   * el aprobador, no el autorizador: es una propiedad del registro, no de la
+   * ruta, y la puerta corre antes de saber sobre que envio se pregunta.
+   */
+  separationOfDuties: (details: Readonly<Record<string, unknown>>): ApiError =>
+    new ApiError({ statusCode: 409, code: "SEPARATION_OF_DUTIES", details }),
+
+  /**
+   * La `config` de una version de reglas no pasa la validacion por rebanadas
+   * (contrato 13.7).
+   *
+   * 422 y con `issues[].path`: quien redacta la configuracion necesita saber
+   * QUE clave esta mal, no que "algo" lo esta. La API no completa ninguna clave
+   * ausente: se limita a decir cual no encaja.
+   */
+  rulesConfigInvalid: (issues: readonly unknown[]): ApiError =>
+    new ApiError({ statusCode: 422, code: "RULES_CONFIG_INVALID", details: { issues } }),
+
+  /**
+   * La modalidad AMOE configurada no admite el formulario en linea.
+   *
+   * 409 y no 404: la via gratuita existe, pero la escritura va por otro
+   * camino -un sobre-, y decir que no existe mandaria a buscar al sitio
+   * equivocado.
+   */
+  amoeModeNotOnline: (details: Readonly<Record<string, unknown>>): ApiError =>
+    new ApiError({ statusCode: 409, code: "AMOE_MODE_NOT_ONLINE", details }),
+
+  /** Transcribir solo tiene sentido con la modalidad postal. */
+  amoeModeNotMailIn: (details: Readonly<Record<string, unknown>>): ApiError =>
+    new ApiError({ statusCode: 409, code: "AMOE_MODE_NOT_MAIL_IN", details }),
+
+  /**
+   * El correo de la ficha pertenece a una cuenta de PERSONAL (S-04).
+   *
+   * Las Official Rules excluyen a empleados y afiliados. No se devuelve el
+   * correo: quien transcribe lo acaba de teclear y ya lo tiene delante, y
+   * repetirlo lo metaria en logs y en cualquier copia de la respuesta.
+   */
+  amoeParticipantIneligibleStaff: (): ApiError =>
+    new ApiError({ statusCode: 409, code: "AMOE_PARTICIPANT_INELIGIBLE_STAFF" }),
+
+  /**
+   * Ese ajuste NO se cambia por PATCH: exige solicitud y segunda aprobacion.
+   *
+   * Se llamaba `FLAG_LEGALLY_MATERIAL`, y el nombre se quedo corto en cuanto
+   * `dual_approval_for_sensitive_actions_enabled` -que NO es legalmente
+   * material- paso a exigir el mismo camino: desarmar el control dual tiene
+   * que costar control dual. El nombre nuevo describe la CONSECUENCIA, que
+   * es lo que el frontend traduce, y no la clasificacion del flag.
+   */
+  flagRequiresChangeRequest: (key: string): ApiError =>
+    new ApiError({
+      statusCode: 409,
+      code: "FLAG_REQUIRES_CHANGE_REQUEST",
+      details: { key, use: "POST /admin/settings/change-requests" },
+    }),
+
+  /** Quien pidio un cambio de ajuste no lo decide. Lo impone ademas una CHECK. */
+  settingChangeSelfApprovalForbidden: (requestedByAdminUserId: string): ApiError =>
+    new ApiError({
+      statusCode: 409,
+      code: "SETTING_CHANGE_SELF_APPROVAL_FORBIDDEN",
+      details: { requested_by_admin_user_id: requestedByAdminUserId },
+    }),
+
+  /**
+   * La solicitud ya estaba decidida.
+   *
+   * Cubre las dos formas del mismo hecho: pedirlo sobre una fila ya aplicada
+   * o rechazada, y perder la carrera contra otra aprobacion simultanea -que
+   * es la que resuelve el `UPDATE ... WHERE status = 'PENDING_APPROVAL'`-.
+   */
+  settingChangeNotPending: (status?: string): ApiError =>
+    new ApiError({
+      statusCode: 409,
+      code: "SETTING_CHANGE_NOT_PENDING",
+      ...(status === undefined ? {} : { details: { status } }),
+    }),
 } as const;

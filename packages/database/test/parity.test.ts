@@ -86,22 +86,93 @@ const rbacSql = readMigration("0004_rbac_catalog_unification.sql");
 const rbacReadSql = readMigration("0007_rbac_read_capabilities.sql");
 
 /**
- * Migraciones que siembran el catalogo RBAC, en orden de aplicacion.
+ * Migraciones que construyen el catalogo RBAC, en orden de aplicacion.
  *
- * Son DOS porque DEC-005 fija migraciones forward-only: cuando `security`
+ * Son VARIAS porque DEC-005 fija migraciones forward-only: cuando `security`
  * resolvio `HO-013` anadiendo las capacidades de lectura que faltaban, la
  * respuesta correcta no fue editar `0004` -eso dejaria dos entornos con la
- * misma version de esquema y catalogos distintos- sino escribir `0007`.
+ * misma version de esquema y catalogos distintos- sino escribir `0007`. `0008`
+ * anadio la clave de flag a las que ya existian y `0027` hizo lo propio con lo
+ * que trajo HO-041.
  *
- * Este test compara la UNION contra el catalogo, de modo que la particion entre
- * migraciones puede cambiar sin que la garantia cambie.
+ * Este test compara el ESTADO RESULTANTE de aplicarlas todas contra el
+ * catalogo, de modo que la particion entre migraciones puede cambiar sin que la
+ * garantia cambie.
  */
-const RBAC_SEED_MIGRATIONS = [rbacSql, rbacReadSql] as const;
+const flagKeySql = readMigration("0008_permission_feature_flag_key.sql");
+const ho041Sql = readMigration("0027_rbac_catalog_ho041.sql");
+
+const RBAC_SEED_MIGRATIONS = [rbacSql, rbacReadSql, ho041Sql] as const;
+
+/** Las de arriba mas las que solo CORRIGEN filas ya sembradas. */
+const RBAC_CATALOG_MIGRATIONS = [rbacSql, rbacReadSql, flagKeySql, ho041Sql] as const;
 
 function parseSeedRowsAcross(table: string): string[][] {
   return RBAC_SEED_MIGRATIONS.flatMap((sql) =>
     sql.includes(`INSERT INTO ${table}`) ? parseValueTuples(parseInsertBlock(sql, table)) : [],
   );
+}
+
+/**
+ * El catalogo `admin_permissions` tal y como queda DESPUES de aplicar todas las
+ * migraciones: filas indexadas por nombre de columna, con los `UPDATE`
+ * posteriores ya aplicados encima.
+ *
+ * DOS COSAS QUE LA LECTURA ANTERIOR NO PODIA HACER
+ *
+ *   1. Leer POR NOMBRE. La lectura posicional dejo de bastar en cuanto una
+ *      migracion tuvo que insertar otra combinacion de columnas: desde `0008`,
+ *      `depends_on_feature_flag` es GENERADA y no se puede escribir, asi que
+ *      las migraciones posteriores no la nombran. Por posicion, la columna
+ *      siguiente se habria interpretado como esa y el test habria comparado
+ *      metadatos desplazados culpando a la migracion.
+ *
+ *   2. Aplicar los `UPDATE`. Un metadato que se CORRIGE despues -el step-up de
+ *      `flag.update`, la clave de flag de `0008`- no aparece en ningun INSERT.
+ *      Comparando solo los INSERT, el test afirmaria que la base de datos dice
+ *      una cosa cuando dice la contraria.
+ */
+function parsePermissionCatalog(): Map<string, Map<string, string>> {
+  const byKey = new Map<string, Map<string, string>>();
+
+  for (const sql of RBAC_SEED_MIGRATIONS) {
+    if (!sql.includes("INSERT INTO admin_permissions")) {
+      continue;
+    }
+    const block = parseInsertBlock(sql, "admin_permissions");
+    const header = block.slice(0, block.indexOf("VALUES"));
+    const columns = header
+      .slice(header.indexOf("(") + 1, header.lastIndexOf(")"))
+      .split(",")
+      .map((column) => column.trim());
+
+    for (const values of parseValueTuples(block)) {
+      const record = new Map(columns.map((column, index) => [column, values[index] ?? ""]));
+      byKey.set(record.get("key") ?? "", record);
+    }
+  }
+
+  // `UPDATE admin_permissions SET <col> = <valor> WHERE key = '<k>'` (o `IN`).
+  for (const sql of RBAC_CATALOG_MIGRATIONS) {
+    for (const match of sql.matchAll(
+      /UPDATE\s+admin_permissions\s+SET\s+([a-z_]+)\s*=\s*(true|false|NULL|'[^']*')\s*\n?\s*WHERE\s+key\s+(?:=\s*'([a-z_.]+)'|IN\s*\(([^)]*)\))/giu,
+    )) {
+      const column = match[1] ?? "";
+      const raw = match[2] ?? "";
+      const value = raw.startsWith("'") ? raw.slice(1, -1) : raw;
+      const single = match[3];
+      const list = match[4];
+      const keys =
+        single !== undefined
+          ? [single]
+          : [...(list ?? "").matchAll(/'([a-z_.]+)'/gu)].map((entry) => entry[1] ?? "");
+      for (const key of keys) {
+        byKey.get(key)?.set(column, value);
+      }
+    }
+  }
+
+  return byKey;
 }
 
 const flagsSql = readMigration("0005_feature_flags.sql");
@@ -465,18 +536,22 @@ describe("garantias estructurales del entry ledger (DEC-007, DEC-009)", () => {
 
 describe("paridad del catalogo RBAC unificado (DEC-027, DEC-015)", () => {
   it("las capacidades sembradas son exactamente las de `@lsw/security`", () => {
-    const rows = parseSeedRowsAcross("admin_permissions").map((columns) => ({
-      key: columns[0] ?? "",
-      domain: columns[1] ?? "",
-      sensitivity: columns[2] ?? "",
-      description: columns[3] ?? "",
-      requiresStepUp: asBoolean(columns[4]),
-      requiresReason: asBoolean(columns[5]),
-      requiresSecondApproval: asBoolean(columns[6]),
-      emitsAuditEvent: asBoolean(columns[7]),
-      touchesPii: asBoolean(columns[8]),
-      dependsOnFeatureFlag: asBoolean(columns[9]),
-      legalDependency: asNullableText(columns[10]),
+    const rows = [...parsePermissionCatalog().values()].map((columns) => ({
+      key: columns.get("key") ?? "",
+      domain: columns.get("domain") ?? "",
+      sensitivity: columns.get("sensitivity") ?? "",
+      description: columns.get("description") ?? "",
+      requiresStepUp: asBoolean(columns.get("requires_step_up")),
+      requiresReason: asBoolean(columns.get("requires_reason")),
+      requiresSecondApproval: asBoolean(columns.get("requires_second_approval")),
+      emitsAuditEvent: asBoolean(columns.get("emits_audit_event")),
+      touchesPii: asBoolean(columns.get("touches_pii")),
+      // Desde `0008` la columna es GENERADA a partir de `feature_flag_key`, asi
+      // que se DERIVA igual que en la base de datos en vez de leerse. Una
+      // migracion posterior no puede escribirla, y leerla del INSERT original
+      // daria el valor de antes de asignar el flag.
+      dependsOnFeatureFlag: columns.get("feature_flag_key") !== undefined,
+      legalDependency: asNullableText(columns.get("legal_dependency")),
     }));
 
     expect(rows.length).toBe(PERMISSIONS.length);
@@ -507,24 +582,14 @@ describe("paridad del catalogo RBAC unificado (DEC-027, DEC-015)", () => {
     }
   });
 
-  it("la migracion 0008 asigna a cada capacidad EL flag que la gobierna, no solo si lo hay", () => {
+  it("las migraciones asignan a cada capacidad EL flag que la gobierna, no solo si lo hay", () => {
     // Sin esta columna, `apps/api` tendria que escribir el nombre del flag a
     // mano en cada handler: el hardcoding que prohibe el principio 14,
     // repartido en tantos sitios como rutas.
-    const flagSql = readMigration("0008_permission_feature_flag_key.sql");
-
     const assigned = new Map<string, string>();
-    for (const match of flagSql.matchAll(
-      /UPDATE\s+admin_permissions\s+SET\s+feature_flag_key\s*=\s*'([a-z_]+)'\s+WHERE\s+key\s+(?:=\s*'([a-z_.]+)'|IN\s*\(([^)]*)\))/giu,
-    )) {
-      const flag = match[1] ?? "";
-      const single = match[2];
-      const list = match[3];
-      const keys =
-        single !== undefined
-          ? [single]
-          : [...(list ?? "").matchAll(/'([a-z_.]+)'/gu)].map((entry) => entry[1] ?? "");
-      for (const key of keys) {
+    for (const [key, columns] of parsePermissionCatalog()) {
+      const flag = columns.get("feature_flag_key");
+      if (flag !== undefined) {
         assigned.set(key, flag);
       }
     }

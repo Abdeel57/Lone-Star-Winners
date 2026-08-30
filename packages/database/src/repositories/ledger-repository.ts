@@ -57,7 +57,7 @@ import {
 } from "@lsw/sweepstakes";
 
 import { entryTransactions } from "../schema/entries.js";
-import { currentExecutor, type DbExecutor } from "./executor.js";
+import { currentExecutor, isInTransaction, type DbExecutor } from "./executor.js";
 
 // ---------------------------------------------------------------------------
 // Traduccion de errores del motor
@@ -352,6 +352,40 @@ export class DrizzleLedgerRepository implements LedgerRepository {
       .orderBy(asc(entryTransactions.sequenceNo));
 
     return rows.map(toTransaction);
+  }
+
+  /**
+   * Cerrojo consultivo por (promocion, participante). DEC-052 punto 5.
+   *
+   * Se toma como PRIMERA sentencia de la transaccion que va a leer el saldo y
+   * conceder. Sin el, dos concesiones concurrentes al mismo participante -dos
+   * revisores aprobando dos fichas distintas, o una compra a la vez que una
+   * aprobacion- leen las dos el mismo saldo y superan el tope: bajo READ
+   * COMMITTED ninguna ve la fila no confirmada de la otra, y la unicidad de
+   * `source_ref` solo protege la doble concesion del MISMO origen.
+   *
+   * Par `(hashtext(namespace), hashtext(clave))`, que es la UNICA tecnica de
+   * cerrojo consultivo del proyecto: la misma que usan la cadena de auditoria,
+   * `lsw_allocate_entry_range` y la reclamacion de webhooks. Con un espacio de
+   * nombres propio no puede colisionar con ninguno de ellos.
+   *
+   * Se libera al confirmar o revertir la transaccion: nadie tiene que
+   * acordarse de soltarlo.
+   */
+  public async lockParticipant(promotionId: string, participantId: string): Promise<void> {
+    if (!isInTransaction()) {
+      // Fuera de transaccion, un cerrojo `xact` se toma y se suelta en el acto:
+      // no serializa nada. Fallar aqui es preferible a conceder de mas creyendo
+      // que hay un control.
+      throw new Error(
+        "lockParticipant exige una transaccion viva: un pg_advisory_xact_lock fuera de " +
+          "transaccion se libera al instante y no serializa el tope por participante.",
+      );
+    }
+
+    await this.db.execute(
+      sql`SELECT pg_advisory_xact_lock(hashtext(${"lsw_entry_balance"}), hashtext(${promotionId + ":" + participantId}))`,
+    );
   }
 
   public async listReversalsOf(transactionId: string): Promise<readonly LedgerTransaction[]> {

@@ -18,6 +18,7 @@ import {
   divideWithRounding,
   type CalculationInput,
   type CalculationItemInput,
+  type ProductKind,
 } from "../src/index.js";
 
 const FLAGS_ALL_OFF = { entryMultipliersEnabled: false, entryCapsEnabled: false } as const;
@@ -44,8 +45,9 @@ function item(
   sku: string,
   quantity: number,
   unitAmountMinor: bigint,
+  productKind: ProductKind = "MERCHANDISE",
 ): CalculationItemInput {
-  return { lineId, sku, quantity, unitAmountMinor, currency: "USD" };
+  return { lineId, sku, productKind, quantity, unitAmountMinor, currency: "USD" };
 }
 
 function input(
@@ -230,6 +232,7 @@ describe("multiplicadores", () => {
     numerator: number,
     priority: number,
     skuScope: string[] | null = null,
+    kindScope: ProductKind[] | null = null,
   ) => ({
     id,
     multiplier: { numerator, denominator: 1 },
@@ -237,6 +240,7 @@ describe("multiplicadores", () => {
     ends_at: "2026-10-01T00:00:00Z",
     priority,
     sku_scope: skuScope,
+    product_kind_scope: kindScope,
   });
 
   it("no aplica ninguno mientras el flag esta apagado", () => {
@@ -423,6 +427,7 @@ describe("determinismo", () => {
           ends_at: "2026-10-01T00:00:00Z",
           priority: 1,
           sku_scope: null,
+          product_kind_scope: null,
         },
         {
           id: "a",
@@ -431,6 +436,7 @@ describe("determinismo", () => {
           ends_at: "2026-10-01T00:00:00Z",
           priority: 0,
           sku_scope: null,
+          product_kind_scope: null,
         },
       ],
     },
@@ -659,6 +665,7 @@ describe("TIERED_BY_AMOUNT", () => {
             ends_at: "2026-10-01T00:00:00Z",
             priority: 0,
             sku_scope: null,
+            product_kind_scope: null,
           },
         ],
       },
@@ -739,6 +746,7 @@ describe("entradas invalidas", () => {
     const mixed: CalculationItemInput = {
       lineId: "a",
       sku: "SKU-1",
+      productKind: "MERCHANDISE",
       quantity: 1,
       unitAmountMinor: 100n,
       currency: "MXN",
@@ -772,5 +780,420 @@ describe("entradas invalidas", () => {
     expect(() => calculateEntries(input([item("a", "SKU-1", 1000, 1n)]), config)).toThrow(
       CalculationError,
     );
+  });
+});
+
+describe("tasa por tipo de producto (DEC-052)", () => {
+  /**
+   * FIXTURE con las cifras del borrador v2: 1 participacion por dolar de
+   * mercancia, 2 por dolar de paquete. No es un requisito legal implementado
+   * aqui: es la configuracion que el abogado escribiria, escrita a mano en el
+   * test para comprobar que el motor la ejecuta y no la lleva dentro.
+   */
+  function byKindConfig(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+    return baseConfig({
+      purchase_entry_formula: {
+        mode: "ENTRIES_PER_CURRENCY_UNIT_BY_PRODUCT_KIND",
+        rates: {
+          MERCHANDISE: {
+            amount_unit_minor: "100",
+            entries_per_amount_unit: { numerator: 1, denominator: 1 },
+          },
+          ENTRY_PACKAGE: {
+            amount_unit_minor: "100",
+            entries_per_amount_unit: { numerator: 2, denominator: 1 },
+          },
+        },
+        rounding_policy: "FLOOR",
+      },
+      ...overrides,
+    });
+  }
+
+  it("un carrito mixto redondea UNA vez sobre la fraccion acumulada de los dos tipos", () => {
+    // 12.50 de mercancia a 1/$1 -> 12.5 exactas.
+    // 10.00 de paquete a 2/$1   -> 20 exactas.
+    // 32.5 -> FLOOR -> 32.
+    const result = calculateEntries(
+      input([
+        item("a", "TEE", 1, 1250n, "MERCHANDISE"),
+        item("b", "PKG-10", 1, 1000n, "ENTRY_PACKAGE"),
+      ]),
+      byKindConfig(),
+    );
+    expect(result.entriesBeforeCaps).toBe(32);
+    expect(result.finalEntries).toBe(32);
+    expect(result.eligibleSubtotalMinor).toBe(2250n);
+    expect(result.trace.exact_numerator).toBe("65");
+    expect(result.trace.exact_denominator).toBe("2");
+  });
+
+  it("dos fracciones del mismo tipo se suman antes de redondear, no despues", () => {
+    // 12.5 + 12.5 = 25 exactas. Linea a linea con FLOOR serian 12 + 12 = 24.
+    const result = calculateEntries(
+      input([item("a", "TEE", 1, 1250n, "MERCHANDISE"), item("b", "CAP", 1, 1250n, "MERCHANDISE")]),
+      byKindConfig(),
+    );
+    expect(result.finalEntries).toBe(25);
+  });
+
+  it("una linea de un tipo sin tasa es inelegible con su motivo, no cero en silencio", () => {
+    const merchandiseOnly = byKindConfig({
+      purchase_entry_formula: {
+        mode: "ENTRIES_PER_CURRENCY_UNIT_BY_PRODUCT_KIND",
+        rates: {
+          MERCHANDISE: {
+            amount_unit_minor: "100",
+            entries_per_amount_unit: { numerator: 1, denominator: 1 },
+          },
+          ENTRY_PACKAGE: null,
+        },
+        rounding_policy: "FLOOR",
+      },
+    });
+    const result = calculateEntries(
+      input([
+        item("a", "TEE", 1, 1000n, "MERCHANDISE"),
+        item("b", "PKG-10", 1, 1000n, "ENTRY_PACKAGE"),
+      ]),
+      merchandiseOnly,
+    );
+    expect(result.finalEntries).toBe(10);
+    // El importe del paquete NO entra en el subtotal elegible: si entrara, un
+    // `TIERED_BY_AMOUNT` subiria de escalon con dinero que no genera nada.
+    expect(result.eligibleSubtotalMinor).toBe(1000n);
+    expect(result.ineligibleItems).toEqual([
+      {
+        lineId: "b",
+        sku: "PKG-10",
+        productKind: "ENTRY_PACKAGE",
+        reasonKey: "PRODUCT_KIND_NOT_RATED",
+      },
+    ]);
+  });
+
+  it("rechaza una configuracion con las dos tasas nulas en vez de conceder cero", () => {
+    const nothingRated = byKindConfig({
+      purchase_entry_formula: {
+        mode: "ENTRIES_PER_CURRENCY_UNIT_BY_PRODUCT_KIND",
+        rates: { MERCHANDISE: null, ENTRY_PACKAGE: null },
+        rounding_policy: "FLOOR",
+      },
+    });
+    expect(() => calculateEntries(input([item("a", "TEE", 1, 1000n)]), nothingRated)).toThrow(
+      CalculationConfigError,
+    );
+  });
+
+  it("anota el tipo de cada linea en la traza, elegible o no", () => {
+    const result = calculateEntries(
+      input([
+        item("a", "TEE", 1, 1000n, "MERCHANDISE"),
+        item("b", "PKG-10", 0, 1000n, "ENTRY_PACKAGE"),
+      ]),
+      byKindConfig(),
+    );
+    expect(result.trace.eligible_items[0]?.productKind).toBe("MERCHANDISE");
+    expect(result.trace.ineligible_items[0]?.productKind).toBe("ENTRY_PACKAGE");
+  });
+
+  it("los modos anteriores dan lo mismo que antes, sea cual sea el tipo de la linea", () => {
+    // Es la afirmacion que justifica no reprocesar nada al subir a la version 2
+    // del motor: lo unico que cambia es la forma de la entrada y de la traza.
+    const result = calculateEntries(
+      input([item("a", "SKU-1", 3, 1000n, "ENTRY_PACKAGE")]),
+      baseConfig(),
+    );
+    expect(result.finalEntries).toBe(30);
+    expect(result.engineVersion).toBe(ENTRY_CALCULATION_ENGINE_VERSION);
+  });
+});
+
+describe("ambito de tipo en los periodos de multiplicador (DEC-052 punto 3)", () => {
+  function bonusConfig(kindScope: ProductKind[] | null): Record<string, unknown> {
+    return baseConfig({
+      purchase_entry_formula: {
+        mode: "ENTRIES_PER_CURRENCY_UNIT_BY_PRODUCT_KIND",
+        rates: {
+          MERCHANDISE: {
+            amount_unit_minor: "100",
+            entries_per_amount_unit: { numerator: 1, denominator: 1 },
+          },
+          ENTRY_PACKAGE: {
+            amount_unit_minor: "100",
+            entries_per_amount_unit: { numerator: 2, denominator: 1 },
+          },
+        },
+        rounding_policy: "FLOOR",
+      },
+      multipliers: {
+        conflict_strategy: "HIGHEST_WINS",
+        periods: [
+          {
+            id: "bonus-5x",
+            multiplier: { numerator: 5, denominator: 1 },
+            starts_at: "2026-09-01T00:00:00Z",
+            ends_at: "2026-10-01T00:00:00Z",
+            priority: 0,
+            sku_scope: null,
+            product_kind_scope: kindScope,
+          },
+        ],
+      },
+    });
+  }
+
+  const mixedCart = [
+    item("a", "TEE", 1, 1250n, "MERCHANDISE"),
+    item("b", "PKG-10", 1, 1000n, "ENTRY_PACKAGE"),
+  ];
+
+  it("un bonus 5X solo de paquetes deja la mercancia intacta", () => {
+    const result = calculateEntries(
+      input(mixedCart, { flags: FLAGS_ALL_ON }),
+      bonusConfig(["ENTRY_PACKAGE"]),
+    );
+    // 12.5 sin tocar + 20 x 5 = 100. Total exacto 112.5 -> FLOOR -> 112.
+    expect(result.finalEntries).toBe(112);
+    expect(result.eligibleItems.find((line) => line.lineId === "a")?.multiplierIds).toEqual([]);
+    expect(result.eligibleItems.find((line) => line.lineId === "b")?.multiplierIds).toEqual([
+      "bonus-5x",
+    ]);
+    expect(result.appliedMultipliers[0]?.appliedToLineIds).toEqual(["b"]);
+  });
+
+  it("sin ambito de tipo, el mismo bonus alcanza a las dos lineas", () => {
+    const result = calculateEntries(input(mixedCart, { flags: FLAGS_ALL_ON }), bonusConfig(null));
+    // (12.5 + 20) x 5 = 162.5 -> FLOOR -> 162.
+    expect(result.finalEntries).toBe(162);
+  });
+
+  it("la interseccion con sku_scope excluye lo que no esta en los dos ambitos", () => {
+    const config = baseConfig({
+      multipliers: {
+        conflict_strategy: "HIGHEST_WINS",
+        periods: [
+          {
+            id: "bonus-2x",
+            multiplier: { numerator: 2, denominator: 1 },
+            starts_at: "2026-09-01T00:00:00Z",
+            ends_at: "2026-10-01T00:00:00Z",
+            priority: 0,
+            // El SKU es de mercancia; el ambito de tipo pide paquetes. La
+            // interseccion es vacia y el periodo no aplica a nada.
+            sku_scope: ["TEE"],
+            product_kind_scope: ["ENTRY_PACKAGE"],
+          },
+        ],
+      },
+    });
+    const result = calculateEntries(
+      input([item("a", "TEE", 1, 1000n, "MERCHANDISE")], { flags: FLAGS_ALL_ON }),
+      config,
+    );
+    expect(result.finalEntries).toBe(10);
+    expect(result.appliedMultipliers).toEqual([]);
+  });
+
+  it("un periodo acotado por tipo NO multiplica una formula de ambito de pedido", () => {
+    const config = baseConfig({
+      purchase_entry_formula: { mode: "FIXED_PER_ORDER", entries: 7, rounding_policy: "FLOOR" },
+      multipliers: {
+        conflict_strategy: "HIGHEST_WINS",
+        periods: [
+          {
+            id: "bonus-10x",
+            multiplier: { numerator: 10, denominator: 1 },
+            starts_at: "2026-09-01T00:00:00Z",
+            ends_at: "2026-10-01T00:00:00Z",
+            priority: 0,
+            sku_scope: null,
+            product_kind_scope: ["ENTRY_PACKAGE"],
+          },
+        ],
+      },
+    });
+    const result = calculateEntries(
+      input([item("a", "PKG-10", 1, 1000n, "ENTRY_PACKAGE")], { flags: FLAGS_ALL_ON }),
+      config,
+    );
+    // Nadie puede decir que parte de las 7 del pedido corresponde al paquete.
+    expect(result.finalEntries).toBe(7);
+    expect(result.appliedMultipliers).toEqual([]);
+  });
+});
+
+/**
+ * Cobertura pedida por la security review (S-14).
+ *
+ * Los dos huecos que senalaba eran reales: el carrito mixto elegido daba el
+ * mismo numero con la implementacion correcta y con la incorrecta, y de la
+ * promesa de `engine-version.ts` -"los resultados de configuraciones antiguas
+ * son identicos"- solo existia UN caso.
+ */
+describe("un solo redondeo: casos que DISCRIMINAN (S-14)", () => {
+  function byKind(rounding: string): Record<string, unknown> {
+    return baseConfig({
+      purchase_entry_formula: {
+        mode: "ENTRIES_PER_CURRENCY_UNIT_BY_PRODUCT_KIND",
+        rates: {
+          MERCHANDISE: {
+            amount_unit_minor: "100",
+            entries_per_amount_unit: { numerator: 1, denominator: 1 },
+          },
+          ENTRY_PACKAGE: {
+            amount_unit_minor: "100",
+            entries_per_amount_unit: { numerator: 2, denominator: 1 },
+          },
+        },
+        rounding_policy: rounding,
+      },
+    });
+  }
+
+  it("dos lineas fraccionarias de TIPOS DISTINTOS: 19 con un redondeo, 18 con dos", () => {
+    // 12,50 de mercancia a 1/$1 -> 12,5 exactas.
+    //  3,25 de paquete   a 2/$1 ->  6,5 exactas.
+    // Suma exacta 19 -> FLOOR -> 19.
+    // Redondeando por grupo: FLOOR(12,5) + FLOOR(6,5) = 12 + 6 = 18.
+    const result = calculateEntries(
+      input([
+        item("a", "TEE", 1, 1250n, "MERCHANDISE"),
+        item("b", "PKG", 1, 325n, "ENTRY_PACKAGE"),
+      ]),
+      byKind("FLOOR"),
+    );
+
+    expect(result.finalEntries).toBe(19);
+    expect(result.trace.exact_numerator).toBe("19");
+    expect(result.trace.exact_denominator).toBe("1");
+  });
+
+  it("y con CEIL discrimina al reves: 19 con un redondeo, 20 con dos", () => {
+    // Mismo carrito: la suma exacta es 19 y CEIL de 19 es 19. Redondeando por
+    // grupo serian CEIL(12,5) + CEIL(6,5) = 13 + 7 = 20.
+    const result = calculateEntries(
+      input([
+        item("a", "TEE", 1, 1250n, "MERCHANDISE"),
+        item("b", "PKG", 1, 325n, "ENTRY_PACKAGE"),
+      ]),
+      byKind("CEIL"),
+    );
+
+    expect(result.finalEntries).toBe(19);
+  });
+
+  it("tres lineas mezcladas siguen acumulando la fraccion entera", () => {
+    // 12,50 (1/$1) = 12,5 ; 3,25 (2/$1) = 6,5 ; 0,75 (1/$1) = 0,75.
+    // Exacto 19,75 -> FLOOR -> 19. Por grupo: FLOOR(13,25) + FLOOR(6,5) = 19
+    // tambien; lo que fija el caso es el numerador exacto de la traza.
+    const result = calculateEntries(
+      input([
+        item("a", "TEE", 1, 1250n, "MERCHANDISE"),
+        item("b", "PKG", 1, 325n, "ENTRY_PACKAGE"),
+        item("c", "CAP", 1, 75n, "MERCHANDISE"),
+      ]),
+      byKind("FLOOR"),
+    );
+
+    expect(result.finalEntries).toBe(19);
+    expect(result.trace.exact_numerator).toBe("79");
+    expect(result.trace.exact_denominator).toBe("4");
+  });
+});
+
+/**
+ * Regresion de la version 1 del motor (S-14).
+ *
+ * `engine-version.ts` promete que los CUATRO modos anteriores dan exactamente
+ * lo mismo que antes: `productKind` no entra en su aritmetica, y un periodo con
+ * `product_kind_scope: null` -el unico valor que puede tener una configuracion
+ * migrada desde la version 1- cubre todos los tipos. Cada caso ejercita el modo
+ * con un carrito MIXTO y, ademas, con multiplicador.
+ */
+describe("regresion de los cuatro modos anteriores (S-14)", () => {
+  /** Un periodo vigente, sin ambito: la unica forma que puede tener una config migrada. */
+  const legacyPeriod = {
+    id: "legacy-2x",
+    multiplier: { numerator: 2, denominator: 1 },
+    starts_at: "2026-09-01T00:00:00Z",
+    ends_at: "2026-10-01T00:00:00Z",
+    priority: 0,
+    sku_scope: null,
+    product_kind_scope: null,
+  };
+
+  const mixedCart = [
+    item("a", "TEE", 2, 1000n, "MERCHANDISE"),
+    item("b", "PKG", 1, 1000n, "ENTRY_PACKAGE"),
+  ];
+
+  const cases = [
+    {
+      name: "FIXED_PER_ORDER",
+      formula: { mode: "FIXED_PER_ORDER", entries: 7, rounding_policy: "FLOOR" },
+      withoutMultiplier: 7,
+      withMultiplier: 14,
+    },
+    {
+      name: "FIXED_PER_PRODUCT",
+      formula: { mode: "FIXED_PER_PRODUCT", entries_per_unit: 3, rounding_policy: "FLOOR" },
+      // 3 x 2 unidades + 3 x 1 unidad = 9.
+      withoutMultiplier: 9,
+      withMultiplier: 18,
+    },
+    {
+      name: "ENTRIES_PER_CURRENCY_UNIT",
+      formula: {
+        mode: "ENTRIES_PER_CURRENCY_UNIT",
+        amount_unit_minor: "100",
+        entries_per_amount_unit: { numerator: 1, denominator: 1 },
+        rounding_policy: "FLOOR",
+      },
+      // 20,00 + 10,00 = 30,00 a 1 por dolar.
+      withoutMultiplier: 30,
+      withMultiplier: 60,
+    },
+    {
+      name: "TIERED_BY_AMOUNT",
+      formula: {
+        mode: "TIERED_BY_AMOUNT",
+        tiers: [
+          { id: "t1", min_eligible_amount_minor: "1000", entries: 5 },
+          { id: "t2", min_eligible_amount_minor: "3000", entries: 25 },
+        ],
+        rounding_policy: "FLOOR",
+      },
+      // Subtotal elegible 3.000: gana el escalon mas alto que no lo supera.
+      withoutMultiplier: 25,
+      withMultiplier: 50,
+    },
+  ] as const;
+
+  for (const testCase of cases) {
+    it(`${testCase.name} no cambia de resultado por llevar productKind`, () => {
+      const result = calculateEntries(
+        input(mixedCart),
+        baseConfig({ purchase_entry_formula: testCase.formula }),
+      );
+      expect(result.finalEntries).toBe(testCase.withoutMultiplier);
+    });
+
+    it(`${testCase.name} con un periodo migrado (product_kind_scope null) alcanza a los dos tipos`, () => {
+      const result = calculateEntries(
+        input(mixedCart, { flags: FLAGS_ALL_ON }),
+        baseConfig({
+          purchase_entry_formula: testCase.formula,
+          multipliers: { conflict_strategy: "HIGHEST_WINS", periods: [legacyPeriod] },
+        }),
+      );
+      expect(result.finalEntries).toBe(testCase.withMultiplier);
+    });
+  }
+
+  it("la version del motor es el literal 2, y un incremento accidental lo rompe", () => {
+    // Comparar la traza contra la propia constante es tautologico: no detecta
+    // un incremento. Un numero suelto si, y obliga a que subirlo sea deliberado.
+    expect(ENTRY_CALCULATION_ENGINE_VERSION).toBe(2);
   });
 });

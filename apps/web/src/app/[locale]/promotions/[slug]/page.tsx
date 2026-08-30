@@ -223,6 +223,7 @@ export default async function PromotionDetailPage({
             rulesPublished={hasRules}
             locale={locale}
             timeZone={promotion.legal_timezone}
+            nowIso={nowIso}
           />
 
           <AmoeCallout

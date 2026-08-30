@@ -34,7 +34,15 @@ export function apiBaseUrl(): string {
   return process.env.API_BASE_URL ?? process.env.NEXT_PUBLIC_API_BASE_URL ?? DEFAULT_API_BASE_URL;
 }
 
-export type ApiMethod = "GET" | "POST" | "PATCH" | "DELETE";
+/**
+ * Metodos que la capa sabe emitir.
+ *
+ * `PUT` entra con §13.7: el documento de una version de reglas en un locale se
+ * CREA O REEMPLAZA entero (`PUT …/documents/:locale`), que es exactamente lo
+ * que `PUT` significa. Un `PATCH` ahi sugeriria que se puede cambiar el cuerpo
+ * legal a trozos.
+ */
+export type ApiMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
 export interface ApiRequestOptions {
   /**

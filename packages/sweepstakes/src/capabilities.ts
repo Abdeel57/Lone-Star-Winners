@@ -34,6 +34,16 @@ export const SWEEPSTAKES_CAPABILITIES = {
   amoeReviewApprove: "amoe.review.approve",
   amoeReviewReject: "amoe.review.reject",
   amoeSelfSubmit: "amoe.self.submit",
+  /**
+   * Teclear en el sistema una ficha postal que llego en papel (DEC-054 punto 4).
+   *
+   * No es `amoe.self.submit` -no es la participacion de quien la teclea- ni
+   * `amoe.review.approve` -transcribir no concede nada-. Es una capacidad
+   * propia justamente para poder separarla de la aprobacion: quien transcribe
+   * no puede aprobar lo que transcribio, y eso solo tiene sentido si las dos
+   * cosas se conceden por separado.
+   */
+  amoeSubmissionTranscribe: "amoe.submission.transcribe",
   entryAdjustCreate: "entry.adjust.create",
   entryAdjustApprove: "entry.adjust.approve",
   entryReversalCreate: "entry.reversal.create",

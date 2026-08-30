@@ -214,36 +214,170 @@ export interface PromotionSummary {
 }
 
 /**
- * [PROVISIONAL] Oferta de participaciones vigente de una promocion.
+ * [CONTRATO §13.1] Tipo de producto (DEC-052).
  *
- * TODO es dato del backend. Ni el ratio ni el multiplicador ni sus fechas
- * aparecen como constante en ninguna parte del frontend: son configuracion
- * derivada de las Official Rules (CLAUDE.md #3 y #14).
+ * DOS VALORES Y NINGUNA CIFRA. Un `ENTRY_PACKAGE` es un producto del catalogo
+ * como cualquier otro -mismo carrito, mismo checkout, mismo reembolso- y lo
+ * unico que lo distingue es que la version de reglas le aplica OTRA TASA. El
+ * producto sigue sin declarar cuantas participaciones da: eso lo dice
+ * `entry_offer`, que calcula el backend con el motor real (DEC-052 punto 7).
  *
- * El frontend NO multiplica: `base_entries_per_unit` y `multiplier` se muestran
- * como datos, y cualquier cifra concreta de participaciones para un carrito o
- * un pedido la produce el backend (DEC-023, requisito R13 de `security`).
+ * La palabra en pantalla es "paquete de participaciones" / "entry package".
+ * Nunca "boleto", "ticket" ni "oportunidad de ganar"
+ * (`docs/LEGAL_PENDING.md`, segundo borrador).
+ */
+export type ProductKind = "MERCHANDISE" | "ENTRY_PACKAGE";
+
+export const PRODUCT_KINDS: readonly ProductKind[] = ["MERCHANDISE", "ENTRY_PACKAGE"];
+
+/**
+ * [CONTRATO §13.4] Categoria del catalogo (DEC-053).
  *
- * `docs/API_CONTRACT.md` todavia no publica este objeto en ninguna respuesta
- * publica. Es la peticion abierta mas importante de este hito: sin el, la
- * interfaz no puede decir que ofrece la promocion sin que alguien meta la mano
- * en el carrito primero.
+ * `key` es el identificador estable y `name` el nombre LOCALIZADO que sirve el
+ * backend (DEC-030): las categorias son datos del negocio -se siembran en la
+ * migracion y el panel puede crear mas-, asi que su nombre NO puede vivir en el
+ * diccionario del frontend. Se pinta con `pickLocalized`, sin traducir.
+ */
+export interface ProductCategory {
+  readonly key: string;
+  readonly name: LocalizedText;
+  /** Orden de presentacion. Ausente en las respuestas que no lo publican. */
+  readonly position?: number;
+}
+
+/** [CONTRATO §13.4] `GET /product-categories` (PUBLIC). */
+export interface ProductCategoryListResponse {
+  readonly items: readonly ProductCategory[];
+}
+
+/**
+ * [CONTRATO §13.4] Oferta de participaciones de UNA variante (DEC-052 punto 7).
+ *
+ * LAS DOS CIFRAS LAS CALCULA EL BACKEND con `calculateEntries` sobre UNA unidad
+ * de la variante, sin topes y con `participantEntriesBefore = 0`. El frontend
+ * las PINTA: no multiplica `base_entries` por el bonus para obtener
+ * `entries_now`, ni por la cantidad del carrito, ni por nada
+ * (DEC-023, requisito R13 de `security`).
+ *
+ * - `base_entries` .... con los multiplicadores APAGADOS.
+ * - `entries_now` ..... con los bonus vigentes, si el flag lo permite.
+ *
+ * Todo el objeto es `null` cuando no hay promocion activa, no hay version de
+ * reglas, el tipo de producto no tiene tasa, el producto no es elegible o la
+ * configuracion no parsea. Nunca una cifra inventada.
+ *
+ * Es lo que exige el segundo borrador de las Official Rules para los paquetes:
+ * "the number of entries included in each package is stated on the page where
+ * the package is offered".
+ */
+export interface VariantEntryOffer {
+  readonly base_entries: number;
+  readonly entries_now: number;
+  /** Identidad de los periodos bonus aplicados. Se listan, no se interpretan. */
+  readonly multiplier_ids: readonly string[];
+  /** Instante de evaluacion. ISO-8601 UTC. */
+  readonly evaluated_at: string;
+  /** Version de reglas con la que se evaluo. Sin esto no hay procedencia. */
+  readonly rules_version_id: string;
+}
+
+/**
+ * [CONTRATO §13.5] Tasa de participaciones por tipo de producto (DEC-052).
+ *
+ * `product_kind` es `null` cuando la promocion usa el modo de tasa UNICA
+ * (`ENTRIES_PER_CURRENCY_UNIT`): entonces hay una sola entrada que vale para
+ * todo el catalogo. Con el modo por tipo hay una entrada por tipo con tasa
+ * declarada, y un tipo sin tasa sencillamente NO APARECE en la lista.
+ *
+ * `entries_per_amount_unit` es una FRACCION (DEC-010), nunca un decimal: el
+ * frontend imprime numerador y denominador y no divide.
+ */
+export interface EntryRate {
+  readonly product_kind: ProductKind | null;
+  readonly entries_per_amount_unit: EntryMultiplier;
+  readonly amount_unit: MoneyMinor;
+}
+
+/**
+ * [CONTRATO §13.5] Periodo de multiplicador (bonus) de la version de reglas.
+ *
+ * SE ANUNCIA ANTES DE EMPEZAR, y por eso `bonus_periods` viaja con los futuros
+ * y no solo con el vigente: el segundo borrador de las Official Rules exige que
+ * los periodos bonus "se anuncien en el sitio antes de que empiecen".
+ *
+ * El ambito puede venir por tipo de producto, por SKU o por los dos (en cuyo
+ * caso aplica la interseccion). `null` significa "todos".
+ */
+export interface BonusPeriod {
+  readonly id: string;
+  readonly multiplier: EntryMultiplier;
+  /** ISO-8601 UTC. */
+  readonly starts_at: string;
+  /** ISO-8601 UTC. */
+  readonly ends_at: string;
+  readonly product_kind_scope: readonly ProductKind[] | null;
+  readonly sku_scope: readonly string[] | null;
+}
+
+/**
+ * [CONTRATO §13.5] Resumen AMOE dentro de la oferta de la promocion.
+ *
+ * Es un RESUMEN para la portada; la fuente completa sigue siendo
+ * `GET /promotions/{slug}/amoe-config`. Ninguna de estas cifras la escribe el
+ * frontend: son configuracion de la version de reglas (CLAUDE.md #3 y #14).
+ */
+export interface EntryOfferAmoeSummary {
+  readonly enabled: boolean;
+  readonly mode: AmoeMode | null;
+  /** Participaciones por ficha aprobada. `null` si la modalidad no las declara. */
+  readonly entries_per_approved_submission?: number | null;
+  readonly max_per_participant_per_period?: number | null;
+  /** Periodo del limite, como clave estable (`PROMOTION`, ...). */
+  readonly limit_period?: string | null;
+}
+
+/**
+ * [CONTRATO §13.5] Oferta de participaciones vigente de una promocion.
+ *
+ * REEMPLAZA POR COMPLETO LA FORMA ANTERIOR (DEC-052). La de antes describia UNA
+ * tasa (`base_entries_per_unit` + `unit_amount`) y UN multiplicador, y el
+ * segundo borrador de las Official Rules necesita dos tasas -1 por $1 en
+ * mercancia, 2 por $1 en paquetes- y una lista de periodos bonus anunciables.
+ *
+ * `entry_pool` DESAPARECE del contrato con esta misma decision: el 10,000 de
+ * DEC-042 no era un universo total sino el TOPE POR PARTICIPANTE, y aqui viaja
+ * como `per_participant_max`. No hay "emitidas" ni "restantes", y el frontend
+ * no las deriva.
+ *
+ * TODO es dato del backend. Ni una tasa, ni un tope, ni una fecha de bonus
+ * aparecen como constante en ninguna parte del frontend.
+ *
+ * Los campos marcados opcionales lo son porque la API real todavia no publica
+ * §13 (backend lo implementa en paralelo, HO-041). `undefined` y `null`
+ * significan lo mismo -no hay dato- y se resuelven en un solo sitio,
+ * `@/lib/entry-offer`.
  */
 export interface EntryOffer {
-  /** Participaciones que otorga cada `unit_amount`. Entero (DEC-010). */
-  readonly base_entries_per_unit: number;
-  /** Importe unitario al que se refiere `base_entries_per_unit`. */
-  readonly unit_amount: MoneyMinor;
+  readonly rules_version_id: string;
+  /** Tasas declaradas. Vacia con modos que no expresan tasa por importe. */
+  readonly rates: readonly EntryRate[];
   /**
-   * Multiplicador vigente como fraccion (DEC-010), o `null` si no hay ninguno.
-   * Solo debe mostrarse si `entry_multipliers_enabled` esta encendido: el flag
-   * gobierna la EXISTENCIA de la funcion, y el dato solo su valor.
+   * Tope de participaciones POR PARTICIPANTE (DEC-052 punto 6).
+   *
+   * Se pinta como "maximo N participaciones por persona" y NUNCA como emitidas
+   * ni como restantes. `null` si la version de reglas no lo declara.
    */
-  readonly multiplier: EntryMultiplier | null;
-  /** Inicio del periodo de multiplicador. ISO-8601 UTC, o `null`. */
-  readonly multiplier_starts_at: string | null;
-  /** Fin del periodo de multiplicador. ISO-8601 UTC, o `null`. */
-  readonly multiplier_ends_at: string | null;
+  readonly per_participant_max: number | null;
+  readonly per_order_max: number | null;
+  /** Valor de `entry_caps_enabled`. Sin el, los topes no se anuncian. */
+  readonly caps_enabled?: boolean;
+  /** Valor de `entry_multipliers_enabled`. */
+  readonly multipliers_enabled?: boolean;
+  /** Periodo bonus VIGENTE de mayor valor, o `null`. */
+  readonly active_bonus?: BonusPeriod | null;
+  /** Periodos con `ends_at > ahora`, ordenados por `starts_at`. */
+  readonly bonus_periods?: readonly BonusPeriod[];
+  readonly amoe?: EntryOfferAmoeSummary | null;
 }
 
 /** [PROVISIONAL] Premio declarado de una promocion. */
@@ -284,37 +418,20 @@ export interface PromotionMedia {
   readonly alt: LocalizedText | null;
 }
 
-/**
- * [PROVISIONAL] Universo de participaciones de una promocion (DEC-042).
+/*
+ * `EntryPool` YA NO EXISTE (DEC-052 punto 6).
  *
- * PETICION ABIERTA A `backend`. El cliente ha fijado para la promocion de la
- * GMC 2025 un universo total de 10,000 participaciones, y eso es CONFIGURACION
- * de la promocion -derivada de las Official Rules- y no un texto que la
- * interfaz pueda escribir (CLAUDE.md #3 y #14). Como el tope y su tratamiento
- * legal siguen en `docs/LEGAL_PENDING.md`, la interfaz lo presenta como dato de
- * las Reglas y nada mas.
+ * Vivio aqui desde DEC-042 con un `cap` de 10,000 y una cifra de `issued` que
+ * ninguna pantalla llego a pintar (DEC-044). El segundo borrador de las
+ * Official Rules aclaro que ese 10,000 nunca fue un universo total: es el TOPE
+ * POR PARTICIPANTE, "por cualquier metodo o combinacion de metodos". Un
+ * universo total y un tope por persona no son la misma afirmacion ni de lejos,
+ * y mantener el tipo -aunque nadie lo leyera- habria dejado en el repositorio
+ * la forma de volver a decirlo mal.
  *
- * EL FRONTEND NO RESTA. `issued` viaja como cifra SERVIDA; no existe aqui un
- * campo `remaining` a proposito, y no se calcula: una cifra de "quedan X" es
- * exactamente el reclamo de urgencia que DEC-042 excluye, y ademas la produciria
- * el cliente a partir de dos numeros que pueden llegar desincronizados. Si algun
- * dia hay que enseñar restantes, lo publica el backend con su propio campo.
- *
- * Y DESDE DEC-044, `issued` TAMPOCO SE PINTA. No basta con no restar: pintar
- * `cap` e `issued` uno debajo del otro publica el contador de restantes POR
- * IMPLICACION, porque la resta la hace el lector. El campo se conserva en el
- * contrato -es dato del backend, y un panel de administracion lo necesitara-
- * pero ninguna pantalla publica lo lee. Lo unico que se ensena del universo es
- * el tope, como dato de las Reglas.
- *
- * `null` en `issued` mientras el backend no publique la cifra.
+ * El tope vive ahora en `EntryOffer.per_participant_max`, y sigue sin haber
+ * "emitidas" ni "restantes" en ninguna superficie publica.
  */
-export interface EntryPool {
-  /** Tope total configurado de participaciones. Entero (DEC-010). */
-  readonly cap: number;
-  /** Participaciones emitidas hasta ahora, servidas por el backend. */
-  readonly issued: number | null;
-}
 
 /**
  * [PROVISIONAL] Promocion completa.
@@ -328,7 +445,7 @@ export interface EntryPool {
  *
  * El e2e contra la API real (primer push, 2026-08-27) demostro que
  * `GET /promotions/{slug}` NO publica `prize`, `administrator_name`,
- * `entry_offer`, `media` ni `entry_pool`: existian solo aqui y en las fixtures
+ * `entry_offer` ni `media`: existian solo aqui y en las fixtures
  * del mock, y el escaparate moria con `TypeError` al leer `prize.name` sobre
  * `undefined`. HO-039 pide al backend publicarlas; hasta entonces:
  *
@@ -349,18 +466,19 @@ export interface PromotionDetail extends PromotionSummary {
    * igual en los dos idiomas.
    */
   readonly administrator_name?: string | null | undefined;
-  /** Oferta vigente, o `null` si la promocion no declara ninguna. */
+  /**
+   * Oferta vigente (§13.5), o `null` sin version de reglas activa.
+   *
+   * De aqui salen las tasas por tipo de producto, el tope por participante y
+   * los periodos bonus. `entry_pool` NO existe: ver la nota que ocupa su sitio
+   * mas arriba.
+   */
   readonly entry_offer?: EntryOffer | null | undefined;
   /**
    * Imagenes del premio (DEC-042). `null` si la promocion no declara ninguna,
    * que es el caso por defecto y el que la interfaz tiene que saber pintar.
    */
   readonly media?: PromotionMedia | null | undefined;
-  /**
-   * Universo de participaciones (DEC-042). `null` si la promocion no declara
-   * tope: no todas lo tienen, y un `0` significaria "ninguna participacion".
-   */
-  readonly entry_pool?: EntryPool | null | undefined;
 }
 
 /** [CONTRATO] `GET /promotions` devuelve una pagina por cursor. */
@@ -503,14 +621,35 @@ export interface ProductVariant {
   readonly id: string;
   readonly sku: string;
   /**
-   * [PROVISIONAL] Nombre de la variante ("Talla M"). Pedido en HO-019 y, tras el
-   * e2e real, confirmado como NO publicado: la API da `sku`, `price` y
-   * `availability`. Opcional por eso; la interfaz enseña el SKU si falta.
+   * Nombre de la variante ("Rojo", "Talla M"), LOCALIZADO (§13.4, DEC-053).
+   *
+   * `null` significa VARIANTE UNICA SIN NOMBRE, que es lo que crea el panel
+   * cuando un producto no tiene opciones; `undefined`, que la API todavia no
+   * publica el campo. La interfaz trata los dos igual -ensena el SKU- porque
+   * en ambos casos no hay nombre que pintar.
    */
-  readonly name?: LocalizedText;
+  readonly name?: LocalizedText | null;
   readonly price: MoneyMinor;
   /** El MISMO objeto que la linea del carrito. Ver `Availability`. */
   readonly availability: Availability;
+  /**
+   * Imagen de la variante (§13.4, DEC-053). `https:` o ruta raiz del sitio.
+   *
+   * SE VUELVE A COMPROBAR ANTES DE PINTARLA aunque la API la valide al
+   * escribir: un `javascript:` en un `src` es ejecucion de codigo de terceros,
+   * y el precio de comprobarlo dos veces es una llamada a `new URL`.
+   *
+   * Puede apuntar a un fichero que todavia no exista -las imagenes las entrega
+   * el usuario en `apps/web/public/products/`, no hay almacen de medios- asi
+   * que la interfaz tiene que tolerar un 404 sin descuadrarse.
+   */
+  readonly image_url?: string | null;
+  /**
+   * Participaciones que otorga UNA unidad de esta variante (§13.4).
+   *
+   * Lo calcula el backend. `null` cuando no hay nada contra lo que evaluar.
+   */
+  readonly entry_offer?: VariantEntryOffer | null;
 }
 
 /**
@@ -576,11 +715,29 @@ export interface ProductSummary {
    */
   readonly sku?: string;
   readonly currency?: string;
+  /**
+   * Tipo de producto (§13.4, DEC-052). Ausente mientras la API no publique §13.
+   *
+   * NO SE DEDUCE DEL SKU. Un `PKG-20` que se llame asi por casualidad no
+   * convierte al producto en un paquete de participaciones, y adivinarlo seria
+   * exactamente la clase de inferencia que este producto no puede permitirse.
+   * Sin `kind`, la interfaz trata el producto como mercancia sin decirlo.
+   */
+  readonly kind?: ProductKind;
+  /**
+   * Categoria, con su nombre LOCALIZADO (§13.4, DEC-053). `null` sin categoria.
+   *
+   * Sustituye a `category_key`, que era una clave que el frontend traducia con
+   * su propio diccionario: las categorias las crea el panel, asi que su nombre
+   * no puede vivir en `messages/*.json`.
+   */
+  readonly category?: ProductCategory | null;
   /** [PROVISIONAL] Resumen corto para la tarjeta. Pedido en HO-019. */
   readonly summary?: LocalizedText;
-  /** [PROVISIONAL] Clave estable de categoria; el copy es del frontend. */
-  readonly category_key?: string;
-  /** [PROVISIONAL] Sin modelo de medios, como en el carrito. Pedido en HO-019. */
+  /**
+   * Imagen principal (§13.4, DEC-053). `https:` o ruta raiz del sitio.
+   * Se valida antes de pintarla; ver `ProductVariant.image_url`.
+   */
   readonly image_url?: string | null;
   /**
    * [PROVISIONAL] Precio de la variante mas barata. Pedido en HO-019. La API no
@@ -611,18 +768,21 @@ export interface ProductDetail extends ProductSummary {
 /** [CONTRATO] `GET /products` devuelve una pagina por cursor. */
 export type ProductListResponse = CursorPage<ProductSummary>;
 
-/** Filtros admitidos por `GET /products`. El cursor es opaco. */
+/**
+ * Filtros admitidos por `GET /products` (§13.4). El cursor es opaco.
+ *
+ * `kind` y `category` los publica §13.4; un valor desconocido devuelve 422, asi
+ * que la interfaz solo manda los que ella misma ofrece. Si un backend anterior
+ * los ignora, la pantalla sigue funcionando y muestra el catalogo completo:
+ * degradar, no romper.
+ */
 export interface ProductListQuery {
   readonly cursor?: string;
   readonly limit?: number;
   readonly promotion_slug?: string;
-  /**
-   * [PROVISIONAL] Filtro por categoria. El contrato solo documenta `cursor`,
-   * `limit` y `promotion_slug`; este parametro esta pedido a `backend`. Si el
-   * backend lo ignora, la pantalla sigue funcionando: mostraria el catalogo
-   * completo, que es degradar, no romper.
-   */
-  readonly category_key?: string;
+  readonly kind?: ProductKind;
+  /** Clave de categoria (§13.4). */
+  readonly category?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -1175,6 +1335,17 @@ export interface EntryTransaction {
   readonly effective_at: string;
   /** Transaccion que este movimiento revierte, o `null`. */
   readonly reverses_transaction_id: string | null;
+  /**
+   * Recorte por tope aplicado a ESTE movimiento, o `null`
+   * (HO-041, resolucion fase 1, punto 4).
+   *
+   * Es lo que permite que la fila explique por que otorgo menos de lo
+   * anunciado: una compra que valia 2,000 participaciones y entro con 550
+   * porque el participante ya estaba cerca del maximo por persona. Sin este
+   * dato, la unica explicacion posible seria una resta hecha en el cliente
+   * sobre dos cifras que ni siquiera estan las dos en la fila.
+   */
+  readonly applied_cap?: AppliedCap | null;
 }
 
 export type EntryTransactionPage = CursorPage<EntryTransaction>;
@@ -1593,6 +1764,56 @@ export interface AmoeConfig {
    * comprobarlo dos veces es una llamada a `new URL`.
    */
   readonly external_url: string | null;
+  /**
+   * [CONTRATO §13.2] Bloque postal, publicado con la configuracion.
+   *
+   * INFORMATIVO: el sistema no cuenta sobres. Lo lee el revisor en la cola y el
+   * publico en la pagina de participacion gratuita, y sus tres valores los fija
+   * la version de reglas. `null` o ausente cuando la modalidad no es postal.
+   */
+  readonly mail_in?: AmoeMailIn | null;
+  /**
+   * [PROVISIONAL] Participaciones por ficha aprobada.
+   *
+   * §13.5 lo publica dentro de `PromotionDetail.entry_offer.amoe`; esta ruta
+   * todavia no lo declara y el frontend lo ha pedido (handoff HO-041). Mientras
+   * no llegue, la pagina lo toma del resumen de la promocion, que SI es
+   * contrato: la cifra se ensena una vez y viene de un solo sitio.
+   */
+  readonly entries_per_approved_submission?: number | null;
+  /**
+   * Limite por participante y periodo, EN LA FORMA DE ESTA RESPUESTA.
+   *
+   * PLANO, y no anidado bajo `limit`. Las dos formas existen y no son la misma
+   * cosa (§13.12, nota 12): la anidada es la de
+   * `PromotionRulesVersion.config` -lo que redacta el abogado y parsea
+   * `amoeConfigSchema`- y esta es la de la RESPUESTA, que publica lo que el
+   * participante necesita leer y no la configuracion con su forma interna
+   * (`duplicate_policy`, por ejemplo, no sale en absoluto).
+   *
+   * Esta capa llego a leer las dos "por si acaso"; backend lo cerro (HO-041) y
+   * la doble lectura se retira. Leer aqui la anidada seria leer un campo que
+   * esta respuesta no trae.
+   */
+  readonly max_per_participant_per_period?: number | null;
+  readonly limit_period?: string | null;
+}
+
+/**
+ * [CONTRATO §13.2] Bloque `mail_in` de la configuracion AMOE (DEC-054 punto 4).
+ *
+ * Las dos fechas son plazos LEGALES -matasellos y recepcion- y se formatean
+ * contra la zona legal de la promocion, nunca contra el reloj del navegador
+ * (DEC-011). El frontend no decide si un plazo ha pasado: lo dice el backend
+ * rechazando el envio.
+ */
+export interface AmoeMailIn {
+  /** Fichas admitidas por sobre. El sistema no las cuenta; lo hace el revisor. */
+  readonly max_cards_per_envelope: number | null;
+  /** ISO-8601 UTC, o `null`. */
+  readonly postmark_by: string | null;
+  /** ISO-8601 UTC, o `null`. */
+  readonly received_by: string | null;
 }
 
 /**
@@ -1726,6 +1947,14 @@ export type AdminCapability =
   | "amoe.review.read"
   | "amoe.review.approve"
   | "amoe.review.reject"
+  /**
+   * Transcribir una ficha postal (DEC-054 punto 4, capacidad nueva de HO-041).
+   *
+   * Es una capacidad APARTE de `amoe.review.approve` a proposito: quien
+   * transcribe una ficha no puede aprobarla (`SEPARATION_OF_DUTIES`), y con una
+   * sola capacidad esa separacion no se podria repartir entre dos personas.
+   */
+  | "amoe.submission.transcribe"
   | "payment.webhook.read"
   | "reconciliation.read"
   | "flag.read"
@@ -1771,6 +2000,7 @@ export const ADMIN_CAPABILITIES: readonly AdminCapability[] = [
   "amoe.review.read",
   "amoe.review.approve",
   "amoe.review.reject",
+  "amoe.submission.transcribe",
   "payment.webhook.read",
   "reconciliation.read",
   "flag.read",
@@ -1850,16 +2080,16 @@ export const RULES_VERSION_STATUSES: readonly RulesVersionStatus[] = [
  * [PROVISIONAL] Version de reglas con el VEREDICTO DEL VALIDADOR DE ACTIVACION
  * (DEC-012).
  *
- * `missing_keys` ES LA PIEZA IMPORTANTE DE TODO ESTE OBJETO. DEC-012 dice que
- * una promocion no transiciona a `ACTIVE` mientras exista una clave requerida
- * en estado provisional o `TBD`, y que el validador "devuelve la lista de claves
- * faltantes". Esa lista se pinta: sin ella, el boton de activar estaria gris
- * sin decir por que, y la respuesta a "por que no puedo activar" seria mirar
- * logs.
+ * `unresolved_required_keys` ES LA PIEZA IMPORTANTE DE TODO ESTE OBJETO.
+ * DEC-012 dice que una promocion no transiciona a `ACTIVE` mientras exista una
+ * clave requerida en estado provisional o `TBD`, y que el validador "devuelve
+ * la lista de claves faltantes". Esa lista se pinta: sin ella, el boton de
+ * activar estaria gris sin decir por que, y la respuesta a "por que no puedo
+ * activar" seria mirar logs.
  *
- * `activatable` lo decide EL BACKEND y no se deriva de `missing_keys.length`.
- * Puede haber mas condiciones que las claves -una promocion ya activa, una
- * ventana cerrada- y deducirlo aqui seria reimplementar el cerrojo en el
+ * `activatable` lo decide EL BACKEND y no se deriva de la longitud de esa
+ * lista. Puede haber mas condiciones que las claves -una promocion ya activa,
+ * una ventana cerrada- y deducirlo aqui seria reimplementar el cerrojo en el
  * frontend, que es exactamente lo que DEC-012 quiere que viva en un solo sitio.
  *
  * Las claves son IDENTIFICADORES ESTABLES (`minimum_age`, `eligible_states`,
@@ -1874,10 +2104,88 @@ export interface AdminRulesVersion {
   /** ISO-8601 UTC, o `null` mientras siga en borrador. */
   readonly effective_at: string | null;
   readonly created_at: string;
-  /** Claves requeridas que siguen provisionales o en `TBD` (DEC-012). */
-  readonly missing_keys: readonly string[];
-  /** Veredicto del validador de activacion. Lo decide el backend. */
+  /**
+   * Claves legales sin resolver (§13.7). COLUMNA GENERADA por el motor: la
+   * aplicacion no puede escribirla, luego no puede declarar resuelto lo que no
+   * lo esta (DEC-012, `docs/LEGAL_PENDING.md`).
+   *
+   * Esta capa llevo un `missing_keys` paralelo mientras no se sabia cual
+   * publicaba la API. Backend confirmo (HO-041) que ese nombre NUNCA existio en
+   * `apps/api`, asi que se retira: no era tolerancia, era una forma inventada.
+   */
+  readonly unresolved_required_keys: readonly string[];
+  /**
+   * Veredicto de presentacion del validador (§13.7).
+   *
+   * Lo calcula el backend: `unresolved_required_keys` vacia Y ninguna rebanada
+   * `INVALID` Y `status === "DRAFT"`.
+   *
+   * NO ES EL CONTROL, y por eso la pantalla sigue enseniando las claves
+   * pendientes junto al boton en vez de limitarse a deshabilitarlo: quien
+   * impide activar es el trigger de DEC-012, que conoce condiciones que esto no
+   * mira. Dar por hecho el resultado seria reimplementar el cerrojo aqui.
+   */
   readonly activatable: boolean;
+
+  // --- §13.7 (DEC-054). Opcionales mientras la API real no los publique.
+
+  readonly promotion_id?: string;
+  /**
+   * Configuracion de la version, TAL CUAL.
+   *
+   * `unknown` y no un tipo estructurado: su forma la fija el dominio legal
+   * (`calculationConfigSchema`, `amoeConfigSchema`, `bonus_rules`) y quien
+   * valida es la API, que responde 422 con rutas. Tiparla aqui seria fijar en
+   * el frontend que claves son legales, que es justo lo que CLAUDE.md #2
+   * prohibe. El panel la edita como formulario estructurado y como JSON.
+   */
+  readonly config?: unknown;
+  readonly validation?: AdminRulesValidation;
+  readonly attorney_approval_reference?: string | null;
+  readonly created_by_admin_user_id?: string | null;
+  readonly activated_at?: string | null;
+  readonly archived_at?: string | null;
+  readonly documents?: readonly AdminRulesDocument[];
+}
+
+/**
+ * [CONTRATO §13.7] Veredicto del validador por rebanadas.
+ *
+ * TRES REBANADAS Y UNA LISTA DE PROBLEMAS. `OK`, `INVALID`, `UNRESOLVED` y
+ * `ABSENT` no son lo mismo y la pantalla los distingue: "no has puesto AMOE" y
+ * "el AMOE que pusiste no parsea" mandan a hacer cosas distintas.
+ *
+ * Los codigos son claves estables (DEC-022) y el `path` es la ruta JSON del
+ * problema. Se pintan tal cual: aqui el identificador tecnico ES lo util.
+ */
+export interface AdminRulesValidation {
+  readonly calculation?: string;
+  readonly amoe?: string;
+  readonly bonus_rules?: string;
+  readonly issues?: readonly AdminRulesIssue[];
+}
+
+export interface AdminRulesIssue {
+  readonly path: string;
+  readonly code: string;
+}
+
+/**
+ * [CONTRATO §13.7] Documento de una version de reglas, en UN idioma.
+ *
+ * Las dos banderas no son redundantes: puede haber una version con las dos
+ * lenguas controlantes, y puede haber -y hoy la hay- una en la que NINGUNA lo
+ * sea, porque `controlling_language` sigue en `TBD`. El panel las edita como
+ * dos casillas independientes y no deduce una de la otra.
+ */
+export interface AdminRulesDocument {
+  /** Etiqueta BCP-47 (DEC-029). */
+  readonly locale: string;
+  readonly title: string;
+  /** Texto plano. NUNCA se interpreta como marcado. */
+  readonly body: string;
+  readonly is_legally_controlling: boolean;
+  readonly is_informational_translation: boolean;
 }
 
 export type AdminRulesVersionPage = CursorPage<AdminRulesVersion>;
@@ -1966,12 +2274,54 @@ export type AdminParticipantPage = CursorPage<AdminParticipantRow>;
  * NO SON ACUMULATIVAS ENTRE FILAS: cada una contesta "si apruebo ESTA".
  */
 export interface AdminAmoeSubmission {
-  readonly id: string;
+  /**
+   * Identidad del envio. `submission_id` en las TRES formas AMOE (§11.3).
+   *
+   * Esta capa llevo un `id` paralelo mientras no se sabia cual publicaba la
+   * API; backend lo cerro (HO-041) y `id` NO EXISTE en la respuesta, asi que el
+   * ayudante que elegia entre los dos se retira. Consumir un campo que la
+   * respuesta no trae es el defecto que HO-034 encontro en el carrito, y
+   * declarar el nombre bueno es lo que impide repetirlo.
+   */
+  readonly submission_id: string;
   readonly promotion_id: string;
   readonly participant_id: string;
+  /**
+   * Correo del participante, SIEMPRE ENMASCARADO (§11.3).
+   *
+   * Lo enmascara la API -dominio entero e inicial de la parte local- porque
+   * `amoe.review.read` declara `touchesPii`, y el correo completo vive detras
+   * de `pii.view.full`, que es otra capacidad y exige motivo. Para distinguir
+   * filas y reconocer un dominio desechable basta con el enmascarado; el
+   * `payload` del envio sigue sin salir.
+   */
   readonly participant_email: string;
   readonly status: AmoeSubmissionStatus;
   readonly submitted_at: string;
+  /** Modalidad con la que entro el envio (`MAIL_IN_REVIEW`, ...). */
+  readonly mode?: string | null;
+  /**
+   * Marcas que el dominio pone al entrar y que el revisor tiene que ver.
+   *
+   * `flagged_envelope` es la del sobre con mas fichas de las que admiten las
+   * Reglas (§13.10): NO se rechaza sola -que pasa con la tercera ficha de un
+   * sobre de dos es una pregunta abierta para el abogado- y por eso el envio
+   * llega marcado y a revision.
+   */
+  readonly flagged_duplicate?: boolean;
+  readonly flagged_envelope?: boolean;
+  /**
+   * `true` cuando la ficha la transcribio QUIEN MIRA LA PANTALLA (§13.10).
+   *
+   * Booleano y no el identificador del transcriptor: el panel solo necesita
+   * saber si puede aprobar ESTA fila, y repartir identificadores de cuentas
+   * administrativas por un listado es regalar el mapa del equipo.
+   *
+   * NO ES EL CONTROL. Lo aplica el backend comparando actores y responde 409
+   * `SEPARATION_OF_DUTIES`; esto solo evita mandar a alguien a firmar una
+   * decision que ya se sabe que va a rebotar.
+   */
+  readonly transcribed_by_me: boolean;
   /**
    * [PROVISIONAL] Datos enviados, TAL COMO LLEGAN.
    *
@@ -2007,6 +2357,68 @@ export interface AdminAmoeSubmission {
    */
   readonly entries_if_approved: number | null;
   readonly entries_after_if_approved: number | null;
+  /**
+   * [CONTRATO §13.3] Proyeccion CON el tope por participante aplicado.
+   *
+   * `entries_if_approved` es lo que vale la ficha; esto es lo que de verdad
+   * entraria en el ledger si el tope recorta. Las dos viajan porque quien
+   * aprueba tiene que ver el recorte ANTES de causarlo, y el frontend no puede
+   * calcularlo: el "espacio restante" sale del predicado de saldo del motor
+   * (DEC-034), no de una resta (requisito R13 de `security`).
+   *
+   * `cap_applies` dice si hay tope vigente. Con `entries_if_approved_after_cap`
+   * a `0` la aprobacion fallaria con `AMOE_ENTRY_CAP_REACHED` y el envio se
+   * queda en revision: la pantalla lo advierte en vez de dejar que salte.
+   */
+  readonly entries_if_approved_after_cap?: number | null;
+  readonly cap_applies?: boolean;
+  /**
+   * Quien transcribio la ficha, si la transcribio alguien (§13.10).
+   *
+   * Sirve para distinguir una ficha postal de un envio del participante. Para
+   * saber si la transcribio quien mira esta `transcribed_by_me`, que es lo que
+   * gobierna el boton.
+   */
+  readonly transcribed_by_admin_user_id?: string | null;
+  /** [PROVISIONAL] Referencia del sobre tecleada al transcribir (§13.10). */
+  readonly envelope_reference?: string | null;
+  /** [PROVISIONAL] Fichas que venian en el sobre (§13.10). */
+  readonly cards_in_envelope?: number | null;
+  /**
+   * Participaciones que este envio OTORGO DE VERDAD, ya aprobado
+   * (HO-041, resolucion fase 1, punto 4).
+   *
+   * Se lee de la transaccion del ledger, no de la proyeccion: `entries_awarded`
+   * dice cuanto valia la ficha y esto dice cuanto entro. Con un tope de por
+   * medio no son el mismo numero, y sin publicar los dos la unica forma de
+   * explicar la diferencia seria restarlos, que es lo que la interfaz no puede
+   * hacer (requisito R13 de `security`).
+   */
+  readonly granted_entries?: number | null;
+  /** Recorte aplicado, ya otorgado. `null` cuando no hubo ninguno. */
+  readonly applied_cap?: AppliedCap | null;
+}
+
+/**
+ * [CONTRATO] Recorte por tope, tal como lo anota la transaccion del ledger
+ * (HO-041, resolucion fase 1, punto 4).
+ *
+ * LAS CUATRO CIFRAS VIAJAN Y NINGUNA SE DERIVA. `requested` es lo que valia la
+ * operacion, `granted` lo que entro, `limit` el tope y `kind` cual de ellos se
+ * aplico. La interfaz las PINTA: restar `requested` menos `granted` para
+ * enseñar "se perdieron N" seria una segunda aritmetica de participaciones en
+ * el cliente, y ademas el motor puede recortar por mas de un motivo a la vez.
+ *
+ * NO ES PII. Es el dato del propio participante y es lo unico que explica por
+ * que recibio menos de lo anunciado; sin el, la fila del ledger dice una cifra
+ * menor que la del correo de confirmacion y nadie puede responder por que.
+ */
+export interface AppliedCap {
+  /** Enum estable (`PER_PARTICIPANT`, ...). El copy es del frontend (DEC-022). */
+  readonly kind: string;
+  readonly limit: number;
+  readonly requested: number;
+  readonly granted: number;
 }
 
 export type AdminAmoeSubmissionPage = CursorPage<AdminAmoeSubmission>;
@@ -2212,7 +2624,8 @@ export interface AdminDrawAuthorization {
   readonly export_snapshot_id: string | null;
   /**
    * Condiciones de DEC-017 que todavia no se cumplen, como claves estables. Se
-   * pintan igual que `missing_keys` de una version de reglas: quien opera tiene
+   * pintan igual que las claves sin resolver de una version de reglas: quien
+   * opera tiene
    * que poder leer POR QUE no se puede sortear.
    */
   readonly blocking_conditions: readonly string[];

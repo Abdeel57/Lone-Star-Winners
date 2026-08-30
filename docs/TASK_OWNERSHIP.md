@@ -139,3 +139,15 @@ README.md
 Configuración raíz del proyecto (manifiestos de paquetes, linters, formatters,
 CI) es **zona neutral**: se acuerda en la fase de planificación, se registra en
 `docs/DECISIONS.md` y **un solo agente** la crea, designado por el Team Lead.
+
+---
+
+## Ajuste 2026-08-29 (Team Lead, HO-041)
+
+- `tests/e2e/**` pertenece a **security-integration** (lo creó en HO-030 y es
+  la red de integración final). `backend` y `frontend` proponen cambios al
+  escenario por handoff; los ajustes de semilla que exija un cambio de
+  contrato los hace `security` en la misma ronda.
+- `docs/legal/**` es **zona de solo lectura**: contiene los documentos del
+  abogado tal como llegan. Nadie los edita; se añaden versiones nuevas con
+  fecha en el nombre.

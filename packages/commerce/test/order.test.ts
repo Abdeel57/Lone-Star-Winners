@@ -36,6 +36,9 @@ function item(overrides: Partial<OrderItem> = {}): OrderItem {
     productVariantId: "var-1",
     sku: "TEE-BLACK-M",
     nameSnapshot: { "en-US": "Black tee", "es-US": "Camiseta negra" },
+    // Dato de prueba. `@lsw/commerce` no lo interpreta: viaja en la foto
+    // para que el motor de calculo pueda leer el tipo DE ENTONCES (DEC-052).
+    productKind: "MERCHANDISE" as const,
     quantity: 2,
     unitAmountMinor: 2500n as MinorAmount,
     sweepstakesEligibleSnapshot: true,

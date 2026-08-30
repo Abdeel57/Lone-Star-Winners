@@ -97,11 +97,24 @@ export const FIXTURE_RULES_VERSION: RulesVersionRecord = {
   ],
 };
 
+/** Categoria de PRUEBA. Ningun valor de aqui es catalogo real del cliente. */
+export const FIXTURE_CATEGORY = {
+  key: "fixture-apparel",
+  name: { "en-US": "Fixture apparel", "es-US": "Ropa de prueba" },
+  position: 10,
+} as const;
+
 export const FIXTURE_PRODUCT: ProductRecord = {
   id: PRODUCT_ID,
   sku: "FIXTURE-TEE",
   slug: "fixture-tee",
   status: "ACTIVE",
+  // DEC-052: el tipo es una etiqueta de catalogo y NO dice cuantas
+  // participaciones da nada. Se escribe explicito en cada fixture porque el
+  // motor no lo supone.
+  kind: "MERCHANDISE",
+  category: FIXTURE_CATEGORY,
+  imageUrl: null,
   currency: "USD",
   name: { "en-US": "Fixture tee", "es-US": "Camiseta de prueba" },
   description: { "en-US": "Fixture description", "es-US": "Descripcion de prueba" },
@@ -113,6 +126,8 @@ export const FIXTURE_PRODUCT: ProductRecord = {
       priceAmountMinor: 2500n,
       currency: "USD",
       stockQuantity: 10,
+      name: null,
+      imageUrl: null,
       position: 0,
     },
     {
@@ -123,6 +138,8 @@ export const FIXTURE_PRODUCT: ProductRecord = {
       // Existencias no gestionadas: `null` NO es cero.
       currency: "USD",
       stockQuantity: null,
+      name: null,
+      imageUrl: null,
       position: 1,
     },
   ],
@@ -144,6 +161,8 @@ export const FIXTURE_DRAFT_PRODUCT: ProductRecord = {
       priceAmountMinor: 999n,
       currency: "USD",
       stockQuantity: 5,
+      name: null,
+      imageUrl: null,
       position: 0,
     },
   ],
@@ -241,6 +260,9 @@ export function createFakeRepositories(options: FakeOptions = {}): FakeRepositor
           unitAmountMinor: found.variant.priceAmountMinor,
           currency: found.variant.currency,
           stockQuantity: found.variant.stockQuantity,
+          // DEC-052: en el carrito el tipo sale del CATALOGO -todavia no hay
+          // foto que congelar-, igual que en el adaptador real.
+          productKind: found.product.kind,
         };
       })
       .sort((a, b) => a.sku.localeCompare(b.sku));
@@ -283,13 +305,35 @@ export function createFakeRepositories(options: FakeOptions = {}): FakeRepositor
   };
 
   const catalog: CatalogRepository = {
-    listPublic: ({ limit, after }) => {
-      const visible = products.filter((product) => product.status === "ACTIVE");
+    listPublic: ({ limit, after, kind, categoryKey }) => {
+      const visible = products
+        .filter((product) => product.status === "ACTIVE")
+        .filter((product) => kind === undefined || kind === null || product.kind === kind)
+        .filter(
+          (product) =>
+            categoryKey === undefined ||
+            categoryKey === null ||
+            product.category?.key === categoryKey,
+        );
       const filtered = after === null ? visible : visible.filter((row) => row.slug > after);
       return Promise.resolve(
         [...filtered].sort((a, b) => a.slug.localeCompare(b.slug)).slice(0, limit),
       );
     },
+    listCategoriesWithActiveProducts: () => {
+      // Igual que el adaptador real: solo las que tienen algo que ensenar.
+      const seen = new Map<string, ProductRecord["category"]>();
+      for (const product of products) {
+        if (product.status === "ACTIVE" && product.category !== null) {
+          seen.set(product.category.key, product.category);
+        }
+      }
+      return Promise.resolve(
+        [...seen.values()].flatMap((category) => (category === null ? [] : [category])),
+      );
+    },
+    categoryExists: (key) =>
+      Promise.resolve(products.some((product) => product.category?.key === key)),
     findBySlug: (slug) =>
       Promise.resolve(
         products.find((product) => product.slug === slug && product.status === "ACTIVE") ?? null,

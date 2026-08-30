@@ -7,7 +7,13 @@ import { AmoeModePanel } from "@/components/amoe-mode-panel";
 import { ApiErrorState } from "@/components/api-error-state";
 import { Link } from "@/i18n/navigation";
 import { routing } from "@/i18n/routing";
-import { fetchActivePromotion, fetchAmoeConfig, pickLocalized } from "@/lib/api";
+import {
+  fetchActivePromotion,
+  fetchAmoeConfig,
+  fetchPromotion,
+  pickLocalized,
+  type EntryOfferAmoeSummary,
+} from "@/lib/api";
 import { isFeatureEnabled } from "@/lib/flags";
 import { loadFeatureFlags } from "@/lib/flags-server";
 import { loadSession } from "@/lib/participant-server";
@@ -105,6 +111,7 @@ export default async function AmoePage({ params }: { params: Promise<{ locale: s
             slug={promotionResult.data.slug}
             title={pickLocalized(promotionResult.data.title, locale)}
             locale={locale}
+            timeZone={promotionResult.data.legal_timezone}
             authenticated={sessionContext.state.kind === "active"}
           />
         )}
@@ -118,11 +125,14 @@ async function AmoeConfigSection({
   slug,
   title,
   locale,
+  timeZone,
   authenticated,
 }: {
   readonly slug: string;
   readonly title: string;
   readonly locale: "en" | "es";
+  /** Zona legal de la promocion (DEC-011). Nunca la del navegador. */
+  readonly timeZone: string;
   readonly authenticated: boolean;
 }) {
   const t = await getTranslations({ locale, namespace: "amoe.page" });
@@ -191,7 +201,32 @@ async function AmoeConfigSection({
         locale={locale}
         promotionSlug={slug}
         authenticated={authenticated}
+        summary={await amoeSummary(slug, locale)}
+        timeZone={timeZone}
       />
     </div>
   );
+}
+
+/**
+ * Resumen AMOE de la promocion (§13.5), como SEGUNDA fuente de las cifras.
+ *
+ * POR QUE HACE FALTA UN VIAJE MAS. `GET /promotions/{slug}/amoe-config` todavia
+ * no publica el valor por ficha ni el limite por participante -es una peticion
+ * abierta a `backend`, anotada en `AmoeConfig`- y §13.5 si los publica dentro de
+ * `entry_offer.amoe`. Mientras las dos formas convivan, la pagina lee la
+ * configuracion como fuente principal y este resumen como respaldo.
+ *
+ * ES DE MEJOR ESFUERZO: un fallo aqui deja la pagina exactamente como estaba
+ * -instrucciones y ventana- y no la tumba. Ninguna cifra se inventa: sin dato,
+ * la fila no se pinta.
+ */
+async function amoeSummary(
+  slug: string,
+  locale: "en" | "es",
+): Promise<EntryOfferAmoeSummary | null> {
+  const detail = await fetchPromotion(slug, locale);
+  if (!detail.ok) return null;
+
+  return detail.data.entry_offer?.amoe ?? null;
 }

@@ -1,6 +1,6 @@
 import type {
+  BonusPeriod,
   EntryOffer,
-  EntryPool,
   PromotionDetail,
   PromotionMedia,
   PromotionStatus,
@@ -8,9 +8,10 @@ import type {
 } from "@/lib/api";
 import { PROMOTION_STATUSES } from "@/lib/api";
 
-import { prizeTruckSquareImage, prizeTruckWideImage } from "./media";
+import { prizeTruckSquareImage } from "./media";
 import {
   GMC_PRIZE_HERO_CANDIDATES,
+  GMC_PRIZE_HERO_FALLBACK,
   GMC_PRIZE_SQUARE_CANDIDATES,
   resolvePrizePhoto,
 } from "./prize-photo";
@@ -31,33 +32,154 @@ import {
  * (CLAUDE.md #1 y #2).
  */
 
-/** Oferta base sin multiplicador. */
-export const baseEntryOffer: EntryOffer = {
-  base_entries_per_unit: 5,
-  unit_amount: { amount_minor: "100", currency: "USD" },
-  multiplier: null,
-  multiplier_starts_at: null,
-  multiplier_ends_at: null,
-};
+const RULES_VERSION_ID = "prv_0000000000000001";
 
-/** Oferta con un periodo de multiplicador vigente. */
-export const multipliedEntryOffer: EntryOffer = {
-  ...baseEntryOffer,
-  multiplier: { numerator: 2, denominator: 1 },
-  multiplier_starts_at: "2026-08-20T05:00:00.000Z",
-  multiplier_ends_at: "2026-09-05T04:59:00.000Z",
+/**
+ * Bonus 5X sobre PAQUETES, vigente (§13.5, DEC-052 punto 3).
+ *
+ * Es el gesto que pidio el cliente -"5X durante las proximas 12 horas"- acotado
+ * a paquetes con `product_kind_scope`, que es lo que evita tener que enumerar
+ * SKUs que todavia no existen. Su identidad coincide con la que declaran las
+ * ofertas de los paquetes en `catalog.ts`: sin esa correspondencia, la ficha
+ * diria que hay bonus y la promocion no sabria cual.
+ */
+export const activeBonusPeriod: BonusPeriod = {
+  id: "bonus-5x-packages",
+  multiplier: { numerator: 5, denominator: 1 },
+  starts_at: "2026-08-28T12:00:00.000Z",
+  ends_at: "2026-09-13T00:00:00.000Z",
+  product_kind_scope: ["ENTRY_PACKAGE"],
+  sku_scope: null,
 };
 
 /**
- * Oferta con multiplicador FRACCIONARIO.
+ * Bonus 2X ANUNCIADO Y AUN NO EMPEZADO, sobre los dos tipos.
+ *
+ * Existe porque el segundo borrador de las Official Rules exige anunciar los
+ * periodos bonus ANTES de que empiecen: sin un periodo futuro en el fixture, la
+ * unica rama que se veria al mirar la aplicacion seria la del vigente, que es
+ * justo la que no puede fallar sola.
+ */
+export const upcomingBonusPeriod: BonusPeriod = {
+  id: "bonus-2x-2026-09-20",
+  multiplier: { numerator: 2, denominator: 1 },
+  starts_at: "2026-09-20T12:00:00.000Z",
+  ends_at: "2026-09-21T00:00:00.000Z",
+  product_kind_scope: null,
+  sku_scope: null,
+};
+
+/**
+ * Bonus con multiplicador FRACCIONARIO.
  *
  * Existe para que nadie pueda tratar el multiplicador como un entero: `3/2` no
  * se puede pintar como "1.5X" sin redondear una cifra que el motor aplica
  * exacta (DEC-010).
  */
-export const fractionalEntryOffer: EntryOffer = {
-  ...multipliedEntryOffer,
+export const fractionalBonusPeriod: BonusPeriod = {
+  ...upcomingBonusPeriod,
+  id: "bonus-3-2-2026-10-01",
   multiplier: { numerator: 3, denominator: 2 },
+  starts_at: "2026-10-01T12:00:00.000Z",
+  ends_at: "2026-10-02T00:00:00.000Z",
+};
+
+/**
+ * Oferta de participaciones de la promocion (§13.5).
+ *
+ * DOS TASAS, no una: 1 participacion por cada $1 en mercancia y 2 por cada $1
+ * en paquetes, que es la configuracion provisional del segundo borrador. El
+ * tope es POR PARTICIPANTE -10,000, "por cualquier metodo o combinacion de
+ * metodos"- y NO un universo total: `entry_pool` se retiro con DEC-052 punto 6.
+ *
+ * Las tasas viajan como FRACCION (DEC-010) y el importe unitario en unidad
+ * menor. Ninguna cifra de este objeto se calcula: son los valores que declara
+ * la version de reglas.
+ */
+export const baseEntryOffer: EntryOffer = {
+  rules_version_id: RULES_VERSION_ID,
+  rates: [
+    {
+      product_kind: "MERCHANDISE",
+      entries_per_amount_unit: { numerator: 1, denominator: 1 },
+      amount_unit: { amount_minor: "100", currency: "USD" },
+    },
+    {
+      product_kind: "ENTRY_PACKAGE",
+      entries_per_amount_unit: { numerator: 2, denominator: 1 },
+      amount_unit: { amount_minor: "100", currency: "USD" },
+    },
+  ],
+  per_participant_max: 10000,
+  per_order_max: null,
+  caps_enabled: true,
+  multipliers_enabled: true,
+  active_bonus: null,
+  bonus_periods: [upcomingBonusPeriod],
+  amoe: {
+    enabled: true,
+    mode: "MAIL_IN_REVIEW",
+    entries_per_approved_submission: 2000,
+    max_per_participant_per_period: 5,
+    limit_period: "PROMOTION",
+  },
+};
+
+/** La misma oferta con el bonus 5X vigente, y el 2X todavia anunciado. */
+export const bonusEntryOffer: EntryOffer = {
+  ...baseEntryOffer,
+  active_bonus: activeBonusPeriod,
+  bonus_periods: [activeBonusPeriod, upcomingBonusPeriod],
+};
+
+/**
+ * Oferta con una sola tasa, sin distinguir tipo de producto.
+ *
+ * Es lo que publica §13.5 cuando la promocion usa el modo
+ * `ENTRIES_PER_CURRENCY_UNIT`: UNA entrada con `product_kind: null` que vale
+ * para todo el catalogo. La interfaz tiene que saber pintar las dos formas, y
+ * sin este fixture solo se recorreria la de dos tasas.
+ */
+export const singleRateEntryOffer: EntryOffer = {
+  ...baseEntryOffer,
+  rates: [
+    {
+      product_kind: null,
+      entries_per_amount_unit: { numerator: 1, denominator: 1 },
+      amount_unit: { amount_minor: "100", currency: "USD" },
+    },
+  ],
+  active_bonus: null,
+  bonus_periods: [],
+};
+
+/**
+ * Oferta con los topes APAGADOS.
+ *
+ * `entry_caps_enabled` es un flag legalmente material: con el apagado el tope
+ * esta declarado y NO se aplica, asi que anunciar "maximo 10,000 por persona"
+ * seria decir algo falso. El fixture conserva la cifra a proposito -para que el
+ * test compruebe que la pantalla la calla teniendola- en vez de vaciarla.
+ */
+export const uncappedEntryOffer: EntryOffer = {
+  ...baseEntryOffer,
+  caps_enabled: false,
+};
+
+/**
+ * Oferta tal como la sirve una API ANTERIOR a §13.
+ *
+ * Sin `caps_enabled`, sin `multipliers_enabled`, sin `active_bonus`, sin
+ * `bonus_periods` y sin `amoe`. Es el fixture que obliga a `normalizeEntryOffer`
+ * a existir: si la interfaz comparase con `=== null`, un `undefined` se colaria
+ * por la rama del "si hay valor" y la portada moriria en el acceso siguiente,
+ * que es exactamente el fallo que el primer e2e real encontro (HO-039).
+ */
+export const partialEntryOffer: EntryOffer = {
+  rules_version_id: RULES_VERSION_ID,
+  rates: baseEntryOffer.rates,
+  per_participant_max: null,
+  per_order_max: null,
 };
 
 const BASE: PromotionSummary = {
@@ -70,9 +192,9 @@ const BASE: PromotionSummary = {
   },
   summary: {
     "en-US":
-      "A 2025 GMC Denali pickup truck. This promotion has a limited entry pool, and how it works is set out in the Official Rules.",
+      "A 2025 GMC Denali pickup truck. How this promotion works, and the entry limits that apply, are set out in the Official Rules.",
     "es-US":
-      "Una camioneta GMC Denali 2025. Esta promoción tiene un universo limitado de participaciones, y cómo funciona se explica en las Reglas Oficiales.",
+      "Una camioneta GMC Denali 2025. Cómo funciona esta promoción, y los límites de participación que se aplican, se explican en las Reglas Oficiales.",
   },
   legal_timezone: "America/Chicago",
   starts_at: "2026-08-01T05:00:00.000Z",
@@ -121,7 +243,17 @@ const BASE: PromotionSummary = {
  * frontend (CLAUDE.md #1 y #2).
  */
 const GMC_MEDIA: PromotionMedia = {
-  hero_url: resolvePrizePhoto(GMC_PRIZE_HERO_CANDIDATES) ?? prizeTruckWideImage,
+  /*
+   * EL RESPALDO DEL HERO ES UNA RUTA, NO UN `data:` URI (S-11).
+   *
+   * Ver `GMC_PRIZE_HERO_FALLBACK`: el hero filtra su imagen con `safeImageUrl`
+   * y esa funcion rechaza `data:` por diseno, asi que la ilustracion de estudio
+   * que ocupaba este sitio ya no podia pintarse. `square_url` conserva la suya
+   * porque hoy ninguna superficie la pinta; el dia que alguna lo haga, tendra
+   * que pasar por el mismo filtro y este respaldo tendra que ser tambien una
+   * ruta.
+   */
+  hero_url: resolvePrizePhoto(GMC_PRIZE_HERO_CANDIDATES) ?? GMC_PRIZE_HERO_FALLBACK,
   square_url: resolvePrizePhoto(GMC_PRIZE_SQUARE_CANDIDATES) ?? prizeTruckSquareImage,
   alt: {
     "en-US": "Silver GMC Denali 2025 pickup, front three-quarter view",
@@ -129,22 +261,18 @@ const GMC_MEDIA: PromotionMedia = {
   },
 };
 
-/**
- * [PROVISIONAL] Universo de participaciones de la promocion protagonista.
+/*
+ * AQUI VIVIA `GMC_ENTRY_POOL`, y se retira con DEC-052 punto 6.
  *
- * El cliente fijo 10,000 el 2026-08-26 (DEC-042). Es CONFIGURACION de la
- * promocion, no texto de la interfaz, y su tratamiento legal -como se agota,
- * que pasa con una compra elegible cuando ya no quedan, si convive con AMOE-
- * sigue en `docs/LEGAL_PENDING.md`.
+ * Declaraba `{ cap: 10000, issued: 1240 }` y la mitad de ese objeto -`issued`-
+ * existia solo para que el test de DEC-044 tuviera algo que NO encontrar en la
+ * pantalla. El segundo borrador de las Official Rules aclaro que el 10,000
+ * nunca fue un universo total sino el tope POR PARTICIPANTE, asi que no queda
+ * ni tope total ni cifra de emitidas que ocultar: la red que protegia a
+ * `issued` deja de tener objeto porque el campo deja de existir en el contrato.
  *
- * `issued` es una cifra SERVIDA, no calculada, y sigue aqui AUNQUE DESDE
- * DEC-044 NINGUNA PANTALLA LA PINTE. No es un resto olvidado: es la mitad
- * activa de la red. Un fixture que dejara de traerla haria que el test de
- * DEC-044 pasara por no tener nada que encontrar, que es la forma mas comun de
- * que una comprobacion de compliance se vuelva decorativa. Mientras el backend
- * pueda servir el campo, el fixture lo sirve y el test exige que no aparezca.
+ * El tope viaja ahora en `baseEntryOffer.per_participant_max`.
  */
-const GMC_ENTRY_POOL: EntryPool = { cap: 10000, issued: 1240 };
 
 /**
  * Contenido de cada edicion de la promocion.
@@ -250,7 +378,7 @@ const EDITIONS: Readonly<Record<PromotionStatus, Edition>> = {
   /*
    * LA PROMOCION PROTAGONISTA (DEC-042).
    *
-   * Camioneta GMC Denali 2025 y universo de 10,000 participaciones. TODO en esta
+   * Camioneta GMC Denali 2025 y tope de 10,000 participaciones POR PERSONA. TODO en esta
    * edicion es PROVISIONAL, empezando por lo que no dice:
    *
    *   - no se declara version, motorizacion ni potencia. El cliente dijo "GMC
@@ -260,7 +388,8 @@ const EDITIONS: Readonly<Record<PromotionStatus, Edition>> = {
    *     premio, y lo que se entrega lo fijan las Reglas Oficiales;
    *   - el valor declarado ($65,000) existe solo para probar que la interfaz
    *     sabe pintar un importe, igual que el resto de este archivo;
-   *   - el tope de 10,000 vive en `entry_pool`, no en el copy, porque es
+   *   - el tope de 10,000 es POR PARTICIPANTE y vive en
+   *     `entry_offer.per_participant_max`, no en el copy, porque es
    *     configuracion (CLAUDE.md #3 y #14) y su tratamiento legal sigue abierto
    *     en `docs/LEGAL_PENDING.md`.
    */
@@ -269,18 +398,18 @@ const EDITIONS: Readonly<Record<PromotionStatus, Edition>> = {
     en: {
       title: "The 2025 GMC Denali Sweepstakes",
       summary:
-        "A 2025 GMC Denali pickup truck. This promotion has a limited entry pool, and how it works is set out in the Official Rules.",
+        "A 2025 GMC Denali pickup truck. How this promotion works, and the entry limits that apply, are set out in the Official Rules.",
       prize: "2025 GMC Denali",
       prizeDescription:
-        "A 2025 GMC Denali pickup truck, delivered ready to drive. Provisional: the prize, its stated value and the limited entry pool are approved with the Official Rules.",
+        "A 2025 GMC Denali pickup truck, delivered ready to drive. Provisional: the prize, its stated value and the entry limits are approved with the Official Rules.",
     },
     es: {
       title: "Sorteo promocional GMC Denali 2025",
       summary:
-        "Una camioneta GMC Denali 2025. Esta promoción tiene un universo limitado de participaciones, y cómo funciona se explica en las Reglas Oficiales.",
+        "Una camioneta GMC Denali 2025. Cómo funciona esta promoción, y los límites de participación que se aplican, se explican en las Reglas Oficiales.",
       prize: "GMC Denali 2025",
       prizeDescription:
-        "Una camioneta GMC Denali 2025, entregada lista para circular. Provisional: el premio, su valor declarado y el universo limitado de participaciones se aprueban junto con las Reglas Oficiales.",
+        "Una camioneta GMC Denali 2025, entregada lista para circular. Provisional: el premio, su valor declarado y los límites de participación se aprueban junto con las Reglas Oficiales.",
     },
     prizeValueMinor: "6500000",
     starts_at: "2026-08-01T05:00:00.000Z",
@@ -491,7 +620,7 @@ export const publicPromotions: readonly PromotionSummary[] = promotionsByStatus.
   (promotion) => promotion.status !== "DRAFT",
 );
 
-/** Promocion activa con un periodo de multiplicador vigente. */
+/** Promocion activa con un periodo bonus vigente. */
 export const promotionWithMultiplier: PromotionSummary = {
   ...BASE,
   id: "prm_0000000000000005",
@@ -512,7 +641,7 @@ export const promotionWithMultiplier: PromotionSummary = {
  * Es la mitad ADVERSARIAL del par: `activePromotion` prueba que el hero
  * completo se ve, y esta prueba que no se ve cuando no debe.
  *
- * Su detalle trae premio, fotografia y universo, como cualquier otra ACTIVE.
+ * Su detalle trae premio, fotografia y oferta, como cualquier otra ACTIVE.
  * Tambien a proposito: lo que el estado contenido tiene que retirar solo se
  * puede comprobar si el dato para pintarlo esta disponible.
  */
@@ -582,16 +711,15 @@ export function detailFor(
     administrator_name: "Sample Administrator LLC",
     entry_offer: entryOffer,
     /*
-     * IMAGENES Y UNIVERSO SOLO PARA LA EDICION QUE LOS DECLARA (DEC-042).
+     * IMAGENES SOLO PARA LA EDICION QUE LAS DECLARA (DEC-042).
      *
-     * Los dos campos son nulables en el contrato y aqui llegan `null` en ocho
-     * de las nueve ediciones. No es economia de fixture: es el caso NORMAL. Una
-     * promocion puede no tener fotografia y puede no tener tope, y si todas las
-     * trajeran, la unica rama que se veria al mirar la aplicacion seria la de
-     * "si hay", que es justo la que no puede fallar sola.
+     * El campo es nulable en el contrato y aqui llega `null` en ocho de las
+     * nueve ediciones. No es economia de fixture: es el caso NORMAL. Una
+     * promocion puede no tener fotografia, y si todas la trajeran, la unica
+     * rama que se veria al mirar la aplicacion seria la de "si hay", que es
+     * justo la que no puede fallar sola.
      */
     media: summary.status === "ACTIVE" ? GMC_MEDIA : null,
-    entry_pool: summary.status === "ACTIVE" ? GMC_ENTRY_POOL : null,
   };
 }
 
@@ -616,10 +744,28 @@ export const publicPromotionDetails: readonly PromotionDetail[] = publicPromotio
     ),
 );
 
-/** Detalle con multiplicador activo. */
+/** Detalle con un periodo bonus VIGENTE (5X sobre paquetes). */
 export const promotionDetailWithMultiplier: PromotionDetail = detailFor(
   promotionWithMultiplier,
-  multipliedEntryOffer,
+  bonusEntryOffer,
+);
+
+/** Detalle con una sola tasa, sin distinguir tipo de producto. */
+export const promotionDetailWithSingleRate: PromotionDetail = detailFor(
+  promotionWithMultiplier,
+  singleRateEntryOffer,
+);
+
+/** Detalle con los topes apagados: el tope existe y no se anuncia. */
+export const promotionDetailWithoutCaps: PromotionDetail = detailFor(
+  activePromotion,
+  uncappedEntryOffer,
+);
+
+/** Detalle con la oferta que sirve una API anterior a §13. */
+export const promotionDetailWithPartialOffer: PromotionDetail = detailFor(
+  activePromotion,
+  partialEntryOffer,
 );
 
 /** Detalle sin oferta declarada. */

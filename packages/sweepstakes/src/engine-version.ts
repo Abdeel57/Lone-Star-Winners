@@ -34,9 +34,42 @@
  *       ningun `EntryCalculationSnapshot` anclado a ella que hubiera que poder
  *       reproducir. En cuanto exista uno, cualquier cambio de resultado exige
  *       version nueva.
+ *
+ *   2 - DEC-052. Tasa por TIPO de producto.
+ *
+ *       QUE CAMBIA
+ *
+ *         - Quinto modo de formula, `ENTRIES_PER_CURRENCY_UNIT_BY_PRODUCT_KIND`,
+ *           con una tasa por `ProductKind` y una sola `rounding_policy`.
+ *         - `CalculationItemInput` exige `productKind`: la entrada del motor
+ *           cambia de forma.
+ *         - Los periodos de multiplicador exigen `product_kind_scope`, que se
+ *           intersecta con `sku_scope`.
+ *         - La traza anota el `productKind` de cada linea, elegible o no, y
+ *           gana el motivo `PRODUCT_KIND_NOT_RATED`.
+ *
+ *       POR QUE SE INCREMENTA AUNQUE LAS CONFIGURACIONES ANTIGUAS DEN LO MISMO
+ *
+ *         Los cuatro modos anteriores producen EXACTAMENTE el mismo resultado
+ *         que en `1` para la misma entrada: `productKind` no entra en su
+ *         aritmetica, y un periodo con `product_kind_scope: null` -el unico
+ *         valor que una configuracion de `1` puede tener tras migrarse- cubre
+ *         todos los tipos, que es lo que hacia antes de existir la clave.
+ *
+ *         Aun asi la version sube, porque la version del motor no responde solo
+ *         a "cambia el numero": responde a "puede un auditor reproducir esto
+ *         con lo que tiene". La ENTRADA y la TRAZA cambian de forma, de modo que
+ *         una traza de `1` y una de `2` no son el mismo documento y no se
+ *         validan con el mismo esquema. Dejarlas indistinguibles bajo un mismo
+ *         numero obligaria a adivinar cual se leyo.
+ *
+ *         Sigue sin haber ningun `EntryTransaction` ni `EntryCalculationSnapshot`
+ *         de produccion anclado a `1`: ninguna promocion ha estado activa. El
+ *         numero `1` se conserva de todos modos -no se reescribe la historia-
+ *         para que los datos de desarrollo sigan diciendo la verdad.
  */
 
 /** `0` significa "motor no implementado". Se conserva para leer datos de B0. */
 export const ENGINE_VERSION_UNIMPLEMENTED = 0;
 
-export const ENTRY_CALCULATION_ENGINE_VERSION = 1;
+export const ENTRY_CALCULATION_ENGINE_VERSION = 2;

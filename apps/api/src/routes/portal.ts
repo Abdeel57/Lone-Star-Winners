@@ -42,6 +42,7 @@ import { ApiError, ApiErrors, errorEnvelopeSchema } from "../http/errors.js";
 import { buildPage, decodeCursor, paginationQuerySchema, pageSchema } from "../http/pagination.js";
 import type { ParticipantPrincipal } from "../http/principal-narrow.js";
 import type { RouteDefinition } from "../http/route-registry.js";
+import { readAppliedCap } from "./amoe.js";
 import {
   awardHoldSchema,
   entryNumberBatchSchema,
@@ -185,6 +186,10 @@ export function buildPortalRoutes(dependencies: AppDependencies): RouteDefinitio
             effective_at: row.effectiveAt.toISOString(),
             expires_at: row.expiresAt?.toISOString() ?? null,
             reverses_transaction_id: row.reversesTransactionId,
+            // Se lee de la MISMA anotacion que dejo la concesion. Nada se
+            // recalcula aqui: recalcular el recorte hoy daria otra cifra si el
+            // saldo ha cambiado, y lo que hay que explicar es lo que paso.
+            applied_cap: readAppliedCap(row.metadata),
           })),
           next_cursor: page.next_cursor,
         };

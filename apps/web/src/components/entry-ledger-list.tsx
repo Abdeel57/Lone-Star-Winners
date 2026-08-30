@@ -87,6 +87,30 @@ export function EntryLedgerList({
                 {reasonLabel(transaction.reason_key)}
               </p>
 
+              {/*
+               * EL RECORTE POR TOPE, EXPLICADO EN LA PROPIA FILA
+               * (HO-041, resolucion fase 1, punto 4).
+               *
+               * Sin esto, alguien que compra un paquete de 2,000 y ve entrar
+               * 550 no tiene ninguna forma de saber por que, y la unica
+               * explicacion que la interfaz podria dar seria una resta hecha en
+               * el cliente sobre cifras que ni siquiera estan las dos en la
+               * fila. Las cuatro las publica el backend desde la transaccion.
+               *
+               * `requested` y `granted` se PINTAN los dos: decir solo "se
+               * aplico un tope" no responde cuanto se perdio, y restarlos aqui
+               * seria la aritmetica que R13 prohibe.
+               */}
+              {transaction.applied_cap === undefined || transaction.applied_cap === null ? null : (
+                <p className="mt-s2 text-body-sm text-text">
+                  {t("appliedCap", {
+                    granted: formatEntryCount(transaction.applied_cap.granted, locale),
+                    requested: formatEntryCount(transaction.applied_cap.requested, locale),
+                    limit: formatEntryCount(transaction.applied_cap.limit, locale),
+                  })}
+                </p>
+              )}
+
               <div className="mt-s3 flex flex-wrap items-center gap-2">
                 <Badge tone="neutral" size="sm">
                   {sourceLabel(transaction.source_type)}

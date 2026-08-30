@@ -56,7 +56,7 @@ import { SweepstakesError } from "../errors.js";
 import type { JsonObject } from "../json.js";
 import { toCanonicalJsonObject } from "../json.js";
 import { ENTRY_REASON_KEYS, entrySourceRef } from "../ledger.js";
-import type { PromotionStatus } from "../enums.js";
+import type { ProductKind, PromotionStatus } from "../enums.js";
 import { actorColumns, SYSTEM_ACTOR, type DomainActor } from "../ports/actor.js";
 import type { AuditSink } from "../ports/audit-sink.js";
 import type { Clock } from "../ports/clock.js";
@@ -81,6 +81,17 @@ import type { EntryAwardHold, EntryAwardHoldRepository } from "./holds.js";
 export interface QualifyingOrderItem {
   readonly lineId: string;
   readonly sku: string;
+  /**
+   * El tipo CONGELADO en el pedido (`order_items.product_kind`), no el que
+   * tenga hoy el producto (DEC-052 punto 1).
+   *
+   * Es la misma razon por la que `sku` y el importe tambien viajan congelados:
+   * si se leyera del catalogo, reetiquetar un producto de `MERCHANDISE` a
+   * `ENTRY_PACKAGE` cambiaria la tasa con la que se calculo una compra de hace
+   * tres meses, y el reversal de esa compra dejaria de cuadrar con la
+   * concesion original.
+   */
+  readonly productKind: ProductKind;
   readonly quantity: number;
   /** DEC-010: unidad menor, entero. Congelado en el momento de la compra. */
   readonly unitAmountMinor: bigint;
@@ -389,12 +400,55 @@ export class AwardService {
   ): Promise<AwardOutcome> {
     const now = this.deps.clock.now();
 
-    const history = await this.deps.ledger.listForParticipant(
-      order.promotionId,
-      order.participantId,
-    );
-    const balance = computeBalanceAt(history, order.promotionId, order.participantId, now);
+    // EL SALDO SE LEE DENTRO DE LA UNIDAD DE TRABAJO Y DESPUES DEL CERROJO.
+    //
+    // Leerlo fuera -como se hacia- dejaba el tope por participante sin
+    // serializar: una compra concurrente con una aprobacion AMOE, o dos
+    // compras a la vez, leen las dos el mismo saldo y superan el tope. El
+    // calculo, el snapshot y la fila de ledger tienen que ver el MISMO saldo
+    // que autorizo la concesion, y eso solo lo garantiza leerlo despues de
+    // haber tomado el cerrojo del participante.
+    return await this.deps.unitOfWork.withTransaction(async () => {
+      await this.deps.ledger.lockParticipant(order.promotionId, order.participantId);
 
+      const history = await this.deps.ledger.listForParticipant(
+        order.promotionId,
+        order.participantId,
+      );
+      const balance = computeBalanceAt(history, order.promotionId, order.participantId, now);
+
+      return await this.performAwardLocked(
+        order,
+        context,
+        sourceRef,
+        actor,
+        verification,
+        now,
+        balance,
+      );
+    });
+  }
+
+  /**
+   * La parte del award que corre YA con el cerrojo tomado y el saldo leido.
+   *
+   * Se separa para que la firma diga cual es la precondicion: quien llame a
+   * esto sin haber pasado por performAward no tiene el cerrojo, y el nombre lo
+   * recuerda. El cuerpo es el de antes, sin ningun cambio de aritmetica.
+   */
+  private async performAwardLocked(
+    order: QualifiedOrder,
+    context: PromotionContext,
+    sourceRef: string,
+    actor: DomainActor,
+    verification: {
+      readonly required: boolean;
+      readonly source: string;
+      readonly emailVerifiedAt: Date | null;
+    },
+    now: Date,
+    balance: { readonly activeEntries: number },
+  ): Promise<AwardOutcome> {
     const calculationInput: CalculationInput = {
       promotionId: order.promotionId,
       rulesVersionId: context.rulesVersionId,
@@ -404,6 +458,7 @@ export class AwardService {
       items: order.items.map((item) => ({
         lineId: item.lineId,
         sku: item.sku,
+        productKind: item.productKind,
         quantity: item.quantity,
         unitAmountMinor: item.unitAmountMinor,
         currency: order.currency,
@@ -435,6 +490,9 @@ export class AwardService {
       items: order.items.map((item) => ({
         line_id: item.lineId,
         sku: item.sku,
+        // DEC-052: sin el tipo, la entrada del snapshot no reproduce el
+        // calculo, porque es lo que decide que tasa se aplico a esta linea.
+        product_kind: item.productKind,
         quantity: item.quantity,
         unit_amount_minor: item.unitAmountMinor.toString(10),
       })),

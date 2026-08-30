@@ -345,3 +345,176 @@ efecto de la disponibilidad de mercancía sobre la elegibilidad.
 
 El borrador está redactado **solo en inglés**, así que el idioma controlante
 sigue sin decidirse formalmente y no hay versión en español que revisar.
+
+---
+
+# Segundo borrador de Official Rules (2026-08-29)
+
+El cliente entregó **`docs/legal/Sweepstakes Official Rules - DRAFT v2 (2026-08-29).docx`**
+(nombre original: "Sweeptakes Official Rules - ACTUALIZADO"), acompañado de tres
+mensajes con precisiones comerciales. **Sigue siendo un borrador**: el abogado
+avisa de que puede haber cambios, "aunque ya no tan drásticos". Todo lo que
+sigue queda marcado `PROVISIONAL — DRAFT v2` y vive como configuración de la
+`PromotionRulesVersion` (DEC-012), nunca como constante. Regla 1 intacta: aquí
+se transcribe, no se inventa.
+
+## Lo que cambia respecto al primer borrador
+
+| Punto                           | Borrador 1 (2026-08-27)              | Borrador 2 (2026-08-29)                                                                                                                                                                             |
+| ------------------------------- | ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Tope por participante**       | 1,000                                | **10,000**, por cualquier método o combinación de métodos. Fijo durante los periodos bonus.                                                                                                         |
+| **Compra de mercancía (Op. 1)** | 2 por cada $5.00 completos           | **1 participación por cada $1.00 completo** del precio pagado, **impuestos y envío excluidos**. Se aplica automáticamente a la cuenta del comprador, sujeto al tope.                                |
+| **Paquetes (Op. 2)**            | 2 por cada $5.00 completos           | **2 participaciones por cada $1.00 completo** del precio del paquete, impuestos excluidos. **El número incluido se declara en la página donde se ofrece el paquete.**                               |
+| **AMOE postal (Op. 3)**         | 200 por ficha                        | **2,000 por ficha válida**. Máximo **5 fichas por participante** en todo el periodo; **2 fichas por sobre**. Manuscrita, con nombre legal, dirección, email, teléfono, fecha de nacimiento y firma. |
+| **Plazos AMOE**                 | igual                                | Matasellos dentro del periodo; **recepción ≤ 7 días naturales** tras el cierre.                                                                                                                     |
+| **Bonus**                       | hasta 10×                            | Igual: hasta **10×** (2X, 5X, 10X) sobre **Opciones 1 y 2**; **nunca** sobre el AMOE postal; el tope de 10,000 no se mueve; **se anuncian en el sitio antes de empezar**.                           |
+| **Premio**                      | vehículo con alternativa en efectivo | **Sin alternativa en efectivo**. "Sponsor **will** substitute" si el vehículo no está disponible. No canjeable por dinero.                                                                          |
+| **Sorteo**                      | [DRAWING DATE]                       | **14 días naturales tras el cierre** del periodo, por el Administrador, con RNG auditado. Tres sorteos alternos.                                                                                    |
+| **Registro del sorteo**         | exigido antes de anunciar            | **La frase desapareció.** El export al administrador (DEC-016) sigue produciendo ese registro.                                                                                                      |
+| **Patrocinador**                | [SPONSOR NAME]                       | **Lone Star Winners LLC** (la dirección sigue en marcador).                                                                                                                                         |
+
+## Lo que el cliente añadió por mensaje (no consta en el documento)
+
+- **Paquetes de $10, $20, $50 y $100** → 20, 40, 100 y 200 participaciones. Es
+  coherente con la tasa de 2 por $1; el número por paquete NO se escribe en el
+  producto, sale de la tasa (DEC-052).
+- **Multiplicadores temporales 2X, 5X, 10X con duración concreta** ("5X durante
+  las próximas 12 horas"), pensados para incentivar la compra de paquetes en
+  momentos puntuales.
+- **Catálogo inicial**: llavero/holder para AirTag; llavero con soporte para
+  teléfono; power bank portátil; libreta con pluma; luz LED manos libres de
+  cuello; termos; gorras premium (≈5 modelos × 5 colores, imagen pendiente).
+- **Confirmación explícita**: el 10,000 es **por persona**, y una persona que
+  solo use el método gratuito puede alcanzar el mismo máximo (5 × 2,000).
+
+## Consecuencias sobre las cuatro contradicciones del primer borrador
+
+1. **AMOE en línea vs postal.** El borrador 2 sigue siendo **solo postal**. Se
+   configura la modalidad `MAIL_IN_REVIEW`; el formulario en línea existe en el
+   código pero **no se enciende** (la vía la gobiernan `amoe_enabled` +
+   `amoe_mode`). Provisionalmente resuelto.
+2. **Universo total de 10,000 (DEC-042).** **No existe.** El 10,000 es el tope
+   **por participante**. El concepto `entry_pool` (tope total, "emitidas") se
+   retira de la interfaz y del contrato (DEC-052 supersede esa parte de
+   DEC-042). Lo que se muestra es "máximo 10,000 participaciones por persona",
+   como dato de las Reglas.
+3. **Paquetes vs `CLAUDE.md` §1.** El abogado los incluye expresamente como
+   "Entry Package Purchase". Se modelan como productos del catálogo de tipo
+   `ENTRY_PACKAGE`, con tasa propia en la versión de reglas (DEC-052). El
+   producto **sigue sin ser una rifa**: lo que se vende es un paquete definido
+   por las Official Rules, con AMOE gratuito equivalente. `CLAUDE.md` §1
+   necesita una enmienda de una frase que solo el usuario / Team Lead puede
+   escribir (`docs/TASK_OWNERSHIP.md`, archivos reservados); se propone en el
+   cierre de esta ronda.
+4. **Sorteo por el Administrador.** Sin cambios.
+
+## Puntos que el borrador 2 resuelve (todos `PROVISIONAL — DRAFT v2`)
+
+```text
+## Entry limits
+RESOLVED (provisional) — 10,000 por participante, cualquier método o combinación;
+per_order_max sin declarar (null = sin tope por pedido).
+Date: 2026-08-29 · Source: Official Rules DRAFT v2 §4 "Entry Limits" + mensaje del cliente
+Impact: DEC-052 (el tope se aplica también a la concesión AMOE)
+
+## Multipliers
+RESOLVED (provisional) — hasta 10× (2X, 5X, 10X), sobre Opciones 1 y 2, nunca AMOE;
+anunciados en el sitio antes de empezar; el tope no se mueve.
+Date: 2026-08-29 · Source: DRAFT v2 §4 "Bonus Entry Periods" + mensaje del cliente
+Impact: DEC-052 (`product_kind_scope`), DEC-054 (atajo "periodo bonus")
+
+## AMOE mechanism
+RESOLVED (provisional) — postal (MAIL_IN_REVIEW): 2,000 por ficha válida, 5 fichas
+por participante en el periodo, 2 por sobre, datos obligatorios de la ficha, matasellos
+en periodo y recepción ≤ 7 días tras el cierre.
+Date: 2026-08-29 · Source: DRAFT v2 §4 "Option 3"
+Impact: DEC-052 (tope en la concesión), DEC-054 (transcripción de fichas desde el panel)
+
+## Purchase entry formula
+RESOLVED (provisional) — mercancía: 1 por cada $1.00 completo; paquetes: 2 por cada
+$1.00 completo; impuestos y envío excluidos; "completo" = redondeo hacia abajo (FLOOR)
+sobre el subtotal elegible del pedido.
+Date: 2026-08-29 · Source: DRAFT v2 §4 Opciones 1 y 2
+Impact: DEC-052 (modo ENTRIES_PER_CURRENCY_UNIT_BY_PRODUCT_KIND)
+
+## Allowed states
+RESOLVED (provisional) — void en Alaska, Florida, Hawái y Nueva York.
+Date: 2026-08-29 · Source: DRAFT v2 §1 · Impact: puerta por estado PENDIENTE DE CONSTRUIR (abajo)
+
+## Minimum age
+RESOLVED (provisional) — 18 años y mayoría de edad del estado de residencia.
+Date: 2026-08-29 · Source: DRAFT v2 §1 · Impact: puerta de edad PENDIENTE DE CONSTRUIR (abajo)
+
+## Winner drawing method
+RESOLVED (provisional) — sorteo aleatorio por el Administrador (tercero), 14 días tras el
+cierre, RNG auditado; 3 sorteos alternos.
+Date: 2026-08-29 · Source: DRAFT v2 §7 · Impact: refuerza DEC-016/DEC-017 (sorteo interno no se autoriza)
+```
+
+## Preguntas nuevas para el abogado
+
+1. **Tope y compras.** Cuando una compra haría superar las 10,000, el sistema
+   otorga solo hasta el tope (el "espacio" que queda) y la venta se completa.
+   ¿Es correcto, o debe impedirse vender un paquete que ya no puede generar
+   participaciones? Mismo criterio para una ficha postal que supere el tope:
+   se concede lo que quepa y se registra el recorte.
+2. **Bonus sobre mercancía.** El texto dice Opciones 1 y 2; el cliente habla
+   de paquetes. El sistema permite acotar cada bonus (solo paquetes, solo
+   mercancía o ambos). ¿Conviene que el texto lo diga?
+3. **"Complete $1.00".** Se redondea hacia abajo **una sola vez** sobre el
+   subtotal elegible del pedido (impuestos y envío fuera), no línea a línea.
+   ¿Correcto? (Con paquetes de precio entero el resultado es el mismo; con
+   mercancía de centavos, no.)
+4. **Devoluciones parciales.** Sigue TBD cómo se prorratea el reverso.
+5. **Paquetes, impuestos y envío.** Un paquete no se envía. ¿Lleva impuesto? El
+   motor excluye impuestos y envío del cálculo en los dos casos.
+6. **Ficha postal.** Qué debe registrar quien transcribe (fecha de matasellos,
+   referencia del sobre, cuántas fichas venían) y qué pasa con la tercera ficha
+   de un sobre: ¿nula solo ella o todo el sobre?
+7. **Persona sin cuenta que envía fichas.** El sistema crea un participante con
+   el email de la ficha (sin contraseña) para poder asignarle las
+   participaciones. ¿Requiere verificación adicional?
+8. **Anuncio de bonus.** El sitio publica los periodos bonus antes de que
+   empiecen (página de la promoción y portada). ¿Es suficiente?
+9. **Registro del sorteo.** La frase sobre conservar el registro desapareció
+   en el borrador 2; el export lo sigue produciendo. ¿Intencionado?
+10. **Estrategia ante bonus solapados.** El sistema exige declararla
+    (`HIGHEST_WINS`, `STACK`, `EXCLUSIVE`, `PRIORITY_ORDER`). Provisionalmente
+    `HIGHEST_WINS` (gana el mayor, no se acumulan). ¿Correcto?
+11. **Marcadores sin rellenar**: nombre del sweepstakes, dirección del
+    patrocinador, Administrador y su dirección, fechas de inicio y fin, URL,
+    **dirección postal del AMOE**, año/marca/modelo/versión/VIN/millaje/ARV,
+    estado y condado de arbitraje, email de contacto.
+
+## Lo que sigue TBD
+
+Caducidad de participaciones, prorrateo de reembolsos parciales, retención y
+supresión, verificación de email antes de acumular, **idioma controlante** (el
+borrador 2 sigue solo en inglés), descargo sobre la imagen del premio, **punto
+de cualificación de la orden** (autorización vs captura), numeración visible,
+efecto de la disponibilidad de mercancía. Mientras cualquiera de las claves
+requeridas de DEC-012 siga TBD, **la promoción no puede activarse**; hoy lo
+siguen: `partial_refund_rounding_policy`, `entry_expiration`,
+`official_rules_document`, `controlling_language`.
+
+## Puertas de cumplimiento pendientes de construir (fuera de esta ronda)
+
+- **Puerta por estado** (AK, FL, HI, NY) en registro y checkout:
+  `state_eligibility_enforcement_enabled` + `allowed_jurisdictions`. Hoy no
+  existe ni el campo de estado en el perfil.
+- **Puerta de edad** (`age_gate_enabled`): hoy no se pide fecha de nacimiento
+  al registrarse.
+- **Cribado BIS / SDN / TDO**: no existe; probablemente sea tarea del
+  Administrador al verificar al ganador, no de la plataforma. Preguntar.
+
+## Preguntas añadidas durante la implementación (2026-08-29, HO-041)
+
+12. **Zona horaria de un periodo bonus.** El panel pide inicio y fin como
+    instantes absolutos (UTC) y el sitio los anuncia convertidos a la zona
+    legal de la promoción. Si el abogado prefiere que las Reglas expresen los
+    bonus en hora de pared de la zona legal ("de 12:00 a 24:00 hora central"),
+    hay que decidir qué pasa con un periodo que cruza un cambio de horario.
+13. **Tope anunciado con `entry_caps_enabled` apagado.** El escaparate solo
+    anuncia "máximo 10,000 por persona" cuando el tope está en vigor; con el
+    flag apagado no lo dice aunque la versión de reglas lo declare. Confirmar
+    que el flag debe estar encendido desde el primer día de la promoción.

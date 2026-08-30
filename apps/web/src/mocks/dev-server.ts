@@ -255,7 +255,10 @@ const MAX_BODY_BYTES = 64 * 1024;
 function collectBody(request: IncomingMessage, done: (rawBody: string) => void): void {
   const method = request.method ?? "GET";
 
-  if (method !== "POST" && method !== "PATCH") {
+  // `PUT` entra con §13.7 (documento de una version de reglas): tambien trae
+  // cuerpo, y sin esta linea el mock lo descartaria y la ruta responderia como
+  // si el formulario hubiera llegado vacio.
+  if (method !== "POST" && method !== "PUT" && method !== "PATCH") {
     request.resume();
     done("");
     return;

@@ -92,6 +92,10 @@ function toCalculationItems(cart: CartRecord): readonly CalculationItemInput[] {
   return cart.lines.map((line) => ({
     lineId: line.id,
     sku: line.sku,
+    // DEC-052: el tipo decide QUE TASA aplica. En el carrito sale del catalogo
+    // -todavia no hay foto que congelar-, y a partir del pedido, de
+    // `order_items.product_kind`.
+    productKind: line.productKind,
     quantity: line.quantity,
     unitAmountMinor: line.unitAmountMinor,
     currency: line.currency,

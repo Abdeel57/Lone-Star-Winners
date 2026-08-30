@@ -32,11 +32,17 @@ import { buildPage, decodeCursor, pageSchema, paginationQuerySchema } from "../h
 import type { RouteDefinition } from "../http/route-registry.js";
 import {
   officialRulesSchema,
+  productCategoryListSchema,
   productSummarySchema,
   promotionDetailSchema,
   promotionSummarySchema,
   publicConfigSchema,
 } from "../http/schemas.js";
+import {
+  promotionEntryOffer,
+  variantEntryOffer,
+  type EntryOfferContext,
+} from "../services/entry-offer.js";
 /**
  * El MISMO predicado que decide el `409 INSUFFICIENT_STOCK` en el carrito. No
  * hay una segunda definicion de "hay existencias" para el catalogo: ver el
@@ -56,6 +62,25 @@ const slugParamsSchema = z.object({
     .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/u, { error: "must_be_slug" }),
 });
 
+/**
+ * Filtros del catalogo publico (contrato 13.4).
+ *
+ * Los dos son OPCIONALES y de valor CERRADO: `kind` es un enum y `category` una
+ * clave con forma de slug que ademas tiene que existir -lo comprueba el
+ * handler-. Un filtro con valor desconocido devuelve 422 y no una lista vacia,
+ * porque una lista vacia no distingue "esa categoria no existe" de "esa
+ * categoria no tiene productos".
+ */
+const catalogQuerySchema = paginationQuerySchema.extend({
+  kind: z.enum(["MERCHANDISE", "ENTRY_PACKAGE"]).optional(),
+  category: z
+    .string()
+    .min(2)
+    .max(60)
+    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/u, { error: "must_be_slug" })
+    .optional(),
+});
+
 function toPromotionSummary(promotion: PromotionRecord): z.infer<typeof promotionSummarySchema> {
   return {
     id: promotion.id,
@@ -72,22 +97,34 @@ function toPromotionSummary(promotion: PromotionRecord): z.infer<typeof promotio
   };
 }
 
-function toProductSummary(product: ProductRecord): z.infer<typeof productSummarySchema> {
+function toProductSummary(
+  product: ProductRecord,
+  offerContext: EntryOfferContext | null,
+): z.infer<typeof productSummarySchema> {
   return {
     id: product.id,
     sku: product.sku,
     slug: product.slug,
+    kind: product.kind,
+    category:
+      product.category === null ? null : { key: product.category.key, name: product.category.name },
     name: product.name,
     description: product.description,
     currency: product.currency,
+    image_url: product.imageUrl,
     variants: product.variants.map((variant) => ({
       id: variant.id,
       sku: variant.sku,
+      name: variant.name,
       price: {
         // DEC-010: cadena de digitos, nunca `number`.
         amount_minor: variant.priceAmountMinor.toString(10),
         currency: variant.currency,
       },
+      image_url: variant.imageUrl,
+      // Lo calcula el MOTOR, no el escaparate. `null` cuando no hay promocion
+      // activa, version de reglas, tasa para el tipo o configuracion legible.
+      entry_offer: offerContext === null ? null : variantEntryOffer(product, variant, offerContext),
       // "Se puede comprar UNA unidad?", con el MISMO predicado que decide el
       // `409 INSUFFICIENT_STOCK` del carrito. La ficha no tiene cantidad
       // pedida, asi que pregunta por la primera unidad; ver
@@ -99,6 +136,41 @@ function toProductSummary(product: ProductRecord): z.infer<typeof productSummary
 
 export function buildStorefrontRoutes(dependencies: AppDependencies): RouteDefinition[] {
   const { repositories } = dependencies;
+
+  /**
+   * El contexto con el que el motor calcula la oferta de una variante.
+   *
+   * `null` cuando falta cualquiera de las piezas: promocion activa, version de
+   * reglas activa o su fila. No es un fallo -el periodo entre promociones es un
+   * estado normal del negocio- y produce `entry_offer: null` en cada variante.
+   *
+   * Se resuelve UNA vez por peticion y no una por variante: ademas de barato,
+   * es lo que garantiza que todas las cifras de la misma pagina esten evaluadas
+   * en el mismo instante. Con una lectura por fila, dos productos a los dos
+   * lados de la frontera de un bonus se contradirian entre si.
+   */
+  async function entryOfferContext(): Promise<EntryOfferContext | null> {
+    const promotion = await repositories.promotions.findActive();
+    const activeRulesVersionId = promotion?.rulesVersionId ?? null;
+    if (promotion === null || activeRulesVersionId === null) {
+      return null;
+    }
+    const rulesVersion = await repositories.promotions.findRulesVersion(activeRulesVersionId);
+    if (rulesVersion === null) {
+      return null;
+    }
+    const config = await repositories.config.read();
+
+    return {
+      promotionId: promotion.id,
+      rulesVersion,
+      multipliersEnabled: config.featureFlags.entry_multipliers_enabled,
+      capsEnabled: config.featureFlags.entry_caps_enabled,
+      amoeEnabled: config.featureFlags.amoe_enabled,
+      evaluatedAt: new Date(),
+      defaultCurrency: dependencies.config.commerce.defaultCurrency,
+    };
+  }
 
   return [
     {
@@ -207,6 +279,8 @@ export function buildStorefrontRoutes(dependencies: AppDependencies): RouteDefin
             ? null
             : await repositories.promotions.findRulesVersion(promotion.rulesVersionId);
 
+        const config = await repositories.config.read();
+
         return {
           ...toPromotionSummary(promotion),
           rules_version:
@@ -220,6 +294,24 @@ export function buildStorefrontRoutes(dependencies: AppDependencies): RouteDefin
                     (document) => document.isLegallyControlling,
                   ),
                 },
+          // DEC-052 punto 6: aqui NO hay `entry_pool`. El 10,000 del borrador
+          // v2 es el tope POR PERSONA, y se publica como
+          // `entry_offer.per_participant_max`, sin emitidas ni restantes.
+          entry_offer:
+            rulesVersion === null
+              ? null
+              : promotionEntryOffer({
+                  promotionId: promotion.id,
+                  rulesVersion,
+                  multipliersEnabled: config.featureFlags.entry_multipliers_enabled,
+                  capsEnabled: config.featureFlags.entry_caps_enabled,
+                  amoeEnabled: config.featureFlags.amoe_enabled,
+                  evaluatedAt: new Date(),
+                  // DEC-010: la moneda viaja explicita junto al importe. Sale
+                  // de la version de reglas y, si no la declara, de la moneda
+                  // de arranque de este despliegue.
+                  defaultCurrency: dependencies.config.commerce.defaultCurrency,
+                }),
         };
       },
     },
@@ -287,17 +379,67 @@ export function buildStorefrontRoutes(dependencies: AppDependencies): RouteDefin
           "Es la tienda. Nombres, descripciones y precios son publicos por definicion, y no se puede comprar lo que no se puede ver antes de registrarse.",
       },
       schema: {
-        querystring: paginationQuerySchema,
+        querystring: catalogQuerySchema,
         response: { 200: pageSchema(productSummarySchema), 422: errorEnvelopeSchema },
       },
       handler: async (request) => {
-        const query = request.query as z.infer<typeof paginationQuerySchema>;
+        const query = request.query as z.infer<typeof catalogQuerySchema>;
         const after = query.cursor === undefined ? null : decodeCursor(query.cursor).sortKey;
 
-        const rows = await repositories.catalog.listPublic({ limit: query.limit + 1, after });
+        // Una categoria DESCONOCIDA es 422 y no una lista vacia: con lista
+        // vacia, "esa categoria no existe" y "esa categoria no tiene productos"
+        // se verian igual, y quien monta un enlace con una errata no se
+        // enteraria nunca.
+        if (
+          query.category !== undefined &&
+          !(await repositories.catalog.categoryExists(query.category))
+        ) {
+          throw ApiErrors.validationFailed([
+            { path: ["category"], code: "unknown_category", value: query.category },
+          ]);
+        }
+
+        const [rows, offerContext] = await Promise.all([
+          repositories.catalog.listPublic({
+            limit: query.limit + 1,
+            after,
+            kind: query.kind ?? null,
+            categoryKey: query.category ?? null,
+          }),
+          entryOfferContext(),
+        ]);
         const page = buildPage(rows, query.limit, (row) => ({ sortKey: row.slug, id: row.id }));
 
-        return { items: page.items.map(toProductSummary), next_cursor: page.next_cursor };
+        return {
+          items: page.items.map((product) => toProductSummary(product, offerContext)),
+          next_cursor: page.next_cursor,
+        };
+      },
+    },
+
+    {
+      method: "GET",
+      url: "/api/v1/product-categories",
+      operationId: "listProductCategories",
+      summary: "Categorias con al menos un producto a la venta.",
+      description:
+        "Solo las que tienen algun producto ACTIVE. Publicar una categoria vacia invita a pulsarla para no ver nada, y ademas revela que el negocio piensa vender algo que todavia no vende. El panel si ve todas (`GET /admin/product-categories`).",
+      tags: ["products"],
+      authorization: {
+        kind: "PUBLIC",
+        justification:
+          "Es la navegacion de la tienda. Son los mismos nombres que ya aparecen en cada producto del catalogo publico, agrupados.",
+      },
+      schema: { response: { 200: productCategoryListSchema } },
+      handler: async () => {
+        const categories = await repositories.catalog.listCategoriesWithActiveProducts();
+        return {
+          items: categories.map((category) => ({
+            key: category.key,
+            name: category.name,
+            position: category.position,
+          })),
+        };
       },
     },
 
@@ -322,7 +464,7 @@ export function buildStorefrontRoutes(dependencies: AppDependencies): RouteDefin
         if (product === null) {
           throw ApiErrors.productNotFound(slug);
         }
-        return toProductSummary(product);
+        return toProductSummary(product, await entryOfferContext());
       },
     },
   ];

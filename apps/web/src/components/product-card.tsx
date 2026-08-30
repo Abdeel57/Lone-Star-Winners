@@ -1,13 +1,29 @@
 import { Badge, Card, CardTitle, cn, MediaFrame } from "@lsw/ui";
 import { useTranslations } from "next-intl";
 
-import { formatMoney } from "@/i18n/formatters";
+import { formatEntryCount, formatMoney, formatZonedDateTime } from "@/i18n/formatters";
 import type { Locale } from "@/i18n/locales";
 import { Link } from "@/i18n/navigation";
 import { useAvailabilityLabel } from "@/i18n/storefront-labels";
-import { pickLocalized, type ProductSummary } from "@/lib/api";
+import { pickLocalized, type BonusPeriod, type ProductSummary } from "@/lib/api";
+import { offerHasBonus, packageOfferOf } from "@/lib/entry-offer";
+import { safeImageUrl } from "@/lib/media-url";
 import { priceFrom } from "@/lib/product-price";
 import { isProductSoldOut } from "@/lib/product-availability";
+
+import { fractionText } from "./entry-rate-lines";
+
+/**
+ * Bonus vigente de la promocion, tal como lo recibe una tarjeta.
+ *
+ * Lleva la ZONA LEGAL junto al periodo porque el "hasta el ..." hay que
+ * formatearlo contra ella y no contra el reloj del navegador (DEC-011), y una
+ * tarjeta suelta no tiene de donde sacarla.
+ */
+export interface CardBonus {
+  readonly period: BonusPeriod;
+  readonly timeZone: string;
+}
 
 /**
  * Tarjeta de producto del catalogo.
@@ -111,9 +127,17 @@ export function ProductCard({
   product,
   locale,
   headingLevel = "h2",
+  bonus,
 }: {
   readonly product: ProductSummary;
   readonly locale: Locale;
+  /**
+   * Periodo bonus vigente, si la pagina lo tiene. Solo sirve para poder decir
+   * COMO SE LLAMA y HASTA CUANDO dura el que produjo `entries_now`; sin el, las
+   * dos cifras se pintan igual y la frase se queda corta, que es preferible a
+   * inventarse el plazo.
+   */
+  readonly bonus?: CardBonus;
   /**
    * Nivel real del titulo dentro de la jerarquia de la PAGINA, no del tamano
    * deseado (el tamano lo fija la tarjeta).
@@ -146,6 +170,27 @@ export function ProductCard({
    * disponible.
    */
   const soldOut = isProductSoldOut(product.variants);
+
+  /*
+   * LA IMAGEN SE FILTRA ANTES DE PINTARLA.
+   *
+   * `image_url` lo escribe quien edita el catalogo en el panel, y un `src` con
+   * un esquema que no sea `https:` -o una ruta que no sea del propio sitio- es
+   * contenido de terceros incrustado en la pagina. La API tambien lo valida al
+   * escribir; se comprueba igualmente en el lado que construye el atributo.
+   */
+  const imageUrl = safeImageUrl(product.image_url);
+
+  /*
+   * LA OFERTA DEL PAQUETE, SI ES UN PAQUETE Y SI ES UNA SOLA.
+   *
+   * `packageOfferOf` devuelve `null` para mercancia, para un `kind` ausente y
+   * para un paquete cuyas variantes ofrezcan cifras distintas. En los tres
+   * casos la tarjeta NO dice ninguna cifra, que es la unica respuesta correcta:
+   * el numero de participaciones de una compra lo produce el motor, y aqui solo
+   * se puede publicar el que el backend ya evaluo para ESTA variante.
+   */
+  const packageOffer = packageOfferOf(product);
 
   return (
     <Card
@@ -180,12 +225,18 @@ export function ProductCard({
           emptyLabel={tProduct("noImage")}
           className="lsw-studio-light rounded-none"
         >
-          {product.image_url === null ? null : (
+          {imageUrl === null ? null : (
             // La URL llega del backend y todavia no hay dominios de imagen
             // configurados en `next.config`. Cuando los haya, esto pasa a
             // `next/image` sin tocar el resto de la tarjeta.
+            //
+            // `safeImageUrl` la ha filtrado antes: solo `https:` o ruta raiz del
+            // propio sitio. La API tambien lo valida al escribir, y la
+            // duplicidad es deliberada (ver `@/lib/media-url`). El fichero puede
+            // no existir todavia -no hay almacen de medios- y el 404 lo absorbe
+            // el marco, que reserva el hueco igual.
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={product.image_url} alt="" loading="lazy" />
+            <img src={imageUrl} alt="" loading="lazy" />
           )}
         </MediaFrame>
 
@@ -199,6 +250,19 @@ export function ProductCard({
             una imagen de estudio claro solo dejaba un manchon en la parte
             superior de cada tarjeta. */}
         <div className="absolute inset-x-0 top-0 flex flex-wrap items-start gap-s2 p-s2 sm:p-s3">
+          {/* PAQUETE DE PARTICIPACIONES, dicho con la palabra que aprobo el
+              abogado. Nunca "boleto" ni "oportunidad de ganar": lo que se vende
+              es un paquete definido por las Official Rules, y el metodo gratuito
+              equivalente existe. Ver `docs/LEGAL_PENDING.md`, segundo borrador.
+
+              `kind` ausente no pinta nada: no se sabe, y suponerlo convertiria
+              medio catalogo en paquetes por omision. */}
+          {product.kind === "ENTRY_PACKAGE" ? (
+            <Badge tone="brand" emphasis="solid" surface="light" shape="square" size="sm">
+              <ChipLabel short={t("packageChip")} full={t("packageBadge")} />
+            </Badge>
+          ) : null}
+
           <EligibilityBadge product={product} />
 
           {soldOut ? (
@@ -269,10 +333,41 @@ export function ProductCard({
           </Link>
         </CardTitle>
 
-        {/* El precio es la unica cifra de la tarjeta, y por eso cierra la
-            composicion. `mt-auto` lo pega al borde inferior: en una rejilla de
-            dos columnas los nombres ocupan una o dos lineas segun el articulo, y
-            sin esto los precios de una misma fila quedarian a distinta altura. */}
+        {/*
+         * PARTICIPACIONES INCLUIDAS, SOLO EN PAQUETES.
+         *
+         * Es un requisito de las Official Rules -"el numero de participaciones
+         * incluido se declara en la pagina donde se ofrece el paquete"- y no una
+         * decision de diseño. Las dos cifras vienen CALCULADAS POR EL BACKEND
+         * (§13.4): la tarjeta no multiplica `base_entries` por el bonus para
+         * obtener `entries_now`, ni por el precio, ni por nada.
+         *
+         * Va ANTES del precio y no despues: quien mira un paquete compara
+         * participaciones, y el precio es la consecuencia.
+         */}
+        {packageOffer === null ? null : (
+          <div className="mt-s3 flex flex-col gap-s1">
+            <p className="lsw-display text-body-sm text-light-gold sm:text-body-md">
+              {t("packageIncludes", {
+                entries: formatEntryCount(packageOffer.base_entries, locale),
+              })}
+            </p>
+
+            {offerHasBonus(packageOffer) ? (
+              <PackageBonusLine
+                entriesNow={packageOffer.entries_now}
+                multiplierIds={packageOffer.multiplier_ids}
+                bonus={bonus}
+                locale={locale}
+              />
+            ) : null}
+          </div>
+        )}
+
+        {/* El precio cierra la composicion. `mt-auto` lo pega al borde inferior:
+            en una rejilla de dos columnas los nombres ocupan una o dos lineas
+            segun el articulo, y sin esto los precios de una misma fila quedarian
+            a distinta altura. */}
         {price === null ? null : (
           <p className="lsw-display mt-auto pt-s3 text-body-md tabular-nums text-light-text sm:text-heading-sm">
             {t("priceFrom", { price })}
@@ -280,6 +375,64 @@ export function ProductCard({
         )}
       </div>
     </Card>
+  );
+}
+
+/**
+ * La cifra con el bonus aplicado, y el bonus que la produjo.
+ *
+ * TRES GRADOS DE PRECISION, Y SE ELIGE EL MAS ALTO QUE LOS DATOS PERMITAN:
+ *
+ * 1. Con el periodo vigente identificado -su `id` aparece en los
+ *    `multiplier_ids` de esta oferta- y su fin legible, se dice todo: cuantas
+ *    ahora, que multiplicador y hasta cuando.
+ * 2. Con el periodo pero sin fecha legible, se dice la cifra y el multiplicador.
+ * 3. Sin periodo -la pagina no lo tenia, o el que hay no es el que se aplico-
+ *    se dice solo la cifra.
+ *
+ * NUNCA se rellena el hueco: un "hasta el ..." inventado sobre una cifra de
+ * participaciones es una promesa con fecha que nadie ha aprobado.
+ */
+function PackageBonusLine({
+  entriesNow,
+  multiplierIds,
+  bonus,
+  locale,
+}: {
+  readonly entriesNow: number;
+  readonly multiplierIds: readonly string[];
+  readonly bonus: CardBonus | undefined;
+  readonly locale: Locale;
+}) {
+  const t = useTranslations("shop");
+
+  const entries = formatEntryCount(entriesNow, locale);
+
+  /*
+   * SE COMPRUEBA LA IDENTIDAD, no la existencia. Que la promocion tenga un
+   * bonus vigente no significa que sea el que se aplico a ESTA variante: el
+   * ambito puede excluirla. `multiplier_ids` es lo que el motor dice que
+   * aplico, y es lo unico que autoriza a nombrarlo.
+   */
+  const applied = bonus !== undefined && multiplierIds.includes(bonus.period.id) ? bonus : null;
+
+  if (applied === null) {
+    return <p className="text-caption text-light-text">{t("packageNow", { entries })}</p>;
+  }
+
+  const until = formatZonedDateTime(applied.period.ends_at, locale, {
+    timeZone: applied.timeZone,
+    showTimeZoneName: true,
+  });
+
+  const multiplier = fractionText(applied.period.multiplier, locale);
+
+  return (
+    <p className="text-caption text-light-text">
+      {until === null
+        ? t("packageNowWithBonus", { entries, multiplier })
+        : t("packageNowWithBonusUntil", { entries, multiplier, until })}
+    </p>
   );
 }
 

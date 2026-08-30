@@ -50,6 +50,46 @@ export const SWEEPSTAKES_ERROR_CODES = [
   "AMOE_DUPLICATE_SUBMISSION",
   "AMOE_PERIOD_LIMIT_REACHED",
   "AMOE_PAYLOAD_INVALID",
+  /**
+   * El participante ya esta en el tope por persona (DEC-052 punto 5).
+   *
+   * NO rechaza el envio: lo deja en `PENDING_REVIEW` para que decida una
+   * persona. Rechazarlo automaticamente cerraria la via gratuita a quien quiza
+   * recupere espacio manana -un reembolso revierte participaciones- y las
+   * Official Rules no dicen que una ficha valida se anule por llegar llena la
+   * cuenta.
+   */
+  "AMOE_ENTRY_CAP_REACHED",
+  /**
+   * La modalidad configurada no admite el formulario en linea.
+   *
+   * Con `MAIL_IN_REVIEW` o `EXTERNAL_INSTRUCTIONS`, la via gratuita que
+   * describen las Official Rules NO es un formulario: es un sobre o un destino
+   * externo. Dejar abierta la ruta de envio propio crearia participaciones por
+   * un metodo que las Reglas vigentes no ofrecen, y despues habria que decidir
+   * que hacer con ellas. La interfaz ya no pinta el formulario; esto lo
+   * garantiza tambien cuando nadie mira la interfaz.
+   */
+  "AMOE_MODE_NOT_ONLINE",
+  /**
+   * Transcribir una ficha solo tiene sentido con `MAIL_IN_REVIEW`.
+   *
+   * En las otras tres modalidades no hay papel que teclear, y admitirlo
+   * convertiria la transcripcion en una via por la que un administrador crea
+   * participaciones a nombre de terceros sin que exista el envio fisico que
+   * las justifica.
+   */
+  "AMOE_MODE_NOT_MAIL_IN",
+  /**
+   * Quien transcribio una ficha postal no puede aprobarla (DEC-054 punto 4).
+   *
+   * Es una propiedad de los DATOS y no de la ruta -depende de quien escribio
+   * `metadata.transcribed_by_admin_user_id`-, asi que se comprueba aqui y no en
+   * el autorizador de transporte. Con la transcripcion, una sola persona
+   * pasaria de teclear una ficha inventada a concederse participaciones sin que
+   * nadie mas la viera.
+   */
+  "SEPARATION_OF_DUTIES",
 
   // --- ajustes y descalificacion ---
   "MANUAL_ADJUSTMENTS_NOT_ENABLED",

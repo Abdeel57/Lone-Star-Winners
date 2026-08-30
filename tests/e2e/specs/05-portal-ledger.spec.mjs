@@ -1,24 +1,39 @@
 /**
  * Portal del participante: resumen de participaciones y ledger.
  *
- * QUE SE PUEDE AFIRMAR HOY, Y POR QUE EL SALDO ES CERO
- * ---------------------------------------------------
- * El escenario NO siembra participaciones. No es una omision: una entry se
- * genera por una compra confirmada -y el checkout termina en 503 porque no hay
- * proveedor de pago- o por un AMOE aprobado -bloqueado por el autorizador-.
- * Escribir filas de ledger a mano produciria un estado que el sistema no
- * generaria jamas, y el portal se probaria contra una forma que no existe. Es
- * el mismo razonamiento que documenta `dev-seed.ts` para no sembrar entries.
+ * QUE SE PUEDE AFIRMAR HOY
+ * ------------------------
+ * El participante principal del escenario sigue con saldo CERO, y no es una
+ * omision: sus participaciones tendrian que venir de una compra confirmada -y
+ * el checkout termina en 503 porque no hay proveedor de pago- o de un AMOE
+ * aprobado. Fabricarselas a mano produciria un estado que el sistema no
+ * generaria jamas.
  *
- * Asi que lo que se afirma es lo que SI es cierto y sigue siendo dato, no un
- * 200: que el resumen viene desglosado por origen, cuadrado, anclado a la
- * promocion correcta, y que el ledger de un participante es SUYO.
+ * Desde HO-041 hay ademas un SEGUNDO participante que si nace con saldo:
+ * `CAP_PARTICIPANT_EMAIL`, con 9,000 participaciones. Existe para la prueba del
+ * tope (`11-mail-in-amoe`), pero de paso resuelve un hueco viejo de este
+ * fichero: hasta ahora el desglose por origen se comprobaba siempre contra
+ * ceros, y un desglose de ceros cuadra aunque el calculo este mal. Con 9,000 de
+ * origen ADMIN, "el desglose suma el total" pasa a significar algo.
+ *
+ * Su saldo NO se escribe como una fila suelta de ledger: la semilla escribe el
+ * par completo que deja un ajuste manual aprobado (transaccion `MANUAL_CREDIT`
+ * mas su fila de `adjustments` en `APPLIED`, con aprobador distinto del
+ * solicitante), que es el estado que produce el recorrido de
+ * `08-adjustment.spec.mjs`.
  */
 
 import { expect, test } from "@playwright/test";
 
 import { expectNoApiErrorState, loginParticipant } from "../lib/actions.mjs";
-import { API_BASE_URL, PARTICIPANT_EMAIL, readFixture } from "../lib/fixture.mjs";
+import {
+  API_BASE_URL,
+  CAP_PARTICIPANT_EMAIL,
+  CAP_SEEDED_ENTRIES,
+  PARTICIPANT_EMAIL,
+  WEB_BASE_URL,
+  readFixture,
+} from "../lib/fixture.mjs";
 
 let fixture;
 
@@ -85,6 +100,62 @@ test("el ledger responde con la forma paginada aunque este vacio", async ({ page
     expect(["PURCHASE", "AMOE", "ADMIN", "SYSTEM"]).toContain(item.source_type);
     expect(item.reason_key).toBeTruthy();
     expect(item.effective_at).toBeTruthy();
+  }
+});
+
+test("con saldo real, el desglose por origen sigue cuadrando", async ({ browser }) => {
+  /*
+   * La misma invariante que arriba, pero contra 9,000 en vez de contra cero.
+   * Un desglose de ceros suma bien aunque el calculo este roto; este no.
+   *
+   * Ademas comprueba la PROCEDENCIA (principio 9): esas 9,000 son de origen
+   * ADMIN -un ajuste manual aprobado- y tienen que contarse como tales, no como
+   * compra. Si aparecieran en `purchase_entries`, la reconciliacion previa al
+   * export cuadraria en el total y mentiria en el desglose, que es peor.
+   */
+  // `browser.newContext()` NO hereda `use.baseURL` de la configuracion: hay que
+  // declararla, o las rutas relativas de `goto` no resuelven.
+  const context = await browser.newContext({ baseURL: WEB_BASE_URL });
+  const capPage = await context.newPage();
+
+  try {
+    await loginParticipant(capPage, CAP_PARTICIPANT_EMAIL);
+
+    const response = await capPage.request.get(
+      `${API_BASE_URL}/account/entry-summary?promotion_id=${fixture.promotion.id}`,
+    );
+    expect(response.status()).toBe(200);
+
+    const summary = await response.json();
+
+    expect(summary.admin_entries).toBe(CAP_SEEDED_ENTRIES);
+    expect(summary.purchase_entries).toBe(0);
+    expect(summary.amoe_entries).toBe(0);
+    expect(summary.active_entries).toBe(CAP_SEEDED_ENTRIES);
+    expect(
+      summary.purchase_entries +
+        summary.amoe_entries +
+        summary.admin_entries +
+        summary.system_entries,
+    ).toBe(summary.active_entries);
+
+    const ledger = await capPage.request.get(
+      `${API_BASE_URL}/account/entry-transactions?promotion_id=${fixture.promotion.id}`,
+    );
+    const items = (await ledger.json()).items;
+
+    expect(items.length).toBeGreaterThan(0);
+    expect(items[0].source_type).toBe("ADMIN");
+    expect(items[0].type).toBe("MANUAL_CREDIT");
+    expect(items[0].quantity_delta).toBe(CAP_SEEDED_ENTRIES);
+    // El ledger del participante es DELIBERADAMENTE minimo: sin metadata, sin
+    // actor, sin motivo interno. Lo que el operador escribio en el ajuste no es
+    // asunto de quien lo recibe.
+    expect(items[0]).not.toHaveProperty("metadata");
+    expect(items[0]).not.toHaveProperty("actor_admin_user_id");
+    expect(items[0]).not.toHaveProperty("reason_detail");
+  } finally {
+    await context.close();
   }
 });
 

@@ -210,6 +210,28 @@ export class DrizzleAmoeSubmissionRepository implements AmoeSubmissionRepository
     return rows.map(toSubmission);
   }
 
+  /**
+   * Un solo estado, exacto. Es la consulta del filtro `?status=` de la cola.
+   *
+   * NO comparte camino con `listPendingReview` a proposito: aquella responde
+   * "que espera decision" -y por eso mete `SUBMITTED` y `PENDING_REVIEW` en la
+   * misma lista- y esta responde "que envios estan en ESTE estado". Fundirlas
+   * obligaria a que preguntar por `SUBMITTED` devolviera tambien lo que ya paso
+   * por revision, que es una respuesta a otra pregunta.
+   */
+  public async listByStatus(
+    promotionId: string,
+    status: AmoeSubmission["status"],
+  ): Promise<readonly AmoeSubmission[]> {
+    const rows = await this.db
+      .select()
+      .from(amoeSubmissions)
+      .where(and(eq(amoeSubmissions.promotionId, promotionId), eq(amoeSubmissions.status, status)))
+      .orderBy(asc(amoeSubmissions.submittedAt));
+
+    return rows.map(toSubmission);
+  }
+
   public async listForParticipant(
     promotionId: string,
     participantId: string,

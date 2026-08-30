@@ -195,12 +195,54 @@ describe("catalogo", () => {
     await app.close();
   });
 
-  it("el catalogo NO declara cuantas entries da un producto (DEC-012)", async () => {
+  /**
+   * DEC-052 cambio esta frontera, y merece explicacion.
+   *
+   * El PRODUCTO sigue sin declarar cuantas participaciones da: no hay columna
+   * que lo diga y ninguna edicion del catalogo cambia lo que significo una
+   * compra pasada. Lo que ahora si viaja es `entry_offer`, y no es lo mismo:
+   * es el resultado de ejecutar EL MOTOR con la version de reglas ACTIVA sobre
+   * una unidad, evaluado en un instante concreto y con su `rules_version_id`
+   * al lado. Cambia cuando cambian las reglas, no cuando cambia el producto.
+   *
+   * Lo exige DRAFT v2 Opcion 2 -"the number of entries included in each
+   * package is stated on the page where the package is offered"- y la
+   * alternativa era que el escaparate multiplicara precio por tasa, que es
+   * una segunda implementacion de la formula sobre datos parciales.
+   */
+  it("el producto no declara entries; la oferta la calcula el MOTOR (DEC-012, DEC-052)", async () => {
     const app = await createApp(buildDependencies());
     const response = await app.inject({ method: "GET", url: "/api/v1/products" });
+    const body = response.json<{
+      items: {
+        variants: {
+          entry_offer: { base_entries: number; rules_version_id: string } | null;
+        }[];
+      }[];
+    }>();
 
-    expect(response.body).not.toContain("entries");
-    expect(response.body).not.toContain("multiplier");
+    // Ninguna columna del producto habla de participaciones.
+    const product = body.items[0];
+    expect(product).toBeDefined();
+    expect(product).not.toHaveProperty("entries_per_unit");
+    expect(product).not.toHaveProperty("entry_value");
+
+    // La cifra que si viaja va SIEMPRE anclada a la version de reglas que la
+    // produjo: sin ese ancla no seria reproducible.
+    const offer = product?.variants[0]?.entry_offer ?? null;
+    expect(offer?.rules_version_id).toBe("22222222-2222-4222-8222-222222222222");
+    await app.close();
+  });
+
+  it("sin promocion activa no hay oferta que anunciar, y se dice con null", async () => {
+    // `null` y NUNCA cero: cero afirmaria que esa variante no genera
+    // participaciones, que es una afirmacion distinta y puede ser falsa.
+    const app = await createApp(buildDependencies({ activePromotion: null }));
+    const body = (await app.inject({ method: "GET", url: "/api/v1/products" })).json<{
+      items: { variants: { entry_offer: unknown }[] }[];
+    }>();
+
+    expect(body.items[0]?.variants[0]?.entry_offer).toBeNull();
     await app.close();
   });
 
@@ -243,6 +285,8 @@ const AVAILABILITY_PRODUCT: ProductRecord = {
       currency: "USD",
       // Existencias no gestionadas: `null` NO es cero.
       stockQuantity: null,
+      name: null,
+      imageUrl: null,
       position: 0,
     },
     {
@@ -252,6 +296,8 @@ const AVAILABILITY_PRODUCT: ProductRecord = {
       priceAmountMinor: 2500n,
       currency: "USD",
       stockQuantity: 0,
+      name: null,
+      imageUrl: null,
       position: 1,
     },
     {
@@ -261,6 +307,8 @@ const AVAILABILITY_PRODUCT: ProductRecord = {
       priceAmountMinor: 2500n,
       currency: "USD",
       stockQuantity: 1,
+      name: null,
+      imageUrl: null,
       position: 2,
     },
     {
@@ -270,6 +318,8 @@ const AVAILABILITY_PRODUCT: ProductRecord = {
       priceAmountMinor: 2500n,
       currency: "USD",
       stockQuantity: 2,
+      name: null,
+      imageUrl: null,
       position: 3,
     },
     {
@@ -279,6 +329,8 @@ const AVAILABILITY_PRODUCT: ProductRecord = {
       priceAmountMinor: 2500n,
       currency: "USD",
       stockQuantity: 7,
+      name: null,
+      imageUrl: null,
       position: 4,
     },
   ],

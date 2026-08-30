@@ -59,6 +59,24 @@ export type RulesVersionStatus = (typeof RULES_VERSION_STATUSES)[number];
 export const PRODUCT_STATUSES = ["DRAFT", "ACTIVE", "ARCHIVED"] as const;
 export type ProductStatus = (typeof PRODUCT_STATUSES)[number];
 
+/**
+ * Tipo de producto del catalogo (DEC-052).
+ *
+ * NO DICE CUANTAS PARTICIPACIONES DA NADA, y esa es toda la gracia. Un
+ * `ENTRY_PACKAGE` es una fila mas del catalogo -mismo carrito, mismo checkout,
+ * mismo pedido, mismo reembolso- y lo unico que lo distingue es que la version
+ * de reglas puede declararle OTRA TASA. La cantidad sigue viviendo en
+ * `PromotionRulesVersion` (DEC-012), nunca en el producto: si viviera aqui,
+ * editar el catalogo cambiaria retroactivamente lo que significo una compra
+ * pasada, que es justo lo que la migracion `0003_catalog` prohibe.
+ *
+ * Es un TIPO, no un SKU, a proposito: un bonus "solo paquetes" no puede
+ * depender de enumerar SKUs que todavia no existen, y un tipo lo revisa una
+ * persona igual de bien que una lista de SKUs.
+ */
+export const PRODUCT_KINDS = ["MERCHANDISE", "ENTRY_PACKAGE"] as const;
+export type ProductKind = (typeof PRODUCT_KINDS)[number];
+
 /** Locales de primera clase (DEC-021). Ninguno es traduccion secundaria del otro. */
 export const LOCALE_CODES = ["en-US", "es-US"] as const;
 export type LocaleCode = (typeof LOCALE_CODES)[number];

@@ -11,16 +11,19 @@ import type {
   AdminDrawAuthorizationPage,
   AdminExportSnapshot,
   AdminExportSnapshotPage,
+  AdminFeatureFlagsResponse,
   AdminOrderPage,
   AdminOrderRow,
   AdminParticipantPage,
   AdminParticipantRow,
+  AdminProductCategoryListResponse,
   AdminProductPage,
   AdminProductRow,
   AdminPromotionPage,
   AdminPromotionRow,
   AdminRulesVersion,
   AdminRulesVersionPage,
+  AdminSettingChangeRequestPage,
   SessionState,
 } from "@/lib/api";
 
@@ -283,37 +286,170 @@ export const adminPromotionPage: AdminPromotionPage = {
  * `docs/LEGAL_PENDING.md`. Es el fixture que hace visible el cerrojo: sin el,
  * la pantalla se probaria solo en el caso feliz, que es justo el que no importa.
  *
- * `activatable` NO se deriva de que `missing_keys` este vacio, ni siquiera
- * aqui: el borrador tiene claves y no es activable, y la archivada no tiene
- * ninguna y tampoco lo es. Deducirlo seria reimplementar el cerrojo.
+ * `activatable` NO se deriva de que la lista de claves este vacia, ni siquiera
+ * aqui: el borrador tiene claves y no es activable, y la ACTIVA y la ARCHIVADA
+ * no tienen ninguna y tampoco lo son -`activatable` exige `DRAFT` (§13.7)-.
+ * Deducirlo seria reimplementar el cerrojo.
  */
 export const adminRulesVersions: readonly AdminRulesVersion[] = [
   {
     id: "prv_0000000000000003",
+    promotion_id: "prm_0000000000000001",
     version: 3,
     status: "ACTIVE",
     effective_at: "2026-09-01T05:00:00.000Z",
     created_at: "2026-08-20T10:00:00.000Z",
-    missing_keys: [],
+    created_by_admin_user_id: "adm_0000000000000001",
+    activated_at: "2026-09-01T05:00:00.000Z",
+    archived_at: null,
+    attorney_approval_reference: "DRAFT v2 (2026-08-29)",
+    unresolved_required_keys: [],
+    // ACTIVA: ya no es "activable" porque `activatable` exige `DRAFT` (§13.7).
     activatable: false,
+    validation: { calculation: "OK", amoe: "OK", bonus_rules: "OK", issues: [] },
+    /*
+     * LA CONFIGURACION DEL SEGUNDO BORRADOR (§13.2), TAL CUAL.
+     *
+     * Es la que el panel tiene que poder redactar y la API validar. Las claves
+     * en `"TBD"` son las que SIGUEN sin resolver -y siguen bloqueando la
+     * activacion (DEC-012)-: el fixture las trae en ese estado porque es el
+     * real, no porque falte rellenarlas. Rellenarlas aqui seria inventar una
+     * respuesta legal (CLAUDE.md #2).
+     */
+    config: {
+      eligibility:
+        "DRAFT v2 §1 — residente legal de EE. UU. (50 estados + D.C.) salvo AK, FL, HI, NY; 18+ y mayoría de edad; excluidos empleados/afiliados y convivientes; cribado BIS/SDN/TDO",
+      allowed_jurisdictions: { mode: "DENY_LIST", regions: ["US-AK", "US-FL", "US-HI", "US-NY"] },
+      minimum_age: 18,
+      promotion_start_end_rules:
+        "DRAFT v2 §2 — 12:00:00 a.m. CT [START DATE] a 11:59:59 p.m. CT [END DATE]",
+      entry_limits: { per_order_max: null, per_participant_max: 10000 },
+      product_eligibility: { mode: "ALL_PRODUCTS" },
+      purchase_entry_formula: {
+        mode: "ENTRIES_PER_CURRENCY_UNIT_BY_PRODUCT_KIND",
+        rates: {
+          MERCHANDISE: {
+            amount_unit_minor: "100",
+            entries_per_amount_unit: { numerator: 1, denominator: 1 },
+          },
+          ENTRY_PACKAGE: {
+            amount_unit_minor: "100",
+            entries_per_amount_unit: { numerator: 2, denominator: 1 },
+          },
+        },
+        rounding_policy: "FLOOR",
+      },
+      partial_refund_rounding_policy: "TBD",
+      entry_expiration: "TBD",
+      official_rules_document: "TBD",
+      controlling_language: "TBD",
+      winner_drawing_method:
+        "DRAFT v2 §7 — sorteo aleatorio por el Administrador 14 días tras el cierre, RNG auditado, 3 sorteos alternos",
+      multipliers: { conflict_strategy: "HIGHEST_WINS", periods: [] },
+      bonus_rules: {
+        max_multiplier: { numerator: 10, denominator: 1 },
+        applies_to_product_kinds: ["MERCHANDISE", "ENTRY_PACKAGE"],
+        applies_to_amoe: false,
+      },
+      amoe: {
+        mode: "MAIL_IN_REVIEW",
+        submission_window: {
+          starts_at: "2026-08-01T05:00:00.000Z",
+          ends_at: "2027-01-07T05:59:00.000Z",
+        },
+        entries_per_approved_submission: 2000,
+        requires_review: true,
+        limit: { max_per_participant_per_period: 5, period: "PROMOTION" },
+        duplicate_policy: "FLAG_FOR_REVIEW",
+        identity_requirements: [
+          "full_name",
+          "mailing_address",
+          "email",
+          "phone",
+          "date_of_birth",
+          "signature_present",
+          "postmark_date",
+        ],
+        mail_in: {
+          max_cards_per_envelope: 2,
+          postmark_by: "2026-12-31T05:59:00.000Z",
+          received_by: "2027-01-07T05:59:00.000Z",
+        },
+      },
+    },
+    documents: [
+      {
+        locale: "en-US",
+        title: "Official Rules",
+        body: "Served by the backend and rendered as it arrives. In production this is the attorney's approved text.",
+        is_legally_controlling: false,
+        is_informational_translation: false,
+      },
+      {
+        locale: "es-US",
+        title: "Reglas Oficiales",
+        body: "Lo sirve el backend y se renderiza tal como llega. En producción es el texto aprobado por el abogado.",
+        is_legally_controlling: false,
+        is_informational_translation: true,
+      },
+    ],
   },
   {
     id: "prv_0000000000000004",
+    promotion_id: "prm_0000000000000001",
     version: 4,
     status: "DRAFT",
     effective_at: null,
     created_at: "2026-09-10T16:30:00.000Z",
-    missing_keys: ["minimum_age", "eligible_states", "amoe_mechanism", "odds_statement"],
+    created_by_admin_user_id: "adm_0000000000000001",
+    activated_at: null,
+    archived_at: null,
+    attorney_approval_reference: null,
+    unresolved_required_keys: [
+      "minimum_age",
+      "eligible_states",
+      "amoe_mechanism",
+      "odds_statement",
+    ],
+    // BORRADOR con claves sin resolver: el backend dice que no es activable, y
+    // la pantalla ademas lista cuales faltan.
     activatable: false,
+    /*
+     * UN BORRADOR CON PROBLEMAS DE VALIDACION, Y ESE ES EL FIXTURE.
+     *
+     * `INVALID` y `UNRESOLVED` no son lo mismo: el primero dice que lo escrito
+     * no parsea y el segundo que falta por escribir. Con un solo caso, la
+     * pantalla se probaria solo en el camino feliz, que es justo el que no
+     * importa cuando alguien no puede activar y no sabe por que.
+     */
+    validation: {
+      calculation: "UNRESOLVED",
+      amoe: "INVALID",
+      bonus_rules: "ABSENT",
+      issues: [
+        { path: "amoe.limit.period", code: "INVALID_ENUM_VALUE" },
+        { path: "purchase_entry_formula.rounding_policy", code: "REQUIRED" },
+      ],
+    },
+    config: { minimum_age: "TBD", eligible_states: "TBD" },
+    documents: [],
   },
   {
     id: "prv_0000000000000002",
+    promotion_id: "prm_0000000000000001",
     version: 2,
     status: "ARCHIVED",
     effective_at: "2026-06-01T05:00:00.000Z",
     created_at: "2026-05-15T09:00:00.000Z",
-    missing_keys: [],
+    created_by_admin_user_id: "adm_0000000000000001",
+    activated_at: "2026-06-01T05:00:00.000Z",
+    archived_at: "2026-09-01T05:00:00.000Z",
+    attorney_approval_reference: "DRAFT v1 (2026-08-27)",
+    unresolved_required_keys: [],
     activatable: false,
+    validation: { calculation: "OK", amoe: "OK", bonus_rules: "ABSENT", issues: [] },
+    config: {},
+    documents: [],
   },
 ];
 
@@ -346,6 +482,134 @@ export const adminProducts: readonly AdminProductRow[] = [
     variant_id: "var_0000000000000001",
     created_at: "2026-08-10T08:00:00.000Z",
     updated_at: "2026-09-10T08:00:00.000Z",
+    kind: "MERCHANDISE",
+    category_key: null,
+    image_url: null,
+    variants: [
+      {
+        id: "var_0000000000000001",
+        sku: "HW-TEE-001-1",
+        name: null,
+        price_amount_minor: "2500",
+        stock_quantity: 120,
+        status: "ACTIVE",
+        image_url: null,
+        position: 1,
+      },
+    ],
+  },
+  {
+    /*
+     * PRODUCTO CON VARIAS VARIANTES CON NOMBRE (DEC-053).
+     *
+     * Es el fixture que obliga al editor de variantes a existir: con una sola
+     * variante sin nombre, el formulario de siempre bastaba. Aqui hay cinco
+     * colores, uno de ellos ARCHIVADO -no hay borrado, se archiva- y otro sin
+     * existencias gestionadas.
+     */
+    id: "prd_cap_premium",
+    sku: "CAP-TX",
+    slug: "premium-cap",
+    status: "ACTIVE",
+    currency: "USD",
+    name: { "en-US": "Premium Cap", "es-US": "Gorra premium" },
+    price_amount_minor: "3500",
+    stock_quantity: 40,
+    variant_id: "var_cap_black",
+    created_at: "2026-08-25T08:00:00.000Z",
+    updated_at: "2026-08-28T08:00:00.000Z",
+    kind: "MERCHANDISE",
+    category_key: "caps",
+    image_url: "/products/premium-cap.jpg",
+    variants: [
+      {
+        id: "var_cap_black",
+        sku: "CAP-TX-BLACK",
+        name: { "en-US": "Black", "es-US": "Negro" },
+        price_amount_minor: "3500",
+        stock_quantity: 40,
+        status: "ACTIVE",
+        image_url: "/products/premium-cap-black.jpg",
+        position: 1,
+      },
+      {
+        id: "var_cap_sand",
+        sku: "CAP-TX-SAND",
+        name: { "en-US": "Sand", "es-US": "Arena" },
+        price_amount_minor: "3500",
+        stock_quantity: 25,
+        status: "ACTIVE",
+        image_url: "/products/premium-cap-sand.jpg",
+        position: 2,
+      },
+      {
+        id: "var_cap_navy",
+        sku: "CAP-TX-NAVY",
+        name: { "en-US": "Navy", "es-US": "Azul marino" },
+        price_amount_minor: "3500",
+        stock_quantity: 1,
+        status: "ACTIVE",
+        image_url: "/products/premium-cap-navy.jpg",
+        position: 3,
+      },
+      {
+        id: "var_cap_red",
+        sku: "CAP-TX-RED",
+        name: { "en-US": "Red", "es-US": "Rojo" },
+        price_amount_minor: "3500",
+        stock_quantity: null,
+        status: "ACTIVE",
+        image_url: "/products/premium-cap-red.jpg",
+        position: 4,
+      },
+      {
+        id: "var_cap_olive",
+        sku: "CAP-TX-OLIVE",
+        name: { "en-US": "Olive", "es-US": "Verde olivo" },
+        price_amount_minor: "3500",
+        stock_quantity: 0,
+        status: "ARCHIVED",
+        image_url: "/products/premium-cap-olive.jpg",
+        position: 5,
+      },
+    ],
+  },
+  {
+    /*
+     * PAQUETE DE PARTICIPACIONES (DEC-052).
+     *
+     * Ninguna columna dice cuantas participaciones da: eso lo dice la version
+     * de reglas. Lo unico que lo distingue de la mercancia es `kind`.
+     */
+    id: "prd_pkg_20",
+    sku: "PKG-20",
+    slug: "entry-package-20",
+    status: "ACTIVE",
+    currency: "USD",
+    name: {
+      "en-US": "$20 Entry Package",
+      "es-US": "Paquete de participaciones de $20",
+    },
+    price_amount_minor: "2000",
+    stock_quantity: null,
+    variant_id: "var_pkg_20",
+    created_at: "2026-08-26T08:00:00.000Z",
+    updated_at: "2026-08-26T08:00:00.000Z",
+    kind: "ENTRY_PACKAGE",
+    category_key: "entry-packages",
+    image_url: "/products/entry-package-20.jpg",
+    variants: [
+      {
+        id: "var_pkg_20",
+        sku: "PKG-20-1",
+        name: null,
+        price_amount_minor: "2000",
+        stock_quantity: null,
+        status: "ACTIVE",
+        image_url: null,
+        position: 1,
+      },
+    ],
   },
   {
     id: "prd_0000000000000002",
@@ -359,8 +623,30 @@ export const adminProducts: readonly AdminProductRow[] = [
     variant_id: "var_0000000000000002",
     created_at: "2026-09-08T08:00:00.000Z",
     updated_at: "2026-09-08T08:00:00.000Z",
+    kind: "MERCHANDISE",
+    category_key: "tumblers",
+    image_url: null,
+    variants: [
+      {
+        id: "var_0000000000000002",
+        sku: "EN-MUG-001-1",
+        name: null,
+        price_amount_minor: "1800",
+        stock_quantity: null,
+        status: "DRAFT",
+        image_url: null,
+        position: 1,
+      },
+    ],
   },
   {
+    /*
+     * PRODUCTO SIN `kind`, tal como lo sirve una API anterior a §13.
+     *
+     * `undefined` NO significa mercancia: significa que no se sabe. El
+     * formulario tiene que decirlo y no preseleccionar una opcion, porque el
+     * tipo decide QUE TASA se aplica a cada compra de ese producto.
+     */
     id: "prd_0000000000000003",
     sku: "LS-CAP-2024",
     slug: "cap-2024",
@@ -374,6 +660,159 @@ export const adminProducts: readonly AdminProductRow[] = [
     updated_at: "2026-02-01T08:00:00.000Z",
   },
 ];
+
+/**
+ * Categorias del catalogo en el panel (DEC-053).
+ *
+ * Las ocho que siembra la migracion `0026`, como DATOS. El panel puede crear
+ * mas: por eso el nombre viaja localizado desde el backend y no vive en
+ * `messages/*.json`.
+ */
+export const adminProductCategories: AdminProductCategoryListResponse = {
+  items: [
+    {
+      key: "airtag-holders",
+      name: { "en-US": "AirTag holders", "es-US": "Soportes AirTag" },
+      position: 1,
+    },
+    {
+      key: "phone-holders",
+      name: { "en-US": "Phone holders", "es-US": "Soportes de teléfono" },
+      position: 2,
+    },
+    {
+      key: "power-banks",
+      name: { "en-US": "Power banks", "es-US": "Baterías portátiles" },
+      position: 3,
+    },
+    { key: "notebooks", name: { "en-US": "Notebooks", "es-US": "Libretas" }, position: 4 },
+    {
+      key: "neck-lights",
+      name: { "en-US": "Neck lights", "es-US": "Luces de cuello" },
+      position: 5,
+    },
+    { key: "tumblers", name: { "en-US": "Tumblers", "es-US": "Termos" }, position: 6 },
+    { key: "caps", name: { "en-US": "Caps", "es-US": "Gorras" }, position: 7 },
+    {
+      key: "entry-packages",
+      name: { "en-US": "Entry packages", "es-US": "Paquetes de participaciones" },
+      position: 8,
+    },
+  ],
+};
+
+/**
+ * Feature flags con su materialidad legal (§13.9, DEC-054 punto 3).
+ *
+ * LOS DOS CASOS QUE IMPORTAN ESTAN AQUI: un flag legalmente material -que exige
+ * `flag.update.legally_material` y step-up- y uno que no lo es. Con un solo
+ * caso, la advertencia de la pantalla no se podria probar contra su ausencia.
+ *
+ * `legal_dependency` es la clave de `docs/LEGAL_PENDING.md` de la que depende el
+ * flag. Se pinta con su identificador: es lo que hay que buscar en ese
+ * documento, y traducirlo lo haria inencontrable.
+ */
+export const adminFeatureFlags: AdminFeatureFlagsResponse = {
+  items: [
+    {
+      /*
+       * FLAG MATERIAL CON UNA SOLICITUD PENDIENTE.
+       *
+       * Es el caso que obliga a la pantalla a retirar el interruptor: con una
+       * solicitud viva habria dos gestos compitiendo por el mismo valor, y el
+       * segundo dejaria a alguien aprobando un cambio que ya no es el actual.
+       */
+      key: "amoe_enabled",
+      enabled: false,
+      is_legally_material: true,
+      dec032_default: false,
+      legal_dependency: "amoe_mechanism",
+      updated_at: "2026-08-20T10:00:00.000Z",
+      pending_change_request_id: "scr_0000000000000001",
+    },
+    {
+      key: "entry_multipliers_enabled",
+      enabled: false,
+      is_legally_material: true,
+      dec032_default: false,
+      legal_dependency: "multipliers",
+      updated_at: null,
+    },
+    {
+      key: "entry_caps_enabled",
+      enabled: true,
+      is_legally_material: true,
+      dec032_default: false,
+      legal_dependency: "entry_limits",
+      updated_at: "2026-08-29T09:00:00.000Z",
+    },
+    {
+      key: "visible_entry_numbers_enabled",
+      enabled: false,
+      is_legally_material: false,
+      dec032_default: false,
+      legal_dependency: null,
+      updated_at: null,
+    },
+    {
+      key: "internal_draw_enabled",
+      enabled: false,
+      is_legally_material: true,
+      dec032_default: false,
+      legal_dependency: "winner_selection_method",
+      updated_at: null,
+    },
+  ],
+  amoe_mode: "MAIL_IN_REVIEW",
+};
+
+/**
+ * Solicitudes de cambio de ajustes (HO-041, resolucion fase 1).
+ *
+ * DOS FILAS Y LA DIFERENCIA ES QUIEN LA PIDIO. La primera la pidio otra
+ * persona -se puede decidir- y la segunda la pidio quien mira, que NO puede
+ * aprobarla: es la `CHECK` de la tabla y el 409
+ * `SETTING_CHANGE_SELF_APPROVAL_FORBIDDEN` del servicio. Sin las dos, la
+ * pantalla se probaria solo en el caso en el que el boton se ofrece.
+ *
+ * La segunda ademas es de `AMOE_MODE`, que es el otro `setting_kind`: la
+ * modalidad AMOE dejo de tener ruta propia y viaja por el mismo control dual.
+ */
+export const adminSettingChangeRequests: AdminSettingChangeRequestPage = {
+  items: [
+    {
+      id: "scr_0000000000000001",
+      setting_kind: "FEATURE_FLAG",
+      setting_key: "amoe_enabled",
+      requested_value: { enabled: true },
+      status: "PENDING_APPROVAL",
+      reason_code: "COMPLIANCE_DIRECTIVE",
+      reason_text: "Publicación de la vía gratuita conforme a las Reglas Oficiales.",
+      requested_by_admin_user_id: "adm_0000000000000002",
+      requested_at: "2026-08-29T09:30:00.000Z",
+      decided_by_admin_user_id: null,
+      decided_at: null,
+      decision_notes: null,
+      requested_by_me: false,
+    },
+    {
+      id: "scr_0000000000000002",
+      setting_kind: "AMOE_MODE",
+      setting_key: "amoe_mode",
+      requested_value: { amoe_mode: "MAIL_IN_REVIEW" },
+      status: "PENDING_APPROVAL",
+      reason_code: "OPERATIONAL_ROLLOUT",
+      reason_text: null,
+      requested_by_admin_user_id: "adm_0000000000000001",
+      requested_at: "2026-08-29T10:05:00.000Z",
+      decided_by_admin_user_id: null,
+      decided_at: null,
+      decision_notes: null,
+      requested_by_me: true,
+    },
+  ],
+  next_cursor: null,
+};
 
 export const adminProductPage: AdminProductPage = {
   items: adminProducts,
@@ -473,7 +912,7 @@ export const adminParticipantPage: AdminParticipantPage = {
  */
 export const adminAmoeSubmissions: readonly AdminAmoeSubmission[] = [
   {
-    id: "amo_0000000000000001",
+    submission_id: "amo_0000000000000001",
     promotion_id: PROMOTION_ID,
     participant_id: participant.id,
     participant_email: participant.email,
@@ -484,10 +923,59 @@ export const adminAmoeSubmissions: readonly AdminAmoeSubmission[] = [
       email: "participant@example.com",
       postal_code: "78701",
     },
+    transcribed_by_me: false,
     entries_awarded: null,
     entries_before: 11_450,
     entries_if_approved: 200,
     entries_after_if_approved: 11_650,
+    /*
+     * SIN TOPE APLICABLE: las dos cifras coinciden y `cap_applies` es `false`.
+     * Es el caso normal, y esta escrito -no derivado- por la misma razon que
+     * las tres de arriba.
+     */
+    entries_if_approved_after_cap: 200,
+    cap_applies: false,
+  },
+  {
+    /*
+     * FICHA POSTAL TRANSCRITA, CON EL TOPE RECORTANDO (§13.3, §13.10).
+     *
+     * Dos cosas a la vez, y las dos nuevas de esta ronda:
+     *
+     *   1. La ficha vale 2,000 y el participante solo tiene sitio para 550, asi
+     *      que `entries_if_approved_after_cap` es MENOR. Las dos cifras viajan
+     *      porque quien aprueba tiene que ver el recorte ANTES de causarlo, y
+     *      la pantalla no puede calcularlo: el "espacio restante" sale del
+     *      predicado de saldo del motor, no de una resta (requisito R13).
+     *   2. La transcribio alguien del equipo, asi que esa persona NO puede
+     *      aprobarla (`SEPARATION_OF_DUTIES`). La pantalla lo advierte; el
+     *      control sigue siendo el 409 del backend.
+     */
+    submission_id: "amo_0000000000000008",
+    promotion_id: PROMOTION_ID,
+    participant_id: "par_0000000000000003",
+    participant_email: "m****@example.com",
+    status: "PENDING_REVIEW",
+    submitted_at: "2026-09-14T10:12:00.000Z",
+    entries_awarded: null,
+    entries_before: 9_450,
+    entries_if_approved: 2_000,
+    entries_after_if_approved: 11_450,
+    entries_if_approved_after_cap: 550,
+    cap_applies: true,
+    /*
+     * LA TRANSCRIBIO QUIEN MIRA, y ese es el fixture: el panel retira el
+     * formulario de aprobar y lo explica. Rechazar SI se ofrece -la separacion
+     * de funciones protege la concesion, no la negativa- y el control sigue
+     * siendo el 409 `SEPARATION_OF_DUTIES`.
+     */
+    transcribed_by_me: true,
+    transcribed_by_admin_user_id: "adm_0000000000000002",
+    envelope_reference: "SOBRE-0012",
+    cards_in_envelope: 3,
+    // Tres fichas en un sobre que admite dos: entra MARCADO y va a revision.
+    // No se rechaza solo (§13.10).
+    flagged_envelope: true,
   },
   {
     /*
@@ -495,12 +983,13 @@ export const adminAmoeSubmissions: readonly AdminAmoeSubmission[] = [
      * `participant_id` interno; nunca el payload". La pantalla tiene que decir
      * que no esta publicado, y no dejar un hueco que parece un envio vacio.
      */
-    id: "amo_0000000000000007",
+    submission_id: "amo_0000000000000007",
     promotion_id: PROMOTION_ID,
     participant_id: "par_0000000000000002",
     participant_email: "a****@example.com",
     status: "PENDING_REVIEW",
     submitted_at: "2026-09-13T08:31:00.000Z",
+    transcribed_by_me: false,
     entries_awarded: null,
     entries_before: 0,
     entries_if_approved: null,
@@ -508,8 +997,35 @@ export const adminAmoeSubmissions: readonly AdminAmoeSubmission[] = [
   },
 ];
 
+/**
+ * Envio YA APROBADO con recorte por tope (HO-041, resolucion fase 1, punto 4).
+ *
+ * `entries_awarded` dice cuanto valia la ficha y `granted_entries` cuanto
+ * entro de verdad en el ledger; `applied_cap` explica la diferencia. Los tres
+ * viajan porque restar los dos primeros seria una segunda aritmetica de
+ * participaciones en el cliente, y ademas el motor puede recortar por mas de un
+ * motivo a la vez.
+ */
+export const adminApprovedCappedSubmission: AdminAmoeSubmission = {
+  submission_id: "amo_0000000000000009",
+  promotion_id: PROMOTION_ID,
+  participant_id: "par_0000000000000003",
+  participant_email: "m****@example.com",
+  status: "APPROVED",
+  submitted_at: "2026-09-14T10:12:00.000Z",
+  entries_awarded: 2_000,
+  entries_before: 9_450,
+  entries_if_approved: 2_000,
+  entries_after_if_approved: 11_450,
+  entries_if_approved_after_cap: 550,
+  cap_applies: true,
+  transcribed_by_me: false,
+  granted_entries: 550,
+  applied_cap: { kind: "PER_PARTICIPANT", limit: 10_000, requested: 2_000, granted: 550 },
+};
+
 export const adminAmoeSubmissionPage: AdminAmoeSubmissionPage = {
-  items: adminAmoeSubmissions,
+  items: [...adminAmoeSubmissions, adminApprovedCappedSubmission],
   next_cursor: null,
 };
 

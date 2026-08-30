@@ -18,6 +18,8 @@
 
 import type { FastifyRequest } from "fastify";
 
+import { ApiErrors } from "./errors.js";
+
 /**
  * Forma de un `reason_code`: la MISMA que ya valida `routes/adjustments.ts`.
  *
@@ -102,4 +104,35 @@ export function presentedReasonCode(request: FastifyRequest): string | null {
   }
 
   return null;
+}
+
+/**
+ * El motivo del cuerpo, ya comprobado, para operar con el.
+ *
+ * ---------------------------------------------------------------------------
+ * POR QUE LOS ESQUEMAS DECLARAN `reason_code` OPCIONAL Y ESTA FUNCION EXISTE
+ * ---------------------------------------------------------------------------
+ *
+ * Quien exige el motivo es la PUERTA: el catalogo de `@lsw/security` marca esas
+ * capacidades con `requiresReason` y `authorize()` las deniega sin el, con 403.
+ * Cuando el esquema de la ruta lo declaraba obligatorio, esa cadena se rompia
+ * -Fastify valida el cuerpo ANTES del `preHandler`-, la peticion moria con 422
+ * `VALIDATION_FAILED` y nunca llegaba al control: un fallo de AUTORIZACION se
+ * presentaba como un cuerpo mal formado.
+ *
+ * CINTURON Y TIRANTES, Y EL TIRANTE ES LA PUERTA. Esta comprobacion no deberia
+ * dispararse nunca. Existe por lo que evita en el caso contrario: sin ella, un
+ * handler tendria que contentar al tipo con un `?? ""` y escribiria en
+ * `audit_events` una fila con el motivo vacio el dia que alguien declarara una
+ * de estas rutas con una capacidad que no exija motivo. Una traza con un hueco
+ * es peor que una peticion rechazada.
+ *
+ * Se llama ANTES de cualquier efecto: una negativa por falta de motivo no puede
+ * dejar detras una promocion activada ni una version de reglas nueva.
+ */
+export function requireReasonCode(reasonCode: string | undefined): string {
+  if (reasonCode === undefined) {
+    throw ApiErrors.forbidden("reason_code");
+  }
+  return reasonCode;
 }

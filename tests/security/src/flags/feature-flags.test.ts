@@ -20,6 +20,9 @@ import {
   FEATURE_FLAG_DEFAULTS,
   FEATURE_FLAG_KEYS,
   getCapability,
+  capabilityForFlagUpdate,
+  DUAL_CONTROL_FLAG_KEYS,
+  flagRequiresDualControl,
   isFeatureFlagKey,
   LEGALLY_MATERIAL_FLAG_KEYS,
   STEP_UP_MAX_AGE_SECONDS_LIMIT,
@@ -144,6 +147,57 @@ describe("la segunda aprobacion no se puede apagar por la puerta de atras", () =
   it("el flag esta documentado como no relajante", () => {
     expect(FEATURE_FLAGS.dual_approval_for_sensitive_actions_enabled.notes).toContain("NO RELAJA");
   });
+
+  it("y APAGARLO exige, el mismo, control dual (HO-041, hallazgo S-02)", () => {
+    /*
+     * LA PUERTA DE ATRAS QUE SI EXISTIA.
+     *
+     * El test de arriba comprueba que `authorize()` no consulta el flag, y eso
+     * era cierto. Lo que no cubria es el camino por el que se APAGA: mientras
+     * `capabilityForFlagUpdate` se derivara solo de `legallyMaterial`, esta clave
+     * -que no es legal- salia por `PATCH /admin/feature-flags/:key` con
+     * `flag.update`, que una sola persona tiene. Apagarla desarmaba la
+     * segunda aprobacion de los otros nueve.
+     *
+     * La regla cabe en una frase: desarmar el control dual exige control dual.
+     */
+    const key = "dual_approval_for_sensitive_actions_enabled";
+
+    // No es materia legal, y sigue sin serlo: no se ha reetiquetado nada.
+    expect(FEATURE_FLAGS[key].legallyMaterial).toBe(false);
+    expect([...LEGALLY_MATERIAL_FLAG_KEYS]).not.toContain(key);
+
+    // Pero cambiarlo va por la cola de solicitudes, como los materiales.
+    expect(flagRequiresDualControl(key)).toBe(true);
+    expect(capabilityForFlagUpdate(key)).toBe("flag.update.legally_material");
+  });
+
+  it("las dos listas se solapan en las nueve legales y difieren solo en esa clave", () => {
+    // Dos preguntas distintas: una la responde el abogado, la otra la
+    // seguridad. Si algun dia coincidieran, seria porque alguien fusiono los
+    // conceptos, y eso hay que verlo.
+    const soloControlDual = DUAL_CONTROL_FLAG_KEYS.filter(
+      (key) => !LEGALLY_MATERIAL_FLAG_KEYS.includes(key),
+    );
+    expect(soloControlDual).toStrictEqual(["dual_approval_for_sensitive_actions_enabled"]);
+
+    // Y ninguna legalmente material se queda fuera del control dual.
+    const sinControlDual = LEGALLY_MATERIAL_FLAG_KEYS.filter(
+      (key) => !flagRequiresDualControl(key),
+    );
+    expect(sinControlDual).toStrictEqual([]);
+  });
+
+  it("toda clave del catalogo tiene decidido su camino, sin excepciones", () => {
+    // Deny-by-default aplicado a los flags: un flag nuevo NO hereda el camino
+    // del de al lado, hay que decidirlo. Lo unico que este test impide es que
+    // quede indecidido.
+    for (const key of FEATURE_FLAG_KEYS) {
+      const capability = capabilityForFlagUpdate(key);
+      expect(["flag.update", "flag.update.legally_material"], key).toContain(capability);
+      expect(flagRequiresDualControl(key), key).toBe(capability === "flag.update.legally_material");
+    }
+  });
 });
 
 describe("las capacidades condicionadas por flag ya NOMBRAN su flag", () => {
@@ -168,6 +222,11 @@ describe("las capacidades condicionadas por flag ya NOMBRAN su flag", () => {
       ["amoe.self.submit", "amoe_enabled"],
       ["amoe.review.approve", "amoe_enabled"],
       ["amoe.review.reject", "amoe_enabled"],
+      // HO-041 / DEC-054: transcribir una ficha postal es meter un envio AMOE
+      // en la cola, asi que cuelga del mismo flag que el resto de la via. Con
+      // `amoe_enabled` apagado, la via gratuita no existe y la cola no debe
+      // recibir nada, ni siquiera desde el panel.
+      ["amoe.submission.transcribe", "amoe_enabled"],
       ["entry.adjust.create", "manual_adjustments_enabled"],
       ["draw.authorization.create", "internal_draw_enabled"],
       ["draw.initiate", "internal_draw_enabled"],
@@ -188,6 +247,7 @@ describe("las capacidades condicionadas por flag ya NOMBRAN su flag", () => {
       "amoe.review.approve",
       "amoe.review.reject",
       "amoe.self.submit",
+      "amoe.submission.transcribe",
       "draw.authorization.create",
       "draw.initiate",
       "entry.adjust.create",

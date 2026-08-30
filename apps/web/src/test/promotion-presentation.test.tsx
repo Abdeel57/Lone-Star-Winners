@@ -40,8 +40,10 @@ import {
   activePromotionWithoutRules,
   activePromotionWithoutRulesDetail,
   baseEntryOffer,
-  fractionalEntryOffer,
-  multipliedEntryOffer,
+  bonusEntryOffer,
+  fractionalBonusPeriod,
+  partialEntryOffer,
+  uncappedEntryOffer,
   promotionInStatus,
   promotionsByStatus,
   promotionWithoutRules,
@@ -146,6 +148,7 @@ describe("PromotionHero en los nueve estados", () => {
             locale={locale}
             nowIso={NOW}
             amoeEnabled={false}
+            multipliersEnabled={false}
           />,
         );
 
@@ -177,6 +180,7 @@ describe("PromotionHero en los nueve estados", () => {
           locale="en"
           nowIso={NOW}
           amoeEnabled={false}
+          multipliersEnabled={false}
         />,
       );
 
@@ -203,6 +207,7 @@ describe("PromotionHero en los nueve estados", () => {
         locale="en"
         nowIso={NOW}
         amoeEnabled={false}
+        multipliersEnabled={false}
       />,
     );
 
@@ -224,6 +229,7 @@ describe("PromotionHero en los nueve estados", () => {
         locale="en"
         nowIso={NOW}
         amoeEnabled={false}
+        multipliersEnabled={false}
       />,
     );
 
@@ -240,6 +246,7 @@ describe("PromotionHero en los nueve estados", () => {
         locale="es"
         nowIso={NOW}
         amoeEnabled={false}
+        multipliersEnabled={false}
       />,
     );
 
@@ -278,6 +285,7 @@ describe("PromotionHero, composicion de DEC-042", () => {
           locale={locale}
           nowIso={NOW}
           amoeEnabled={false}
+          multipliersEnabled={false}
         />,
       );
 
@@ -304,6 +312,7 @@ describe("PromotionHero, composicion de DEC-042", () => {
           locale={locale}
           nowIso={NOW}
           amoeEnabled
+          multipliersEnabled={false}
         />,
       );
 
@@ -323,6 +332,7 @@ describe("PromotionHero, composicion de DEC-042", () => {
         locale="es"
         nowIso={NOW}
         amoeEnabled={false}
+        multipliersEnabled={false}
       />,
     );
 
@@ -343,6 +353,7 @@ describe("PromotionHero, composicion de DEC-042", () => {
           locale={locale}
           nowIso={NOW}
           amoeEnabled={false}
+          multipliersEnabled={false}
         />,
       );
 
@@ -363,7 +374,7 @@ describe("PromotionHero, composicion de DEC-042", () => {
     }
   });
 
-  it("pinta el TOPE del universo y ninguna otra cifra de participaciones", () => {
+  it("pinta el tope POR PERSONA y ninguna cifra de universo (DEC-052)", () => {
     const view = renderIn(
       "es",
       <PromotionHero
@@ -372,31 +383,26 @@ describe("PromotionHero, composicion de DEC-042", () => {
         locale="es"
         nowIso={NOW}
         amoeEnabled={false}
+        multipliersEnabled={false}
       />,
     );
 
-    const pool = activePromotionDetail.entry_pool ?? null;
-    expect(pool, "el fixture protagonista declara universo").not.toBeNull();
-    if (pool === null) return;
-
-    expect(screen.getByText(/10,000/)).toBeInTheDocument();
+    const offer = activePromotionDetail.entry_offer ?? null;
+    expect(offer, "el fixture protagonista declara oferta").not.toBeNull();
+    expect(offer?.per_participant_max, "y declara el tope por persona").toBe(10000);
 
     /*
-     * NI LAS EMITIDAS NI LA RESTA (DEC-042 y DEC-044).
+     * LA CIFRA SE PINTA, Y LA FRASE DICE QUE ES POR PERSONA.
      *
-     * El fixture SI sirve `issued`, y eso es lo que hace util esta
-     * comprobacion: no se mide que el dato falte, se mide que estando
-     * disponible no llegue al DOM. Pintarlo debajo del tope publicaria el
-     * contador de restantes por implicacion, que es la misma urgencia
-     * fabricada que DEC-042 excluye, hecha por el lector en vez de por el
-     * cliente.
+     * Este test comprobaba antes que el 10,000 se pintara como "universo" y que
+     * la cifra de emitidas NO llegara al DOM. `entry_pool` desaparecio del
+     * contrato con DEC-052 -no hay total ni emitidas que ocultar- y lo que se
+     * mide ahora es lo contrario de aquello: que la cifra vaya acompanada de
+     * "por persona", porque enseniar 10,000 a secas volveria a leerse como un
+     * universo.
      */
-    expect(pool.issued, "el fixture adversarial sirve la cifra de emitidas").not.toBeNull();
-    const issued = (pool.issued ?? 0).toLocaleString("en-US");
-    expect(document.body.textContent, "las emitidas no se pintan").not.toContain(issued);
-
-    const remaining = (pool.cap - (pool.issued ?? 0)).toLocaleString("en-US");
-    expect(document.body.textContent, "ni la resta").not.toContain(remaining);
+    expect(screen.getByText(/10,000/)).toBeInTheDocument();
+    expect(document.body.textContent, "la frase dice por persona").toMatch(/por persona/i);
 
     view.unmount();
   });
@@ -410,6 +416,7 @@ describe("PromotionHero, composicion de DEC-042", () => {
         locale="es"
         nowIso={NOW}
         amoeEnabled={false}
+        multipliersEnabled={false}
       />,
     );
 
@@ -456,6 +463,7 @@ describe("PromotionHero, composicion de DEC-042", () => {
         locale="en"
         nowIso={NOW}
         amoeEnabled={false}
+        multipliersEnabled={false}
       />,
     );
 
@@ -475,6 +483,7 @@ describe("PromotionHero, composicion de DEC-042", () => {
         locale="en"
         nowIso={NOW}
         amoeEnabled={false}
+        multipliersEnabled={false}
       />,
     );
 
@@ -515,6 +524,7 @@ describe("PromotionHero sin Reglas Oficiales publicadas (DEC-044)", () => {
           locale={locale}
           nowIso={NOW}
           amoeEnabled={false}
+          multipliersEnabled={false}
         />,
       );
 
@@ -564,6 +574,7 @@ describe("PromotionHero sin Reglas Oficiales publicadas (DEC-044)", () => {
         locale="es"
         nowIso={NOW}
         amoeEnabled={false}
+        multipliersEnabled={false}
       />,
     );
 
@@ -590,6 +601,7 @@ describe("PromotionHero sin Reglas Oficiales publicadas (DEC-044)", () => {
           locale={locale}
           nowIso={NOW}
           amoeEnabled={false}
+          multipliersEnabled={false}
         />,
       );
 
@@ -626,6 +638,7 @@ describe("PromotionHero sin Reglas Oficiales publicadas (DEC-044)", () => {
         locale="en"
         nowIso={NOW}
         amoeEnabled={false}
+        multipliersEnabled={false}
       />,
     );
 
@@ -649,6 +662,7 @@ describe("PromotionHero sin Reglas Oficiales publicadas (DEC-044)", () => {
         locale="es"
         nowIso={NOW}
         amoeEnabled={false}
+        multipliersEnabled={false}
       />,
     );
 
@@ -691,10 +705,10 @@ describe("PromotionTimeline", () => {
   });
 });
 
-describe("EntryOfferPanel (DEC-013 y DEC-032)", () => {
+describe("EntryOfferPanel (§13.5, DEC-052)", () => {
   const activePresentation = presentPromotion("ACTIVE");
 
-  it("muestra el ratio que declara la promocion, sin calcular nada", () => {
+  it("muestra LAS DOS tasas que declara la promocion, sin calcular nada", () => {
     renderIn(
       "en",
       <EntryOfferPanel
@@ -704,44 +718,119 @@ describe("EntryOfferPanel (DEC-013 y DEC-032)", () => {
         rulesPublished
         locale="en"
         timeZone="America/Chicago"
+        nowIso={NOW}
       />,
     );
 
-    expect(screen.getByText(/5 entries per \$1\.00/)).toBeInTheDocument();
+    // 1 por $1 en mercancia y 2 por $1 en paquetes: son dos frases distintas
+    // porque son dos afirmaciones distintas, y el segundo borrador de las
+    // Official Rules las separa expresamente (Opciones 1 y 2).
+    expect(
+      screen.getByText(/1 entries for every \$1\.00 of eligible merchandise/),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/2 entries for every \$1\.00 of an entry package/)).toBeInTheDocument();
   });
 
-  it("con el flag de multiplicadores apagado no queda ni rastro del 2X", () => {
+  it("publica el tope POR PERSONA cuando los topes estan encendidos", () => {
     renderIn(
       "en",
       <EntryOfferPanel
-        offer={multipliedEntryOffer}
+        offer={baseEntryOffer}
         presentation={activePresentation}
         multipliersEnabled={false}
         rulesPublished
         locale="en"
         timeZone="America/Chicago"
+        nowIso={NOW}
       />,
     );
 
-    // Ni la insignia ni la fecha de fin del periodo: una funcion desactivada no
-    // deja restos a medias en el DOM.
+    expect(screen.getByText(/Up to 10,000 entries per person/)).toBeInTheDocument();
+  });
+
+  it("con los topes APAGADOS calla la cifra aunque la oferta la traiga", () => {
+    /*
+     * `entry_caps_enabled` es un flag legalmente material: con el apagado el
+     * tope esta declarado y el motor NO lo aplica, asi que anunciarlo seria
+     * decir algo falso. El fixture conserva el 10,000 a proposito -se mide que
+     * teniendolo no se pinte, no que falte-.
+     */
+    expect(uncappedEntryOffer.per_participant_max, "el fixture trae la cifra").toBe(10000);
+
+    renderIn(
+      "en",
+      <EntryOfferPanel
+        offer={uncappedEntryOffer}
+        presentation={activePresentation}
+        multipliersEnabled={false}
+        rulesPublished
+        locale="en"
+        timeZone="America/Chicago"
+        nowIso={NOW}
+      />,
+    );
+
+    expect(document.body.textContent).not.toContain("10,000");
+  });
+
+  it("con el flag de multiplicadores apagado no queda ni rastro del 5X", () => {
+    renderIn(
+      "en",
+      <EntryOfferPanel
+        offer={bonusEntryOffer}
+        presentation={activePresentation}
+        multipliersEnabled={false}
+        rulesPublished
+        locale="en"
+        timeZone="America/Chicago"
+        nowIso={NOW}
+      />,
+    );
+
+    // Ni la insignia del vigente ni el anuncio de los proximos: una funcion
+    // desactivada no deja restos a medias en el DOM.
+    expect(screen.queryByText(/5×/)).not.toBeInTheDocument();
     expect(screen.queryByText(/2×/)).not.toBeInTheDocument();
     expect(screen.getByText(enMessages.entryOffer.governedNote)).toBeInTheDocument();
   });
 
-  it("con el flag encendido y promocion abierta, anuncia el periodo", () => {
+  it("con el flag encendido y promocion abierta, anuncia el periodo vigente", () => {
     renderIn(
       "es",
       <EntryOfferPanel
-        offer={multipliedEntryOffer}
+        offer={bonusEntryOffer}
         presentation={activePresentation}
         multipliersEnabled
         rulesPublished
         locale="es"
         timeZone="America/Chicago"
+        nowIso={NOW}
       />,
     );
 
+    expect(screen.getByText(/5×/)).toBeInTheDocument();
+  });
+
+  it("anuncia los periodos que TODAVIA NO han empezado", () => {
+    /*
+     * Es el anuncio previo que exige el segundo borrador: los periodos bonus
+     * "se anuncian en el sitio antes de empezar". Sin esta rama, la unica que
+     * se veria seria la del vigente.
+     */
+    renderIn(
+      "en",
+      <EntryOfferPanel
+        offer={bonusEntryOffer}
+        presentation={activePresentation}
+        multipliersEnabled
+        rulesPublished
+        locale="en"
+        timeZone="America/Chicago"
+        nowIso={NOW}
+      />,
+    );
+
+    expect(screen.getByText(enMessages.entryOffer.bonusUpcomingHeading)).toBeInTheDocument();
     expect(screen.getByText(/2×/)).toBeInTheDocument();
   });
 
@@ -751,12 +840,13 @@ describe("EntryOfferPanel (DEC-013 y DEC-032)", () => {
     renderIn(
       "en",
       <EntryOfferPanel
-        offer={fractionalEntryOffer}
+        offer={{ ...bonusEntryOffer, active_bonus: fractionalBonusPeriod, bonus_periods: [] }}
         presentation={activePresentation}
         multipliersEnabled
         rulesPublished
         locale="en"
         timeZone="America/Chicago"
+        nowIso={NOW}
       />,
     );
 
@@ -764,20 +854,21 @@ describe("EntryOfferPanel (DEC-013 y DEC-032)", () => {
     expect(screen.queryByText(/1\.5/)).not.toBeInTheDocument();
   });
 
-  it("no anuncia el multiplicador sobre una promocion cerrada aunque el flag este encendido", () => {
+  it("no anuncia el bonus sobre una promocion cerrada aunque el flag este encendido", () => {
     renderIn(
       "en",
       <EntryOfferPanel
-        offer={multipliedEntryOffer}
+        offer={bonusEntryOffer}
         presentation={presentPromotion("CLOSED")}
         multipliersEnabled
         rulesPublished
         locale="en"
         timeZone="America/Chicago"
+        nowIso={NOW}
       />,
     );
 
-    expect(screen.queryByText(/2×/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/5×/)).not.toBeInTheDocument();
   });
 
   it("sin oferta declarada no inventa ninguna", () => {
@@ -790,6 +881,7 @@ describe("EntryOfferPanel (DEC-013 y DEC-032)", () => {
         rulesPublished
         locale="en"
         timeZone="America/Chicago"
+        nowIso={NOW}
       />,
     );
 
@@ -800,17 +892,55 @@ describe("EntryOfferPanel (DEC-013 y DEC-032)", () => {
     renderIn(
       "en",
       <EntryOfferPanel
-        offer={{ ...baseEntryOffer, unit_amount: { amount_minor: "no", currency: "USD" } }}
+        offer={{
+          ...baseEntryOffer,
+          rates: [
+            {
+              product_kind: "MERCHANDISE",
+              entries_per_amount_unit: { numerator: 1, denominator: 1 },
+              amount_unit: { amount_minor: "no", currency: "USD" },
+            },
+          ],
+        }}
         presentation={activePresentation}
         multipliersEnabled={false}
         rulesPublished
         locale="en"
         timeZone="America/Chicago"
+        nowIso={NOW}
       />,
     );
 
-    expect(screen.getByText(enMessages.entryOffer.ratioUnavailable)).toBeInTheDocument();
-    expect(screen.queryByText(/NaN/)).not.toBeInTheDocument();
+    // La linea de la tasa no se pinta -mejor una menos que un importe roto- y
+    // no queda ningun `NaN` suelto.
+    expect(document.body.textContent).not.toContain("NaN");
+    expect(screen.queryByText(/for every/)).not.toBeInTheDocument();
+  });
+
+  it("una oferta ANTERIOR a §13 se pinta sin romperse", () => {
+    /*
+     * Es el fixture que justifica `normalizeEntryOffer`: sin `caps_enabled`,
+     * sin `multipliers_enabled`, sin `active_bonus`, sin `bonus_periods` y sin
+     * `amoe`. Si la interfaz comparase con `=== null`, un `undefined` se
+     * colaria por la rama del "si hay valor" y el acceso siguiente lanzaria.
+     */
+    renderIn(
+      "en",
+      <EntryOfferPanel
+        offer={partialEntryOffer}
+        presentation={activePresentation}
+        multipliersEnabled
+        rulesPublished
+        locale="en"
+        timeZone="America/Chicago"
+        nowIso={NOW}
+      />,
+    );
+
+    expect(
+      screen.getByText(/1 entries for every \$1\.00 of eligible merchandise/),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/per person/)).not.toBeInTheDocument();
   });
 });
 

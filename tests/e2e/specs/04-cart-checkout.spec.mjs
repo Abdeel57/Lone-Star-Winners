@@ -90,13 +90,16 @@ test("la cotizacion de participaciones se ancla a la version de reglas vigente",
    * LO QUE SE AFIRMA AQUI NO ES UNA CIFRA DE PARTICIPACIONES.
    *
    * Cuantas participaciones genera una compra lo dice `purchase_entry_formula`,
-   * que es una clave legal y en este escenario lleva un valor de RELLENO.
-   * Afirmar "2 articulos dan N participaciones" seria inventar una regla legal
-   * (principio 2) y convertir el relleno en contrato.
+   * que es una clave legal y en este escenario lleva valores de FIXTURE. Lo que
+   * se afirma es lo que importa para la auditoria: que la cotizacion viene
+   * ANCLADA a la promocion y a la version de reglas concretas, y que trae
+   * rastro de calculo. Eso es DEC-012 funcionando.
    *
-   * Lo que si es comprobable, y es lo que importa para la auditoria: que la
-   * cotizacion viene ANCLADA a la promocion y a la version de reglas concretas,
-   * y que trae rastro de calculo. Eso es DEC-012 funcionando.
+   * La cifra concreta -25 por la camiseta de $25 a 1 por dolar, 20 por el
+   * paquete de $10 a 2 por dolar- se comprueba en
+   * `09-entry-packages.spec.mjs`, que es donde vive la afirmacion sobre la tasa
+   * POR TIPO de producto (DEC-052). Aqui seguiria dependiendo de una sola tasa,
+   * y con dos ya no habria una respuesta unica que escribir.
    */
   expect(quote.promotion_id).toBe(fixture.promotion.id);
   expect(quote.rules_version_id).toBe(fixture.promotion.rulesVersionId);
@@ -105,6 +108,27 @@ test("la cotizacion de participaciones se ancla a la version de reglas vigente",
   expect(Array.isArray(quote.eligible_items)).toBe(true);
   expect(Array.isArray(quote.ineligible_items)).toBe(true);
   expect(Number.isInteger(quote.final_entries)).toBe(true);
+});
+
+test("la cotizacion no publica el tope como si fueran participaciones restantes", async ({
+  page,
+}) => {
+  /*
+   * DEC-052 punto 6 aplicado a la cotizacion. El tope por participante puede
+   * viajar -es un dato de las Reglas y el participante tiene derecho a saberlo-
+   * pero NUNCA con el vocabulario de un pozo que se agota. Un `remaining` en la
+   * cotizacion seria el `entry_pool` retirado, entrando por otra puerta.
+   */
+  await page.goto(`/es/products/${PRODUCT_SLUG}`);
+  await page.getByRole("button", { name: "Añadir al carrito" }).click();
+  await expect(page.getByText("Añadido a tu carrito.")).toBeVisible();
+
+  const quote = await (await page.request.get(`${API_BASE_URL}/cart/entry-quote`)).json();
+  const serialized = JSON.stringify(quote);
+
+  for (const forbidden of ["entry_pool", "issued", "remaining"]) {
+    expect(serialized, `la cotizacion publica ${forbidden}`).not.toContain(`"${forbidden}"`);
+  }
 });
 
 test("modificar y quitar una linea se refleja en el servidor", async ({ page }) => {

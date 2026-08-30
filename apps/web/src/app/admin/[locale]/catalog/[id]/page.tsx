@@ -12,10 +12,16 @@ import { ProductStatusBadge } from "@/components/admin/product-status-badge";
 import { adminHref } from "@/i18n/admin-routing";
 import { formatInteger, formatMoney } from "@/i18n/formatters";
 import { isLocale } from "@/i18n/locales";
-import { publishProductAction, updateProductAction } from "@/lib/admin/actions";
+import { VariantEditor } from "@/components/admin/variant-editor";
+import {
+  createVariantAction,
+  publishProductAction,
+  updateProductAction,
+  updateVariantAction,
+} from "@/lib/admin/actions";
 import { can } from "@/lib/admin/capabilities";
 import { minorUnitsToPriceText } from "@/lib/admin/catalog-input";
-import { fetchAdminProduct, pickLocalized } from "@/lib/api";
+import { fetchAdminProduct, fetchAdminProductCategories, pickLocalized } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
 
@@ -54,7 +60,14 @@ export default async function AdminProductPage({
 
   if (!screen.ok) return screen.node;
 
-  const result = await fetchAdminProduct(id, locale, screen.session);
+  const [result, categories] = await Promise.all([
+    fetchAdminProduct(id, locale, screen.session),
+    fetchAdminProductCategories(locale, screen.session),
+  ]);
+
+  // Comodidad, no requisito: sin categorias el desplegable llega vacio y el
+  // producto se guarda igual, porque "sin categoria" es un valor legitimo.
+  const categoryOptions = categories.ok ? categories.data.items : [];
   const canWrite = can(screen.actor, "product.write");
   const canPublish = can(screen.actor, "product.publish");
 
@@ -183,11 +196,44 @@ export default async function AdminProductPage({
                       result.data.currency,
                     ),
                     stockQuantity: result.data.stock_quantity,
+                    ...(result.data.kind === undefined ? {} : { kind: result.data.kind }),
+                    categoryKey: result.data.category_key ?? null,
+                    imageUrl: result.data.image_url ?? null,
                   }}
+                  categories={categoryOptions}
                 />
               ) : (
                 <Alert tone="info">{t("noWriteCapability")}</Alert>
               )}
+            </div>
+          </Card>
+
+          {/*
+           * VARIANTES (§13.6, DEC-053).
+           *
+           * Bloque propio y despues de los datos del producto: cada variante se
+           * guarda por separado, porque sus existencias cambian solas -por cada
+           * compra- y un guardado masivo escribiria valores leidos hace cinco
+           * minutos sobre los colores que nadie tocaba.
+           *
+           * Con una API anterior a §13 la lista llega vacia y el editor lo dice;
+           * el flujo de una sola variante sigue viviendo en el formulario de
+           * arriba, que es lo que necesita la mayoria de los productos.
+           */}
+          <Card elevation="raised" padding="lg">
+            <CardTitle as="h2" size="sm">
+              {t("variantsHeadingDetail")}
+            </CardTitle>
+
+            <div className="mt-s4">
+              <VariantEditor
+                locale={locale}
+                productId={result.data.id}
+                variants={result.data.variants ?? []}
+                createAction={createVariantAction}
+                updateAction={updateVariantAction}
+                editable={canWrite}
+              />
             </div>
           </Card>
 

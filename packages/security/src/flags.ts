@@ -167,14 +167,58 @@ export function getFeatureFlag(key: FeatureFlagKey): FeatureFlagDefinition {
 }
 
 /**
- * Flags cuyo cambio exige `flag.update.legally_material`.
+ * Flags legalmente materiales.
  *
  * Se deriva del catalogo en vez de escribirse a mano: una lista paralela es una
  * lista que se queda corta el dia que alguien anade un flag.
+ *
+ * OJO: esto responde a "cambiar este flag cambia lo que las Official Rules
+ * prometen al participante", que es una pregunta LEGAL. La pregunta operativa
+ * -"puede una sola persona cambiarlo"- la responde `flagRequiresDualControl`,
+ * que no es la misma lista.
  */
 export const LEGALLY_MATERIAL_FLAG_KEYS: readonly FeatureFlagKey[] = FEATURE_FLAG_KEYS.filter(
   (key) => FEATURE_FLAGS[key].legallyMaterial,
 );
+
+/**
+ * Flags que NO puede cambiar una sola persona (HO-041, hallazgo S-02).
+ *
+ * POR QUE ESTA LISTA NO ES `LEGALLY_MATERIAL_FLAG_KEYS`
+ *
+ *   Son dos preguntas distintas y solo se solapan en nueve de las doce claves.
+ *   "Legalmente material" significa que cambiar el flag cambia lo que se le
+ *   promete al participante; lo decide el abogado. "Exige control dual"
+ *   significa que una sola persona no puede hacerlo; lo decide la seguridad.
+ *
+ *   `dual_approval_for_sensitive_actions_enabled` NO es legalmente material -no
+ *   cambia ninguna promesa- y sin embargo entra aqui, porque es el interruptor
+ *   que APAGA el control dual de todos los demas. Sin esta linea existia una
+ *   cadena corta y real: una persona con `flag.update` apagaba el control dual
+ *   por el PATCH ordinario, y a partir de ahi otra persona sola podia apagar
+ *   `amoe_enabled` -dejando la promocion sin via gratuita- o encender
+ *   `internal_draw_enabled`. Dos personas, ninguna aprobando a la otra, y el
+ *   catalogo declarando `requiresSecondApproval: true` todo el rato.
+ *
+ *   La regla que cierra esa puerta se enuncia en una frase: DESARMAR EL CONTROL
+ *   DUAL EXIGE CONTROL DUAL. Un control que se puede apagar sin el propio
+ *   control que impone no es un control, es una preferencia.
+ *
+ * QUE HACE ESTE DATO, Y QUE NO
+ *   Decide por que CAMINO va un cambio de flag: `capabilityForFlagUpdate()` lo
+ *   usa para devolver `flag.update.legally_material`, y con ella la ruta de
+ *   solicitud con segunda aprobacion. No decide si el cambio es legal ni si es
+ *   buena idea: eso sigue siendo de las Official Rules y de quien aprueba.
+ */
+export function flagRequiresDualControl(key: FeatureFlagKey): boolean {
+  return (
+    FEATURE_FLAGS[key].legallyMaterial || key === "dual_approval_for_sensitive_actions_enabled"
+  );
+}
+
+/** Derivada, nunca escrita a mano, por el mismo motivo que la de arriba. */
+export const DUAL_CONTROL_FLAG_KEYS: readonly FeatureFlagKey[] =
+  FEATURE_FLAG_KEYS.filter(flagRequiresDualControl);
 
 /**
  * Valores de arranque, tal y como debe sembrarlos `packages/database`.

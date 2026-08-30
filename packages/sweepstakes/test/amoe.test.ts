@@ -30,6 +30,7 @@ import {
   NOW,
   PARTICIPANT_ID,
   PROMOTION_ID,
+  SECOND_ADMIN_ID,
   baseRulesConfig,
   buildHarness,
   qualifiedOrder,
@@ -166,6 +167,9 @@ describe("el flag manda", () => {
       // de relleno.
       instructions: null,
       externalUrl: null,
+      // Esta promocion de prueba es `ONLINE_FORM`: no declara bloque postal, y
+      // el sistema no se inventa plazos de sobre que nadie ha escrito.
+      mailIn: null,
     });
     // La politica de duplicados NO se publica: seria regalar el mapa de los
     // controles antifraude.
@@ -174,7 +178,7 @@ describe("el flag manda", () => {
 });
 
 describe("las cuatro modalidades", () => {
-  it.each(["ONLINE_FORM", "CODE", "EXTERNAL_INSTRUCTIONS"] as const)(
+  it.each(["ONLINE_FORM", "CODE"] as const)(
     "%s se acepta sin revision si la configuracion lo dice",
     async (mode) => {
       const { amoe } = enabled({ mode, requires_review: false });
@@ -196,15 +200,24 @@ describe("las cuatro modalidades", () => {
     ).rejects.toSatisfy((error: unknown) => isSweepstakesError(error, "AMOE_CONFIG_INVALID"));
   });
 
-  it("MAIL_IN_REVIEW con revision entra en la cola", async () => {
-    const { amoe } = enabled({ mode: "MAIL_IN_REVIEW", requires_review: true });
-    const outcome = await amoe.submit({
-      promotionId: PROMOTION_ID,
-      participantId: PARTICIPANT_ID,
-      payload: PAYLOAD,
-    });
-    expect(outcome.status).toBe("PENDING_REVIEW");
-  });
+  /**
+   * La MODALIDAD decide quien puede escribir por esta via.
+   *
+   * Con `MAIL_IN_REVIEW` la participacion llega en un sobre y la teclea un
+   * operador; con `EXTERNAL_INSTRUCTIONS` ocurre fuera del sistema. Dejar
+   * abierto el envio propio en esos casos crearia participaciones por un
+   * metodo que las Official Rules vigentes no ofrecen, y despues habria que
+   * decidir que hacer con ellas.
+   */
+  it.each(["MAIL_IN_REVIEW", "EXTERNAL_INSTRUCTIONS"] as const)(
+    "%s cierra el envio propio del participante, no solo el formulario en pantalla",
+    async (mode) => {
+      const { amoe } = enabled({ mode, requires_review: true });
+      await expect(
+        amoe.submit({ promotionId: PROMOTION_ID, participantId: PARTICIPANT_ID, payload: PAYLOAD }),
+      ).rejects.toSatisfy((error: unknown) => isSweepstakesError(error, "AMOE_MODE_NOT_ONLINE"));
+    },
+  );
 
   it("una discrepancia entre el flag y la version de reglas falla ruidosamente", async () => {
     // Dos fuentes de verdad sobre la modalidad. Se hace control en vez de
@@ -599,6 +612,40 @@ describe("cola de revision y permisos", () => {
     expect(queue.map((item) => item.id)).toEqual([a.submission.id, b.submission.id]);
   });
 
+  /**
+   * Un envio decidido tiene que seguir siendo consultable.
+   *
+   * La cola SIN filtro es la de trabajo -lo que espera decision- y por eso un
+   * aprobado sale de ella. Si ese fuera el unico modo de leerla, la aprobacion
+   * se llevaria consigo el expediente entero, y con el la unica explicacion de
+   * cuantas participaciones concedio y por que. Un registro promocional que no
+   * se puede volver a mirar no es auditable.
+   */
+  it("un aprobado sale de la cola de trabajo y se recupera filtrando por su estado", async () => {
+    const { amoe } = enabled({ requires_review: true });
+    const submitted = await amoe.submit({
+      promotionId: PROMOTION_ID,
+      participantId: PARTICIPANT_ID,
+      payload: PAYLOAD,
+    });
+    await amoe.approve(submitted.submission.id, reviewer);
+
+    const working = await amoe.reviewQueue(PROMOTION_ID, reviewer);
+    expect(working.map((item) => item.id)).not.toContain(submitted.submission.id);
+
+    const approved = await amoe.reviewQueue(PROMOTION_ID, reviewer, "APPROVED");
+    expect(approved.map((item) => item.id)).toEqual([submitted.submission.id]);
+  });
+
+  it("el filtro tambien exige amoe.review.read: es la misma lectura", async () => {
+    // La capacidad se comprueba ANTES de mirar el filtro. Un parametro de
+    // consulta no puede ser la diferencia entre pedir permiso y no pedirlo.
+    const { amoe } = enabled({ requires_review: true });
+    await expect(amoe.reviewQueue(PROMOTION_ID, powerless, "APPROVED")).rejects.toSatisfy(
+      (error: unknown) => isSweepstakesError(error, "CAPABILITY_REQUIRED"),
+    );
+  });
+
   it("aprobar exige amoe.review.approve", async () => {
     const { amoe } = enabled({ requires_review: true });
     const submitted = await amoe.submit({
@@ -929,5 +976,534 @@ describe("proyeccion de la aprobacion", () => {
   it("una cola vacia devuelve un mapa vacio, no falla", async () => {
     const { amoe } = enabled({ requires_review: true });
     await expect(amoe.approvalProjections([])).resolves.toHaveProperty("size", 0);
+  });
+});
+
+/**
+ * Tope por participante en la via GRATUITA (DEC-052 punto 5).
+ *
+ * Las Official Rules aplican el maximo "regardless of method". Si la concesion
+ * AMOE lo ignorara, quien ya tuviera el tope lleno recibiria participaciones
+ * por segunda vez, y el ledger dejaria de cuadrar con lo que dicen las Reglas.
+ */
+describe("tope por participante en la concesion AMOE", () => {
+  const PER_PARTICIPANT_MAX = 10000;
+
+  /** Promocion de PRUEBA con tope y con 2,000 por ficha, como el borrador v2. */
+  function cappedSetup(overrides: Partial<AmoeConfig> = {}): Setup {
+    return setup({
+      flags: { amoe_enabled: true, entry_caps_enabled: true },
+      rulesConfig: baseRulesConfig({
+        entry_limits: { per_order_max: null, per_participant_max: PER_PARTICIPANT_MAX },
+        amoe: amoeConfig({
+          entries_per_approved_submission: 2000,
+          requires_review: true,
+          limit: { max_per_participant_per_period: 5, period: "PROMOTION" },
+          duplicate_policy: "FLAG_FOR_REVIEW",
+          ...overrides,
+        }),
+      }),
+    });
+  }
+
+  /** Deja al participante con `entries` participaciones de COMPRA. */
+  async function fillWithPurchase(context: Setup, entries: number): Promise<void> {
+    await context.award.awardForQualifiedOrder(
+      qualifiedOrder({
+        items: [
+          {
+            lineId: "line-1",
+            sku: "TEE-BLACK-M",
+            productKind: "MERCHANDISE",
+            quantity: 1,
+            // La configuracion base da 1 participacion por cada 100 unidades
+            // menores, asi que el importe ES la cifra de participaciones x100.
+            unitAmountMinor: BigInt(entries) * 100n,
+          },
+        ],
+      }),
+    );
+  }
+
+  it("concede solo el espacio que queda y anota el recorte en la transaccion", async () => {
+    const context = cappedSetup();
+    await fillWithPurchase(context, 9000);
+
+    const submitted = await context.amoe.submit({
+      promotionId: PROMOTION_ID,
+      participantId: PARTICIPANT_ID,
+      payload: PAYLOAD,
+    });
+    const approved = await context.amoe.approve(submitted.submission.id, reviewer);
+
+    expect(approved.status).toBe("APPROVED");
+    if (approved.status !== "APPROVED") {
+      return;
+    }
+    expect(approved.entries).toBe(1000);
+    expect(approved.transaction.metadata.applied_cap).toEqual({
+      kind: "PER_PARTICIPANT",
+      limit: PER_PARTICIPANT_MAX,
+      requested: 2000,
+      granted: 1000,
+    });
+
+    const balance = computeBalanceAt(
+      context.harness.ledger.all(),
+      PROMOTION_ID,
+      PARTICIPANT_ID,
+      NOW,
+    );
+    expect(balance.activeEntries).toBe(PER_PARTICIPANT_MAX);
+  });
+
+  it("sin recorte no escribe `applied_cap`: seria ruido en el 99% de las filas", async () => {
+    const context = cappedSetup();
+    const submitted = await context.amoe.submit({
+      promotionId: PROMOTION_ID,
+      participantId: PARTICIPANT_ID,
+      payload: PAYLOAD,
+    });
+    const approved = await context.amoe.approve(submitted.submission.id, reviewer);
+    if (approved.status !== "APPROVED") {
+      throw new Error("la aprobacion deberia haber concedido participaciones");
+    }
+    expect(approved.entries).toBe(2000);
+    expect(approved.transaction.metadata).not.toHaveProperty("applied_cap");
+  });
+
+  it("con espacio cero se niega y el envio SIGUE en revision, sin rechazarse solo", async () => {
+    const context = cappedSetup();
+    await fillWithPurchase(context, PER_PARTICIPANT_MAX);
+
+    const submitted = await context.amoe.submit({
+      promotionId: PROMOTION_ID,
+      participantId: PARTICIPANT_ID,
+      payload: PAYLOAD,
+    });
+    const rowsBefore = context.harness.ledger.all().length;
+
+    await expect(context.amoe.approve(submitted.submission.id, reviewer)).rejects.toSatisfy(
+      (error: unknown) => isSweepstakesError(error, "AMOE_ENTRY_CAP_REACHED"),
+    );
+
+    // Ni una fila de ledger nueva, y el envio intacto: lo decide una persona.
+    expect(context.harness.ledger.all()).toHaveLength(rowsBefore);
+    const stored = await context.harness.submissions.findById(submitted.submission.id);
+    expect(stored?.status).toBe("PENDING_REVIEW");
+  });
+
+  it("con el flag de topes apagado no se recorta nada, aunque la version declare tope", async () => {
+    const context = setup({
+      flags: { amoe_enabled: true, entry_caps_enabled: false },
+      rulesConfig: baseRulesConfig({
+        entry_limits: { per_order_max: null, per_participant_max: PER_PARTICIPANT_MAX },
+        amoe: amoeConfig({ entries_per_approved_submission: 2000, requires_review: true }),
+      }),
+    });
+    await fillWithPurchase(context, 9000);
+
+    const submitted = await context.amoe.submit({
+      promotionId: PROMOTION_ID,
+      participantId: PARTICIPANT_ID,
+      payload: PAYLOAD,
+    });
+    const approved = await context.amoe.approve(submitted.submission.id, reviewer);
+    if (approved.status !== "APPROVED") {
+      throw new Error("la aprobacion deberia haber concedido participaciones");
+    }
+    expect(approved.entries).toBe(2000);
+  });
+
+  it("la proyeccion ensena el recorte ANTES de aprobar, con la misma aritmetica", async () => {
+    const context = cappedSetup();
+    await fillWithPurchase(context, 9000);
+
+    const submitted = await context.amoe.submit({
+      promotionId: PROMOTION_ID,
+      participantId: PARTICIPANT_ID,
+      payload: PAYLOAD,
+    });
+    const projection = (await context.amoe.approvalProjections([submitted.submission])).get(
+      submitted.submission.id,
+    );
+
+    expect(projection?.entriesBefore).toBe(9000);
+    expect(projection?.entriesIfApproved).toBe(2000);
+    expect(projection?.capApplies).toBe(true);
+    expect(projection?.entriesIfApprovedAfterCap).toBe(1000);
+  });
+
+  it("sin tope declarado, la proyeccion lo dice y las dos cifras coinciden", async () => {
+    const context = setup({
+      flags: { amoe_enabled: true, entry_caps_enabled: true },
+      rulesConfig: baseRulesConfig({ amoe: amoeConfig({ requires_review: true }) }),
+    });
+    const submitted = await context.amoe.submit({
+      promotionId: PROMOTION_ID,
+      participantId: PARTICIPANT_ID,
+      payload: PAYLOAD,
+    });
+    const projection = (await context.amoe.approvalProjections([submitted.submission])).get(
+      submitted.submission.id,
+    );
+    expect(projection?.capApplies).toBe(false);
+    expect(projection?.entriesIfApprovedAfterCap).toBe(projection?.entriesIfApproved);
+  });
+});
+
+/**
+ * Transcripcion de fichas postales (DEC-054 punto 4).
+ *
+ * Reutiliza `submit` entero -ventana, huella, limite y duplicados- y solo anade
+ * procedencia. Lo que si es propio es la separacion de funciones: quien teclea
+ * una ficha no puede aprobarla.
+ */
+describe("transcripcion de fichas postales", () => {
+  const MAIL_IN = {
+    max_cards_per_envelope: 2,
+    postmark_by: "2026-12-01T06:00:00.000Z",
+    received_by: "2026-12-08T06:00:00.000Z",
+  } as const;
+
+  const transcriber: Principal = {
+    actor: { type: "ADMIN", adminUserId: ADMIN_ID },
+    scope: "STAFF",
+    capabilities: ["amoe.submission.transcribe"],
+  };
+
+  const otherReviewer: Principal = {
+    actor: { type: "ADMIN", adminUserId: SECOND_ADMIN_ID },
+    scope: "STAFF",
+    capabilities: ["amoe.review.read", "amoe.review.approve"],
+  };
+
+  function mailInSetup(): Setup {
+    return setup({
+      flags: { amoe_enabled: true },
+      amoeMode: "MAIL_IN_REVIEW",
+      rulesConfig: baseRulesConfig({
+        amoe: amoeConfig({
+          mode: "MAIL_IN_REVIEW",
+          requires_review: true,
+          entries_per_approved_submission: 2000,
+          limit: { max_per_participant_per_period: 5, period: "PROMOTION" },
+          mail_in: MAIL_IN,
+        }),
+      }),
+    });
+  }
+
+  function transcribeInput(overrides: Record<string, unknown> = {}) {
+    return {
+      promotionId: PROMOTION_ID,
+      participantId: PARTICIPANT_ID,
+      payload: PAYLOAD,
+      transcribedByAdminUserId: ADMIN_ID,
+      envelopeReference: "SOBRE-0012",
+      cardsInEnvelope: 1,
+      ...overrides,
+    };
+  }
+
+  it("exige la capacidad: transcribir no es lo mismo que revisar", async () => {
+    const { amoe } = mailInSetup();
+    await expect(amoe.submitOnBehalf(transcribeInput(), powerless)).rejects.toSatisfy(
+      (error: unknown) => isSweepstakesError(error, "CAPABILITY_REQUIRED"),
+    );
+  });
+
+  it("deja constancia de quien la tecleo y de que sobre salio", async () => {
+    const { amoe, harness } = mailInSetup();
+    const outcome = await amoe.submitOnBehalf(transcribeInput(), transcriber);
+
+    expect(outcome.status).toBe("PENDING_REVIEW");
+    expect(outcome.submission.metadata).toMatchObject({
+      transcribed_by_admin_user_id: ADMIN_ID,
+      envelope_reference: "SOBRE-0012",
+      cards_in_envelope: 1,
+    });
+    expect(outcome.submission.metadata).not.toHaveProperty("flag");
+    expect(harness.audit.byAction("amoe.submission.transcribed")).toHaveLength(1);
+  });
+
+  it("un sobre con mas fichas de las admitidas entra MARCADO, no rechazado", async () => {
+    const { amoe } = mailInSetup();
+    const outcome = await amoe.submitOnBehalf(transcribeInput({ cardsInEnvelope: 3 }), transcriber);
+
+    // Las Reglas dicen cuantas fichas caben en un sobre, no cual anular cuando
+    // llegan de mas. Eso lo decide una persona (LEGAL_PENDING, pregunta 6).
+    expect(outcome.status).toBe("PENDING_REVIEW");
+    expect(outcome.submission.metadata.flag).toBe("ENVELOPE_LIMIT_EXCEEDED");
+  });
+
+  it("quien transcribio NO puede aprobar su propia transcripcion", async () => {
+    const { amoe } = mailInSetup();
+    const outcome = await amoe.submitOnBehalf(transcribeInput(), transcriber);
+
+    await expect(amoe.approve(outcome.submission.id, reviewer)).rejects.toSatisfy(
+      (error: unknown) => isSweepstakesError(error, "SEPARATION_OF_DUTIES"),
+    );
+  });
+
+  it("otra persona si puede aprobarla, y concede en el mismo ledger", async () => {
+    const { amoe, harness } = mailInSetup();
+    const outcome = await amoe.submitOnBehalf(transcribeInput(), transcriber);
+    const approved = await amoe.approve(outcome.submission.id, otherReviewer);
+
+    if (approved.status !== "APPROVED") {
+      throw new Error("la aprobacion deberia haber concedido participaciones");
+    }
+    expect(approved.entries).toBe(2000);
+    // Principio 9: mismo universo, procedencia conservada.
+    expect(approved.transaction.sourceType).toBe("AMOE");
+    expect(harness.ledger.all()).toHaveLength(1);
+  });
+
+  it("un envio propio del participante no queda bloqueado por la separacion de funciones", async () => {
+    // Con una modalidad EN LINEA, que es la unica en la que un participante
+    // puede enviar por su cuenta. La separacion "quien transcribe no aprueba"
+    // solo aplica a lo transcrito: un envio sin transcriptor no tiene a nadie
+    // de quien separarse.
+    const { amoe } = enabled({ mode: "ONLINE_FORM", requires_review: true });
+    const submitted = await amoe.submit({
+      promotionId: PROMOTION_ID,
+      participantId: PARTICIPANT_ID,
+      payload: PAYLOAD,
+    });
+    const approved = await amoe.approve(submitted.submission.id, reviewer);
+    expect(approved.status).toBe("APPROVED");
+  });
+
+  it("transcribir solo tiene sentido con la modalidad postal", async () => {
+    const online = setup({
+      flags: { amoe_enabled: true },
+      rulesConfig: baseRulesConfig({ amoe: amoeConfig({ mode: "ONLINE_FORM" }) }),
+    });
+    await expect(online.amoe.submitOnBehalf(transcribeInput(), transcriber)).rejects.toSatisfy(
+      (error: unknown) => isSweepstakesError(error, "AMOE_MODE_NOT_MAIL_IN"),
+    );
+  });
+
+  it("publica los plazos postales en la vista publica, sin inventarlos", async () => {
+    const { amoe } = mailInSetup();
+    const view = await amoe.configView(PROMOTION_ID);
+    expect(view.mailIn).toEqual(MAIL_IN);
+  });
+});
+
+/**
+ * Hallazgos de la security review de HO-041 (fase 2).
+ *
+ * Cada test nombra el hallazgo que cierra. No son casos hipoteticos: los cuatro
+ * describen una forma concreta de eludir un control que ya existia.
+ */
+describe("security review fase 2", () => {
+  const MAIL_IN = {
+    max_cards_per_envelope: 2,
+    postmark_by: "2026-12-01T06:00:00.000Z",
+    received_by: "2026-12-08T06:00:00.000Z",
+  } as const;
+
+  function mailIn(overrides: Partial<AmoeConfig> = {}): Setup {
+    return setup({
+      flags: { amoe_enabled: true },
+      amoeMode: "MAIL_IN_REVIEW",
+      rulesConfig: baseRulesConfig({
+        amoe: amoeConfig({
+          mode: "MAIL_IN_REVIEW",
+          requires_review: true,
+          entries_per_approved_submission: 2000,
+          limit: { max_per_participant_per_period: 5, period: "PROMOTION" },
+          mail_in: MAIL_IN,
+          ...overrides,
+        }),
+      }),
+    });
+  }
+
+  const transcriber: Principal = {
+    actor: { type: "ADMIN", adminUserId: ADMIN_ID },
+    scope: "STAFF",
+    capabilities: ["amoe.submission.transcribe", "amoe.review.approve", "amoe.review.reject"],
+  };
+
+  const transcribeInput = {
+    promotionId: PROMOTION_ID,
+    participantId: PARTICIPANT_ID,
+    payload: PAYLOAD,
+    envelopeReference: "SOBRE-0012",
+    cardsInEnvelope: 1,
+  } as const;
+
+  /**
+   * S-01. El identificador de quien transcribe decide quien NO puede aprobar
+   * despues. Si lo eligiera quien transcribe, el control no seria un control:
+   * bastaria con escribir el id de un companero para poder aprobar la ficha uno
+   * mismo. Ahora sale del principal y el input ni siquiera puede expresarlo.
+   */
+  it("S-01: el transcriptor sale del PRINCIPAL, y un id ajeno en el input no firma por otro", async () => {
+    const { amoe } = mailIn();
+
+    const outcome = await amoe.submitOnBehalf(
+      {
+        ...transcribeInput,
+        // Un cuerpo hostil que intenta atribuir la ficha a otra persona. El tipo
+        // ya no lo admite; se fuerza para probar que tampoco lo admite el codigo.
+        ...({ transcribedByAdminUserId: SECOND_ADMIN_ID } as unknown as Record<string, never>),
+      },
+      transcriber,
+    );
+
+    expect(outcome.submission.metadata.transcribed_by_admin_user_id).toBe(ADMIN_ID);
+
+    // Y por tanto sigue sin poder aprobarla: la separacion de funciones se
+    // sostiene sobre el dato correcto.
+    await expect(amoe.approve(outcome.submission.id, transcriber)).rejects.toSatisfy(
+      (error: unknown) => isSweepstakesError(error, "SEPARATION_OF_DUTIES"),
+    );
+  });
+
+  it("S-01: un principal que no es ADMIN no puede transcribir aunque traiga la capacidad", async () => {
+    const { amoe } = mailIn();
+    const impostor: Principal = {
+      actor: { type: "SYSTEM" },
+      scope: "STAFF",
+      capabilities: ["amoe.submission.transcribe"],
+    };
+
+    await expect(amoe.submitOnBehalf(transcribeInput, impostor)).rejects.toSatisfy(
+      (error: unknown) => isSweepstakesError(error, "CAPABILITY_REQUIRED"),
+    );
+  });
+
+  /**
+   * S-07. Rechazar tambien es decidir: quien teclea una ficha no puede cerrarla
+   * el solo, porque cerraria unilateralmente la unica via gratuita de esa
+   * persona.
+   */
+  it("S-07: quien transcribe tampoco puede RECHAZAR lo que tecleo", async () => {
+    const { amoe } = mailIn();
+    const outcome = await amoe.submitOnBehalf(transcribeInput, transcriber);
+
+    await expect(
+      amoe.reject(outcome.submission.id, transcriber, "AMOE_ILLEGIBLE"),
+    ).rejects.toSatisfy((error: unknown) => isSweepstakesError(error, "SEPARATION_OF_DUTIES"));
+  });
+
+  /**
+   * S-03. Estar dentro de la transaccion no serializa nada: bajo READ COMMITTED
+   * dos concesiones concurrentes leen el mismo saldo. El cerrojo tiene que
+   * pedirse ANTES de leer, y aqui se comprueba ese ORDEN, que es lo unico que
+   * un doble de un solo hilo puede demostrar.
+   */
+  it("S-03: la concesion pide el cerrojo del participante ANTES de leer el saldo", async () => {
+    const context = setup({
+      flags: { amoe_enabled: true, entry_caps_enabled: true },
+      rulesConfig: baseRulesConfig({
+        entry_limits: { per_order_max: null, per_participant_max: 10000 },
+        amoe: amoeConfig({ entries_per_approved_submission: 2000, requires_review: true }),
+      }),
+    });
+
+    const submitted = await context.amoe.submit({
+      promotionId: PROMOTION_ID,
+      participantId: PARTICIPANT_ID,
+      payload: PAYLOAD,
+    });
+    await context.amoe.approve(submitted.submission.id, reviewer);
+
+    expect(context.harness.ledger.lockCalls()).toContain(`${PROMOTION_ID}:${PARTICIPANT_ID}`);
+    // El cerrojo se pide antes de la primera lectura del historial: si se
+    // pidiera despues, en PostgreSQL protegeria una lectura ya ocurrida.
+    expect(context.harness.ledger.firstLockBeforeFirstRead()).toBe(true);
+  });
+
+  it("S-03: la via de COMPRA tambien lo pide, y desde dentro de la transaccion", async () => {
+    const context = setup({
+      flags: { entry_caps_enabled: true },
+      rulesConfig: baseRulesConfig({
+        entry_limits: { per_order_max: null, per_participant_max: 10000 },
+      }),
+    });
+
+    await context.award.awardForQualifiedOrder(qualifiedOrder());
+
+    expect(context.harness.ledger.lockCalls()).toContain(`${PROMOTION_ID}:${PARTICIPANT_ID}`);
+    expect(context.harness.ledger.firstLockBeforeFirstRead()).toBe(true);
+  });
+
+  /**
+   * S-08. Con auto-aprobacion y tope agotado, el rescate a `PENDING_REVIEW`
+   * tiene que SOBREVIVIR. Antes se relanzaba, y con una transaccion real en el
+   * llamante la excepcion revertia tambien el registro del envio: no quedaba ni
+   * la ficha ni el rastro.
+   */
+  it("S-08: con auto-aprobacion y espacio cero, la ficha QUEDA registrada y en revision", async () => {
+    const context = setup({
+      flags: { amoe_enabled: true, entry_caps_enabled: true },
+      rulesConfig: baseRulesConfig({
+        entry_limits: { per_order_max: null, per_participant_max: 10000 },
+        amoe: amoeConfig({
+          entries_per_approved_submission: 2000,
+          // Sin revision: la concesion la intenta el sistema, no una persona.
+          requires_review: false,
+        }),
+      }),
+    });
+
+    // El participante llega al tope por la via de compra.
+    await context.award.awardForQualifiedOrder(
+      qualifiedOrder({
+        items: [
+          {
+            lineId: "line-1",
+            sku: "TEE-BLACK-M",
+            productKind: "MERCHANDISE",
+            quantity: 1,
+            unitAmountMinor: 1000000n,
+          },
+        ],
+      }),
+    );
+
+    const outcome = await context.amoe.submit({
+      promotionId: PROMOTION_ID,
+      participantId: PARTICIPANT_ID,
+      payload: PAYLOAD,
+    });
+
+    expect(outcome.status).toBe("CAP_REACHED_PENDING_REVIEW");
+
+    // La ficha existe, esta en la cola y no concedio nada.
+    const stored = await context.harness.submissions.findById(outcome.submission.id);
+    expect(stored?.status).toBe("PENDING_REVIEW");
+    expect(context.harness.audit.byAction("amoe.submission.cap_reached")).toHaveLength(1);
+    const amoeRows = context.harness.ledger.all().filter((row) => row.sourceType === "AMOE");
+    expect(amoeRows).toHaveLength(0);
+  });
+
+  /**
+   * S-12. `assertPayloadComplete` comprueba que ESTEN las claves requeridas; las
+   * de mas se guardaban tal cual, y la tabla acababa almacenando datos
+   * personales que nadie pidio.
+   */
+  it("S-12: el payload se recorta a identity_requirements antes de guardarse", async () => {
+    const { amoe, harness } = setup({
+      flags: { amoe_enabled: true },
+      rulesConfig: baseRulesConfig({
+        amoe: amoeConfig({ identity_requirements: ["full_name"] }),
+      }),
+    });
+
+    const outcome = await amoe.submit({
+      promotionId: PROMOTION_ID,
+      participantId: PARTICIPANT_ID,
+      payload: { full_name: "Ada Lovelace", numero_tarjeta: "4111111111111111" },
+    });
+
+    const stored = await harness.submissions.findById(outcome.submission.id);
+    expect(stored?.payload).toEqual({ full_name: "Ada Lovelace" });
+    expect(JSON.stringify(stored?.payload)).not.toContain("4111");
   });
 });

@@ -66,11 +66,29 @@ function productFixture(overrides: Record<string, unknown> = {}): Record<string,
     sku: "GORRA-LS-001",
     slug: "gorra-lone-star",
     status: "DRAFT",
+    // DEC-052: etiqueta de catalogo, no una cantidad de participaciones.
+    kind: "MERCHANDISE",
+    categoryKey: null,
+    imageUrl: null,
     currency: "USD",
     name: { "es-US": "Gorra Lone Star", "en-US": "Lone Star Cap" },
     priceAmountMinor: 2500n,
     stockQuantity: 100,
     variantId: VARIANT_ID,
+    variants: [
+      {
+        id: VARIANT_ID,
+        sku: "GORRA-LS-001-1",
+        // Variante unica SIN nombre: el caso normal. `null` y no dos cadenas
+        // vacias, para que el panel distinga "no hay nombre" de "esta a medias".
+        name: null,
+        priceAmountMinor: 2500n,
+        stockQuantity: 100,
+        status: "DRAFT",
+        imageUrl: null,
+        position: 0,
+      },
+    ],
     createdAt: NOW,
     updatedAt: NOW,
     ...overrides,
@@ -142,6 +160,9 @@ describe("POST /admin/products", () => {
         sku: "GORRA-LS-001",
         slug: "gorra-lone-star",
         currency: "usd",
+        // Obligatorio desde DEC-052: nadie supone que un producto nuevo es
+        // mercancia, porque la tasa de un paquete es otra.
+        kind: "MERCHANDISE",
         name: { "es-US": "Gorra Lone Star", "en-US": "Lone Star Cap" },
         price_amount_minor: 2500,
         stock_quantity: 100,
@@ -221,6 +242,7 @@ describe("POST /admin/products", () => {
         sku: "GORRA-LS-001",
         slug: "gorra-lone-star",
         currency: "USD",
+        kind: "MERCHANDISE",
         name: { "es-US": "Gorra", "en-US": "Cap" },
         price_amount_minor: 2500,
       },
@@ -447,7 +469,7 @@ describe("POST /admin/promotions/:promotion_id/activate", () => {
   it("exige un reason_code con la forma que se persiste en la traza", async () => {
     // Lo que abre la puerta tiene que ser exactamente lo que queda escrito en
     // `audit_events.reason_code`. Si bastara cualquier cadena, el control seria
-    // un tramite.
+    // un tramite. El motivo MAL FORMADO si es un cuerpo invalido: 422.
     shared.repository = { setPromotionStatus: () => Promise.resolve(promotionFixture()) };
 
     const app = await appAllowingPermissions();
@@ -458,6 +480,40 @@ describe("POST /admin/promotions/:promotion_id/activate", () => {
     });
 
     expect(response.statusCode).toBe(422);
+  });
+
+  /**
+   * SIN MOTIVO, 403 DEL AUTORIZADOR, NO 422 DEL ESQUEMA.
+   *
+   * `promotion.activate` esta marcada `requiresReason` en el catalogo de
+   * `@lsw/security`, y quien deniega sin motivo es `authorize()` (HO-034.1).
+   * Con el esquema declarandolo obligatorio, Fastify validaba el cuerpo ANTES
+   * del `preHandler` y la peticion moria con 422 sin llegar al control: un
+   * fallo de autorizacion se presentaba como un cuerpo mal formado.
+   *
+   * Aqui el autorizador esta ABIERTO, asi que el 403 lo produce la comprobacion
+   * de cinturon del handler; con el real lo produce la puerta, antes de entrar.
+   * Lo que se fija es que NUNCA es 422.
+   */
+  it("activar sin motivo es 403, y no llega a tocar el estado", async () => {
+    let touched = false;
+    shared.repository = {
+      setPromotionStatus: () => {
+        touched = true;
+        return Promise.resolve(promotionFixture({ status: "ACTIVE" }));
+      },
+    };
+
+    const app = await appAllowingPermissions();
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/v1/admin/promotions/${PROMOTION_ID}/activate`,
+      payload: {},
+    });
+
+    expect(response.statusCode).toBe(403);
+    // La negativa no puede dejar detras una promocion ya activada.
+    expect(touched).toBe(false);
   });
 
   it("activa cuando el motor lo permite", async () => {
@@ -474,6 +530,62 @@ describe("POST /admin/promotions/:promotion_id/activate", () => {
 
     expect(response.statusCode).toBe(200);
     expect(response.json<{ status: string }>().status).toBe("ACTIVE");
+  });
+});
+
+describe("POST /admin/promotions/:promotion_id/close", () => {
+  it("cerrar sin motivo es 403, y no llega a tocar el estado", async () => {
+    // Mismo criterio que al activar. Cerrar detiene la entrada de
+    // participaciones: la operacion que no se puede explicar es justo la que no
+    // debe ocurrir.
+    let touched = false;
+    shared.repository = {
+      setPromotionStatus: () => {
+        touched = true;
+        return Promise.resolve(promotionFixture({ status: "CLOSED" }));
+      },
+    };
+
+    const app = await appAllowingPermissions();
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/v1/admin/promotions/${PROMOTION_ID}/close`,
+      payload: {},
+    });
+
+    expect(response.statusCode).toBe(403);
+    expect(touched).toBe(false);
+  });
+
+  it("un motivo con otra ortografia sigue siendo 422", async () => {
+    shared.repository = {
+      setPromotionStatus: () => Promise.resolve(promotionFixture({ status: "CLOSED" })),
+    };
+
+    const app = await appAllowingPermissions();
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/v1/admin/promotions/${PROMOTION_ID}/close`,
+      payload: { reason_code: "x" },
+    });
+
+    expect(response.statusCode).toBe(422);
+  });
+
+  it("cierra cuando el motor lo permite", async () => {
+    shared.repository = {
+      setPromotionStatus: () => Promise.resolve(promotionFixture({ status: "CLOSED" })),
+    };
+
+    const app = await appAllowingPermissions();
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/v1/admin/promotions/${PROMOTION_ID}/close`,
+      payload: { reason_code: "promotion_window_ended" },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json<{ status: string }>().status).toBe("CLOSED");
   });
 });
 
@@ -494,6 +606,7 @@ describe("sin sesion", () => {
         sku: "GORRA-LS-001",
         slug: "gorra-lone-star",
         currency: "USD",
+        kind: "MERCHANDISE",
         name: { "es-US": "Gorra", "en-US": "Cap" },
         price_amount_minor: 2500,
       },

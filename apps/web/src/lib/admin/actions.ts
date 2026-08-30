@@ -6,15 +6,33 @@ import { redirect } from "next/navigation";
 import { adminHref } from "@/i18n/admin-routing";
 import { FALLBACK_LOCALE, type Locale } from "@/i18n/locales";
 import {
+  activateAdminRulesVersion,
   ADJUSTMENT_DIRECTIONS,
+  ADMIN_PRODUCT_STATUSES,
+  AMOE_MODES,
   approveAdjustment,
+  approveAdminSettingChangeRequest,
   approveAmoeSubmission,
   createAdjustment,
+  createAdminBonusPeriod,
+  createAdminProductVariant,
+  createAdminRulesVersion,
+  createAdminSettingChangeRequest,
   login,
   logout,
+  PRODUCT_KINDS,
+  putAdminRulesDocument,
+  rejectAdminSettingChangeRequest,
   rejectAmoeSubmission,
+  transcribeAmoeSubmission,
+  updateAdminFeatureFlag,
+  updateAdminProductVariant,
+  updateAdminRulesVersion,
   verifyMfa,
   type AdjustmentDirection,
+  type AdminProductVariantInput,
+  type AmoeMode,
+  type ProductKind,
   activateAdminPromotion,
   closeAdminPromotion,
   createAdminProduct,
@@ -29,7 +47,13 @@ import {
 import { fromFailure, invalid, SUCCEEDED, type ActionResult } from "@/lib/action-result";
 import { checkboxFrom, localeFrom, secretFrom, textFrom } from "@/lib/form-input";
 import { isIanaTimeZone, priceToMinorUnits, zonedWallTimeToIso } from "@/lib/admin/catalog-input";
-import { PROMOTION_ACTIVATE_REASONS, PROMOTION_CLOSE_REASONS } from "@/lib/admin/reason-codes";
+import {
+  BONUS_PERIOD_REASONS,
+  FLAG_UPDATE_REASONS,
+  PROMOTION_ACTIVATE_REASONS,
+  PROMOTION_CLOSE_REASONS,
+  RULES_ACTIVATE_REASONS,
+} from "@/lib/admin/reason-codes";
 import { mutableSession } from "@/lib/session-server";
 
 /**
@@ -494,6 +518,12 @@ export async function createProductAction(
   const stock = stockFrom(formData);
   if (!stock.ok) return invalid("VALIDATION_FAILED", "stock");
 
+  const kind = productKindFrom(formData);
+  if (kind === null) return invalid("FIELD_REQUIRED", "kind");
+
+  const variants = variantsFrom(formData, currency);
+  if (!variants.ok) return variants.result;
+
   const session = await mutableSession();
   const result = await createAdminProduct(
     {
@@ -507,6 +537,12 @@ export async function createProductAction(
       },
       price_amount_minor: price,
       stock_quantity: stock.value,
+      kind,
+      category_key: textFrom(formData, "category_key"),
+      image_url: textFrom(formData, "image_url"),
+      // Vacio significa "sin variantes declaradas": la API crea `<sku>-1` con
+      // el precio y las existencias de arriba, que es el flujo de siempre.
+      ...(variants.value.length === 0 ? {} : { variants: variants.value }),
     },
     locale,
     session,
@@ -551,9 +587,223 @@ export async function updateProductAction(
   const price = priceToMinorUnits(priceText, current.data.currency);
   if (price === null) return invalid("PRICE_INVALID", "price");
 
+  const kind = productKindFrom(formData);
+
   const result = await updateAdminProduct(
     productId,
-    { name: name.value, price_amount_minor: price, stock_quantity: stock.value },
+    {
+      name: name.value,
+      price_amount_minor: price,
+      stock_quantity: stock.value,
+      /*
+       * `kind` SOLO VIAJA SI SE ELIGIO. Sin eleccion no se manda: un producto
+       * que la API sirve sin `kind` no se convierte en mercancia por guardar el
+       * nombre, porque eso cambiaria en silencio la tasa que se le aplica.
+       */
+      ...(kind === null ? {} : { kind }),
+      category_key: textFrom(formData, "category_key"),
+      image_url: textFrom(formData, "image_url"),
+    },
+    locale,
+    session,
+  );
+
+  if (!result.ok) return fromFailure(result.error);
+
+  revalidatePath("/admin", "layout");
+  return SUCCEEDED;
+}
+
+/**
+ * Tipo de producto elegido, comprobado contra el enum del contrato (§13.1).
+ *
+ * `null` significa QUE NO SE ELIGIO NINGUNO, y quien llama decide si eso es un
+ * error -al crear- o una ausencia legitima -al editar un producto que la API
+ * sirve sin `kind`-. Nunca se cae a `MERCHANDISE` por defecto: el tipo decide
+ * la tasa, y elegir por omision cambiaria lo que vale comprarlo.
+ */
+function productKindFrom(formData: FormData): ProductKind | null {
+  const raw = textFrom(formData, "kind");
+  if (raw === null) return null;
+
+  return PRODUCT_KINDS.find((kind) => kind === raw) ?? null;
+}
+
+/**
+ * Variantes declaradas en el alta, leidas por indice.
+ *
+ * El formulario numera los campos (`variant_0_name_es`, `variant_1_price`, ...)
+ * y manda cuantas hay en `variant_count`. Es la forma que sobrevive SIN
+ * JavaScript y sin arrays en `FormData`: cada campo tiene nombre propio.
+ *
+ * UNA VARIANTE A MEDIAS ES UN ERROR, no una variante con huecos: sin los dos
+ * nombres o sin precio no se puede crear, y dejarla pasar produciria un SKU
+ * anonimo en la tienda. El precio se convierte a unidad menor en el servidor,
+ * sin coma flotante, con la MONEDA DEL PRODUCTO -que es la que decide cuantos
+ * decimales tiene-.
+ */
+function variantsFrom(
+  formData: FormData,
+  currency: string,
+):
+  | { readonly ok: true; readonly value: readonly AdminProductVariantInput[] }
+  | { readonly ok: false; readonly result: ActionResult } {
+  const countRaw = textFrom(formData, "variant_count");
+  const count = countRaw === null ? 0 : Number.parseInt(countRaw, 10);
+  if (!Number.isSafeInteger(count) || count < 0) return { ok: true, value: [] };
+
+  const value: AdminProductVariantInput[] = [];
+
+  for (let index = 0; index < count; index += 1) {
+    const nameEs = textFrom(formData, `variant_${index}_name_es`);
+    const nameEn = textFrom(formData, `variant_${index}_name_en`);
+    if (nameEs === null) {
+      return { ok: false, result: invalid("FIELD_REQUIRED", `variant_${index}_name_es`) };
+    }
+    if (nameEn === null) {
+      return { ok: false, result: invalid("FIELD_REQUIRED", `variant_${index}_name_en`) };
+    }
+
+    const priceText = textFrom(formData, `variant_${index}_price`);
+    if (priceText === null) {
+      return { ok: false, result: invalid("FIELD_REQUIRED", `variant_${index}_price`) };
+    }
+
+    const price = priceToMinorUnits(priceText, currency);
+    if (price === null) {
+      return { ok: false, result: invalid("PRICE_INVALID", `variant_${index}_price`) };
+    }
+
+    const stockRaw = textFrom(formData, `variant_${index}_stock`);
+    const stock = stockRaw === null ? null : Number.parseInt(stockRaw, 10);
+    if (stock !== null && (!Number.isSafeInteger(stock) || stock < 0)) {
+      return { ok: false, result: invalid("VALIDATION_FAILED", `variant_${index}_stock`) };
+    }
+
+    const sku = textFrom(formData, `variant_${index}_sku`);
+    const imageUrl = textFrom(formData, `variant_${index}_image_url`);
+
+    value.push({
+      name: { "es-US": nameEs, "en-US": nameEn },
+      price_amount_minor: price,
+      stock_quantity: stock,
+      ...(sku === null ? {} : { sku }),
+      ...(imageUrl === null ? {} : { image_url: imageUrl }),
+    });
+  }
+
+  return { ok: true, value };
+}
+
+/**
+ * Alta de una variante (§13.6).
+ *
+ * La moneda se lee del PRODUCTO y no del formulario: es lo que decide cuantos
+ * decimales tiene el precio, y un campo oculto se edita en cinco segundos.
+ */
+export async function createVariantAction(
+  _previous: ActionResult,
+  formData: FormData,
+): Promise<ActionResult> {
+  const locale = localeFrom(formData);
+  if (locale === null) return invalid("VALIDATION_FAILED");
+
+  const productId = textFrom(formData, "product_id");
+  if (productId === null) return invalid("VALIDATION_FAILED");
+
+  const name = localizedFrom(formData, "name");
+  if (!name.ok) return name.result;
+
+  const priceText = textFrom(formData, "price");
+  if (priceText === null) return invalid("FIELD_REQUIRED", "price");
+
+  const stock = stockFrom(formData);
+  if (!stock.ok) return invalid("VALIDATION_FAILED", "stock");
+
+  const session = await mutableSession();
+
+  const current = await fetchAdminProduct(productId, locale, session);
+  if (!current.ok) return fromFailure(current.error);
+
+  const price = priceToMinorUnits(priceText, current.data.currency);
+  if (price === null) return invalid("PRICE_INVALID", "price");
+
+  const sku = textFrom(formData, "sku");
+  const imageUrl = textFrom(formData, "image_url");
+
+  const result = await createAdminProductVariant(
+    productId,
+    {
+      name: name.value,
+      price_amount_minor: price,
+      stock_quantity: stock.value,
+      ...(sku === null ? {} : { sku }),
+      image_url: imageUrl,
+    },
+    locale,
+    session,
+  );
+
+  if (!result.ok) return fromFailure(result.error);
+
+  revalidatePath("/admin", "layout");
+  return SUCCEEDED;
+}
+
+/**
+ * Edicion de una variante, ARCHIVARLA incluida (§13.6).
+ *
+ * No existe `deleteVariantAction` y no puede existir: un SKU vendido tiene que
+ * seguir explicando los pedidos que lo contienen (principios #5 y #6). La API
+ * tampoco publica un DELETE.
+ */
+export async function updateVariantAction(
+  _previous: ActionResult,
+  formData: FormData,
+): Promise<ActionResult> {
+  const locale = localeFrom(formData);
+  if (locale === null) return invalid("VALIDATION_FAILED");
+
+  const productId = textFrom(formData, "product_id");
+  if (productId === null) return invalid("VALIDATION_FAILED");
+
+  const variantId = textFrom(formData, "variant_id");
+  if (variantId === null) return invalid("VALIDATION_FAILED");
+
+  const name = localizedFrom(formData, "name");
+  if (!name.ok) return name.result;
+
+  const priceText = textFrom(formData, "price");
+  if (priceText === null) return invalid("FIELD_REQUIRED", "price");
+
+  const stock = stockFrom(formData);
+  if (!stock.ok) return invalid("VALIDATION_FAILED", "stock");
+
+  const statusRaw = textFrom(formData, "status");
+  const status =
+    statusRaw === null
+      ? null
+      : (ADMIN_PRODUCT_STATUSES.find((value) => value === statusRaw) ?? null);
+  if (statusRaw !== null && status === null) return invalid("VALIDATION_FAILED", "status");
+
+  const session = await mutableSession();
+
+  const current = await fetchAdminProduct(productId, locale, session);
+  if (!current.ok) return fromFailure(current.error);
+
+  const price = priceToMinorUnits(priceText, current.data.currency);
+  if (price === null) return invalid("PRICE_INVALID", "price");
+
+  const result = await updateAdminProductVariant(
+    productId,
+    variantId,
+    {
+      name: name.value,
+      price_amount_minor: price,
+      stock_quantity: stock.value,
+      image_url: textFrom(formData, "image_url"),
+      ...(status === null ? {} : { status }),
+    },
     locale,
     session,
   );
@@ -803,6 +1053,645 @@ export async function closePromotionAction(
   const result = await closeAdminPromotion(
     promotionId,
     { reason_code: reason.reasonCode, reason_text: reason.reasonText },
+    locale,
+    session,
+  );
+
+  if (!result.ok) return fromFailure(result.error);
+
+  revalidatePath("/admin", "layout");
+  return SUCCEEDED;
+}
+
+// ---------------------------------------------------------------------------
+// Versiones de reglas, bonus, flags y transcripcion (§13.7 a §13.10, DEC-054)
+// ---------------------------------------------------------------------------
+//
+// LO QUE ESTAS ACCIONES NO DECIDEN, Y ES CASI TODO
+//
+//   No validan una configuracion legal: lo hace la API por rebanadas, con los
+//   esquemas del dominio, y responde 422 con la ruta de cada problema. No
+//   deciden si una version se puede activar: ese cerrojo es un trigger de
+//   PostgreSQL (DEC-012) y su 409 se ensena tal cual. No comprueban ninguna
+//   capacidad ni ningun step-up: eso es del autorizador, y su 403 tambien se
+//   pinta.
+//
+//   Y NO RELLENAN NINGUNA CLAVE. Un campo vacio viaja como `"TBD"` o como
+//   `null` segun la clave -el formulario lo dice con esas palabras- porque
+//   `"TBD"` es el estado honesto de una clave legal sin resolver y un valor por
+//   defecto diria que algo esta decidido cuando no lo esta (CLAUDE.md #2).
+
+/**
+ * `config` tecleado en la vista JSON avanzada.
+ *
+ * SE COMPRUEBA QUE SEA UN OBJETO JSON y nada mas. No se valida su contenido
+ * -eso es del dominio legal y lo hace la API- pero un texto que no parsea no
+ * puede viajar: el backend respondería un 400 sin `path`, y quien opera se
+ * quedaría sin saber en que linea se equivoco.
+ */
+function configFrom(
+  formData: FormData,
+  field: string,
+):
+  | { readonly ok: true; readonly value: Record<string, unknown> }
+  | { readonly ok: false; readonly result: ActionResult } {
+  const raw = textFrom(formData, field);
+  if (raw === null) return { ok: false, result: invalid("FIELD_REQUIRED", field) };
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return { ok: false, result: invalid("CONFIG_JSON_INVALID", field) };
+  }
+
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    return { ok: false, result: invalid("CONFIG_JSON_INVALID", field) };
+  }
+
+  return { ok: true, value: parsed as Record<string, unknown> };
+}
+
+/**
+ * Alta de un borrador de version de reglas.
+ *
+ * DOS CAMINOS Y NINGUNO INVENTA NADA: vacio -la API compone la plantilla con
+ * todas las claves requeridas en `"TBD"`- o CLONANDO otra version, que es el
+ * camino normal porque casi ningun cambio legal parte de cero.
+ */
+export async function createRulesVersionAction(
+  _previous: ActionResult,
+  formData: FormData,
+): Promise<ActionResult> {
+  const locale = localeFrom(formData);
+  if (locale === null) return invalid("VALIDATION_FAILED");
+
+  const promotionId = textFrom(formData, "promotion_id");
+  if (promotionId === null) return invalid("VALIDATION_FAILED");
+
+  const cloneFrom = textFrom(formData, "clone_from_rules_version_id");
+  const reference = textFrom(formData, "attorney_approval_reference");
+
+  const session = await mutableSession();
+  const result = await createAdminRulesVersion(
+    promotionId,
+    {
+      ...(cloneFrom === null ? {} : { clone_from_rules_version_id: cloneFrom }),
+      ...(reference === null ? {} : { attorney_approval_reference: reference }),
+    },
+    locale,
+    session,
+  );
+
+  if (!result.ok) return fromFailure(result.error);
+
+  revalidatePath("/admin", "layout");
+  redirect(
+    adminHref(
+      locale,
+      `/promotions/${encodeURIComponent(promotionId)}/rules/${encodeURIComponent(result.data.id)}`,
+    ),
+  );
+}
+
+/**
+ * Edicion del `config` de un borrador.
+ *
+ * EL CUERPO LLEVA EL OBJETO ENTERO, no un parche por clave. Es lo que pide
+ * §13.7 y ademas es lo correcto para un documento legal: enviar solo lo que
+ * cambio dejaria al servidor fusionando dos versiones de una configuracion que
+ * gobierna cuanto vale una compra.
+ */
+export async function updateRulesVersionAction(
+  _previous: ActionResult,
+  formData: FormData,
+): Promise<ActionResult> {
+  const locale = localeFrom(formData);
+  if (locale === null) return invalid("VALIDATION_FAILED");
+
+  const promotionId = textFrom(formData, "promotion_id");
+  if (promotionId === null) return invalid("VALIDATION_FAILED");
+
+  const rulesVersionId = textFrom(formData, "rules_version_id");
+  if (rulesVersionId === null) return invalid("VALIDATION_FAILED");
+
+  const config = configFrom(formData, "config");
+  if (!config.ok) return config.result;
+
+  const reference = textFrom(formData, "attorney_approval_reference");
+
+  const session = await mutableSession();
+  const result = await updateAdminRulesVersion(
+    promotionId,
+    rulesVersionId,
+    { config: config.value, attorney_approval_reference: reference },
+    locale,
+    session,
+  );
+
+  if (!result.ok) return fromFailure(result.error);
+
+  revalidatePath("/admin", "layout");
+  return SUCCEEDED;
+}
+
+/**
+ * Documento de una version en un locale.
+ *
+ * LAS DOS BANDERAS SON INDEPENDIENTES y se envian como se marcaron. No se
+ * deduce una de la otra: puede haber una version con las dos lenguas
+ * controlantes, y hoy la real es la contraria -ninguna lo es, porque
+ * `controlling_language` sigue en `TBD`-. Deducirlas seria decidir cual manda,
+ * que es materia del abogado (CLAUDE.md #2).
+ */
+export async function putRulesDocumentAction(
+  _previous: ActionResult,
+  formData: FormData,
+): Promise<ActionResult> {
+  const locale = localeFrom(formData);
+  if (locale === null) return invalid("VALIDATION_FAILED");
+
+  const promotionId = textFrom(formData, "promotion_id");
+  if (promotionId === null) return invalid("VALIDATION_FAILED");
+
+  const rulesVersionId = textFrom(formData, "rules_version_id");
+  if (rulesVersionId === null) return invalid("VALIDATION_FAILED");
+
+  const documentLocale = textFrom(formData, "document_locale");
+  if (documentLocale === null) return invalid("VALIDATION_FAILED", "document_locale");
+
+  const title = textFrom(formData, "title");
+  if (title === null) return invalid("FIELD_REQUIRED", "title");
+
+  const body = textFrom(formData, "body");
+  if (body === null) return invalid("FIELD_REQUIRED", "body");
+
+  const session = await mutableSession();
+  const result = await putAdminRulesDocument(
+    promotionId,
+    rulesVersionId,
+    documentLocale,
+    {
+      title,
+      body,
+      is_legally_controlling: checkboxFrom(formData, "is_legally_controlling"),
+      is_informational_translation: checkboxFrom(formData, "is_informational_translation"),
+    },
+    locale,
+    session,
+  );
+
+  if (!result.ok) return fromFailure(result.error);
+
+  revalidatePath("/admin", "layout");
+  return SUCCEEDED;
+}
+
+/**
+ * Activacion de una version de reglas. Motivo obligatorio y step-up.
+ *
+ * La pantalla ya lista las claves sin resolver ANTES del boton, para que el 409
+ * del motor no sea la primera noticia. Cuando aun asi salta, su mensaje se
+ * conserva en `detail` y se ensena tal cual: es la unica explicacion fiable de
+ * cual de los cerrojos de DEC-012 se cerro (HO-038 punto 4).
+ */
+export async function activateRulesVersionAction(
+  _previous: ActionResult,
+  formData: FormData,
+): Promise<ActionResult> {
+  const locale = localeFrom(formData);
+  if (locale === null) return invalid("VALIDATION_FAILED");
+
+  const promotionId = textFrom(formData, "promotion_id");
+  if (promotionId === null) return invalid("VALIDATION_FAILED");
+
+  const rulesVersionId = textFrom(formData, "rules_version_id");
+  if (rulesVersionId === null) return invalid("VALIDATION_FAILED");
+
+  if (!checkboxFrom(formData, "confirmed")) return invalid("CONFIRMATION_REQUIRED", "confirmed");
+
+  const reason = transitionReasonFrom(formData, RULES_ACTIVATE_REASONS);
+  if (!reason.ok) return reason.result;
+
+  const session = await mutableSession();
+  const result = await activateAdminRulesVersion(
+    promotionId,
+    rulesVersionId,
+    { reason_code: reason.reasonCode, reason_text: reason.reasonText },
+    locale,
+    session,
+  );
+
+  if (!result.ok) return fromFailure(result.error);
+
+  revalidatePath("/admin", "layout");
+  return SUCCEEDED;
+}
+
+/**
+ * Atajo "periodo bonus" (§13.8).
+ *
+ * ES UNA VERSION DE REGLAS NUEVA, no un objeto aparte: clona la activa, le
+ * anade el periodo y la activa. Por eso exige lo mismo que activar -motivo y
+ * step-up- y por eso el multiplicador viaja como FRACCION (DEC-010), nunca como
+ * decimal.
+ *
+ * EL INSTANTE SE COMPONE EN EL SERVIDOR a partir de un preset -"ahora + 12h"- o
+ * de dos fechas escritas. Los presets son comodidad, no una regla: el techo
+ * legal lo impone `bonus_rules.max_multiplier` y lo comprueba la API.
+ */
+export async function createBonusPeriodAction(
+  _previous: ActionResult,
+  formData: FormData,
+): Promise<ActionResult> {
+  const locale = localeFrom(formData);
+  if (locale === null) return invalid("VALIDATION_FAILED");
+
+  const promotionId = textFrom(formData, "promotion_id");
+  if (promotionId === null) return invalid("VALIDATION_FAILED");
+
+  if (!checkboxFrom(formData, "confirmed")) return invalid("CONFIRMATION_REQUIRED", "confirmed");
+
+  const multiplier = multiplierFrom(formData);
+  if (multiplier === null) return invalid("MULTIPLIER_INVALID", "multiplier_numerator");
+
+  const window = bonusWindowFrom(formData);
+  if (!window.ok) return window.result;
+
+  const reason = transitionReasonFrom(formData, BONUS_PERIOD_REASONS);
+  if (!reason.ok) return reason.result;
+
+  const session = await mutableSession();
+  const result = await createAdminBonusPeriod(
+    promotionId,
+    {
+      multiplier,
+      starts_at: window.startsAt,
+      ends_at: window.endsAt,
+      product_kind_scope: productKindScopeFrom(formData),
+      sku_scope: null,
+      conflict_strategy: textFrom(formData, "conflict_strategy"),
+      reason_code: reason.reasonCode,
+      reason_text: reason.reasonText,
+    },
+    locale,
+    session,
+  );
+
+  if (!result.ok) return fromFailure(result.error);
+
+  revalidatePath("/admin", "layout");
+
+  /*
+   * LAS ADVERTENCIAS DE LA RESPUESTA SE DEVUELVEN, NO SE TRAGAN.
+   *
+   * Con `entry_multipliers_enabled` apagado el bonus existe y NO aplica, y la
+   * API lo dice en `warnings`. Un exito silencioso dejaria a quien acaba de
+   * crear un 5X creyendo que esta activo, que es la peor forma de terminar este
+   * gesto. Viajan en `detail` porque es el unico canal de texto libre que tiene
+   * `ActionResult`, y la pantalla las pinta como aviso y no como error.
+   */
+  const warnings = result.data.warnings ?? [];
+  if (warnings.length === 0) return SUCCEEDED;
+
+  return { ...SUCCEEDED, detail: warnings.join(" · ") };
+}
+
+/**
+ * Multiplicador como fraccion (DEC-010).
+ *
+ * DOS ENTEROS Y NUNCA UN DECIMAL. El panel ofrece 2X, 5X y 10X como atajos
+ * -son los que pidio el cliente- y admite escribir numerador y denominador; en
+ * los tres casos lo que viaja son dos enteros, porque `3/2` redondeado a "1.5"
+ * es una cifra distinta de la que aplica el motor.
+ *
+ * Aqui NO se comprueba el techo: `bonus_rules.max_multiplier` es una regla legal
+ * de la version activa y quien la conoce es la API, que responde 422.
+ */
+function multiplierFrom(formData: FormData): { numerator: number; denominator: number } | null {
+  const numerator = positiveIntegerFrom(formData, "multiplier_numerator");
+  if (numerator === null) return null;
+
+  const denominator = positiveIntegerFrom(formData, "multiplier_denominator") ?? 1;
+
+  return { numerator, denominator };
+}
+
+function positiveIntegerFrom(formData: FormData, field: string): number | null {
+  const raw = textFrom(formData, field);
+  if (raw === null) return null;
+  if (!/^\d+$/u.test(raw)) return null;
+
+  const value = Number.parseInt(raw, 10);
+  if (!Number.isSafeInteger(value) || value <= 0) return null;
+
+  return value;
+}
+
+/**
+ * Ventana del periodo bonus.
+ *
+ * DOS FORMAS, Y LA COMODA ES LA DEL PRESET. "Ahora + 12h" es literalmente el
+ * gesto que pidio el cliente, y componerlo en el SERVIDOR -no en el navegador-
+ * es lo que evita que la duracion dependa del reloj de quien pulsa (DEC-011).
+ *
+ * Con fechas escritas se toman tal cual, en ISO UTC. No se convierten desde la
+ * zona legal de la promocion: el formulario pide instantes absolutos y lo dice,
+ * porque un periodo bonus de doce horas cruzando un cambio de horario no tiene
+ * una respuesta obvia y no es el frontend quien debe elegirla.
+ */
+function bonusWindowFrom(
+  formData: FormData,
+):
+  | { readonly ok: true; readonly startsAt: string; readonly endsAt: string }
+  | { readonly ok: false; readonly result: ActionResult } {
+  const preset = textFrom(formData, "duration_preset");
+
+  if (preset !== null && preset !== "custom") {
+    /*
+     * `preset` es texto de formulario y el mapa es una constante literal de
+     * este archivo: una clave desconocida devuelve `undefined` y se rechaza en
+     * la linea siguiente, que es exactamente la comprobacion que la regla pide.
+     */
+    // eslint-disable-next-line security/detect-object-injection
+    const hours = BONUS_PRESET_HOURS[preset];
+    if (hours === undefined)
+      return { ok: false, result: invalid("VALIDATION_FAILED", "duration_preset") };
+
+    const now = Date.now();
+    return {
+      ok: true,
+      startsAt: new Date(now).toISOString(),
+      endsAt: new Date(now + hours * 3_600_000).toISOString(),
+    };
+  }
+
+  const startsAt = textFrom(formData, "starts_at");
+  if (startsAt === null) return { ok: false, result: invalid("FIELD_REQUIRED", "starts_at") };
+
+  const endsAt = textFrom(formData, "ends_at");
+  if (endsAt === null) return { ok: false, result: invalid("FIELD_REQUIRED", "ends_at") };
+
+  const start = Date.parse(startsAt);
+  const end = Date.parse(endsAt);
+  if (Number.isNaN(start)) return { ok: false, result: invalid("DATETIME_INVALID", "starts_at") };
+  if (Number.isNaN(end)) return { ok: false, result: invalid("DATETIME_INVALID", "ends_at") };
+
+  // La API tambien lo rechaza (422). Se comprueba aqui para no mandar a nadie a
+  // firmar una accion que ya se sabe que va a fallar.
+  if (end <= start) return { ok: false, result: invalid("DATETIME_INVALID", "ends_at") };
+
+  return { ok: true, startsAt: new Date(start).toISOString(), endsAt: new Date(end).toISOString() };
+}
+
+/** Presets de duracion que ofrece el panel. Comodidad, no regla legal. */
+const BONUS_PRESET_HOURS: Readonly<Record<string, number>> = {
+  "6h": 6,
+  "12h": 12,
+  "24h": 24,
+  "48h": 48,
+};
+
+/**
+ * Ambito por tipo de producto.
+ *
+ * `null` significa TODOS y es lo que viaja cuando se eligen los dos o ninguno:
+ * es la forma que espera el contrato, y enumerar los dos tipos daria el mismo
+ * resultado con mas superficie de error.
+ */
+function productKindScopeFrom(formData: FormData): readonly ProductKind[] | null {
+  const raw = textFrom(formData, "product_kind_scope");
+  if (raw === null || raw === "ALL") return null;
+
+  const kind = PRODUCT_KINDS.find((candidate) => candidate === raw);
+  return kind === undefined ? null : [kind];
+}
+
+/**
+ * Cambio de un feature flag, con motivo.
+ *
+ * LA MATERIALIDAD LEGAL NO SE COMPRUEBA AQUI. Que un flag exija
+ * `flag.update.legally_material` y step-up lo decide el autorizador con el
+ * catalogo de `@lsw/security`; esta accion manda el cambio y el 403 se pinta
+ * como estado deliberado. La pantalla lo ADVIERTE antes, que es otra cosa.
+ */
+export async function updateFeatureFlagAction(
+  _previous: ActionResult,
+  formData: FormData,
+): Promise<ActionResult> {
+  const locale = localeFrom(formData);
+  if (locale === null) return invalid("VALIDATION_FAILED");
+
+  const key = textFrom(formData, "flag_key");
+  if (key === null) return invalid("VALIDATION_FAILED", "flag_key");
+
+  const reason = transitionReasonFrom(formData, FLAG_UPDATE_REASONS);
+  if (!reason.ok) return reason.result;
+
+  /*
+   * `enabled` se compara con la cadena "true" y no con `Boolean()`:
+   * `Boolean("false")` es `true`, y ese es exactamente el fallo que encenderia
+   * un flag legalmente material al intentar apagarlo.
+   */
+  const enabled = formData.get("enabled") === "true";
+
+  const session = await mutableSession();
+  const result = await updateAdminFeatureFlag(
+    key,
+    { enabled, reason_code: reason.reasonCode, reason_text: reason.reasonText },
+    locale,
+    session,
+  );
+
+  if (!result.ok) return fromFailure(result.error);
+
+  revalidatePath("/admin", "layout");
+  return SUCCEEDED;
+}
+
+/**
+ * Solicitud de cambio de un ajuste legalmente material
+ * (HO-041, resolucion fase 1).
+ *
+ * SUSTITUYE AL `PATCH` DIRECTO. Encender `amoe_enabled` o apagar
+ * `entry_caps_enabled` cambia lo que la plataforma afirma o aplica sobre las
+ * condiciones de participacion, y DEC-032 pide segunda aprobacion para eso. La
+ * respuesta no fue rebajar la capacidad de la ruta: fue construir el control
+ * dual, igual que en los ajustes de participaciones.
+ *
+ * DOS TIPOS DE AJUSTE, UN SOLO GESTO: un flag (`enabled`) y la modalidad AMOE
+ * (`amoe_mode`). Solo viaja el valor que corresponde al tipo; mandar los dos
+ * "por si acaso" no diria que se esta pidiendo, y la API responde 422.
+ *
+ * NO DEDUCE EL EFECTO. Con `dual_approval_for_sensitive_actions_enabled`
+ * apagado, la API aplica el cambio al momento y lo dice con `status: "APPLIED"`.
+ * Suponer que siempre queda pendiente diria que no ha pasado nada cuando si ha
+ * pasado.
+ */
+export async function requestSettingChangeAction(
+  _previous: ActionResult,
+  formData: FormData,
+): Promise<ActionResult> {
+  const locale = localeFrom(formData);
+  if (locale === null) return invalid("VALIDATION_FAILED");
+
+  const kindRaw = textFrom(formData, "setting_kind");
+  const kind =
+    kindRaw === "AMOE_MODE" ? "AMOE_MODE" : kindRaw === "FEATURE_FLAG" ? "FEATURE_FLAG" : null;
+  if (kind === null) return invalid("VALIDATION_FAILED", "setting_kind");
+
+  const key = textFrom(formData, "setting_key");
+  if (key === null) return invalid("VALIDATION_FAILED", "setting_key");
+
+  const reason = transitionReasonFrom(formData, FLAG_UPDATE_REASONS);
+  if (!reason.ok) return reason.result;
+
+  let value: { readonly enabled: boolean } | { readonly amoe_mode: AmoeMode | null };
+
+  if (kind === "AMOE_MODE") {
+    /*
+     * Vacio significa NINGUNA MODALIDAD, y es un estado real: alguien enciende
+     * la via gratuita antes de que el abogado fije como funciona. Viaja como
+     * `null` y no como cadena vacia, que no es un valor del enum.
+     */
+    const raw = textFrom(formData, "amoe_mode");
+    const mode = raw === null ? null : (AMOE_MODES.find((candidate) => candidate === raw) ?? null);
+    if (raw !== null && mode === null) return invalid("VALIDATION_FAILED", "amoe_mode");
+
+    value = { amoe_mode: mode };
+  } else {
+    /*
+     * `enabled` se compara con la cadena "true" y no con `Boolean()`:
+     * `Boolean("false")` es `true`, y ese es exactamente el fallo que pediria
+     * ENCENDER un flag legalmente material al intentar apagarlo.
+     */
+    value = { enabled: formData.get("enabled") === "true" };
+  }
+
+  const session = await mutableSession();
+  const result = await createAdminSettingChangeRequest(
+    {
+      setting_kind: kind,
+      setting_key: key,
+      ...value,
+      reason_code: reason.reasonCode,
+      reason_text: reason.reasonText,
+    },
+    locale,
+    session,
+  );
+
+  if (!result.ok) return fromFailure(result.error);
+
+  revalidatePath("/admin", "layout");
+
+  /*
+   * El estado viaja en `detail` para que la pantalla pueda decir si el cambio
+   * quedo pendiente o si ya se aplico. Es la misma via por la que llegan los
+   * `warnings` del atajo bonus y el mensaje del motor: texto que produce el
+   * backend y que la interfaz no redacta.
+   */
+  return { ...SUCCEEDED, detail: result.data.status };
+}
+
+/**
+ * Aprobacion o rechazo de una solicitud de cambio.
+ *
+ * QUIEN LA PIDIO NO PUEDE APROBARLA. Que la pantalla no ofrezca el boton es
+ * cortesia; el control lo aplican el servicio y una `CHECK` de la tabla, y
+ * responden 409 `SETTING_CHANGE_SELF_APPROVAL_FORBIDDEN`. Si esta accion se
+ * llamara igualmente sobre una solicitud propia, ese 409 es lo correcto y se
+ * pinta tal cual.
+ */
+export async function decideSettingChangeAction(
+  _previous: ActionResult,
+  formData: FormData,
+): Promise<ActionResult> {
+  const locale = localeFrom(formData);
+  if (locale === null) return invalid("VALIDATION_FAILED");
+
+  const requestId = textFrom(formData, "request_id");
+  if (requestId === null) return invalid("VALIDATION_FAILED", "request_id");
+
+  const decision = textFrom(formData, "decision");
+  if (decision !== "approve" && decision !== "reject") {
+    return invalid("VALIDATION_FAILED", "decision");
+  }
+
+  const reason = transitionReasonFrom(formData, FLAG_UPDATE_REASONS);
+  if (!reason.ok) return reason.result;
+
+  const body = {
+    reason_code: reason.reasonCode,
+    reason_text: reason.reasonText,
+    decision_notes: reason.reasonText,
+  };
+
+  const session = await mutableSession();
+  const result =
+    decision === "approve"
+      ? await approveAdminSettingChangeRequest(requestId, body, locale, session)
+      : await rejectAdminSettingChangeRequest(requestId, body, locale, session);
+
+  if (!result.ok) return fromFailure(result.error);
+
+  revalidatePath("/admin", "layout");
+  return SUCCEEDED;
+}
+
+/**
+ * Transcripcion de una ficha postal (§13.10).
+ *
+ * EL `payload` SE COMPONE CON LOS CAMPOS QUE DECLARA LA CONFIGURACION, ni uno
+ * mas ni uno menos. Las claves llegan en un campo oculto porque quien las fija
+ * es la version de reglas -a traves de `required_fields`- y no esta accion:
+ * escribirlas aqui seria fijar en el frontend que se pide para participar
+ * gratis, que es justo lo que el principio 2 prohibe.
+ *
+ * QUIEN TRANSCRIBE NO PODRA APROBAR. No se comprueba aqui -la accion no sabe
+ * quien aprobara despues-: lo aplica el backend comparando actores y responde
+ * 409 `SEPARATION_OF_DUTIES`.
+ */
+export async function transcribeAmoeAction(
+  _previous: ActionResult,
+  formData: FormData,
+): Promise<ActionResult> {
+  const locale = localeFrom(formData);
+  if (locale === null) return invalid("VALIDATION_FAILED");
+
+  const promotionId = textFrom(formData, "promotion_id");
+  if (promotionId === null) return invalid("VALIDATION_FAILED", "promotion_id");
+
+  const email = textFrom(formData, "participant_email");
+  if (email === null) return invalid("FIELD_REQUIRED", "participant_email");
+
+  const keysRaw = textFrom(formData, "payload_keys");
+  if (keysRaw === null) return invalid("VALIDATION_FAILED", "payload_keys");
+
+  const payload: Record<string, string> = {};
+  for (const key of keysRaw.split(",").filter((candidate) => candidate.length > 0)) {
+    const value = textFrom(formData, `field_${key}`);
+    /*
+     * Las claves salen de `required_fields` de la configuracion AMOE, no de
+     * entrada libre, y el objeto se construye aqui mismo: nada se lee de el
+     * despues, solo se serializa como cuerpo JSON de la peticion.
+     */
+    // eslint-disable-next-line security/detect-object-injection
+    if (value !== null) payload[key] = value;
+  }
+
+  const envelope = textFrom(formData, "envelope_reference");
+  const cards = positiveIntegerFrom(formData, "cards_in_envelope");
+
+  const session = await mutableSession();
+  const result = await transcribeAmoeSubmission(
+    {
+      promotion_id: promotionId,
+      participant_email: email,
+      payload,
+      ...(envelope === null ? {} : { envelope_reference: envelope }),
+      ...(cards === null ? {} : { cards_in_envelope: cards }),
+    },
     locale,
     session,
   );
