@@ -82,6 +82,37 @@ export const promotionManagerSession: SessionState = {
   email: "promotions@example.com",
   email_verified: true,
   roles: ["PROMOTION_MANAGER"],
+  // Lo que publica la API para este rol: copia LITERAL de ROLE_CAPABILITIES
+  // (packages/security/src/permissions.ts) en el momento de escribirla. Es un
+  // fixture de la respuesta, no una politica: si el catalogo cambia, cambia
+  // aqui tambien, y el test de menu lo delata.
+  capabilities: [
+    "session.self.read",
+    "session.self.revoke",
+    "dashboard.read",
+    "participant.list",
+    "participant.read",
+    "pii.view.masked",
+    "order.read",
+    "order.refund.initiate",
+    "entry.ledger.read",
+    "entry.adjust.create",
+    "amoe.review.read",
+    "amoe.review.approve",
+    "amoe.review.reject",
+    "product.read",
+    "product.write",
+    "product.publish",
+    "promotion.read",
+    "promotion.create",
+    "promotion.update",
+    "promotion.activate",
+    "promotion.close",
+    "rules.version.read",
+    "rules.version.create",
+    "flag.read",
+    "reconciliation.read",
+  ],
 };
 
 /** Personal de cumplimiento. Aprueba ajustes; no los propone. */
@@ -92,6 +123,44 @@ export const complianceOfficerSession: SessionState = {
   email: "compliance@example.com",
   email_verified: true,
   roles: ["COMPLIANCE_OFFICER"],
+  capabilities: [
+    "session.self.read",
+    "session.self.revoke",
+    "dashboard.read",
+    "promotion.read",
+    "product.read",
+    "participant.list",
+    "participant.read",
+    "pii.view.masked",
+    "pii.view.full",
+    "order.read",
+    "payment.webhook.read",
+    "entry.ledger.read",
+    "entry.adjust.approve",
+    "participant.disqualify",
+    "amoe.review.read",
+    "amoe.review.approve",
+    "amoe.review.reject",
+    "rules.version.read",
+    "rules.version.create",
+    "rules.version.activate",
+    "flag.read",
+    "flag.update.legally_material",
+    "reconciliation.read",
+    "audit.read",
+    "audit.integrity.verify",
+    "rbac.admin.read",
+    "tpa.config.read",
+    "export.snapshot.read",
+    "export.snapshot.create",
+    "export.snapshot.validate",
+    "export.finalize",
+    "draw.authorization.create",
+    "draw.result.read",
+    "winner.workflow.read",
+    "winner.status.update",
+    "winner.publish",
+  ],
 };
 
 /** Personal a la espera del segundo factor. No da acceso a nada. */
@@ -102,11 +171,11 @@ export const staffMfaPendingSession: SessionState = {
 };
 
 /**
- * Sesion de personal con las capacidades PUBLICADAS por el backend.
+ * Sesion de personal con un SUBCONJUNTO de capacidades publicado.
  *
- * Es el escenario que hay que poder probar hoy aunque el backend todavia no lo
- * sirva: cuando publique `capabilities`, el espejo local de la matriz deja de
- * usarse y el panel tiene que seguir pintando lo mismo.
+ * Sirve para probar que el panel pinta lo que la API dice y no lo que el rol
+ * sugiere: `PROMOTION_MANAGER` tendria `entry.adjust.create`, y aqui la
+ * respuesta no la trae, asi que el menu tampoco.
  */
 export const staffSessionWithPublishedCapabilities: SessionState = {
   ...promotionManagerSession,

@@ -141,32 +141,34 @@ describe("guarda del panel: los cuatro casos que no dan acceso", () => {
 });
 
 describe("capacidades: que decide que se pinta", () => {
-  it("las publicadas por el backend ganan al espejo provisional", () => {
+  it("manda lo que publica la API, no lo que el rol sugiere", () => {
     const actor = toAdminActor(staffSessionWithPublishedCapabilities);
-
     expect(actor.capabilitiesPublished).toBe(true);
     expect(can(actor, "amoe.review.approve")).toBe(true);
-
-    // El espejo daria `entry.adjust.create` a `PROMOTION_MANAGER`; la respuesta
-    // publicada no la incluye, y manda la respuesta.
+    // El rol PROMOTION_MANAGER tiene `entry.adjust.create` en el catalogo; esta
+    // respuesta no la trae, y no hay ninguna copia local que la rellene.
     expect(can(actor, "entry.adjust.create")).toBe(false);
   });
 
-  it("sin capacidades publicadas se deriva del espejo, y se dice", () => {
-    const actor = toAdminActor(promotionManagerSession);
-
+  it("sin capacidades publicadas NO se deriva nada: menu vacio, y se dice", () => {
+    // Una API anterior a la seccion 10 actual. Antes habia un espejo local de la
+    // matriz que rellenaba este hueco; era una segunda fuente de verdad y se
+    // borro. Ahora el hueco se ve: cero capacidades y aviso en el chrome.
+    const { capabilities: _omitted, ...withoutCapabilities } = promotionManagerSession;
+    const actor = toAdminActor(withoutCapabilities);
     expect(actor.capabilitiesPublished).toBe(false);
-    expect(can(actor, "entry.adjust.create")).toBe(true);
+    expect(actor.capabilities.size).toBe(0);
+    expect(can(actor, "entry.adjust.create")).toBe(false);
   });
 
   it("un rol desconocido no concede nada, y no rompe", () => {
-    // `role` llega de la API. Un valor como `constructor` sobre un objeto
-    // indexado devolveria algo que no es un array y el recorrido lanzaria.
+    // `role` llega de la API y ya no decide nada aqui: las capacidades vienen
+    // publicadas. Un rol raro con capacidades vacias sigue dando cero.
     const session: SessionState = {
       ...promotionManagerSession,
       roles: ["constructor", "__proto__"],
+      capabilities: [],
     };
-
     expect(capabilitiesOf(session).size).toBe(0);
   });
 

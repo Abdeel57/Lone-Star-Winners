@@ -832,7 +832,7 @@
       "signOut": "Sign out",
       "noRoles": "No role assigned",
       "mainLandmark": "Admin content",
-      "provisionalCapabilities": "The menu is being derived from a local copy of the permission matrix because the backend does not publish capabilities yet. What you can actually do is decided by the backend on every request."
+      "provisionalCapabilities": "This session did not include the capabilities published by the backend, so the menu is empty. It usually means the deployed API is older than the panel; once it is updated, the menu comes back on its own."
     },
     "nav": {
       "label": "Admin sections",

@@ -832,7 +832,7 @@
       "signOut": "Cerrar sesión",
       "noRoles": "Sin rol asignado",
       "mainLandmark": "Contenido de administración",
-      "provisionalCapabilities": "El menú se está derivando de una copia local de la matriz de permisos porque el backend todavía no publica las capacidades. Lo que realmente se puede hacer lo decide el backend en cada petición."
+      "provisionalCapabilities": "Esta sesión no trae las capacidades publicadas por el backend, así que el menú se muestra vacío. Suele significar que la API desplegada es anterior a la versión del panel; en cuanto se actualice, el menú vuelve solo."
     },
     "nav": {
       "label": "Secciones de administración",

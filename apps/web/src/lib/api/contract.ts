@@ -1014,41 +1014,15 @@ export interface SessionState {
   /** Roles del contrato. Vacio para un participante sin rol de personal. */
   readonly roles: readonly string[];
   /**
-   * [PROVISIONAL] Capacidades EFECTIVAS del actor (DEC-048).
+   * Capacidades EFECTIVAS del actor (DEC-048), publicadas por la API desde
+   * f0a1c74 (contrato seccion 10): resueltas en el backend con
+   * `ROLE_CAPABILITIES` y con los mismos roles efectivos que usa el autorizador
+   * (STAFF -> roles administrativos; PARTICIPANT -> solo PARTICIPANT; ANONYMOUS
+   * y MFA_PENDING -> vacio).
    *
-   * PETICION ADITIVA a `backend`, no una reescritura: el campo es OPCIONAL, de
-   * modo que la respuesta que la seccion 10 publica hoy -sin el- sigue siendo
-   * valida y el panel sigue funcionando.
-   *
-   * POR QUE SE PIDE. El mapa rol -> capacidad ya existe y es autoritativo:
-   * `ROLE_CAPABILITIES` en `packages/security/src/permissions.ts`. Que el
-   * frontend lo reimplemente es crear una segunda fuente de verdad de una
-   * politica de AUTORIZACION, que es justo lo que prohibe `CLAUDE.md` seccion 4.
-   * Resolverlo en el backend -donde ya esta- y publicar el resultado cuesta un
-   * campo y elimina la divergencia por construccion.
-   *
-   * MIENTRAS NO EXISTA, el panel cae a un espejo local de esa matriz, marcado
-   * como provisional en `src/lib/admin/capabilities.ts`. Ese espejo decide
-   * unicamente QUE ENLACES SE PINTAN; quien decide que se puede hacer sigue
-   * siendo el backend, que responde 403 y la interfaz lo pinta como estado
-   * deliberado.
-   *
-   * Los valores son capacidades del contrato. Se tipa `string[]` y no
-   * `AdminCapability[]` a proposito: el backend puede publicar una capacidad
-   * que la interfaz todavia no conozca, y eso tiene que poder ignorarse en vez
-   * de dejar de compilar contra una respuesta legitima.
-   *
-   * TODO(HO-031): el campo SIGUE SIN EXISTIR en la sesion que sirve la API. La
-   * forma esperada cuando llegue, para que el espejo local se pueda borrar de
-   * una vez y sin adivinar nada:
-   *
-   *   readonly capabilities: readonly string[];
-   *
-   * es decir, SIEMPRE PRESENTE y nunca `undefined` -asi "no publicado" y "sin
-   * ninguna" dejan de ser el mismo valor-, y `[]` para un participante, que es
-   * lo que hace que el panel no le ensene nada. Sirve UNICAMENTE para pintar;
-   * jamas para autorizar: quien decide que se puede hacer es el backend, en cada
-   * peticion, y responde 403.
+   * Opcional AQUI solo para tolerar una API anterior a ese cambio sin romper el
+   * parseo: si falta, el panel no deriva nada, deja el menu vacio y lo dice
+   * (`src/lib/admin/capabilities.ts`). Ya no existe ningun espejo local.
    */
   readonly capabilities?: readonly string[];
 }
