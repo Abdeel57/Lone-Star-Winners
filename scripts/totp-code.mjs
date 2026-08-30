@@ -9,8 +9,11 @@
  *   cambiaran, aqui hay que cambiarlos.
  *
  * DONDE VIVE EL SECRETO
- *   En `.admin-totp`, en la raiz, que `.gitignore` excluye. Nunca en el
- *   repositorio: es equivalente a una credencial (principio 19).
+ *   En un fichero `.admin-totp*` de la raiz, que `.gitignore` excluye. Por
+ *   defecto `.admin-totp`; la variable de entorno `LSW_TOTP_FILE` elige otro,
+ *   porque cada cuenta de personal tiene su propio secreto (la de operacion y
+ *   la de aprobacion son cuentas DISTINTAS a proposito: la separacion de
+ *   funciones exige dos actores). Nunca en el repositorio (principio 19).
  */
 
 import { createHmac } from "node:crypto";
@@ -37,12 +40,21 @@ function base32ToBytes(text) {
 }
 
 function readSecret() {
+  const file = process.env.LSW_TOTP_FILE ?? ".admin-totp";
+
+  // Solo nombres de la familia .admin-totp*, sin separadores de ruta: la
+  // variable elige ENTRE los secretos de la raiz, no un camino arbitrario.
+  if (!/^\.admin-totp[A-Za-z0-9._-]*$/u.test(file)) {
+    console.error("[codigo] LSW_TOTP_FILE invalido:", file);
+    process.exit(1);
+  }
+
   let secret;
 
   try {
-    secret = readFileSync(new URL("../.admin-totp", import.meta.url), "utf8").trim();
+    secret = readFileSync(new URL(`../${file}`, import.meta.url), "utf8").trim();
   } catch {
-    console.error("[codigo] Falta el fichero .admin-totp en la raiz del proyecto.");
+    console.error(`[codigo] Falta el fichero ${file} en la raiz del proyecto.`);
     process.exit(1);
   }
 
