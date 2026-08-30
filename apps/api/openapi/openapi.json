@@ -15985,6 +15985,12 @@
                     "authenticated": {
                       "type": "boolean"
                     },
+                    "capabilities": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
                     "email": {
                       "anyOf": [
                         {
@@ -16033,7 +16039,8 @@
                     "scope",
                     "email",
                     "email_verified",
-                    "roles"
+                    "roles",
+                    "capabilities"
                   ],
                   "type": "object"
                 }
@@ -16241,6 +16248,12 @@
                     "authenticated": {
                       "type": "boolean"
                     },
+                    "capabilities": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
                     "email": {
                       "anyOf": [
                         {
@@ -16289,7 +16302,8 @@
                     "scope",
                     "email",
                     "email_verified",
-                    "roles"
+                    "roles",
+                    "capabilities"
                   ],
                   "type": "object"
                 }
@@ -16401,6 +16415,12 @@
                     "authenticated": {
                       "type": "boolean"
                     },
+                    "capabilities": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
                     "email": {
                       "anyOf": [
                         {
@@ -16449,7 +16469,8 @@
                     "scope",
                     "email",
                     "email_verified",
-                    "roles"
+                    "roles",
+                    "capabilities"
                   ],
                   "type": "object"
                 }

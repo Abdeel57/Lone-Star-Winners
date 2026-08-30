@@ -29,6 +29,7 @@
 
 import {
   audienceForRoles,
+  capabilitiesForRoles,
   decodeSecretBoxKey,
   decryptSecret,
   evaluateSession,
@@ -85,9 +86,37 @@ const sessionResponseSchema = z.object({
   email: z.string().nullable(),
   email_verified: z.boolean(),
   roles: z.array(z.string()),
+  /**
+   * Capacidades EFECTIVAS de la sesion, resueltas por el servidor con el mismo
+   * catalogo que usa el autorizador (DEC-027). El panel las usaba desde un
+   * espejo local de la matriz mientras esto no existia, con un aviso en
+   * pantalla; publicarlas es lo que hace desaparecer ese aviso y el espejo.
+   *
+   * Vacias mientras la sesion no autentique (ANONYMOUS, MFA_PENDING): una
+   * sesion que "todavia no vale para nada" no puede anunciar que puede.
+   */
+  capabilities: z.array(z.string()),
 });
 
 type SessionResponse = z.infer<typeof sessionResponseSchema>;
+
+/**
+ * Las capacidades que se publican, calculadas como las ve el AUTORIZADOR.
+ *
+ * Los roles efectivos salen del scope, no de la persona (ver
+ * `session-authorizer.ts`): una sesion de escaparate lleva solo PARTICIPANT
+ * aunque la persona tenga roles administrativos. Publicar aqui otra cosa haria
+ * que el panel pintara enlaces que la puerta iba a denegar.
+ */
+function publishedCapabilities(
+  state: SessionResponse["state"],
+  scope: SessionAudience,
+  adminRoles: readonly RoleId[],
+): string[] {
+  if (state !== "ACTIVE") return [];
+  const roles: readonly RoleId[] = scope === "STAFF" ? adminRoles : ["PARTICIPANT"];
+  return [...capabilitiesForRoles(roles)].sort();
+}
 
 const ANONYMOUS: SessionResponse = {
   authenticated: false,
@@ -96,6 +125,7 @@ const ANONYMOUS: SessionResponse = {
   email: null,
   email_verified: false,
   roles: [],
+  capabilities: [],
 };
 
 export function buildAuthRoutes(dependencies: AppDependencies): RouteDefinition[] {
@@ -249,14 +279,16 @@ export function buildAuthRoutes(dependencies: AppDependencies): RouteDefinition[
         );
 
         const pending = requiresMfa(roles);
+        const state = pending ? ("MFA_PENDING" as const) : ("ACTIVE" as const);
 
         return {
           authenticated: !pending,
-          state: pending ? ("MFA_PENDING" as const) : ("ACTIVE" as const),
+          state,
           scope: audience,
           email: found.email,
           email_verified: found.emailVerifiedAt !== null,
           roles: [...roles],
+          capabilities: publishedCapabilities(state, audience, roles),
         } satisfies SessionResponse;
       },
     },
@@ -355,6 +387,7 @@ export function buildAuthRoutes(dependencies: AppDependencies): RouteDefinition[
           email: record?.email ?? null,
           email_verified: record?.emailVerifiedAt != null,
           roles: [...roles],
+          capabilities: publishedCapabilities("ACTIVE", session.scope, roles as readonly RoleId[]),
         } satisfies SessionResponse;
       },
     },
@@ -416,13 +449,16 @@ export function buildAuthRoutes(dependencies: AppDependencies): RouteDefinition[
 
         const record = await identity.identities.findById(session.identityId);
 
+        const published = state === "ACTIVE" ? ("ACTIVE" as const) : ("MFA_PENDING" as const);
+
         return {
           authenticated: state === "ACTIVE",
-          state: state === "ACTIVE" ? ("ACTIVE" as const) : ("MFA_PENDING" as const),
+          state: published,
           scope: session.scope,
           email: record?.email ?? null,
           email_verified: record?.emailVerifiedAt != null,
           roles: [...roles],
+          capabilities: publishedCapabilities(published, session.scope, roles as readonly RoleId[]),
         } satisfies SessionResponse;
       },
     },

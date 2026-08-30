@@ -1378,9 +1378,19 @@ solo el hash SHA-256 del token.
   "scope": "STAFF",
   "email": "persona@ejemplo.invalid",
   "email_verified": true,
-  "roles": ["CATALOG_MANAGER"]
+  "roles": ["PROMOTION_MANAGER"],
+  "capabilities": ["dashboard.read", "product.read", "product.write", "..."]
 }
 ```
+
+**`capabilities` son las capacidades EFECTIVAS de la sesión**, resueltas por el
+servidor con el mismo catálogo que usa el autorizador (DEC-027) y con los roles
+que el autorizador usaría: una sesión de escaparate publica solo las de
+`PARTICIPANT` aunque la persona tenga roles administrativos. Vacías mientras la
+sesión no autentique (`ANONYMOUS`, `MFA_PENDING`). El panel las usa para
+decidir **qué pinta**, nunca qué puede hacer: eso lo decide el backend en cada
+petición. Hasta este campo, el panel derivaba el menú de un espejo local de la
+matriz con un aviso en pantalla; el espejo sobra.
 
 `state` es `ANONYMOUS`, `ACTIVE` o **`MFA_PENDING`**. Este último es el estado
 de una sesión de personal que ya pasó la contraseña y **todavía no vale para
