@@ -22,7 +22,41 @@ No hace falta Docker, ni la CLI de Railway, ni tocar ningún archivo.
 
 ---
 
+## Estado actual (2026-08-28)
+
+El proyecto vive **temporalmente** en la workspace **"Abdel Cruz's Projects"**
+(plan Hobby), recreado desde cero el 28 de agosto de 2026 porque la workspace
+original, "abdeel57's Projects", quedó con la prueba caducada y Railway dejó de
+construir en ella. Los dominios actuales:
+
+- web: `https://web-production-5e278b.up.railway.app`
+- api: `https://api-production-1d452.up.railway.app`
+
+El proyecto antiguo sigue existiendo en la workspace original con sus propios
+secretos; las dos instalaciones no comparten nada. El cliente ha dicho que
+volverá a la original cuando restaure la suscripción. Ese día, la de "Abdel
+Cruz's Projects" se apaga y esta sección se actualiza.
+
 ## Los 7 pasos
+
+Los 7 pasos siguen valiendo, con un cambio de mecanismo en el 3 y el 4 (abajo).
+Además, hoy **todo se puede hacer desde la CLI**, sin tocar el dashboard; es
+como se hizo la recreación de agosto de 2026:
+
+```bash
+railway init --name lone-star-winners --workspace "<workspace>"
+railway add --database postgres            # se llama Postgres
+railway add --service api                  # vacío; el repo se conecta al final
+railway add --service web
+railway domain --service api               # antes de las variables: las referencian
+railway domain --service web
+node scripts/railway-env.mjs               # y aplicar con `railway variables --set`
+railway service source connect --repo Abdeel57/Lone-Star-Winners --branch main --service api
+railway service source connect --repo Abdeel57/Lone-Star-Winners --branch main --service web
+```
+
+Conectar el repo **al final** importa: es lo que dispara el primer despliegue, y
+para entonces las variables y los ajustes de servicio ya tienen que estar.
 
 ### 1. Proyecto vacío
 
@@ -46,23 +80,32 @@ referencian por ese nombre.
 
 Luego, en **Settings** del servicio:
 
-| Campo                      | Valor                   |
-| -------------------------- | ----------------------- |
-| Service Name               | `api`                   |
-| Config-as-code (file path) | `apps/api/railway.json` |
+| Campo        | Valor |
+| ------------ | ----- |
+| Service Name | `api` |
 
-La ruta del archivo de configuración es **absoluta desde la raíz del repo** y
-no sigue al Root Directory: es una particularidad de Railway, no un descuido.
+**Config-as-code está deprecado (agosto de 2026).** Railway ya no acepta fijar
+`railway.json` como archivo de configuración por su API ("Config as Code is
+deprecated. Use Infrastructure as Code (.railway/railway.ts)"). El archivo
+`apps/api/railway.json` **se conserva como fuente de verdad legible**, y sus
+campos se aplican directamente al servicio con la mutación
+`serviceInstanceUpdate` de la API pública (`railway api`): `builder`,
+`buildCommand`, `watchPatterns`, `startCommand`, `healthcheckPath`,
+`healthcheckTimeout`, `restartPolicyType`, `restartPolicyMaxRetries` y
+`preDeployCommand`. Son los mismos nombres, uno a uno. En el dashboard es
+**Settings → Build / Deploy** del servicio.
+
 No pongas Root Directory: el build necesita la raíz del monorepo.
 
 ### 4. Servicio `web`
 
 **+ New → GitHub Repo →** el **mismo** repositorio otra vez.
 
-| Campo                      | Valor                   |
-| -------------------------- | ----------------------- |
-| Service Name               | `web`                   |
-| Config-as-code (file path) | `apps/web/railway.json` |
+| Campo        | Valor |
+| ------------ | ----- |
+| Service Name | `web` |
+
+Mismo mecanismo que `api`, con `apps/web/railway.json` como fuente.
 
 ### 5. Variables
 
