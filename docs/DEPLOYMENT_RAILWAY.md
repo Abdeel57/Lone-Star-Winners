@@ -32,8 +32,9 @@ construir en ella. Los dominios actuales:
 - web: `https://web-production-5e278b.up.railway.app`
 - api: `https://api-production-1d452.up.railway.app`
 
-El proyecto antiguo sigue existiendo en la workspace original con sus propios
-secretos; las dos instalaciones no comparten nada. El cliente ha dicho que
+El proyecto antiguo (`20e5fd86…`, en "abdeel57's Projects") sigue existiendo,
+congelado en `bfad707` (api) y `efb8ef9` (web), con sus propios secretos; las dos
+instalaciones no comparten nada. El activo es `fd35ed69…`. El cliente ha dicho que
 volverá a la original cuando restaure la suscripción. Ese día, la de "Abdel
 Cruz's Projects" se apaga y esta sección se actualiza.
 
