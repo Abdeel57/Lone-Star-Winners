@@ -106,6 +106,14 @@ const TRANSLATED_CODES = [
   "DATETIME_INVALID",
   "TIMEZONE_INVALID",
   "CONFIRMATION_REQUIRED",
+  /*
+   * Fotos del catalogo (§14, DEC-056). Los dos primeros los devuelve la API y
+   * los ANTICIPA la accion del panel con el mismo codigo, para contestar junto
+   * al campo sin gastar la subida. El tercero es el tope de cuerpo de una ruta.
+   */
+  "MEDIA_TOO_LARGE",
+  "MEDIA_TYPE_UNSUPPORTED",
+  "PAYLOAD_TOO_LARGE",
 ] as const;
 
 type TranslatedCode = (typeof TRANSLATED_CODES)[number];
@@ -213,6 +221,12 @@ export function useApiErrorMessage(): (code: string | null) => string {
         return t("TIMEZONE_INVALID");
       case "CONFIRMATION_REQUIRED":
         return t("CONFIRMATION_REQUIRED");
+      case "MEDIA_TOO_LARGE":
+        return t("MEDIA_TOO_LARGE");
+      case "MEDIA_TYPE_UNSUPPORTED":
+        return t("MEDIA_TYPE_UNSUPPORTED");
+      case "PAYLOAD_TOO_LARGE":
+        return t("PAYLOAD_TOO_LARGE");
     }
   };
 }

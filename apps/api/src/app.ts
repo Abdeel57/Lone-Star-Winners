@@ -35,6 +35,8 @@ import { createSessionPrincipalResolver } from "./http/session-principal.js";
 import { buildAuthRoutes } from "./routes/auth.js";
 import { buildCartRoutes } from "./routes/cart.js";
 import { buildHealthRoutes } from "./routes/health.js";
+// DEC-056: imagenes de catalogo subidas desde el panel.
+import { buildMediaRoutes } from "./routes/media.js";
 import { buildMetaRoutes } from "./routes/meta.js";
 import { buildStorefrontRoutes } from "./routes/storefront.js";
 // Hito B5 (DEC-046): comercio, portal, AMOE, ajustes, sorteo y exportacion.
@@ -55,6 +57,7 @@ import { buildPortalRoutes } from "./routes/portal.js";
 import { installPrincipalResolver } from "./http/principal.js";
 import { createFeatureFlagPort } from "./services/draw-service.js";
 import { createIdentityRepositories } from "./services/drizzle-identity.js";
+import { createEmailSender, type EmailSender } from "./services/email.js";
 import { createParticipantLookup } from "./services/participant-lookup.js";
 import { createRepositories } from "./services/drizzle-repositories.js";
 import type { IdentityRepositories } from "./services/identity-ports.js";
@@ -72,6 +75,8 @@ export interface AppDependencies {
   readonly repositories: Repositories;
   /** Puertos de identidad y sesion (DEC-006, DEC-045). */
   readonly identity: IdentityRepositories;
+  /** Correo transaccional (DEC-058): verificacion y recuperacion de contrasena. */
+  readonly email: EmailSender;
 }
 
 export function createDependencies(config: ApiConfig): AppDependencies {
@@ -96,6 +101,7 @@ export function createDependencies(config: ApiConfig): AppDependencies {
     // `CLAUDE.md` seccion 7: el procesador de pagos no esta decidido. Hasta que
     // lo este, el puerto falla ruidosamente en vez de simular exito.
     paymentProvider: new UnconfiguredPaymentProvider(),
+    email: createEmailSender(config, createLogger(config)),
   };
 }
 
@@ -118,6 +124,7 @@ export function collectRouteDefinitions(dependencies: AppDependencies): RouteDef
     ...buildAdminAuditRoutes(dependencies),
     ...buildAdminCatalogRoutes(dependencies),
     ...buildAdminRulesRoutes(dependencies),
+    ...buildMediaRoutes(dependencies),
   ];
 
   const metaRoutes = buildMetaRoutes({
@@ -155,6 +162,7 @@ export function collectContractRouteDefinitions(dependencies: AppDependencies): 
     ...buildAdminAuditRoutes(dependencies),
     ...buildAdminCatalogRoutes(dependencies),
     ...buildAdminRulesRoutes(dependencies),
+    ...buildMediaRoutes(dependencies),
   ];
   routes.push(
     ...buildMetaRoutes({ serverUrl: dependencies.config.http.publicUrl, allRoutes: () => routes }),
@@ -296,6 +304,17 @@ export async function createApp(dependencies: AppDependencies): Promise<FastifyI
         request.log.info({ event: "request.rejected", code: error.code }, "peticion rechazada");
       }
       void reply.code(error.statusCode).send(error.toEnvelope(request.id));
+      return;
+    }
+
+    // El cuerpo no cabe en el limite de la ruta. Lo levanta Fastify ANTES del
+    // handler, asi que no puede llegar como `ApiError`; sin esta rama una foto
+    // demasiado grande se contestaba con un 500 generico, que manda a buscar un
+    // fallo del servidor donde lo que hay es un fichero que pesa de mas.
+    if ((error as { code?: unknown }).code === "FST_ERR_CTP_BODY_TOO_LARGE") {
+      const tooLarge = ApiErrors.payloadTooLarge();
+      request.log.info({ event: "request.rejected", code: tooLarge.code }, "peticion rechazada");
+      void reply.code(tooLarge.statusCode).send(tooLarge.toEnvelope(request.id));
       return;
     }
 

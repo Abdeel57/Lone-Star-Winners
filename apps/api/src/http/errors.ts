@@ -109,6 +109,44 @@ export const ApiErrors = {
       details: { retry_after_seconds: retryAfterSeconds },
     }),
 
+  /**
+   * El correo del alta ya pertenece a una identidad.
+   *
+   * Esto SI revela que el correo esta registrado, al contrario que el login, y
+   * es una concesion consciente: el alta abre sesion en el acto, asi que "ya
+   * existe" y "cuenta creada" no pueden responder igual sin entregarle la
+   * cuenta a quien no es su dueno. La alternativa que no enumera -responder
+   * siempre "revisa tu correo"- necesita un proveedor de email que aun no esta
+   * decidido (`CLAUDE.md` seccion 7). Sin `details`: el correo lo acaba de
+   * teclear quien pregunta y repetirlo solo lo meteria en logs.
+   */
+  emailAlreadyRegistered: (): ApiError =>
+    new ApiError({ statusCode: 409, code: "EMAIL_ALREADY_REGISTERED" }),
+
+  /**
+   * La contrasena no cumple la politica de `packages/security`.
+   *
+   * Codigo propio y no `VALIDATION_FAILED` porque el frontend lo traduce con
+   * un mensaje distinto, y `details` lleva los limites para que pueda decir
+   * cuales son sin copiarlos en su codigo.
+   */
+  weakPassword: (details: Readonly<Record<string, unknown>>): ApiError =>
+    new ApiError({ statusCode: 422, code: "WEAK_PASSWORD", details }),
+
+  /**
+   * Enlaces de correo (DEC-058). Los cuatro codigos ya los traduce `apps/web`
+   * (`apiErrors.*`). "No valido" cubre inexistente, ya usado y de otro
+   * proposito sin distinguirlos; "caducado" se separa porque la pantalla
+   * aconseja lo mismo pero explica otra cosa, y quien presenta el token ya lo
+   * tiene: no se le revela nada.
+   */
+  verificationTokenInvalid: (): ApiError =>
+    new ApiError({ statusCode: 422, code: "VERIFICATION_TOKEN_INVALID" }),
+  verificationTokenExpired: (): ApiError =>
+    new ApiError({ statusCode: 410, code: "VERIFICATION_TOKEN_EXPIRED" }),
+  resetTokenInvalid: (): ApiError => new ApiError({ statusCode: 422, code: "RESET_TOKEN_INVALID" }),
+  resetTokenExpired: (): ApiError => new ApiError({ statusCode: 410, code: "RESET_TOKEN_EXPIRED" }),
+
   notFound: (): ApiError => new ApiError({ statusCode: 404, code: "NOT_FOUND" }),
 
   validationFailed: (issues: readonly unknown[]): ApiError =>
@@ -117,6 +155,13 @@ export const ApiErrors = {
       code: "VALIDATION_FAILED",
       details: { issues },
     }),
+
+  /**
+   * El cuerpo supera el limite de la ruta. Sin `details`: el limite depende de
+   * la ruta y quien lo necesita ya lo publica en su propio codigo de dominio
+   * (`MEDIA_TOO_LARGE` lleva `max_bytes`).
+   */
+  payloadTooLarge: (): ApiError => new ApiError({ statusCode: 413, code: "PAYLOAD_TOO_LARGE" }),
 
   rateLimited: (retryAfterSeconds: number): ApiError =>
     new ApiError({

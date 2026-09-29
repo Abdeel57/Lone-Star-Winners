@@ -51,6 +51,15 @@ export interface ActionResult {
    * ensenarlo.
    */
   readonly detail: string | null;
+  /**
+   * Longitud minima de contrasena que el backend publica en un 422
+   * `WEAK_PASSWORD` (`details.minimum_length`, seccion 10 del contrato).
+   *
+   * Es lo que permite decirle a alguien CUANTOS caracteres hacen falta sin
+   * copiar la politica de `packages/security` en el frontend: el numero llega
+   * con el rechazo. Opcional y ausente en todo lo demas.
+   */
+  readonly minimumPasswordLength?: number;
 }
 
 export const IDLE: ActionResult = {
@@ -92,6 +101,9 @@ export function fromFailure(failure: ApiFailure, field: string | null = null): A
         ? "MALFORMED_RESPONSE"
         : (failure.code ?? "INTERNAL_ERROR");
 
+  const minimumPasswordLength =
+    code === "WEAK_PASSWORD" ? minimumPasswordLengthFrom(failure.details) : null;
+
   return {
     status: "error",
     code,
@@ -99,7 +111,25 @@ export function fromFailure(failure: ApiFailure, field: string | null = null): A
     field,
     retryAfterSeconds: retryAfterSecondsFrom(failure.details),
     detail: engineDetailFrom(failure.details),
+    ...(minimumPasswordLength === null ? {} : { minimumPasswordLength }),
   };
+}
+
+/**
+ * Extrae `minimum_length` de un 422 `WEAK_PASSWORD`, y solo cuando el motivo es
+ * `too_short`: anunciar un minimo a quien se paso del maximo seria mandarle en
+ * la direccion contraria. Misma comprobacion en tiempo de ejecucion que
+ * `retryAfterSecondsFrom`, por la misma razon.
+ */
+function minimumPasswordLengthFrom(details: unknown): number | null {
+  if (typeof details !== "object" || details === null) return null;
+  if (!("reason" in details) || details.reason !== "too_short") return null;
+  if (!("minimum_length" in details)) return null;
+
+  const { minimum_length: value } = details;
+  if (typeof value !== "number" || !Number.isInteger(value) || value <= 0) return null;
+
+  return value;
 }
 
 /**

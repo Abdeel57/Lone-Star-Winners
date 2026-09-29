@@ -84,7 +84,13 @@ const RUNTIME_AND_DATA_VARS: readonly EnvVarSpec[] = Object.freeze([
   v("API_RATE_LIMIT_MAX_REQUESTS", "api", "integer", ALL_ENVIRONMENTS, "Maximo por ventana."),
 
   // ----- apps/web ------------------------------------------------------
-  v("WEB_PUBLIC_URL", "web", "url", ALL_ENVIRONMENTS, "URL publica del portal."),
+  v(
+    "WEB_PUBLIC_URL",
+    "shared",
+    "url",
+    ALL_ENVIRONMENTS,
+    "URL publica del portal. `apps/api` la usa para los enlaces de los correos (DEC-058).",
+  ),
   v("NEXT_PUBLIC_SITE_URL", "web", "url", ALL_ENVIRONMENTS, "URL del sitio, visible en navegador."),
   v(
     "NEXT_PUBLIC_API_BASE_URL",
@@ -388,7 +394,14 @@ const INTEGRATION_VARS: readonly EnvVarSpec[] = Object.freeze([
   ),
 
   // ----- Email ----------------------------------------------------------
-  v("EMAIL_PROVIDER", "api", "string", ALL_ENVIRONMENTS, "Proveedor de email. Sin decidir."),
+  v(
+    "EMAIL_PROVIDER",
+    "api",
+    "enum",
+    ALL_ENVIRONMENTS,
+    "Proveedor de email (DEC-058). `resend` obligatorio en produccion.",
+    { allowedValues: ["console", "resend"] },
+  ),
   v("EMAIL_FROM_ADDRESS", "api", "email", ALL_ENVIRONMENTS, "Remitente."),
   v("EMAIL_FROM_NAME", "api", "string", ALL_ENVIRONMENTS, "Nombre del remitente."),
   v("EMAIL_PROVIDER_API_KEY", "api", "string", NO_ENVIRONMENT, "Credencial del proveedor.", {

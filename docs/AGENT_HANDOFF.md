@@ -3591,3 +3591,143 @@ ya no hay excepcion pendiente.
 verde, `test` **276/276** (15 ficheros), `contract:emit` 100 rutas. Comprobado
 en el JSON: los cuerpos de `activate` y `close` ya no llevan `required`, y
 `reason_code` conserva su `pattern`.
+
+---
+
+### HO-042 · alta de participante: `POST /auth/register` (cierra HO-034 punto 4)
+
+Status: OPEN (implementado; pendiente de security review) — Date: 2026-09-21 —
+From: sesión del usuario — To: security-integration, backend-sweepstakes,
+frontend-ux
+
+**Qué hay.** `POST /api/v1/auth/register`, `PUBLIC`, contrato §10, DEC-057
+(`Proposed`). Crea identidad `ACTIVE` + credencial Argon2id + participante en
+una transacción (`registerParticipant` en `drizzle-identity.ts`) y abre sesión
+de escaparate con el mismo camino que el login (`openSession`, extraído para
+que no diverjan). `201` `SessionState` · `409 EMAIL_ALREADY_REGISTERED` · `422
+WEAK_PASSWORD` con `details.minimum_length` · `422 VALIDATION_FAILED`. Sin
+migración: los `GRANT INSERT` de `0001` y `0010` ya cubrían las tres tablas.
+
+**Cambio cross-domain en `apps/web`** (mínimo, pedido por el usuario en la
+misma sesión): el error del alta se atribuye a su campo
+(`registerFieldFor` en `auth-actions.ts`) y el mensaje de contraseña corta
+interpola el mínimo que manda el backend (`minimumPasswordLength` en
+`ActionResult`, clave nueva `auth.fields.passwordTooShort` en los dos
+diccionarios). El frontend sigue sin copiar la política.
+
+**What I need from you**
+
+- `security-integration`: revisión de DEC-057, en especial sus dos riesgos
+  abiertos — (a) el rate limiting ve la IP del servidor de Next, no la del
+  visitante, así que el alta solo está acotada por el límite global; (b) el
+  alta no emite `audit_events`. Y levantar `NO_PARTICIPANT_REGISTRATION_ENDPOINT`
+  en `tests/e2e/lib/blockers.mjs` **contra CI**, como fija la resolución de
+  HO-034 (hoy se activa con `E2E_REGISTRATION_ENDPOINT=true`). Se tocó **una
+  línea** de `03-participant-auth.spec.mjs`, que es vuestro: la prueba del alta
+  no rellenaba `password_confirmation` y habría fallado por el formulario, no
+  por el backend. `FAKE_PARTICIPANT_PASSWORD` (25 caracteres) cumple la
+  política. La prueba sigue sin haberse ejecutado nunca: no hay PostgreSQL ni
+  Playwright levantados en esta sesión.
+- `backend-sweepstakes`: prueba de integración contra PostgreSQL real de
+  `registerParticipant` — atomicidad de las tres inserciones, `null` ante el
+  índice `identities_email_normalized_key` (también con distinta capitalización
+  y ante un expediente postal `PENDING_VERIFICATION`), y que otra violación de
+  unicidad NO se traduce a "correo ya registrado". Las pruebas de `apps/api`
+  usan repositorio falso (DEC-018) y no cubren el motor.
+- `frontend-ux`: dar por bueno el copy de `passwordTooShort` en los dos idiomas.
+
+**Fase siguiente, no incluida:** verificación de correo (con ella, la
+reclamación de expedientes postales y el alta que no enumera), reset de
+contraseña y persistencia de consentimientos. Las tres dependen de decisiones
+abiertas: proveedor de email (`CLAUDE.md` §7) y `docs/LEGAL_PENDING.md`.
+
+**Aviso de concurrencia.** Mientras se hacía esto había otra sesión trabajando
+en la subida de imágenes (DEC-056, `routes/media.ts`, migración `0029`).
+`contract:emit` se ejecutó con su código ya presente: el manifiesto tiene
+**103** rutas, de las que `POST /api/v1/admin/media` y `GET /api/v1/media/:file`
+son suyas. Esa sesión las documentó en el contrato (§14) mientras tanto, y el
+gate de contrato quedó en verde. Los ficheros compartidos (`http/errors.ts`,
+`lib/api/resources.ts`, los dos diccionarios, este documento) se tocaron solo
+con reemplazos puntuales, sin reescribir nada suyo. Queda una tabla de §14 sin
+pasar por Prettier: es suya y no se tocó.
+
+**Verificación**: `apps/api` `test` **295/295** (16 ficheros; 19 nuevos en
+`auth-register.test.ts`), `build` verde, `eslint` 0 errores en los ficheros
+tocados; `apps/web` `tsc` verde, `eslint` limpio en los ficheros tocados y
+`test` **628/628** (40 ficheros; 11 nuevos en `register-rejections.test.tsx`);
+`tests/security` `contract` + `permissions` **109/109**. **No verificado:** el
+camino contra PostgreSQL real ni el e2e (no hay base de datos ni Playwright
+levantados en esta sesión).
+
+---
+
+### HO-043 · fotos del catálogo subidas desde el dispositivo (DEC-056, contrato §14)
+
+Status: OPEN (implementado; pendiente de revisión) — Date: 2026-09-21 —
+From: sesión del usuario — To: backend-sweepstakes, frontend-ux,
+security-integration
+
+**Qué pidió el usuario.** Que la imagen de un producto se cargue directamente
+desde el dispositivo y no con una URL, en todos los sitios donde se pide. Son
+tres: la foto del producto, la de cada variante declarada en el alta, y la del
+editor de variantes (alta y edición). Las promociones no tienen campo de imagen
+en el panel (`media.hero_url` no tiene superficie de escritura), así que ahí no
+había nada que cambiar.
+
+**Qué hay.**
+
+- `packages/database`: migración `0029_media_assets` y `src/schema/media.ts`.
+  Tabla `media_assets` con los bytes en `bytea`, tope de 5 MiB por CHECK,
+  `sha256` UNIQUE, y `GRANT SELECT, INSERT` a `lsw_app` — **sin UPDATE ni
+  DELETE**: las filas son inmutables. `lsw_readonly_report` no recibe nada.
+- `apps/api`: `POST /api/v1/admin/media` (`product.write`) y
+  `GET /api/v1/media/:file` (`PUBLIC`), en `routes/media.ts` y
+  `services/media.ts`. El tipo se decide por la **firma de los bytes**; SVG no
+  entra. Dos campos opcionales nuevos en `RouteDefinition`: `bodyLimitBytes`
+  (límite de cuerpo por ruta, solo lo usa la subida) y `binaryResponses` (para
+  que el OpenAPI publique un 200 que no es JSON). Código transversal nuevo
+  `PAYLOAD_TOO_LARGE` (413): un cuerpo que no cabía se contestaba con 500.
+- `apps/web`: `ImageUploadField` sustituye al campo de URL en `product-form` y
+  `variant-editor`; `lib/admin/image-upload.ts` sube el fichero desde la Server
+  Action; `app/media/[file]/route.ts` sirve las imágenes bajo el origen del
+  sitio (la CSP fija `img-src 'self'` y el navegador no habla con la API).
+  `next.config.mjs` sube a 16 MB `serverActions.bodySizeLimit` **y**
+  `middlewareClientMaxBodySize`.
+- `image_url` **no cambia**: ni el campo, ni su validación, ni el CHECK de
+  `0026`. En una edición, `image_url` solo viaja si la foto cambió.
+
+**What I need from you**
+
+- `security-integration`: revisión de DEC-056. Los puntos que merecen mirada:
+  (a) `apps/web` sirve **contenido subido por un formulario bajo el origen del
+  sitio**; las defensas son la firma de bytes en la API, la lista cerrada de
+  `Content-Type` en el proxy, `nosniff` y `Content-Security-Policy: default-src
+'none'; sandbox` en la respuesta. (b) El límite de cuerpo de Next pasa de 1 MB
+  a 16 MB para **toda** Server Action, y el cuerpo se lee antes de saber quién lo
+  manda. (c) `GET /media/:file` es `PUBLIC` y sin rate limit propio, solo el
+  global. (d) La subida no emite `audit_events`; queda `uploaded_by_admin_user_id`
+  en la fila.
+- `backend-sweepstakes`: prueba de integración de `0029` contra PostgreSQL real
+  —que el CHECK de 5 MiB y el de `octet_length` saltan, que `sha256` duplicado
+  no inserta, y que `lsw_app` no puede `UPDATE` ni `DELETE`—. Y dar por buena la
+  extensión del registro de rutas, que es tuya.
+- `frontend-ux`: copy de `admin.catalog.fieldImage*` / `image*` y de los tres
+  códigos nuevos de `apiErrors` en los dos idiomas; y el pintado del
+  `<input type="file">`, que usa clases propias porque `Input` fija una altura
+  que no le sirve a un selector de fichero.
+
+**Verificación**: `packages/database` `test` **53/53** (auditoría de
+migraciones y paridad, con `0029` en el journal); `apps/api` `test` **312/312**
+(17 ficheros; 17 nuevos en `media.test.ts`), `tsc` verde, `eslint` 0 errores en
+los ficheros tocados, `contract:emit` 103 rutas; `apps/web` `tsc` verde,
+`eslint` limpio en los ficheros tocados y 19 tests nuevos verdes
+(`admin-image-upload.test.ts`, `media-route.test.ts`); `tests/security`
+`contract` + `permissions` **109/109**; `next.config.mjs` cargado con el
+validador de Next: los dos límites se aceptan.
+
+**No verificado.** La migración `0029` **no se ha aplicado contra un PostgreSQL
+real**: en esta máquina no hay Docker ni Postgres. Se aplicará por primera vez
+en el `preDeployCommand` de Railway (`db:bootstrap`); si fallara, el despliegue
+se detiene antes de arrancar y sigue sirviendo la versión anterior. Tampoco se
+ha probado en un navegador de verdad la reducción de la foto ni la vista previa
+—son mejora progresiva: si fallan, el fichero original viaja igual—, ni el e2e.

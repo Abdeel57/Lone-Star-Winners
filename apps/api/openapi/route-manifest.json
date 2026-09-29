@@ -255,6 +255,15 @@
       "summary": "Cambiar un flag NO legalmente material, con motivo."
     },
     {
+      "method": "POST",
+      "path": "/api/v1/admin/media",
+      "operation_id": "uploadAdminMedia",
+      "authorization": "product.write",
+      "requires_step_up": false,
+      "tags": ["admin"],
+      "summary": "Subir una imagen de catalogo. Devuelve la ruta que va en `image_url`."
+    },
+    {
       "method": "GET",
       "path": "/api/v1/admin/orders",
       "operation_id": "listAdminOrders",
@@ -687,6 +696,33 @@
       "summary": "Completar el segundo factor de una sesion en MFA_PENDING."
     },
     {
+      "method": "POST",
+      "path": "/api/v1/auth/password/forgot",
+      "operation_id": "requestPasswordReset",
+      "authorization": "PUBLIC",
+      "requires_step_up": false,
+      "tags": ["auth"],
+      "summary": "Pedir un enlace para restablecer la contrasena."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/password/reset",
+      "operation_id": "resetPassword",
+      "authorization": "PUBLIC",
+      "requires_step_up": false,
+      "tags": ["auth"],
+      "summary": "Fijar una contrasena nueva con el token del enlace."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/register",
+      "operation_id": "register",
+      "authorization": "PUBLIC",
+      "requires_step_up": false,
+      "tags": ["auth"],
+      "summary": "Alta de participante con correo y contrasena."
+    },
+    {
       "method": "GET",
       "path": "/api/v1/auth/session",
       "operation_id": "getSession",
@@ -694,6 +730,24 @@
       "requires_step_up": false,
       "tags": ["auth"],
       "summary": "Estado de la sesion actual."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/verify-email",
+      "operation_id": "verifyEmail",
+      "authorization": "PUBLIC",
+      "requires_step_up": false,
+      "tags": ["auth"],
+      "summary": "Verificar el correo con el token del enlace."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/verify-email/resend",
+      "operation_id": "resendEmailVerification",
+      "authorization": "PARTICIPANT_SELF",
+      "requires_step_up": false,
+      "tags": ["auth"],
+      "summary": "Reenviar el enlace de verificacion al correo de la sesion."
     },
     {
       "method": "GET",
@@ -802,6 +856,15 @@
       "requires_step_up": false,
       "tags": ["portal"],
       "summary": "Cambiar nombre para mostrar e idioma preferido."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/media/:file",
+      "operation_id": "getMedia",
+      "authorization": "PUBLIC",
+      "requires_step_up": false,
+      "tags": ["products"],
+      "summary": "Los bytes de una imagen de catalogo."
     },
     {
       "method": "GET",

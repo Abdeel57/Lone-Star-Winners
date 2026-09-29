@@ -47,6 +47,7 @@ import {
 import { fromFailure, invalid, SUCCEEDED, type ActionResult } from "@/lib/action-result";
 import { checkboxFrom, localeFrom, secretFrom, textFrom } from "@/lib/form-input";
 import { isIanaTimeZone, priceToMinorUnits, zonedWallTimeToIso } from "@/lib/admin/catalog-input";
+import { checkImage, imageFrom } from "@/lib/admin/image-upload";
 import {
   BONUS_PERIOD_REASONS,
   FLAG_UPDATE_REASONS,
@@ -524,7 +525,37 @@ export async function createProductAction(
   const variants = variantsFrom(formData, currency);
   if (!variants.ok) return variants.result;
 
+  /*
+   * LAS FOTOS SE COMPRUEBAN TODAS ANTES DE SUBIR NINGUNA, y se suben lo ultimo
+   * (§14, DEC-056). Subir es lo unico de esta accion que deja algo guardado
+   * antes del alta: si la tercera variante trae un PDF, o falta un nombre, no
+   * tiene que haber ya dos imagenes en la base de datos que nadie va a usar.
+   */
+  const rejectedImage =
+    checkImage(formData, "image") ??
+    variants.value.reduce<ActionResult | null>(
+      (found, _variant, index) => found ?? checkImage(formData, `variant_${index}_image`),
+      null,
+    );
+  if (rejectedImage !== null) return rejectedImage;
+
   const session = await mutableSession();
+
+  const image = await imageFrom(formData, "image", locale, session);
+  if (!image.ok) return image.result;
+
+  const variantInputs: AdminProductVariantInput[] = [];
+  for (const [index, variant] of variants.value.entries()) {
+    const variantImage = await imageFrom(formData, `variant_${index}_image`, locale, session);
+    if (!variantImage.ok) return variantImage.result;
+
+    variantInputs.push(
+      typeof variantImage.value === "string"
+        ? { ...variant, image_url: variantImage.value }
+        : variant,
+    );
+  }
+
   const result = await createAdminProduct(
     {
       sku,
@@ -539,10 +570,11 @@ export async function createProductAction(
       stock_quantity: stock.value,
       kind,
       category_key: textFrom(formData, "category_key"),
-      image_url: textFrom(formData, "image_url"),
+      // En un alta no hay imagen previa que conservar: sin foto es `null`.
+      image_url: image.value ?? null,
       // Vacio significa "sin variantes declaradas": la API crea `<sku>-1` con
       // el precio y las existencias de arriba, que es el flujo de siempre.
-      ...(variants.value.length === 0 ? {} : { variants: variants.value }),
+      ...(variantInputs.length === 0 ? {} : { variants: variantInputs }),
     },
     locale,
     session,
@@ -589,6 +621,9 @@ export async function updateProductAction(
 
   const kind = productKindFrom(formData);
 
+  const image = await imageFrom(formData, "image", locale, session);
+  if (!image.ok) return image.result;
+
   const result = await updateAdminProduct(
     productId,
     {
@@ -602,7 +637,13 @@ export async function updateProductAction(
        */
       ...(kind === null ? {} : { kind }),
       category_key: textFrom(formData, "category_key"),
-      image_url: textFrom(formData, "image_url"),
+      /*
+       * `image_url` SOLO VIAJA SI LA FOTO CAMBIO (§14): ruta nueva si se subio
+       * una, `null` si se marco quitarla. Sin tocarla no se manda, y la API deja
+       * la que habia. Mandar siempre el valor obligaria a repetir en un campo
+       * oculto la ruta actual, que se edita en cinco segundos.
+       */
+      ...(image.value === undefined ? {} : { image_url: image.value }),
     },
     locale,
     session,
@@ -681,14 +722,14 @@ function variantsFrom(
     }
 
     const sku = textFrom(formData, `variant_${index}_sku`);
-    const imageUrl = textFrom(formData, `variant_${index}_image_url`);
 
+    // La foto de la variante NO se lee aqui: subirla es lo ultimo que hace
+    // `createProductAction`, cuando ya se sabe que todo lo demas es valido.
     value.push({
       name: { "es-US": nameEs, "en-US": nameEn },
       price_amount_minor: price,
       stock_quantity: stock,
       ...(sku === null ? {} : { sku }),
-      ...(imageUrl === null ? {} : { image_url: imageUrl }),
     });
   }
 
@@ -729,7 +770,9 @@ export async function createVariantAction(
   if (price === null) return invalid("PRICE_INVALID", "price");
 
   const sku = textFrom(formData, "sku");
-  const imageUrl = textFrom(formData, "image_url");
+
+  const image = await imageFrom(formData, "image", locale, session);
+  if (!image.ok) return image.result;
 
   const result = await createAdminProductVariant(
     productId,
@@ -738,7 +781,7 @@ export async function createVariantAction(
       price_amount_minor: price,
       stock_quantity: stock.value,
       ...(sku === null ? {} : { sku }),
-      image_url: imageUrl,
+      image_url: image.value ?? null,
     },
     locale,
     session,
@@ -794,6 +837,9 @@ export async function updateVariantAction(
   const price = priceToMinorUnits(priceText, current.data.currency);
   if (price === null) return invalid("PRICE_INVALID", "price");
 
+  const image = await imageFrom(formData, "image", locale, session);
+  if (!image.ok) return image.result;
+
   const result = await updateAdminProductVariant(
     productId,
     variantId,
@@ -801,7 +847,8 @@ export async function updateVariantAction(
       name: name.value,
       price_amount_minor: price,
       stock_quantity: stock.value,
-      image_url: textFrom(formData, "image_url"),
+      // Solo viaja si la foto cambio. Ver `updateProductAction`.
+      ...(image.value === undefined ? {} : { image_url: image.value }),
       ...(status === null ? {} : { status }),
     },
     locale,

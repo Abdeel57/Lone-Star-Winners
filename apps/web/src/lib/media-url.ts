@@ -14,12 +14,12 @@
  * dependiendo de que ninguna otra ruta, entorno o version sirva jamas un
  * destino sin filtrar.
  *
- * NO COMPRUEBA QUE EL FICHERO EXISTA. No hay almacen de medios todavia
- * (`CLAUDE.md` §7 sigue sin decidir el proveedor de almacenamiento): las
- * imagenes son ficheros estaticos que el usuario deja en
- * `apps/web/public/products/`, y una ruta puede apuntar a uno que aun no ha
- * subido. Ese 404 lo tiene que tolerar el componente sin descuadrar la rejilla,
- * que es justo lo que hace `MediaFrame` reservando el hueco.
+ * NO COMPRUEBA QUE EL FICHERO EXISTA. Las fotos que sube el panel (§14,
+ * DEC-056) viven en `/media/<id>.<ext>`, que es una ruta raiz como cualquier
+ * otra y pasa por aqui sin trato especial; las rutas `/products/...` de
+ * ficheros estaticos anteriores siguen siendo validas. Cualquiera de las dos
+ * puede dar 404, y eso lo tiene que tolerar el componente sin descuadrar la
+ * rejilla, que es justo lo que hace `MediaFrame` reservando el hueco.
  */
 
 export function isSafeImageUrl(value: string | null | undefined): value is string {

@@ -109,10 +109,57 @@ describe("refuerzos que solo aplican en produccion", () => {
     DATABASE_URL_APP: "postgresql://lsw_app:secreto@db.interno.invalid:5432/lone_star_winners",
     SESSION_SECRET: "0123456789012345678901234567890123456789",
     API_CORS_ALLOWED_ORIGINS: "https://www.ejemplo.invalid",
+    EMAIL_PROVIDER: "resend",
+    EMAIL_PROVIDER_API_KEY: "re_0123456789abcdefghij",
+    EMAIL_FROM_ADDRESS: "no-reply@lsw-pruebas.com",
+    WEB_PUBLIC_URL: "https://www.lsw-pruebas.com",
   });
 
   it("acepta una configuracion de produccion correcta", () => {
     expect(loadConfig(PRODUCTION_BASE).isProduction).toBe(true);
+  });
+
+  describe("DEC-058: correo transaccional", () => {
+    it("publica el proveedor, el remitente y la URL del portal", () => {
+      const config = loadConfig(PRODUCTION_BASE);
+      expect(config.email).toMatchObject({
+        provider: "resend",
+        apiKey: "re_0123456789abcdefghij",
+        fromAddress: "no-reply@lsw-pruebas.com",
+        fromName: "Lone Star Winners",
+      });
+      expect(config.web.publicUrl).toBe("https://www.lsw-pruebas.com");
+    });
+
+    it("rechaza `console` en produccion: los correos no saldrian", () => {
+      expect(() => loadConfig({ ...PRODUCTION_BASE, EMAIL_PROVIDER: "console" })).toThrow(
+        /EMAIL_PROVIDER/u,
+      );
+    });
+
+    it("rechaza `resend` sin clave, en cualquier entorno", () => {
+      const withoutKey = { ...PRODUCTION_BASE };
+      delete withoutKey.EMAIL_PROVIDER_API_KEY;
+      expect(() => loadConfig(withoutKey)).toThrow(/EMAIL_PROVIDER_API_KEY/u);
+      expect(() => loadConfig(withEnv({ EMAIL_PROVIDER: "resend" }))).toThrow(
+        /EMAIL_PROVIDER_API_KEY/u,
+      );
+    });
+
+    it("rechaza el remitente de relleno y un portal sin HTTPS", () => {
+      expect(() =>
+        loadConfig({ ...PRODUCTION_BASE, EMAIL_FROM_ADDRESS: "no-reply@localhost.invalid" }),
+      ).toThrow(/EMAIL_FROM_ADDRESS/u);
+      expect(() =>
+        loadConfig({ ...PRODUCTION_BASE, WEB_PUBLIC_URL: "http://www.lsw-pruebas.com" }),
+      ).toThrow(/WEB_PUBLIC_URL/u);
+    });
+
+    it("fuera de produccion basta con no declarar nada: `console` y el portal local", () => {
+      const config = loadConfig(VALID_DEV_ENV);
+      expect(config.email.provider).toBe("console");
+      expect(config.web.publicUrl).toBe("http://localhost:3000");
+    });
   });
 
   it("rechaza una cookie de sesion sin Secure (DEC-006)", () => {

@@ -141,6 +141,20 @@
       "when": 1787616028000,
       "tag": "0028_setting_change_requests",
       "breakpoints": false
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1787616029000,
+      "tag": "0029_media_assets",
+      "breakpoints": false
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1787616030000,
+      "tag": "0030_email_tokens",
+      "breakpoints": false
     }
   ]
 }

@@ -85,7 +85,17 @@ ADMIN_SESSION_IDLE_TIMEOUT_MINUTES=15
 STEP_UP_MAX_AGE_SECONDS=300
 
 PAYMENT_PROVIDER=none
-DEFAULT_CURRENCY=USD`;
+DEFAULT_CURRENCY=USD
+
+EMAIL_PROVIDER=resend
+EMAIL_FROM_ADDRESS=no-reply@REPLACE-dominio-verificado-en-resend.example
+EMAIL_FROM_NAME=Lone Star Winners
+EMAIL_PROVIDER_API_KEY=REPLACE_con_la_clave_re_de_Resend
+WEB_PUBLIC_URL=https://REPLACE-dominio-del-portal.example`;
+
+// Las tres lineas REPLACE de correo (DEC-058) se rellenan a mano en Railway:
+// la clave la da Resend y los dominios los decide el cliente. Si se quedan
+// asi, la API NO arranca: el esquema de entorno rechaza los marcadores.
 
 const web = `NODE_ENV=production
 TZ=UTC

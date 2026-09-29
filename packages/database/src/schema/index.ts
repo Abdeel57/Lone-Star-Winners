@@ -22,3 +22,7 @@ export * from "./audit-events.js";
 // HO-041 (DEC-032, DEC-054): control dual de flags legalmente materiales y de
 // la modalidad AMOE. Al final por el mismo motivo que los bloques de arriba.
 export * from "./settings.js";
+// DEC-056: imagenes de catalogo subidas desde el panel. Al final, como el resto.
+export * from "./media.js";
+// DEC-058: enlaces de verificacion de correo y de restablecimiento. Al final.
+export * from "./email-tokens.js";

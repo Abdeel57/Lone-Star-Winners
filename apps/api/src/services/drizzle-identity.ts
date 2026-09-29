@@ -14,9 +14,10 @@
 import type { Database } from "@lsw/database";
 import { schema } from "@lsw/database";
 import type { SessionAudience } from "@lsw/security";
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, count, eq, gt, gte, isNull, sql } from "drizzle-orm";
 
 import type {
+  ConsumeEmailTokenResult,
   CreateSessionInput,
   CredentialRecord,
   IdentityRepositories,
@@ -28,7 +29,9 @@ import type {
 const {
   identities,
   identityCredentials,
+  identityEmailTokens,
   identityMfaFactors,
+  participants,
   sessions,
   adminUserRoles,
   adminUsers,
@@ -70,9 +73,82 @@ function toSession(row: {
   };
 }
 
+/** Indice unico de `0001_identity_and_rbac.sql` sobre `email_normalized`. */
+const EMAIL_UNIQUE_INDEX = "identities_email_normalized_key";
+
+/**
+ * `true` solo si el motor rechazo la fila por el indice unico del correo.
+ *
+ * Se recorre la cadena de `cause` porque drizzle envuelve el error real de
+ * `pg`. Y se exige el NOMBRE del indice ademas del `23505`: cualquier otra
+ * violacion de unicidad traducida a "ese correo ya existe" mandaria a alguien a
+ * iniciar sesion en una cuenta que no tiene.
+ */
+function isEmailTaken(error: unknown): boolean {
+  const seen = new Set<unknown>();
+  let current: unknown = error;
+
+  while (typeof current === "object" && current !== null && !seen.has(current)) {
+    seen.add(current);
+    const candidate = current as { code?: unknown; constraint?: unknown; cause?: unknown };
+
+    if (candidate.code === "23505") {
+      return candidate.constraint === EMAIL_UNIQUE_INDEX;
+    }
+
+    current = candidate.cause;
+  }
+
+  return false;
+}
+
 export function createIdentityRepositories(db: Database): IdentityRepositories {
   return {
     identities: {
+      async registerParticipant(input): Promise<IdentityRecord | null> {
+        try {
+          return await db.transaction(async (tx) => {
+            const [identity] = await tx
+              .insert(identities)
+              .values({
+                // Se guarda recortado y tal como se tecleo. La normalizacion a
+                // minusculas la hace la columna generada, no esta linea.
+                email: input.email.trim(),
+                // `ACTIVE` con `email_verified_at` a null: el login exige
+                // `ACTIVE`, y todavia no existe verificacion de correo con la
+                // que salir de `PENDING_VERIFICATION`. Que un correo sin
+                // verificar tenga consecuencias es una decision legal pendiente
+                // (`docs/LEGAL_PENDING.md`), no algo que decidir aqui cerrando
+                // la puerta a todo el mundo.
+                status: "ACTIVE",
+              })
+              .returning({
+                id: identities.id,
+                email: identities.email,
+                emailVerifiedAt: identities.emailVerifiedAt,
+                status: identities.status,
+              });
+
+            if (identity === undefined) throw new Error("identity_insert_returned_no_row");
+
+            await tx
+              .insert(identityCredentials)
+              .values({ identityId: identity.id, passwordHash: input.passwordHash });
+
+            await tx.insert(participants).values({
+              identityId: identity.id,
+              displayName: input.displayName,
+              preferredLocale: input.preferredLocale,
+            });
+
+            return toIdentity(identity);
+          });
+        } catch (error) {
+          if (isEmailTaken(error)) return null;
+          throw error;
+        }
+      },
+
       async findByEmail(email: string): Promise<IdentityRecord | null> {
         // Se compara contra la columna GENERADA `email_normalized`
         // (`lower(btrim(email))`), no contra `email`. Comparar contra la cruda
@@ -228,6 +304,120 @@ export function createIdentityRepositories(db: Database): IdentityRepositories {
           );
 
         return (result.rowCount ?? 0) > 0;
+      },
+
+      async setPasswordAfterReset(identityId: string, passwordHash: string): Promise<void> {
+        await db
+          .update(identityCredentials)
+          .set({
+            passwordHash,
+            passwordSetAt: sql`now()`,
+            failedAttempts: 0,
+            lockedUntil: null,
+            updatedAt: sql`now()`,
+          })
+          .where(eq(identityCredentials.identityId, identityId));
+      },
+
+      async markEmailVerified(identityId: string, email: string, now: Date): Promise<boolean> {
+        const normalized = email.trim().toLowerCase();
+
+        // `COALESCE` conserva el instante de la PRIMERA verificacion: forma
+        // parte de la procedencia y un segundo clic no puede moverlo. La
+        // condicion sobre `email_normalized` es la que impide que un enlace
+        // enviado a una direccion anterior verifique la actual.
+        const result = await db
+          .update(identities)
+          .set({
+            emailVerifiedAt: sql`COALESCE(${identities.emailVerifiedAt}, ${now}::timestamptz)`,
+          })
+          .where(and(eq(identities.id, identityId), eq(identities.emailNormalized, normalized)));
+
+        return (result.rowCount ?? 0) > 0;
+      },
+    },
+
+    emailTokens: {
+      async issue(input): Promise<void> {
+        await db.insert(identityEmailTokens).values({
+          identityId: input.identityId,
+          purpose: input.purpose,
+          tokenHash: input.tokenHash,
+          email: input.email,
+          expiresAt: input.expiresAt,
+        });
+      },
+
+      async consume(tokenHash, purpose, now): Promise<ConsumeEmailTokenResult> {
+        // Todas las condiciones van en el WHERE, no en un `if` previo: es lo
+        // que hace atomico el consumo. Dos clics simultaneos compiten por la
+        // misma fila y solo uno recibe una fila de vuelta.
+        const consumed = await db
+          .update(identityEmailTokens)
+          .set({ consumedAt: now })
+          .where(
+            and(
+              eq(identityEmailTokens.tokenHash, tokenHash),
+              eq(identityEmailTokens.purpose, purpose),
+              isNull(identityEmailTokens.consumedAt),
+              gt(identityEmailTokens.expiresAt, now),
+            ),
+          )
+          .returning({
+            identityId: identityEmailTokens.identityId,
+            email: identityEmailTokens.email,
+          });
+
+        const row = consumed[0];
+
+        if (row !== undefined) {
+          return { status: "CONSUMED", identityId: row.identityId, email: row.email };
+        }
+
+        // Solo para elegir el mensaje: caducado y sin usar, o cualquier otra
+        // cosa (inexistente, de otro proposito, ya usado).
+        const existing = await db
+          .select({ consumedAt: identityEmailTokens.consumedAt })
+          .from(identityEmailTokens)
+          .where(
+            and(
+              eq(identityEmailTokens.tokenHash, tokenHash),
+              eq(identityEmailTokens.purpose, purpose),
+            ),
+          )
+          .limit(1);
+
+        // Sin fila, `?.` da `undefined` y la comparacion con `null` es falsa:
+        // cae en `INVALID`, que es lo correcto.
+        return existing[0]?.consumedAt === null ? { status: "EXPIRED" } : { status: "INVALID" };
+      },
+
+      async countIssuedSince(identityId, purpose, since): Promise<number> {
+        const rows = await db
+          .select({ issued: count() })
+          .from(identityEmailTokens)
+          .where(
+            and(
+              eq(identityEmailTokens.identityId, identityId),
+              eq(identityEmailTokens.purpose, purpose),
+              gte(identityEmailTokens.createdAt, since),
+            ),
+          );
+
+        return rows[0]?.issued ?? 0;
+      },
+
+      async invalidateOutstanding(identityId, purpose, now): Promise<void> {
+        await db
+          .update(identityEmailTokens)
+          .set({ consumedAt: now })
+          .where(
+            and(
+              eq(identityEmailTokens.identityId, identityId),
+              eq(identityEmailTokens.purpose, purpose),
+              isNull(identityEmailTokens.consumedAt),
+            ),
+          );
       },
     },
 

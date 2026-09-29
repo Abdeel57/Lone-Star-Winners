@@ -412,6 +412,21 @@ export const mockRoutes: readonly MockRoute[] = [
    * que la respuesta tiene la forma del contrato, no que el mock persista.
    */
   { method: "POST", path: API_PATHS.adminProducts, body: adminProducts[0] },
+  /*
+   * Subida de una foto (§14, DEC-056). Como el resto de mutaciones, devuelve un
+   * fixture fijo y NO guarda nada: la API simulada no sirve binarios, asi que la
+   * ruta devuelta tiene la forma del contrato pero no hay imagen detras.
+   */
+  {
+    method: "POST",
+    path: API_PATHS.adminMedia,
+    body: {
+      id: "5d5d5d5d-5d5d-4d5d-8d5d-5d5d5d5d5d5d",
+      url: "/media/5d5d5d5d-5d5d-4d5d-8d5d-5d5d5d5d5d5d.jpg",
+      content_type: "image/jpeg",
+      byte_size: 184_320,
+    },
+  },
   ...adminProducts.flatMap((product): readonly MockRoute[] => [
     { method: "GET", path: adminProductPath(product.id), body: product },
     { method: "PATCH", path: adminProductPath(product.id), body: product },

@@ -18,7 +18,8 @@
  * POR QUE ESTAS RUTAS SON `PUBLIC`
  *   Porque son las que se usan ANTES de tener sesion. Que sean publicas no
  *   significa que sean laxas: el rate limiting las cubre y ninguna revela si
- *   una cuenta existe.
+ *   una cuenta existe, con UNA excepcion declarada: el alta responde 409 ante
+ *   un correo ya registrado (ver `ApiErrors.emailAlreadyRegistered`).
  *
  * NO SE DISTINGUE "NO EXISTE" DE "CONTRASENA INCORRECTA"
  *   Ambos producen el mismo error y, en la medida de lo posible, el mismo
@@ -28,6 +29,7 @@
  */
 
 import {
+  assertPasswordAcceptable,
   audienceForRoles,
   capabilitiesForRoles,
   decodeSecretBoxKey,
@@ -37,7 +39,10 @@ import {
   hashPassword,
   hashSessionToken,
   looksLikeSessionToken,
+  MAXIMUM_PASSWORD_LENGTH,
+  MINIMUM_PASSWORD_LENGTH,
   needsRehash,
+  PasswordPolicyError,
   requiresMfa,
   SESSION_POLICIES,
   verifyPassword,
@@ -45,6 +50,7 @@ import {
   type RoleId,
   type SessionAudience,
 } from "@lsw/security";
+import type { FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 
 import type { AppDependencies } from "../app.js";
@@ -56,6 +62,15 @@ import {
   cookieOptionsFor,
   type SessionCookieConfig,
 } from "../http/session-cookie.js";
+import { maskEmail } from "../services/email.js";
+import {
+  emailLocaleFrom,
+  renderPasswordResetEmail,
+  renderVerificationEmail,
+  webLink,
+  type EmailLocale,
+} from "../services/email-templates.js";
+import type { EmailTokenPurpose } from "../services/identity-ports.js";
 
 /**
  * Umbral de bloqueo por intentos fallidos y duracion.
@@ -74,9 +89,92 @@ const loginBodySchema = z.object({
   password: z.string().min(1).max(1_024),
 });
 
+const registerBodySchema = z.object({
+  /**
+   * La misma forma y el mismo tope que las CHECK de `identities`
+   * (`identities_email_shape`, `identities_email_length`). Se repiten aqui
+   * porque un correo que solo rechazara el motor saldria como 500, y a quien se
+   * equivoca tecleando le corresponde un 422.
+   */
+  email: z
+    .string()
+    .trim()
+    .max(254)
+    .regex(/^[^@\s]+@[^@\s]+\.[^@\s]+$/u),
+  /**
+   * Solo el tope, para acotar el trabajo de Argon2. La politica -longitud
+   * minima- la decide `assertPasswordAcceptable` en el handler, con su propio
+   * codigo de error.
+   */
+  password: z.string().min(1).max(MAXIMUM_PASSWORD_LENGTH),
+  /** Mismos limites que `participants_display_name_length`. */
+  display_name: z.string().trim().min(1).max(120).nullable().optional(),
+  /** Etiqueta BCP-47 completa (DEC-029). Sin default: DEC-021 no admite uno. */
+  language_preference: z.enum(["en-US", "es-US"]),
+  /**
+   * VACIO O NADA, y no es un descuido.
+   *
+   * `GET /config` no publica `required_consents` y no existe tabla donde
+   * guardar una aceptacion: que consentimientos hay que recoger es decision del
+   * abogado del cliente y sigue pendiente. Aceptar aqui una lista y tirarla
+   * seria perder en silencio una aceptacion legal; rechazarla obliga a que el
+   * dia que se publiquen, la persistencia exista antes.
+   */
+  consents: z
+    .array(z.object({ key: z.string().min(1).max(100), version: z.string().min(1).max(100) }))
+    .max(0)
+    .default([]),
+});
+
 const mfaBodySchema = z.object({
   code: z.string().min(6).max(16),
 });
+
+/**
+ * Enlaces de correo (DEC-058).
+ *
+ * La verificacion dura 48 horas porque nadie tiene prisa por confirmar su
+ * correo y un enlace que caduca antes de que la persona abra el mensaje solo
+ * genera reenvios. El restablecimiento dura una hora: es una credencial que da
+ * acceso a la cuenta entera, y cuanto menos viva, menos sirve si se filtra.
+ */
+const VERIFICATION_TTL_MINUTES = 48 * 60;
+const RESET_TTL_MINUTES = 60;
+
+/**
+ * Tope de enlaces por identidad y proposito en la ventana.
+ *
+ * Vive en la base de datos y no en el rate limiting por IP porque la API ve la
+ * IP del servidor de `apps/web`, no la del visitante (DEC-057): un limite por
+ * IP frenaria a todo el publico a la vez. Este frena lo que importa: que
+ * alguien use el formulario para inundar el buzon de otra persona o para
+ * gastar la cuota del proveedor.
+ */
+const EMAIL_THROTTLE_WINDOW_MINUTES = 15;
+const EMAIL_THROTTLE_MAX = 3;
+
+/**
+ * El token es opaco, pero tiene forma: 43 caracteres base64url, la misma que
+ * el de sesion porque sale del mismo generador. Lo que no la tiene se rechaza
+ * sin consultar la base de datos.
+ */
+const linkTokenSchema = z.string().min(1).max(256);
+
+const verifyEmailBodySchema = z.object({ token: linkTokenSchema });
+
+const forgotPasswordBodySchema = z.object({
+  email: z.string().trim().min(3).max(320),
+});
+
+const resetPasswordBodySchema = z.object({
+  token: linkTokenSchema,
+  /** Solo el tope; la politica la decide `assertPasswordAcceptable`. */
+  password: z.string().min(1).max(MAXIMUM_PASSWORD_LENGTH),
+});
+
+const acknowledgedResponseSchema = z.object({ acknowledged: z.literal(true) });
+
+const ACKNOWLEDGED = { acknowledged: true as const };
 
 const sessionResponseSchema = z.object({
   authenticated: z.boolean(),
@@ -129,7 +227,7 @@ const ANONYMOUS: SessionResponse = {
 };
 
 export function buildAuthRoutes(dependencies: AppDependencies): RouteDefinition[] {
-  const { identity, config } = dependencies;
+  const { identity, config, email } = dependencies;
 
   const cookieConfig: SessionCookieConfig = {
     name: config.session.cookieName,
@@ -160,7 +258,212 @@ export function buildAuthRoutes(dependencies: AppDependencies): RouteDefinition[
     return null;
   }
 
+  /**
+   * Abre una sesion y emite su cookie.
+   *
+   * Lo comparten el login y el alta para que las dos entradas no puedan
+   * divergir en TTL, scope o atributos de cookie: son la misma operacion con
+   * distinta forma de llegar a ella.
+   */
+  async function openSession(
+    request: FastifyRequest,
+    reply: FastifyReply,
+    identityId: string,
+    audience: SessionAudience,
+    now: Date,
+  ): Promise<void> {
+    const policy = SESSION_POLICIES[audience];
+    const token = generateSessionToken();
+
+    await identity.sessions.create({
+      tokenHash: hashSessionToken(token),
+      identityId,
+      scope: audience,
+      expiresAt: new Date(now.getTime() + policy.absoluteTtlMinutes * 60_000),
+      ipAddress: request.ip ?? null,
+      userAgent: request.headers["user-agent"] ?? null,
+    });
+
+    void reply.setCookie(
+      cookieNameFor(cookieConfig.name, audience),
+      token,
+      cookieOptionsFor(audience, cookieConfig, policy.absoluteTtlMinutes * 60),
+    );
+  }
+
+  /**
+   * Emite un enlace de un solo uso y lo envia por correo (DEC-058).
+   *
+   * Devuelve `THROTTLED` sin emitir nada si la identidad ya recibio
+   * `EMAIL_THROTTLE_MAX` enlaces de ese proposito en la ventana. Quien llama
+   * responde lo mismo en los dos casos: el tope protege el buzon de la
+   * persona, no es informacion para quien pregunta.
+   *
+   * Lanza si el proveedor rechaza el envio. El enlace ya emitido queda en la
+   * tabla sin usar y caduca solo.
+   */
+  async function deliverLink(input: {
+    readonly identityId: string;
+    readonly address: string;
+    readonly purpose: EmailTokenPurpose;
+    readonly locale: EmailLocale;
+    readonly now: Date;
+  }): Promise<"SENT" | "THROTTLED"> {
+    const since = new Date(input.now.getTime() - EMAIL_THROTTLE_WINDOW_MINUTES * 60_000);
+    const recent = await identity.emailTokens.countIssuedSince(
+      input.identityId,
+      input.purpose,
+      since,
+    );
+
+    if (recent >= EMAIL_THROTTLE_MAX) {
+      return "THROTTLED";
+    }
+
+    const verification = input.purpose === "EMAIL_VERIFICATION";
+    const linkToken = generateSessionToken();
+    const ttlMinutes = verification ? VERIFICATION_TTL_MINUTES : RESET_TTL_MINUTES;
+
+    await identity.emailTokens.issue({
+      identityId: input.identityId,
+      purpose: input.purpose,
+      tokenHash: hashSessionToken(linkToken),
+      email: input.address,
+      expiresAt: new Date(input.now.getTime() + ttlMinutes * 60_000),
+    });
+
+    const link = webLink(
+      config.web.publicUrl,
+      input.locale,
+      verification ? "/account/verify-email" : "/account/reset-password",
+      linkToken,
+    );
+
+    const rendered = verification
+      ? renderVerificationEmail(input.locale, link)
+      : renderPasswordResetEmail(input.locale, link);
+
+    await email.send({
+      to: input.address,
+      ...rendered,
+      kind: verification ? "email_verification" : "password_reset",
+    });
+
+    return "SENT";
+  }
+
+  /**
+   * Ejecuta un envio SIN que la respuesta lo espere.
+   *
+   * Dos motivos. En el alta, un proveedor lento no puede retener la creacion
+   * de la cuenta. En "olvide mi contrasena", el tiempo de respuesta no puede
+   * depender de si el correo existe: si solo las cuentas reales esperaran al
+   * proveedor, cronometrar la respuesta diria quien tiene cuenta.
+   *
+   * Un fallo se registra -sin la direccion completa ni el enlace- y no se
+   * propaga: ya no hay respuesta a la que propagarlo.
+   */
+  function inBackground(
+    request: FastifyRequest,
+    event: string,
+    task: () => Promise<unknown>,
+  ): void {
+    void task().catch((error: unknown) => {
+      request.log.error({ event, err: error }, "envio de correo fallido");
+    });
+  }
+
   return [
+    {
+      method: "POST",
+      url: "/api/v1/auth/register",
+      operationId: "register",
+      summary: "Alta de participante con correo y contrasena.",
+      description:
+        "Crea identidad, credencial Argon2id y perfil de participante en una transaccion, y abre sesion de escaparate en el acto. El correo nace SIN verificar (`email_verified: false`). Nunca crea personal: los roles administrativos no se conceden por aqui.",
+      tags: ["auth"],
+      authorization: {
+        kind: "PUBLIC",
+        justification:
+          "Es la ruta con la que se obtiene una cuenta, asi que no puede exigir una. Solo crea participantes -sin roles ni capacidades de personal- y el rate limiting la cubre. Revela si un correo ya esta registrado (409): ver `ApiErrors.emailAlreadyRegistered`.",
+      },
+      schema: {
+        body: registerBodySchema,
+        response: {
+          201: sessionResponseSchema,
+          409: errorEnvelopeSchema,
+          422: errorEnvelopeSchema,
+        },
+      },
+      handler: async (request, reply) => {
+        const body = request.body as z.infer<typeof registerBodySchema>;
+        const now = new Date();
+
+        try {
+          assertPasswordAcceptable(body.password);
+        } catch (error) {
+          if (error instanceof PasswordPolicyError) {
+            throw ApiErrors.weakPassword({
+              reason: error.reason,
+              minimum_length: MINIMUM_PASSWORD_LENGTH,
+              maximum_length: MAXIMUM_PASSWORD_LENGTH,
+            });
+          }
+          throw error;
+        }
+
+        // Se hashea ANTES de saber si el correo esta libre. El 409 de abajo ya
+        // dice que existe, asi que el tiempo no esconde nada; el orden esta
+        // para que la transaccion del alta no tenga dentro decenas de
+        // milisegundos de Argon2 con una conexion del pool cogida.
+        const passwordHash = await hashPassword(body.password);
+
+        const created = await identity.identities.registerParticipant({
+          email: body.email,
+          passwordHash,
+          displayName: body.display_name ?? null,
+          preferredLocale: body.language_preference,
+        });
+
+        if (created === null) {
+          throw ApiErrors.emailAlreadyRegistered();
+        }
+
+        // Siempre `PARTICIPANT`, sin pasar por `audienceForRoles`: una
+        // identidad recien creada no tiene roles, y si algun dia los tuviera
+        // no seria por esta ruta.
+        await openSession(request, reply, created.id, "PARTICIPANT", now);
+
+        // DEC-058: el enlace de verificacion sale en segundo plano. La cuenta
+        // ya existe y la sesion ya esta abierta; si el proveedor falla, la
+        // persona puede pedir otro desde su cuenta.
+        const address = created.email;
+        if (address !== null) {
+          inBackground(request, "email.verification.failed", () =>
+            deliverLink({
+              identityId: created.id,
+              address,
+              purpose: "EMAIL_VERIFICATION",
+              locale: body.language_preference,
+              now,
+            }),
+          );
+        }
+
+        void reply.code(201);
+
+        return {
+          authenticated: true,
+          state: "ACTIVE" as const,
+          scope: "PARTICIPANT" as const,
+          email: created.email,
+          email_verified: created.emailVerifiedAt !== null,
+          roles: [],
+          capabilities: publishedCapabilities("ACTIVE", "PARTICIPANT", []),
+        } satisfies SessionResponse;
+      },
+    },
+
     {
       method: "POST",
       url: "/api/v1/auth/login",
@@ -258,25 +561,7 @@ export function buildAuthRoutes(dependencies: AppDependencies): RouteDefinition[
         }
 
         const audience = audienceForRoles(roles);
-        const policy = SESSION_POLICIES[audience];
-
-        const token = generateSessionToken();
-        const expiresAt = new Date(now.getTime() + policy.absoluteTtlMinutes * 60_000);
-
-        await identity.sessions.create({
-          tokenHash: hashSessionToken(token),
-          identityId: found.id,
-          scope: audience,
-          expiresAt,
-          ipAddress: request.ip ?? null,
-          userAgent: request.headers["user-agent"] ?? null,
-        });
-
-        void reply.setCookie(
-          cookieNameFor(cookieConfig.name, audience),
-          token,
-          cookieOptionsFor(audience, cookieConfig, policy.absoluteTtlMinutes * 60),
-        );
+        await openSession(request, reply, found.id, audience, now);
 
         const pending = requiresMfa(roles);
         const state = pending ? ("MFA_PENDING" as const) : ("ACTIVE" as const);
@@ -498,6 +783,235 @@ export function buildAuthRoutes(dependencies: AppDependencies): RouteDefinition[
         // Siempre 200. Un 401 al cerrar sesion no le sirve a nadie y ademas
         // revelaria si la cookie presentada era valida.
         return { ok: true as const };
+      },
+    },
+
+    // -----------------------------------------------------------------------
+    // DEC-058: verificacion de correo y restablecimiento de contrasena.
+    // -----------------------------------------------------------------------
+
+    {
+      method: "POST",
+      url: "/api/v1/auth/verify-email",
+      operationId: "verifyEmail",
+      summary: "Verificar el correo con el token del enlace.",
+      description:
+        "Gasta el enlace de un solo uso y fija `email_verified_at` si la identidad sigue teniendo la direccion a la que se envio. No exige sesion: el enlace puede abrirse en otro dispositivo. Idempotente sobre el resultado: un correo ya verificado conserva su instante original.",
+      tags: ["auth"],
+      authorization: {
+        kind: "PUBLIC",
+        justification:
+          "El token del enlace ES la prueba: solo lo tiene quien recibe el correo. Exigir sesion impediria verificar desde el telefono un alta hecha en el ordenador. El token es de 256 bits, de un solo uso y caduca a las 48 horas.",
+      },
+      schema: {
+        body: verifyEmailBodySchema,
+        response: {
+          200: acknowledgedResponseSchema,
+          410: errorEnvelopeSchema,
+          422: errorEnvelopeSchema,
+        },
+      },
+      handler: async (request) => {
+        const body = request.body as z.infer<typeof verifyEmailBodySchema>;
+        const now = new Date();
+
+        if (!looksLikeSessionToken(body.token)) {
+          throw ApiErrors.verificationTokenInvalid();
+        }
+
+        const result = await identity.emailTokens.consume(
+          hashSessionToken(body.token),
+          "EMAIL_VERIFICATION",
+          now,
+        );
+
+        if (result.status === "EXPIRED") throw ApiErrors.verificationTokenExpired();
+        if (result.status === "INVALID") throw ApiErrors.verificationTokenInvalid();
+
+        const verified = await identity.identities.markEmailVerified(
+          result.identityId,
+          result.email,
+          now,
+        );
+
+        // La identidad ya no tiene esa direccion: el enlace era para otra.
+        if (!verified) throw ApiErrors.verificationTokenInvalid();
+
+        return ACKNOWLEDGED;
+      },
+    },
+
+    {
+      method: "POST",
+      url: "/api/v1/auth/verify-email/resend",
+      operationId: "resendEmailVerification",
+      summary: "Reenviar el enlace de verificacion al correo de la sesion.",
+      description:
+        "Envia un enlace nuevo a la direccion de la cuenta que presenta la sesion; nunca a otra. Si el correo ya esta verificado, o si se alcanzo el tope de envios de la ventana, responde igual sin enviar.",
+      tags: ["auth"],
+      authorization: { kind: "PARTICIPANT", selfOnly: true },
+      schema: {
+        response: {
+          200: acknowledgedResponseSchema,
+          401: errorEnvelopeSchema,
+          503: errorEnvelopeSchema,
+        },
+      },
+      handler: async (request) => {
+        const presented = readSession(request);
+        const session =
+          presented === null
+            ? null
+            : await identity.sessions.findByTokenHash(hashSessionToken(presented.token));
+
+        // La puerta ya exigio una sesion de participante valida; esto solo
+        // recupera DE QUIEN es. Si no se encuentra, no se envia a nadie.
+        // En positivo, como en `mfa/verify` y por el mismo motivo.
+        const usable = session !== null && session.revokedAt === null;
+
+        if (!usable) {
+          throw ApiErrors.unauthenticated();
+        }
+
+        const record = await identity.identities.findById(session.identityId);
+
+        if (record?.email == null || record.emailVerifiedAt !== null) {
+          return ACKNOWLEDGED;
+        }
+
+        try {
+          await deliverLink({
+            identityId: record.id,
+            address: record.email,
+            purpose: "EMAIL_VERIFICATION",
+            locale: emailLocaleFrom(request.headers["accept-language"]),
+            now: new Date(),
+          });
+        } catch (error) {
+          // Aqui SI hay a quien decirselo: la persona acaba de pulsar "reenviar"
+          // y un "enviado" falso la dejaria esperando un correo que no llega.
+          request.log.error(
+            { event: "email.verification.failed", to: maskEmail(record.email), err: error },
+            "reenvio de verificacion fallido",
+          );
+          throw ApiErrors.serviceUnavailable();
+        }
+
+        return ACKNOWLEDGED;
+      },
+    },
+
+    {
+      method: "POST",
+      url: "/api/v1/auth/password/forgot",
+      operationId: "requestPasswordReset",
+      summary: "Pedir un enlace para restablecer la contrasena.",
+      description:
+        "Responde SIEMPRE 200 `{ acknowledged: true }`, exista o no una cuenta con ese correo, y antes de buscarla: ni el cuerpo ni el tiempo de respuesta dicen si el correo esta registrado. Si existe una cuenta ACTIVE con contrasena, se le envia un enlace de una hora.",
+      tags: ["auth"],
+      authorization: {
+        kind: "PUBLIC",
+        justification:
+          "Se usa precisamente cuando no se puede iniciar sesion. No revela si una cuenta existe (misma respuesta y mismo tiempo), solo envia a la direccion ya registrada -nunca a una que elija quien pregunta- y un tope por identidad impide usarla para inundar un buzon.",
+      },
+      schema: {
+        body: forgotPasswordBodySchema,
+        response: {
+          200: acknowledgedResponseSchema,
+          422: errorEnvelopeSchema,
+        },
+      },
+      handler: (request) => {
+        const body = request.body as z.infer<typeof forgotPasswordBodySchema>;
+        const locale = emailLocaleFrom(request.headers["accept-language"]);
+        const now = new Date();
+
+        inBackground(request, "email.password_reset.failed", async () => {
+          const found = await identity.identities.findByEmail(body.email);
+
+          // El expediente postal sin credencial, una cuenta suspendida o una
+          // identidad sin correo no reciben nada: restablecer supone que ya
+          // habia una contrasena.
+          if (found?.email == null || found.status !== "ACTIVE") return;
+
+          const credential = await identity.identities.findCredential(found.id);
+          if (credential === null) return;
+
+          await deliverLink({
+            identityId: found.id,
+            address: found.email,
+            purpose: "PASSWORD_RESET",
+            locale,
+            now,
+          });
+        });
+
+        return ACKNOWLEDGED;
+      },
+    },
+
+    {
+      method: "POST",
+      url: "/api/v1/auth/password/reset",
+      operationId: "resetPassword",
+      summary: "Fijar una contrasena nueva con el token del enlace.",
+      description:
+        "Comprueba la politica de contrasena ANTES de gastar el enlace, para que una contrasena corta no lo queme. Al fijarla: levanta el bloqueo por intentos, invalida los demas enlaces de restablecimiento vivos y revoca TODAS las sesiones abiertas de la cuenta.",
+      tags: ["auth"],
+      authorization: {
+        kind: "PUBLIC",
+        justification:
+          "Se usa sin sesion, desde el enlace del correo. El token es la prueba de control del buzon: 256 bits, de un solo uso y valido una hora. El personal sigue necesitando su segundo factor para entrar despues.",
+      },
+      schema: {
+        body: resetPasswordBodySchema,
+        response: {
+          200: acknowledgedResponseSchema,
+          410: errorEnvelopeSchema,
+          422: errorEnvelopeSchema,
+        },
+      },
+      handler: async (request) => {
+        const body = request.body as z.infer<typeof resetPasswordBodySchema>;
+        const now = new Date();
+
+        if (!looksLikeSessionToken(body.token)) {
+          throw ApiErrors.resetTokenInvalid();
+        }
+
+        try {
+          assertPasswordAcceptable(body.password);
+        } catch (error) {
+          if (error instanceof PasswordPolicyError) {
+            throw ApiErrors.weakPassword({
+              reason: error.reason,
+              minimum_length: MINIMUM_PASSWORD_LENGTH,
+              maximum_length: MAXIMUM_PASSWORD_LENGTH,
+            });
+          }
+          throw error;
+        }
+
+        // Se gasta ANTES de Argon2: un token inventado no cuesta un hash.
+        const result = await identity.emailTokens.consume(
+          hashSessionToken(body.token),
+          "PASSWORD_RESET",
+          now,
+        );
+
+        if (result.status === "EXPIRED") throw ApiErrors.resetTokenExpired();
+        if (result.status === "INVALID") throw ApiErrors.resetTokenInvalid();
+
+        const passwordHash = await hashPassword(body.password);
+
+        await identity.identities.setPasswordAfterReset(result.identityId, passwordHash);
+        await identity.emailTokens.invalidateOutstanding(result.identityId, "PASSWORD_RESET", now);
+
+        // Si alguien entro con la contrasena vieja, esa sesion muere aqui. Es
+        // la razon mas comun para restablecer una contrasena.
+        await identity.sessions.revokeAllForIdentity(result.identityId, "password_reset", now);
+
+        return ACKNOWLEDGED;
       },
     },
   ];

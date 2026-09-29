@@ -148,6 +148,35 @@ export interface AdminProductPatch {
   readonly image_url?: string | null;
 }
 
+/** Tipos de imagen que la API admite (§14, DEC-056). SVG no: puede llevar script. */
+export const ADMIN_MEDIA_CONTENT_TYPES = ["image/jpeg", "image/png", "image/webp"] as const;
+export type AdminMediaContentType = (typeof ADMIN_MEDIA_CONTENT_TYPES)[number];
+
+/** 5 MiB. El mismo tope que impone la API, y debajo de ella un CHECK. */
+export const ADMIN_MEDIA_MAX_BYTES = 5_242_880;
+
+/**
+ * Subida de una imagen (§14). Solo los bytes: el tipo lo decide la API leyendo
+ * la firma del contenido, no lo que declare quien sube.
+ */
+export interface AdminMediaInput {
+  readonly data_base64: string;
+}
+
+/**
+ * Imagen subida (§14, DEC-056).
+ *
+ * `url` es una ruta raiz de ESTE sitio (`/media/<id>.<ext>`) y es exactamente
+ * lo que se manda despues como `image_url`. La imagen es inmutable: cambiar la
+ * foto de un producto es subir otra.
+ */
+export interface AdminMediaRow {
+  readonly id: string;
+  readonly url: string;
+  readonly content_type: AdminMediaContentType;
+  readonly byte_size: number;
+}
+
 /**
  * Categoria del catalogo en el panel (§13.6, DEC-053).
  *

@@ -4,6 +4,7 @@ import { Alert, Button, FormField, Input, Radio, RadioGroup, Select, Textarea } 
 import { useTranslations } from "next-intl";
 import { useActionState, useState } from "react";
 
+import { ImageUploadField } from "@/components/admin/image-upload-field";
 import { FormError, LocaleField, useFieldError } from "@/components/auth-form-shell";
 import type { Locale } from "@/i18n/locales";
 import { IDLE, type ActionResult } from "@/lib/action-result";
@@ -185,19 +186,14 @@ export function ProductForm({
           </Select>
         </FormField>
 
-        <FormField
-          label={t("fieldImageUrl")}
-          description={t("fieldImageUrlHint")}
-          error={fieldError("image_url")}
-        >
-          <Input
-            name="image_url"
-            defaultValue={product?.imageUrl ?? ""}
-            autoComplete="off"
-            spellCheck={false}
-            inputMode="url"
-          />
-        </FormField>
+        {/* La foto se elige DESDE EL DISPOSITIVO y viaja en este mismo formulario
+            (§14, DEC-056). No hay campo de URL: ver `ImageUploadField`. */}
+        <ImageUploadField
+          name="image"
+          label={t("fieldImage")}
+          currentUrl={product?.imageUrl}
+          error={fieldError("image_file")}
+        />
       </div>
 
       <p className="text-caption text-text-subtle">{t("bothLanguages")}</p>
@@ -312,9 +308,11 @@ export function ProductForm({
                 <Input name={`variant_${index}_stock`} inputMode="numeric" pattern="[0-9]*" />
               </FormField>
 
-              <FormField label={t("fieldImageUrl")}>
-                <Input name={`variant_${index}_image_url`} inputMode="url" spellCheck={false} />
-              </FormField>
+              <ImageUploadField
+                name={`variant_${index}_image`}
+                label={t("fieldImage")}
+                error={fieldError(`variant_${index}_image_file`)}
+              />
             </div>
           ))}
 

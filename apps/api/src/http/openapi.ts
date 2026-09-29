@@ -120,6 +120,22 @@ export function buildOpenApiDocument(
       };
     }
 
+    // Respuestas binarias (DEC-056). No tienen esquema Zod -Fastify no pasa un
+    // `Buffer` por el serializador-, pero el documento tiene que decir que
+    // existen y con que tipos, o el contrato publicado callaria el unico 200 de
+    // la ruta.
+    for (const status of Object.keys(definition.binaryResponses ?? {}).sort()) {
+      const mediaTypes = definition.binaryResponses?.[Number(status)] ?? [];
+      responses[status] = {
+        description: `Respuesta ${status}.`,
+        content: Object.fromEntries(
+          [...mediaTypes]
+            .sort()
+            .map((mediaType) => [mediaType, { schema: { type: "string", format: "binary" } }]),
+        ),
+      };
+    }
+
     const parameters = [
       ...buildParameters(definition.schema.params, "path"),
       ...buildParameters(definition.schema.querystring, "query"),

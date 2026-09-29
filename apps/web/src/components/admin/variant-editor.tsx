@@ -4,6 +4,7 @@ import { Alert, Badge, Button, Card, FormField, Input, Select } from "@lsw/ui";
 import { useTranslations } from "next-intl";
 import { useActionState } from "react";
 
+import { ImageUploadField } from "@/components/admin/image-upload-field";
 import { FormError, LocaleField, useFieldError } from "@/components/auth-form-shell";
 import type { Locale } from "@/i18n/locales";
 import { IDLE, type ActionResult } from "@/lib/action-result";
@@ -40,9 +41,9 @@ const VARIANT_STATUSES = ["ACTIVE", "ARCHIVED"] as const;
  * debajo como traduccion. Es lo que distingue "Rojo" de "Red" para el mismo
  * color, y lo que hace que el selector de la ficha deje de enseñar SKUs.
  *
- * LA IMAGEN PUEDE APUNTAR A UN FICHERO QUE NO EXISTE TODAVIA: no hay almacen de
- * medios (DEC-053) y las entrega el usuario en `apps/web/public/products/`. El
- * formulario acepta la ruta y el escaparate tolera el 404.
+ * LA FOTO SE ELIGE DESDE EL DISPOSITIVO (§14, DEC-056) y viaja en el mismo
+ * formulario que el resto de la variante. No hay campo de URL: ver
+ * `ImageUploadField`.
  */
 export function VariantEditor({
   locale,
@@ -188,14 +189,12 @@ function VariantForm({
           />
         </FormField>
 
-        <FormField label={t("fieldImageUrl")} error={fieldError("image_url")}>
-          <Input
-            name="image_url"
-            inputMode="url"
-            spellCheck={false}
-            defaultValue={variant?.image_url ?? ""}
-          />
-        </FormField>
+        <ImageUploadField
+          name="image"
+          label={t("fieldImage")}
+          currentUrl={variant?.image_url}
+          error={fieldError("image_file")}
+        />
 
         {/* ARCHIVAR NO ES BORRAR, y el desplegable lo dice con los dos unicos
             valores que la API admite. Solo al editar: una variante nueva nace

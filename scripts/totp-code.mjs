@@ -39,7 +39,8 @@ function base32ToBytes(text) {
   return Buffer.from(output);
 }
 
-function readSecret() {
+/** Secreto base32 del fichero `.admin-totp*` elegido. Tambien lo usa `admin-qr.mjs`. */
+export function readSecret() {
   const file = process.env.LSW_TOTP_FILE ?? ".admin-totp";
 
   // Solo nombres de la familia .admin-totp*, sin separadores de ruta: la
@@ -66,12 +67,15 @@ function readSecret() {
   return secret;
 }
 
-/** Codigo de la ventana que contiene `nowMillis`. */
-export function totpCode(nowMillis) {
+/**
+ * Codigo de la ventana que contiene `nowMillis`. Sin `secret`, el del fichero;
+ * `admin-recover-qr.mjs` pasa el que recupera de Railway.
+ */
+export function totpCode(nowMillis, secret = readSecret()) {
   const message = Buffer.alloc(8);
   message.writeBigUInt64BE(BigInt(Math.floor(nowMillis / 1000 / 30)));
 
-  const digest = createHmac("sha1", base32ToBytes(readSecret())).update(message).digest();
+  const digest = createHmac("sha1", base32ToBytes(secret)).update(message).digest();
 
   // Truncamiento dinamico del RFC 4226: los 4 bits bajos del ultimo byte dicen
   // desde que posicion leer los 4 bytes que se convierten en el codigo.

@@ -115,6 +115,25 @@ export interface RouteDefinition {
   readonly authorization: RouteAuthorization;
   readonly schema: RouteSchemas;
   /**
+   * Limite de cuerpo PROPIO de la ruta, en bytes. Ausente, rige el global
+   * (`API_BODY_LIMIT_BYTES`).
+   *
+   * Existe para la subida de imagenes (DEC-056): subir el limite global para
+   * que quepa una foto abriria todas las demas rutas -login incluido- a
+   * cuerpos de varios megas que ninguna necesita. Asi la excepcion se declara
+   * junto a la ruta que la usa y se lee en la revision.
+   */
+  readonly bodyLimitBytes?: number;
+  /**
+   * Respuestas que NO son JSON: status -> tipos de contenido que puede llevar.
+   *
+   * Un handler que responde bytes los manda con `reply.send(buffer)`, y Fastify
+   * no pasa un `Buffer` por el serializador, asi que ese status no tiene -ni
+   * puede tener- esquema Zod en `schema.response`. Se declara aqui para que el
+   * documento OpenAPI lo publique como binario en vez de callarlo.
+   */
+  readonly binaryResponses?: Readonly<Record<number, readonly string[]>>;
+  /**
    * Devuelve el cuerpo de la respuesta; el serializador Zod se encarga del
    * resto. El tipo es `unknown` a secas -no `Promise<unknown> | unknown`-
    * porque `unknown` ya incluye las promesas: enumerarlas aparte no anadia
@@ -370,6 +389,7 @@ export function registerRoutes(
       method: definition.method,
       url: definition.url,
       config: { [ROUTE_CONFIG_KEY]: definition } satisfies LswRouteConfig,
+      ...(definition.bodyLimitBytes === undefined ? {} : { bodyLimit: definition.bodyLimitBytes }),
       preHandler: buildAuthorizationPreHandler(),
       schema: {
         ...(definition.schema.params === undefined ? {} : { params: definition.schema.params }),

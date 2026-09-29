@@ -201,6 +201,22 @@ export const environmentSchema = z
     // `none` es el unico valor que este hito reconoce.
     PAYMENT_PROVIDER: z.string().min(1),
     DEFAULT_CURRENCY: z.string().regex(/^[A-Z]{3}$/u, { error: "must_be_iso4217_uppercase" }),
+
+    // ----- Correo transaccional (DEC-058) -----
+    //
+    // Opcionales FUERA de produccion, con `console` como proveedor: en local y
+    // en tests el flujo se recorre sin enviar nada. En produccion el
+    // refinamiento de abajo exige `resend`, su clave y la URL del portal.
+    EMAIL_PROVIDER: z.enum(["console", "resend"]).default("console"),
+    EMAIL_FROM_ADDRESS: z.email().default("no-reply@localhost.invalid"),
+    EMAIL_FROM_NAME: z.string().trim().min(1).max(80).default("Lone Star Winners"),
+    EMAIL_PROVIDER_API_KEY: z.string().trim().min(1).optional(),
+    /**
+     * URL publica del portal (`apps/web`). La API la necesita para construir
+     * los enlaces de los correos, que abren pantallas del portal y no de la
+     * API. Es la del dominio que ve el cliente, no la interna de Railway.
+     */
+    WEB_PUBLIC_URL: z.url().default("http://localhost:3000"),
   })
   // ----- Refinamientos que solo aplican en produccion -----
   .superRefine((env, ctx) => {
@@ -269,6 +285,58 @@ export const environmentSchema = z
         message: "En produccion la API se sirve sobre HTTPS.",
       });
     }
+
+    // DEC-058. Con `console` en produccion la recuperacion de contrasena
+    // responderia "revisa tu correo" y no llegaria nada: parece que funciona.
+    if (env.EMAIL_PROVIDER !== "resend") {
+      ctx.addIssue({
+        code: "custom",
+        path: ["EMAIL_PROVIDER"],
+        message:
+          "DEC-058: en produccion EMAIL_PROVIDER debe ser `resend`. Con `console` los correos de verificacion y de recuperacion no se envian.",
+      });
+    }
+
+    if (
+      env.EMAIL_FROM_ADDRESS.endsWith(".invalid") ||
+      looksLikePlaceholder(env.EMAIL_FROM_ADDRESS)
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["EMAIL_FROM_ADDRESS"],
+        message:
+          "DEC-058: en produccion EMAIL_FROM_ADDRESS debe ser una direccion del dominio verificado en el proveedor.",
+      });
+    }
+
+    if (!env.WEB_PUBLIC_URL.startsWith("https://") || looksLikePlaceholder(env.WEB_PUBLIC_URL)) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["WEB_PUBLIC_URL"],
+        message:
+          "En produccion WEB_PUBLIC_URL es la direccion HTTPS del portal: los enlaces de los correos apuntan ahi.",
+      });
+    }
+  })
+  // ----- Coherencia del proveedor de correo, en cualquier entorno -----
+  .superRefine((env, ctx) => {
+    if (env.EMAIL_PROVIDER !== "resend") {
+      return;
+    }
+
+    if (env.EMAIL_PROVIDER_API_KEY === undefined) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["EMAIL_PROVIDER_API_KEY"],
+        message: "DEC-058: EMAIL_PROVIDER=resend necesita la clave de la API de Resend.",
+      });
+    } else if (looksLikePlaceholder(env.EMAIL_PROVIDER_API_KEY)) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["EMAIL_PROVIDER_API_KEY"],
+        message: "La clave de correo conserva un marcador de la plantilla .env.example.",
+      });
+    }
   });
 
 export type Environment = z.infer<typeof environmentSchema>;
@@ -308,6 +376,26 @@ export interface ApiConfig {
   readonly commerce: {
     readonly paymentProvider: string;
     readonly defaultCurrency: string;
+  };
+  /**
+   * Correo transaccional (DEC-058). Union discriminada: con `resend` la clave
+   * existe por construccion, y con `console` no hay clave que olvidar.
+   */
+  readonly email:
+    | {
+        readonly provider: "resend";
+        readonly apiKey: string;
+        readonly fromAddress: string;
+        readonly fromName: string;
+      }
+    | {
+        readonly provider: "console";
+        readonly fromAddress: string;
+        readonly fromName: string;
+      };
+  /** Portal (`apps/web`): destino de los enlaces que viajan por correo. */
+  readonly web: {
+    readonly publicUrl: string;
   };
   /**
    * El documento OpenAPI enumera toda la superficie administrativa. En
@@ -382,6 +470,25 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): ApiConfig {
     commerce: {
       paymentProvider: env.PAYMENT_PROVIDER,
       defaultCurrency: env.DEFAULT_CURRENCY,
+    },
+    email:
+      // La segunda condicion no es redundante para el lector: el refinamiento
+      // ya garantiza que con `resend` hay clave, y aqui se hace visible al
+      // compilador en vez de afirmarlo con un `!`.
+      env.EMAIL_PROVIDER === "resend" && env.EMAIL_PROVIDER_API_KEY !== undefined
+        ? {
+            provider: "resend",
+            apiKey: env.EMAIL_PROVIDER_API_KEY,
+            fromAddress: env.EMAIL_FROM_ADDRESS,
+            fromName: env.EMAIL_FROM_NAME,
+          }
+        : {
+            provider: "console",
+            fromAddress: env.EMAIL_FROM_ADDRESS,
+            fromName: env.EMAIL_FROM_NAME,
+          },
+    web: {
+      publicUrl: env.WEB_PUBLIC_URL,
     },
     exposeOpenApiOverHttp: env.NODE_ENV !== "production",
   };

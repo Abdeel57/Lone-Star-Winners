@@ -213,10 +213,15 @@ markdown, y es lo que verifica el test de contrato de DEC-015.
 | PATCH  | /api/v1/cart/items/:item_id             | `PARTICIPANT_SELF` |
 | DELETE | /api/v1/cart/items/:item_id             | `PARTICIPANT_SELF` |
 | GET    | /api/v1/cart/entry-quote                | `PARTICIPANT_SELF` |
+| POST   | /api/v1/auth/register                   | `PUBLIC`           |
 | POST   | /api/v1/auth/login                      | `PUBLIC`           |
 | POST   | /api/v1/auth/mfa/verify                 | `PUBLIC`           |
 | GET    | /api/v1/auth/session                    | `PUBLIC`           |
 | POST   | /api/v1/auth/logout                     | `PUBLIC`           |
+| POST   | /api/v1/auth/verify-email               | `PUBLIC`           |
+| POST   | /api/v1/auth/verify-email/resend        | `PARTICIPANT_SELF` |
+| POST   | /api/v1/auth/password/forgot            | `PUBLIC`           |
+| POST   | /api/v1/auth/password/reset             | `PUBLIC`           |
 
 Las tres de infraestructura (`/api/v1/health`, `/api/v1/health/ready`,
 `/api/v1/openapi.json`) están documentadas más abajo y exentas de ese gate por
@@ -1348,9 +1353,9 @@ Status: PROPOSED
 
 ## 10. Autenticación (DEC-006, DEC-045)
 
-**Estado:** `IMPLEMENTED` para las cuatro rutas de abajo. Inscripción de MFA,
-registro de participante, verificación de email y restablecimiento de
-contraseña siguen en `TBD`: son la fase siguiente.
+**Estado:** `IMPLEMENTED` para las nueve rutas de abajo. Verificación de email
+y restablecimiento de contraseña llegaron con DEC-058 (proveedor: Resend).
+Inscripción de MFA sigue en `TBD`.
 
 ### Un solo sistema, dos políticas
 
@@ -1410,6 +1415,66 @@ de una sesión de personal que ya pasó la contraseña y **todavía no vale para
 nada** salvo para completar el segundo factor. No es una pantalla que se pueda
 saltar: es una sesión que aún no autentica.
 
+### `POST /api/v1/auth/register`
+
+`Authorization: PUBLIC` — es la ruta con la que se obtiene una cuenta. Owner:
+`backend`. Status: `IMPLEMENTED`.
+
+Alta de **participante**. Crea identidad, credencial Argon2id y perfil en una
+sola transacción, y **abre sesión de escaparate en el acto**: responde con el
+mismo `SessionState` que el login y emite la misma cookie. Nunca crea personal;
+los roles administrativos no se conceden por aquí.
+
+Cuerpo:
+
+```json
+{
+  "email": "persona@ejemplo.invalid",
+  "password": "una-frase-larga-de-ejemplo",
+  "display_name": "Persona de Ejemplo",
+  "language_preference": "es-US",
+  "consents": []
+}
+```
+
+- `email` — se recorta; máximo 254 caracteres. La unicidad **no distingue
+  mayúsculas** (la decide el índice sobre `email_normalized`).
+- `password` — la política es de `packages/security`: mínimo 12 caracteres,
+  máximo 1024, **sin reglas de complejidad**. El frontend no la duplica.
+- `display_name` — opcional (`null` o ausente); 1 a 120 caracteres.
+- `language_preference` — etiqueta completa, `en-US` o `es-US` (DEC-029).
+  Obligatoria y sin valor por defecto (DEC-021).
+- `consents` — **hoy solo se admite vacío o ausente.** `GET /config` no publica
+  `required_consents` y no existe dónde persistir una aceptación; qué
+  consentimientos se recogen es decisión del abogado del cliente
+  (`docs/LEGAL_PENDING.md`). Una lista no vacía se rechaza con `422` en lugar de
+  aceptarse y perderse. Cuando se publiquen, esta entrada cambia **a la vez**
+  que llega su persistencia.
+
+Respuestas: `201` `SessionState` (`state: "ACTIVE"`, `scope: "PARTICIPANT"`,
+`email_verified: false`) · `409` `EMAIL_ALREADY_REGISTERED` · `422`
+`WEAK_PASSWORD`, con `details: { reason, minimum_length, maximum_length }` ·
+`422` `VALIDATION_FAILED`.
+
+**La cuenta nace `ACTIVE` con el correo SIN verificar.** El login exige
+`ACTIVE` y todavía no existe verificación de correo. Que un correo sin verificar
+tenga consecuencias sobre las participaciones sigue siendo una decisión legal
+pendiente (ver "Lo que NO está aquí").
+
+**Esta ruta SÍ revela si un correo está registrado, y el login no.** Es una
+concesión declarada, no un descuido: el alta abre sesión en el acto, así que
+"ya existe" y "cuenta creada" no pueden responder igual sin entregar la cuenta a
+quien no es su dueño. La alternativa que no enumera —responder siempre "revisa
+tu correo"— exige un proveedor de email que no está decidido (`CLAUDE.md` §7).
+El `409` no lleva `details`.
+
+**Un correo con expediente postal no se "reclama" aquí.** La transcripción de
+fichas AMOE (§13.10) crea identidades `PENDING_VERIFICATION` sin credenciales.
+Registrarse con ese correo responde `409` como cualquier otro ya existente: sin
+verificación de correo, bastaría con teclear la dirección de otra persona para
+quedarse con sus participaciones. El flujo de reclamación llega con la
+verificación de email.
+
 ### `POST /api/v1/auth/login`
 
 `Authorization: PUBLIC` — es la ruta que se usa antes de tener sesión.
@@ -1456,6 +1521,80 @@ cookie presentada era válida.
 **Revoca en base de datos además de borrar la cookie.** Borrar solo la cookie
 dejaría el token vivo para quien lo hubiera copiado.
 
+### Enlaces por correo (DEC-058)
+
+Las cuatro rutas siguientes usan **enlaces de un solo uso** que viajan por
+correo. Reglas comunes:
+
+- El token tiene la misma forma que el de sesión (43 caracteres `base64url`) y
+  **la base de datos guarda solo su SHA-256** (`identity_email_tokens`).
+- Cada enlace vale **una vez** y para **un propósito**: uno de verificación no
+  restablece contraseñas. Verificación: 48 horas. Restablecimiento: 1 hora.
+- El enlace apunta al **portal**, no a la API:
+  `{WEB_PUBLIC_URL}/{en|es}/account/verify-email?token=…` y
+  `…/account/reset-password?token=…`. El idioma sale de `language_preference`
+  en el alta y de `Accept-Language` en el resto.
+- **Tope por identidad:** como mucho 3 enlaces del mismo propósito cada 15
+  minutos. Pasado el tope la respuesta es idéntica, pero no se envía nada. Es
+  por identidad y no por IP porque la API ve la IP del servidor de `apps/web`
+  (DEC-057).
+- Respuesta de éxito de las cuatro: `200 { "acknowledged": true }`.
+
+`POST /auth/register` envía además el primer enlace de verificación, **en
+segundo plano**: un proveedor lento o caído no impide crear la cuenta, y la
+persona puede pedir otro.
+
+### `POST /api/v1/auth/verify-email`
+
+`Authorization: PUBLIC` — el token del enlace es la prueba; exigir sesión
+impediría verificar desde el teléfono un alta hecha en el ordenador.
+
+Cuerpo: `{ "token": string }`.
+
+Respuestas: `200` · `410` `VERIFICATION_TOKEN_EXPIRED` · `422`
+`VERIFICATION_TOKEN_INVALID` (inexistente, ya usado, de otro propósito, o
+enviado a una dirección que la cuenta ya no tiene).
+
+Fija `email_verified_at` **solo si la identidad sigue teniendo la dirección a la
+que se envió el enlace**. Si ya estaba verificado conserva el instante original.
+
+### `POST /api/v1/auth/verify-email/resend`
+
+`Authorization: PARTICIPANT_SELF`. Sin cuerpo.
+
+Envía un enlace nuevo a la dirección **de la cuenta de la sesión**, nunca a
+otra. Si el correo ya está verificado, o se alcanzó el tope, responde `200` sin
+enviar. Respuestas: `200` · `401` · `503` `SERVICE_UNAVAILABLE` si el proveedor
+rechaza el envío: aquí sí hay a quién decírselo, y un "enviado" falso dejaría a
+la persona esperando.
+
+### `POST /api/v1/auth/password/forgot`
+
+`Authorization: PUBLIC`.
+
+Cuerpo: `{ "email": string }`.
+
+Respuesta: **siempre `200 { "acknowledged": true }`**, exista o no la cuenta, y
+**antes de buscarla**: la búsqueda y el envío corren en segundo plano, así que
+ni el cuerpo ni el tiempo de respuesta dicen si el correo está registrado. Solo
+reciben enlace las cuentas `ACTIVE` con contraseña; un expediente postal sin
+credencial o una cuenta suspendida no reciben nada.
+
+### `POST /api/v1/auth/password/reset`
+
+`Authorization: PUBLIC`.
+
+Cuerpo: `{ "token": string, "password": string }`.
+
+Respuestas: `200` · `410` `RESET_TOKEN_EXPIRED` · `422` `RESET_TOKEN_INVALID` ·
+`422` `WEAK_PASSWORD` (misma forma que en el alta).
+
+La política de contraseña se comprueba **antes** de gastar el enlace: una
+contraseña corta no lo quema. Al fijarla: levanta el bloqueo por intentos,
+**invalida los demás enlaces de restablecimiento vivos y revoca todas las
+sesiones abiertas** de la cuenta. El personal sigue necesitando su segundo
+factor para entrar.
+
 ### La cabecera `Cookie` que reenvía `apps/web`
 
 `apps/web` no es un navegador: es un segundo proceso (DEC-004) que reenvía la
@@ -1496,8 +1635,12 @@ partiría la cabecera e inyectaría cookies que nadie envió.
 
 ### Lo que NO está aquí, y por qué
 
-- **Inscripción de MFA, registro, verificación de email y reset de
-  contraseña.** Fase siguiente.
+- **Inscripción de MFA.** Fase siguiente.
+- **Reclamación de un expediente postal por su dueño** (ver `POST
+/auth/register`). La verificación de correo ya existe (DEC-058) y es la pieza
+  que lo hace posible, pero el flujo de reclamación en sí no está hecho.
+- **Persistencia de consentimientos del alta.** No hay tabla ni lista
+  publicada; depende de `docs/LEGAL_PENDING.md`.
 - **Si la verificación de email condiciona ganar participaciones.** Depende de
   `docs/LEGAL_PENDING.md` ("Email verification before earning entries", `TBD`).
   El campo `email_verified` se publica como dato; **que ese dato tenga
@@ -3626,3 +3769,109 @@ presentado en esta petición".
 **La forma sí se sigue validando**: un `reason_code` presente con otra
 ortografía es 422, porque lo que abre la puerta tiene que ser exactamente lo que
 se persiste en `audit_events.reason_code`.
+
+---
+
+## 14. Imágenes de catálogo subidas desde el panel (DEC-056)
+
+Status: IMPLEMENTED
+
+Las fotos de productos y variantes se **suben desde el dispositivo**; el panel
+ya no pide una URL. Esta sección **no cambia `image_url`**: sigue siendo el
+campo de §13.4 y §13.6, con la misma validación (`https://…` o ruta raíz del
+propio sitio). Lo que añade es de dónde sale esa ruta.
+
+El flujo tiene dos pasos y son independientes:
+
+1. `POST /admin/media` guarda los bytes y devuelve una `url`.
+2. Esa `url` se manda como `image_url` en el alta o el `PATCH` de siempre
+   (§13.6). Subir **no asocia nada**.
+
+Las imágenes son **inmutables**: cambiar la foto de un producto es subir otra.
+Subir dos veces el mismo contenido devuelve la misma imagen (`sha256` único).
+No hay `DELETE`: una imagen que dejó de usarse es inofensiva.
+
+### POST /api/v1/admin/media
+
+Authorization: `product.write`
+
+Es la misma capacidad que ya exige escribir `image_url`: lo único que puede
+hacerse con una imagen subida es ponerla en un producto o una variante.
+
+Request:
+
+```json
+{ "data_base64": "/9j/4AAQSkZJRgABAQ…" }
+```
+
+- `data_base64`: los bytes en base64 estándar **con relleno**. Base64 mal
+  formado es 422; no se guarda "lo que se pueda decodificar".
+- **No hay `content_type`.** El tipo lo decide la API leyendo la firma de los
+  bytes. Se admiten JPEG, PNG y WebP. **SVG no**: es un documento que puede
+  llevar script.
+- Tope: **5 MiB** (5 242 880 bytes) ya decodificados. Es el único cuerpo de la
+  API que supera `API_BODY_LIMIT_BYTES`, y el límite ampliado es de esta ruta,
+  no global.
+
+Response 201:
+
+```json
+{
+  "id": "5d5d5d5d-5d5d-4d5d-8d5d-5d5d5d5d5d5d",
+  "url": "/media/5d5d5d5d-5d5d-4d5d-8d5d-5d5d5d5d5d5d.jpg",
+  "content_type": "image/jpeg",
+  "byte_size": 184320
+}
+```
+
+`url` es una **ruta raíz de `apps/web`**, no de la API, y es exactamente lo que
+se manda después como `image_url`. La extensión es la canónica del tipo
+detectado: `jpg`, `png` o `webp`.
+
+Errors:
+
+| Status | `code`                   | Cuándo                                                          |
+| ------ | ------------------------ | --------------------------------------------------------------- |
+| 401    | `UNAUTHENTICATED`        | Sin sesión de personal.                                         |
+| 403    | `FORBIDDEN`              | Sin `product.write`.                                            |
+| 413    | `MEDIA_TOO_LARGE`        | Más de 5 MiB decodificados. `details.max_bytes`.                |
+| 413    | `PAYLOAD_TOO_LARGE`      | El cuerpo no cabe en el límite de la ruta (código transversal). |
+| 415    | `MEDIA_TYPE_UNSUPPORTED` | La firma no es JPEG, PNG ni WebP. `details.accepted`.           |
+| 422    | `VALIDATION_FAILED`      | Falta `data_base64` o no es base64 válido.                      |
+
+### GET /api/v1/media/:file
+
+Authorization: PUBLIC
+
+Son las fotos de la mercancía del escaparate, tan públicas como la ficha que las
+muestra. No enumera y no revela quién subió la imagen.
+
+`:file` es `<id>.<ext>` con la extensión canónica del tipo guardado. **Una
+imagen tiene una sola dirección**: cualquier otra forma —otra extensión, un
+nombre que no sea un uuid en minúsculas— es **404**, no 422: quien pide es una
+etiqueta `<img>`.
+
+Response 200: los bytes, **no JSON**. `Content-Type` es el tipo detectado al
+subir (nunca se deduce de la extensión pedida), con
+`Cache-Control: public, max-age=31536000, immutable` y `ETag: "<sha256>"`.
+Con `If-None-Match` vigente responde 304.
+
+Errors: 404 `NOT_FOUND`.
+
+**Cómo llega al navegador.** El navegador no habla con `apps/api` (§ adaptador
+de `apps/web`) y la CSP del sitio fija `img-src 'self'`. `apps/web` expone
+`GET /media/:file` en su propio origen y reenvía esta ruta; por eso `image_url`
+es `/media/<id>.<ext>` y no una URL de la API. El proxy solo reenvía respuestas
+cuyo `Content-Type` sea uno de los tres tipos de imagen.
+
+### Notas de implementación (§14)
+
+- Los bytes viven en PostgreSQL (`media_assets`, migración `0029`). No se ha
+  elegido proveedor de almacenamiento (`CLAUDE.md` §7): se usa lo ya decidido
+  (DEC-043). El día que haya almacén de objetos cambia de dónde lee la API y
+  **no cambia este contrato**.
+- `lsw_app` tiene solo `SELECT` e `INSERT` sobre `media_assets`: la
+  inmutabilidad de la que depende `immutable` no descansa en que la aplicación
+  no tenga una ruta para editar.
+- Las rutas `/products/…` de ficheros estáticos anteriores a esta sección siguen
+  siendo `image_url` válidos.

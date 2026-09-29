@@ -2716,3 +2716,211 @@ Flags), `docs/API_CONTRACT.md` §13.9, `tests/security`.
 
 Proposed by: security-integration (hallazgo), Team Lead (resolución)
 Agreed by: backend-sweepstakes (implementado), frontend-ux, security-integration
+
+---
+
+## DEC-056
+
+Status: Accepted
+
+Date: 2026-09-21
+
+Decision:
+**Las imágenes de productos y variantes se suben desde el dispositivo; el panel
+deja de pedir una URL.** Sustituye el punto de DEC-053 que decía "no hay almacén
+de medios: las imágenes son ficheros estáticos que el usuario entrega".
+
+- `POST /admin/media` (`product.write`) recibe los bytes en base64 dentro de un
+  cuerpo JSON y devuelve `{ id, url, content_type, byte_size }`.
+  `GET /media/:file` (PUBLIC) los sirve. Contrato en §14.
+- **Los bytes viven en PostgreSQL** (`media_assets`, migración `0029`), con
+  tope de 5 MiB por CHECK, `sha256` único (deduplica) y filas **inmutables**:
+  `lsw_app` solo tiene `SELECT` e `INSERT`.
+- **El tipo lo decide la firma de los bytes**, no lo que declare el cliente.
+  JPEG, PNG y WebP. SVG queda fuera: puede llevar script.
+- **`image_url` no cambia** ni de forma ni de CHECK: la ruta devuelta es
+  `/media/<id>.<ext>`, una ruta raíz del propio sitio. `apps/web` la expone en su
+  origen con un manejador que reenvía a la API, porque el navegador no habla con
+  `apps/api` y la CSP fija `img-src 'self'`.
+- En el panel, la foto es un `<input type="file">` **dentro del formulario de
+  siempre** y la sube la Server Action: funciona sin JavaScript. Con JavaScript,
+  además, hay vista previa y la foto se reduce a 2000 px antes de enviarse.
+  El límite de cuerpo de Next sube a 16 MB (`serverActions.bodySizeLimit` y
+  `middlewareClientMaxBodySize`, que tienen que coincidir).
+
+Context:
+El dueño edita el catálogo desde el teléfono. Lo que tiene es la foto, no una
+URL: el campo de DEC-053 le pedía alojar el fichero y escribir su ruta, y cada
+foto era un despliegue. DEC-053 ya dejaba escrito que cerraba HO-019 "salvo la
+subida de imágenes".
+
+Alternatives:
+A — Almacén de objetos (S3, R2) (descartado **por ahora**: exige elegir
+proveedor y credenciales, y `CLAUDE.md` §7 sigue sin decidirlo; esta decisión
+no lo cierra). B — Disco del contenedor o volumen de Railway (descartado: el
+disco es efímero y un redeploy lo vacía; un volumen ata la API a una sola
+réplica). C — `multipart/form-data` en la API (descartado: un parser multipart
+es una dependencia nueva que valida fuera de Zod, contra DEC-014; quien llama es
+el servidor de Next, así que el 33 % del base64 viaja por red interna). D —
+Subir desde el navegador directamente a la API (descartado: rompe "el navegador
+no habla con `apps/api`" y obligaría a abrir CORS y CSP). E — PostgreSQL
+(elegida).
+
+Reason:
+Es lo único que funciona hoy sin adelantar una decisión de infraestructura: usa
+la base de datos que ya está decidida (DEC-043), entra en sus copias de
+seguridad y sobrevive a los despliegues. El catálogo es corto —decenas de
+productos— y cada imagen está acotada, así que el tamaño es del orden de la
+traza de auditoría. El contrato está escrito para que el día que haya almacén de
+objetos cambie de dónde lee la API y nada más.
+
+Affected areas: `packages/database` (migración `0029`, `src/schema/media.ts`),
+`apps/api` (`routes/media.ts`, `services/media.ts`, `bodyLimitBytes` y
+`binaryResponses` en el registro de rutas, `PAYLOAD_TOO_LARGE`), `apps/web`
+(`app/media/[file]`, `components/admin/image-upload-field.tsx`,
+`lib/admin/image-upload.ts`, acciones de catálogo, `next.config.mjs`),
+`docs/API_CONTRACT.md` §14.
+
+Proposed by: usuario (dueño del producto)
+Agreed by: pendiente de revisión por backend-sweepstakes, frontend-ux y
+security-integration (ver HO-043)
+
+---
+
+## DEC-057
+
+(El número 056 se deja libre: el código de la subida de imágenes ya lo cita y
+su entrada la escribe esa sesión.)
+
+Status: Proposed
+
+Date: 2026-09-21
+
+Decision:
+**El alta de participante (`POST /api/v1/auth/register`) crea la cuenta
+`ACTIVE` con el correo sin verificar, abre sesión en el acto y responde `409
+EMAIL_ALREADY_REGISTERED` ante un correo ya existente.** Cuatro puntos:
+
+1. **`ACTIVE` sin verificar.** El login exige `identities.status = 'ACTIVE'` y
+   no existe verificación de correo (no hay proveedor de email, `CLAUDE.md` §7).
+   Nacer `PENDING_VERIFICATION` dejaría a todo el público sin poder entrar.
+   `email_verified_at` queda a `null` y se publica como dato; que tenga
+   consecuencias sobre las participaciones sigue en `docs/LEGAL_PENDING.md`.
+2. **El alta SÍ revela que un correo está registrado; el login sigue sin
+   hacerlo.** Abrir sesión en el acto hace imposible responder igual a "ya
+   existe" y a "creada" sin entregar la cuenta a quien no es su dueño. La
+   variante que no enumera ("revisa tu correo") exige proveedor de email.
+3. **`consents` solo se admite vacío.** La configuración pública no publica
+   `required_consents` y no hay tabla donde persistir una aceptación. Una lista
+   con contenido se rechaza (`422`) en vez de aceptarse y perderse: falla
+   cerrado hasta que exista la persistencia.
+4. **Un expediente postal no se reclama registrándose.** Las identidades
+   `PENDING_VERIFICATION` sin credenciales que crea la transcripción AMOE
+   (§13.10) responden `409` como cualquier correo existente. Sin verificación
+   de correo, reclamarlas sería quedarse con participaciones ajenas tecleando
+   una dirección.
+
+Context:
+HO-034 punto 4 dejó abierto `POST /auth/register`: la pantalla
+`/{locale}/account/register` existía en `apps/web` sin backend y el e2e
+sembraba el participante por SQL. El usuario pidió abrir el alta al público
+como paso previo a la compra.
+
+Alternatives:
+A — Alta sin sesión + verificación de correo obligatoria, que no enumera
+(descartada HOY: no hay proveedor de email; es el destino cuando lo haya).
+B — Nacer `PENDING_VERIFICATION` y relajar el login (descartada: cambia la
+semántica de un control existente para todas las identidades, incluidos los
+expedientes postales sin credencial). C — Aceptar `consents` y descartarlos
+(descartada: pierde en silencio un acto con valor legal, principios 5 y 12).
+D — La elegida.
+
+Reason:
+Es lo mínimo que permite al público crear cuenta sin inventar requisitos
+legales ni debilitar el login. Cada concesión está acotada y escrita donde se
+toma (`ApiErrors.emailAlreadyRegistered`, `registerBodySchema`,
+`registerParticipant`), y las tres se retiran con la misma pieza: verificación
+de correo.
+
+Riesgos abiertos, para `security-integration`:
+
+- **Rate limiting por cliente.** `apps/web` llama a la API desde su servidor,
+  así que la IP que ve el límite global es la de Next, no la del visitante.
+  Un límite estricto por IP en el alta frenaría a todo el público a la vez; sin
+  él, la enumeración por `409` y el coste de Argon2 solo los acota el límite
+  global. Requiere decidir cómo reenviar una IP de cliente de confianza.
+- **Sin `audit_events` en el alta** (tampoco los emite el login). La
+  procedencia es reconstruible desde `identities.created_at` y la fila de
+  `sessions` (IP, user agent), pero no está en la cadena de auditoría.
+
+Affected areas: `apps/api` (`routes/auth.ts`, `services/identity-ports.ts`,
+`services/drizzle-identity.ts`, `http/errors.ts`, `test/auth-register.test.ts`,
+`openapi/`), `apps/web` (`lib/auth-actions.ts`, `lib/action-result.ts`,
+`components/auth-form-shell.tsx`, `lib/api/resources.ts`, `messages/`),
+`docs/API_CONTRACT.md` §10.
+
+Proposed by: sesión del usuario (2026-09-21)
+Agreed by: pendiente — backend-sweepstakes, security-integration, frontend-ux
+
+## DEC-058
+
+Status: Proposed
+
+Date: 2026-09-29
+
+Decision:
+**Proveedor de correo transaccional: Resend, por su API HTTP y sin SDK. Con él
+se implementan la verificación de correo y el restablecimiento de contraseña
+(`POST /auth/verify-email`, `/auth/verify-email/resend`, `/auth/password/forgot`,
+`/auth/password/reset`).** Cinco puntos:
+
+1. **Resend.** Lo eligió el cliente y ya abrió la cuenta a nombre del negocio.
+   El dominio remitente se verifica con registros SPF/DKIM en `send.` y
+   `resend._domainkey.`, que no tocan el correo entrante del dominio. Sin SDK:
+   la integración es un `POST` con dos cabeceras (`services/email.ts`).
+2. **Enlaces de un solo uso en tabla, no tokens firmados.** `identity_email_tokens`
+   (migración `0030`) guarda el SHA-256 del token, el propósito, la dirección a
+   la que se envió, la caducidad y `consumed_at`. Consumir es un `UPDATE ...
+WHERE consumed_at IS NULL AND expires_at > now`: atómico y de un solo uso.
+   Un token firmado no se puede gastar ni revocar.
+3. **"Olvidé mi contraseña" no enumera.** Responde `200` antes de buscar la
+   cuenta; la búsqueda y el envío corren en segundo plano, así que tampoco el
+   tiempo de respuesta revela nada. El alta también envía en segundo plano.
+4. **Tope por identidad, no por IP.** 3 enlaces por propósito cada 15 minutos,
+   contados en la tabla. La API ve la IP del servidor de `apps/web` (riesgo ya
+   abierto en DEC-057); el tope por identidad protege lo que importa: el buzón
+   de la persona y la cuota del proveedor.
+5. **En producción `EMAIL_PROVIDER=console` no arranca.** Con `console` la
+   recuperación respondería "revisa tu correo" y no llegaría nada. Fuera de
+   producción `console` es el valor por defecto e imprime el enlace para poder
+   recorrer el flujo en local; en producción nunca lo imprime.
+
+Lo que esta decisión NO cambia: la cuenta sigue naciendo `ACTIVE` y el `409` del
+alta sigue existiendo (DEC-057). Si verificar el correo condiciona las
+participaciones sigue en `docs/LEGAL_PENDING.md`; los correos no afirman nada
+al respecto.
+
+Context:
+El cliente entregó el acceso a Resend. `apps/web` ya tenía las cuatro pantallas
+y llamaba a estas rutas como `PROVISIONAL`; solo respondían los mocks.
+
+Alternatives:
+A — SDK oficial de Resend (descartada: una dependencia más para una sola
+llamada). B — Token firmado sin tabla (descartada: no se puede consumir ni
+revocar). C — Rate limit por IP (descartada: la IP es la de `apps/web`). D — La
+elegida.
+
+Reason:
+Cierra la alternativa A de DEC-057 en su parte de correo sin inventar
+requisitos legales, con el token tratado como la credencial que es: solo hash
+en base de datos, nunca en logs, un solo uso.
+
+Affected areas: `apps/api` (`routes/auth.ts`, `services/email.ts`,
+`services/email-templates.ts`, `services/identity-ports.ts`,
+`services/drizzle-identity.ts`, `config/env.ts`, `http/errors.ts`, `test/`,
+`openapi/`), `packages/database` (`drizzle/0030_email_tokens.sql`,
+`schema/email-tokens.ts`), `docs/API_CONTRACT.md` §10, `.env.example`,
+`scripts/railway-env.mjs`.
+
+Proposed by: sesión del usuario (2026-09-29)
+Agreed by: pendiente — backend-sweepstakes, security-integration, frontend-ux

@@ -150,9 +150,23 @@ export async function registerAction(
     session,
   );
 
-  if (!result.ok) return fromFailure(result.error);
+  if (!result.ok) return fromFailure(result.error, registerFieldFor(result.error.code));
 
   return afterAuthentication(locale, destinationFrom(formData));
+}
+
+/**
+ * Campo al que pertenece un rechazo del alta (seccion 10 del contrato).
+ *
+ * Los dos codigos hablan de UN campo concreto, y el error se pinta junto a el
+ * en vez de en la cabecera del formulario: "esa contrasena es corta" arriba del
+ * todo obliga a adivinar cual de los cuatro campos hay que corregir. Cualquier
+ * otro fallo -red, servicio, validacion generica- es del formulario entero.
+ */
+function registerFieldFor(code: string | null): string | null {
+  if (code === "WEAK_PASSWORD") return "password";
+  if (code === "EMAIL_ALREADY_REGISTERED") return "email";
+  return null;
 }
 
 /** Inicio de sesion. */

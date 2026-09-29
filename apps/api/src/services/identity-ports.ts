@@ -65,7 +65,30 @@ export interface CreateSessionInput {
   readonly userAgent: string | null;
 }
 
+export interface RegisterParticipantInput {
+  readonly email: string;
+  /** Cadena PHC ya calculada. La contrasena en claro no llega nunca aqui. */
+  readonly passwordHash: string;
+  readonly displayName: string | null;
+  readonly preferredLocale: "en-US" | "es-US";
+}
+
 export interface IdentityRepository {
+  /**
+   * Alta de participante: identidad, credencial y perfil en UNA transaccion.
+   *
+   * Devuelve `null` si el correo ya pertenece a una identidad, sea cual sea:
+   * una cuenta normal, una de personal o el expediente `PENDING_VERIFICATION`
+   * sin credenciales que deja una ficha postal transcrita. Este ultimo caso NO
+   * se "reclama" aqui a proposito: sin verificacion de correo, bastaria con
+   * teclear la direccion de otra persona para quedarse con sus participaciones.
+   *
+   * La unicidad la decide el indice sobre `email_normalized`, no una lectura
+   * previa: dos altas simultaneas con el mismo correo pasarian las dos un
+   * `findByEmail` y solo el motor puede desempatarlas.
+   */
+  registerParticipant(input: RegisterParticipantInput): Promise<IdentityRecord | null>;
+
   findByEmail(email: string): Promise<IdentityRecord | null>;
   findById(identityId: string): Promise<IdentityRecord | null>;
   findCredential(identityId: string): Promise<CredentialRecord | null>;
@@ -106,6 +129,69 @@ export interface IdentityRepository {
 
   /** Consume una ventana TOTP. Falla si otro proceso la consumio antes. */
   consumeMfaCounter(factorId: string, counter: number): Promise<boolean>;
+
+  /**
+   * Fija la contrasena tras un restablecimiento (DEC-058) y levanta el
+   * bloqueo por intentos fallidos: quien demuestra que controla el correo no
+   * tiene por que esperar a que caduque un bloqueo que quiza provoco otro.
+   */
+  setPasswordAfterReset(identityId: string, passwordHash: string): Promise<void>;
+
+  /**
+   * Marca el correo como verificado, SOLO si la identidad sigue teniendo la
+   * direccion `email` (comparada normalizada). Devuelve `false` si ya no la
+   * tiene: un enlace enviado a una direccion anterior no verifica la nueva.
+   * Si ya estaba verificado, conserva el instante original y devuelve `true`.
+   */
+  markEmailVerified(identityId: string, email: string, now: Date): Promise<boolean>;
+}
+
+/** Para que sirve un enlace enviado por correo (DEC-058). */
+export type EmailTokenPurpose = "EMAIL_VERIFICATION" | "PASSWORD_RESET";
+
+export interface IssueEmailTokenInput {
+  readonly identityId: string;
+  readonly purpose: EmailTokenPurpose;
+  /** SHA-256 del token. El token en claro solo existe en el correo. */
+  readonly tokenHash: string;
+  readonly email: string;
+  readonly expiresAt: Date;
+}
+
+/**
+ * Resultado de gastar un enlace.
+ *
+ * `EXPIRED` y `INVALID` se distinguen porque la pantalla dice cosas distintas
+ * ("ha caducado, pide otro" frente a "no es valido"), y distinguirlos no
+ * revela nada: quien presenta el token ya lo tiene.
+ */
+export type ConsumeEmailTokenResult =
+  | {
+      readonly status: "CONSUMED";
+      readonly identityId: string;
+      readonly email: string;
+    }
+  | { readonly status: "EXPIRED" }
+  | { readonly status: "INVALID" };
+
+export interface EmailTokenRepository {
+  issue(input: IssueEmailTokenInput): Promise<void>;
+
+  /**
+   * Gasta el enlace en UNA sentencia: dos clics simultaneos compiten por la
+   * misma fila y solo uno la consume. Un enlace ya consumido es `INVALID`.
+   */
+  consume(
+    tokenHash: string,
+    purpose: EmailTokenPurpose,
+    now: Date,
+  ): Promise<ConsumeEmailTokenResult>;
+
+  /** Enlaces de ese proposito emitidos para la identidad desde `since`. */
+  countIssuedSince(identityId: string, purpose: EmailTokenPurpose, since: Date): Promise<number>;
+
+  /** Gasta todos los enlaces vivos de ese proposito (tras un restablecimiento). */
+  invalidateOutstanding(identityId: string, purpose: EmailTokenPurpose, now: Date): Promise<void>;
 }
 
 export interface SessionRepository {
@@ -122,4 +208,6 @@ export interface SessionRepository {
 export interface IdentityRepositories {
   readonly identities: IdentityRepository;
   readonly sessions: SessionRepository;
+  /** DEC-058: enlaces de verificacion y de restablecimiento. */
+  readonly emailTokens: EmailTokenRepository;
 }

@@ -53,6 +53,8 @@ import type {
   AdminFeatureFlagPatch,
   AdminFeatureFlagRow,
   AdminFeatureFlagsResponse,
+  AdminMediaInput,
+  AdminMediaRow,
   AdminProductCategoryInput,
   AdminProductCategoryListResponse,
   AdminProductCategoryRow,
@@ -122,9 +124,9 @@ export const API_PATHS = {
   /*
    * --- Identidad (DEC-006, DEC-045), seccion 10 del contrato.
    *
-   * CUATRO SON CONTRATO Y CINCO SIGUEN EN TBD, y la diferencia importa: las
-   * primeras estan `IMPLEMENTED` y su forma es la del documento; las segundas
-   * son la fase siguiente de la otra sesion y lo que hay aqui es una peticion.
+   * LAS DE `[CONTRATO]` ESTAN `IMPLEMENTED` y su forma es la del documento;
+   * las `[PROVISIONAL]` son todavia una peticion. Las cuatro de correo pasaron
+   * a contrato con DEC-058.
    */
   /** [CONTRATO] Sesion vigente. Responde 200 SIEMPRE, tambien sin sesion. */
   authSession: "/auth/session",
@@ -134,15 +136,15 @@ export const API_PATHS = {
   authMfaVerify: "/auth/mfa/verify",
   /** [CONTRATO] Cierre de sesion. Idempotente: siempre 200. */
   authLogout: "/auth/logout",
-  /** [PROVISIONAL] Alta de participante. TBD en la seccion 10. */
+  /** [CONTRATO] Alta de participante. 201 con `SessionState` ya `ACTIVE`. */
   authRegister: "/auth/register",
-  /** [PROVISIONAL] Solicitud de restablecimiento de contrasena. TBD. */
+  /** [CONTRATO] Solicitud de restablecimiento. Siempre 200 (DEC-058). */
   authPasswordForgot: "/auth/password/forgot",
-  /** [PROVISIONAL] Fijado de la nueva contrasena. TBD. */
+  /** [CONTRATO] Fijado de la nueva contrasena con el token del correo (DEC-058). */
   authPasswordReset: "/auth/password/reset",
-  /** [PROVISIONAL] Verificacion del correo. TBD. */
+  /** [CONTRATO] Verificacion del correo con el token del enlace (DEC-058). */
   authVerifyEmail: "/auth/verify-email",
-  /** [PROVISIONAL] Reenvio del mensaje de verificacion. TBD. */
+  /** [CONTRATO] Reenvio del enlace de verificacion (DEC-058). */
   authVerifyEmailResend: "/auth/verify-email/resend",
   /** [PROVISIONAL] Perfil del participante. No esta en el contrato. */
   me: "/me",
@@ -197,6 +199,8 @@ export const API_PATHS = {
   adminAdjustments: "/admin/entry-adjustments",
   /** Categorias del catalogo en el panel (§13.6). */
   adminProductCategories: "/admin/product-categories",
+  /** Subida de imagenes de catalogo (§14, DEC-056). */
+  adminMedia: "/admin/media",
   /** Feature flags con su materialidad legal (§13.9). */
   adminFeatureFlags: "/admin/feature-flags",
   /**
@@ -656,11 +660,13 @@ export const ANONYMOUS_SESSION: SessionState = {
 /**
  * Alta de participante.
  *
- * [PROVISIONAL] y marcado: la seccion 10 declara `TBD` el registro, la
- * verificacion de correo, el restablecimiento de contrasena y la inscripcion de
- * MFA. Se pide que devuelva un `SessionState`, igual que el login, porque hace
- * lo mismo -abrir una sesion- y dos formas distintas para el mismo efecto solo
- * garantizan que un dia diverjan.
+ * [CONTRATO] Seccion 10, `POST /auth/register`. Devuelve un `SessionState`,
+ * igual que el login, porque hace lo mismo -abrir una sesion- y dos formas
+ * distintas para el mismo efecto solo garantizan que un dia diverjan.
+ *
+ * Rechazos propios: 409 `EMAIL_ALREADY_REGISTERED` y 422 `WEAK_PASSWORD`, este
+ * con `details.minimum_length`. `consents` hoy solo se admite vacio: el backend
+ * rechaza una lista con contenido mientras no exista donde guardarla.
  */
 export function register(
   input: {
@@ -1485,6 +1491,29 @@ export function updateAdminProduct(
     body: patch,
     ...sessionOptions(session),
   });
+}
+
+/**
+ * Sube una imagen de catalogo (§14, DEC-056) y devuelve su ruta.
+ *
+ * NO ASOCIA NADA: la `url` devuelta se manda despues como `image_url` en el alta
+ * o la edicion del producto o la variante, con la validacion de siempre.
+ */
+export function uploadAdminMedia(
+  input: AdminMediaInput,
+  locale: Locale,
+  session: SessionContext,
+): Promise<ApiResult<AdminMediaRow>> {
+  return apiRequest<AdminMediaRow>("POST", API_PATHS.adminMedia, {
+    locale,
+    body: input,
+    ...sessionOptions(session),
+  });
+}
+
+/** Bytes de una imagen subida (§14). `file` es `<id>.<ext>`. */
+export function mediaPath(file: string): string {
+  return `/media/${encodeURIComponent(file)}`;
 }
 
 /**

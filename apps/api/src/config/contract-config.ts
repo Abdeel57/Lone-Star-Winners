@@ -49,5 +49,13 @@ export const CONTRACT_GENERATION_CONFIG: ApiConfig = {
     paymentProvider: "none",
     defaultCurrency: "USD",
   },
+  email: {
+    provider: "console",
+    fromAddress: "no-reply@localhost.invalid",
+    fromName: "Lone Star Winners",
+  },
+  web: {
+    publicUrl: "http://localhost:3000",
+  },
   exposeOpenApiOverHttp: true,
 };

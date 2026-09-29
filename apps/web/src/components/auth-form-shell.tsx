@@ -60,10 +60,19 @@ export function FormError({ result }: { readonly result: ActionResult }) {
  * que hace que el campo no se marque invalido cuando no lo esta.
  */
 export function useFieldError(result: ActionResult): (field: string) => string | undefined {
+  const t = useTranslations("auth.fields");
   const message = useApiErrorMessage();
 
   return (field: string): string | undefined => {
     if (result.status !== "error" || result.field !== field) return undefined;
+
+    // El minimo llega CON el rechazo (`details.minimum_length`), no esta escrito
+    // aqui: es la forma de decir cuantos caracteres faltan sin romper la regla
+    // de arriba. Si el backend no lo manda, se cae al mensaje generico.
+    if (result.minimumPasswordLength !== undefined) {
+      return t("passwordTooShort", { count: result.minimumPasswordLength });
+    }
+
     return message(result.code);
   };
 }

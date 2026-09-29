@@ -120,6 +120,9 @@ export type {
   AdminFeatureFlagPatch,
   AdminFeatureFlagRow,
   AdminFeatureFlagsResponse,
+  AdminMediaContentType,
+  AdminMediaInput,
+  AdminMediaRow,
   AdminProductCategoryInput,
   AdminProductCategoryListResponse,
   AdminProductCategoryRow,
@@ -146,7 +149,11 @@ export type {
   AdminSettingChangeStatus,
   AdminSettingKind,
 } from "./admin-contract";
-export { ADMIN_PRODUCT_STATUSES } from "./admin-contract";
+export {
+  ADMIN_MEDIA_CONTENT_TYPES,
+  ADMIN_MEDIA_MAX_BYTES,
+  ADMIN_PRODUCT_STATUSES,
+} from "./admin-contract";
 export {
   ADJUSTMENT_DIRECTIONS,
   ADJUSTMENT_STATUSES,
@@ -278,6 +285,8 @@ export {
   transcribeAmoeSubmission,
   updateAdminFeatureFlag,
   updateAdminProductVariant,
+  uploadAdminMedia,
+  mediaPath,
   updateAdminRulesVersion,
   updateCartItem,
   updateMe,

@@ -137,6 +137,10 @@ test.describe("alta por la interfaz", () => {
     await page.goto("/es/account/register");
     await page.locator('input[name="email"]').fill(email);
     await page.locator('input[name="password"]').fill(FAKE_PARTICIPANT_PASSWORD);
+    // El formulario pide la contrasena dos veces y `registerAction` rechaza el
+    // envio sin la segunda: sin esta linea la prueba fallaria por el formulario
+    // y no por el backend, que es lo que se quiere medir.
+    await page.locator('input[name="password_confirmation"]').fill(FAKE_PARTICIPANT_PASSWORD);
     await page.getByRole("button", { name: /Crear|Registr/ }).click();
 
     await page.waitForURL(/\/es\/account/);

@@ -139,6 +139,28 @@ const HSTS_HEADER = {
   value: "max-age=63072000; includeSubDomains",
 };
 
+/**
+ * Tope del cuerpo de una peticion con fotos (DEC-056).
+ *
+ * Las imagenes del catalogo viajan DENTRO del formulario del panel, como
+ * `<input type="file">`, hasta una Server Action. Next corta el cuerpo de una
+ * accion a 1 MB por defecto, que es menos que una sola foto de telefono.
+ *
+ * 16 MB y no "lo que haga falta": el alta de producto puede llevar la foto del
+ * producto y una por variante, y la API admite 5 MiB por imagen. Con JavaScript
+ * el panel las reduce antes de enviarlas y el formulario entero ronda 1-2 MB;
+ * este margen es para quien lo envia sin JavaScript. Un cuerpo se lee ANTES de
+ * saber quien lo manda, asi que el tope es tambien lo que un anonimo puede
+ * obligar a este proceso a tener en memoria por peticion.
+ *
+ * SON DOS AJUSTES Y TIENEN QUE COINCIDIR. Como hay middleware, Next almacena el
+ * cuerpo para poder entregarselo (`middlewareClientMaxBodySize`, 10 MB por
+ * defecto) y lo TRUNCA si no cabe: subir solo el de las acciones dejaria pasar
+ * un formulario cortado, que falla al parsearse con un error que no se parece a
+ * su causa.
+ */
+const UPLOAD_BODY_LIMIT = "16mb";
+
 /** @type {import("next").NextConfig} */
 const nextConfig = {
   output: "standalone",
@@ -155,6 +177,11 @@ const nextConfig = {
   // MSW intercepta a nivel de `http`/`undici`; empaquetarlo rompe la
   // interceptacion. Solo se carga en desarrollo (ver src/instrumentation.ts).
   serverExternalPackages: ["msw", "@mswjs/interceptors"],
+
+  experimental: {
+    serverActions: { bodySizeLimit: UPLOAD_BODY_LIMIT },
+    middlewareClientMaxBodySize: UPLOAD_BODY_LIMIT,
+  },
 
   headers() {
     const isProduction = process.env.NODE_ENV === "production";
