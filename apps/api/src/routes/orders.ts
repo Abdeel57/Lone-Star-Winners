@@ -564,8 +564,9 @@ export function buildOrdersRoutes(dependencies: AppDependencies): RouteDefinitio
         const returnTo = new URL(body.return_url);
         returnTo.searchParams.set("draft", draft.id);
 
+        let session: Awaited<ReturnType<typeof paymentProvider.createCheckoutSession>>;
         try {
-          const session = await paymentProvider.createCheckoutSession({
+          session = await paymentProvider.createCheckoutSession({
             orderId: draft.id,
             // La clave de idempotencia es el pedido: reintentar la apertura no
             // crea un segundo cobro.
@@ -590,48 +591,6 @@ export function buildOrdersRoutes(dependencies: AppDependencies): RouteDefinitio
             cancelUrl: returnTo.toString(),
             metadata: { order_id: draft.id },
           });
-
-          await orders.createCheckoutSession({
-            id: domain.ids.next(),
-            orderId: draft.id,
-            participantId: principal.participantId,
-            provider: paymentProvider.name,
-            providerSessionId: session.providerSessionId,
-            presentation: session.presentation,
-            idempotencyKey: `order:${draft.id}`,
-            expiresAt: session.expiresAt,
-          });
-
-          // DRAFT -> PENDING_PAYMENT. Sin este paso, el primer pago confirmado
-          // intentaria DRAFT -> CONFIRMED, que la maquina de estados no admite:
-          // el webhook quedaria en FAILED y el pedido pagado sin participaciones.
-          const pending = applyPaymentState(
-            toCommerceOrder(draft),
-            "REQUIRES_ACTION",
-            domain.clock.now(),
-            "PAID",
-          ).order;
-          await orders.applyPaymentState(draft.id, {
-            status: pending.status,
-            paymentState: pending.paymentState,
-            chargebackState: pending.chargebackState,
-            paidAt: pending.paidAt,
-            qualifiedAt: pending.qualifiedAt,
-            provider: paymentProvider.name,
-            providerPaymentId: pending.providerPaymentId,
-            providerOrderId: session.providerSessionId,
-          });
-
-          void reply.code(201);
-          return {
-            provider: paymentProvider.name,
-            mode: session.presentation,
-            client_config:
-              session.presentation === "hosted_redirect"
-                ? { redirect_url: session.redirectUrl }
-                : { client_token: session.clientToken },
-            order_draft_id: draft.id,
-          };
         } catch (error) {
           if (isCommerceError(error, "PAYMENT_PROVIDER_NOT_CONFIGURED")) {
             // No es un fallo transitorio: la decision de proveedor sigue
@@ -640,8 +599,93 @@ export function buildOrdersRoutes(dependencies: AppDependencies): RouteDefinitio
             // comprar" y no como un error del participante.
             throw new ApiError({ statusCode: 503, code: "PAYMENT_PROVIDER_NOT_CONFIGURED" });
           }
-          throw error;
+          // El proveedor rechazo abrir el cobro: cuenta sin metodos de pago
+          // activos, clave revocada, caida. No es culpa de quien compra y no se
+          // ha cobrado nada, asi que 503 con el codigo que la web ya explica, y
+          // no un 500 generico (medido el 2026-09-30 con la cuenta real de
+          // Stripe sin metodos de pago para USD).
+          request.log.error(
+            { event: "payment.session.failed", provider: paymentProvider.name, err: error },
+            "el proveedor de pago no abrio el cobro",
+          );
+          // El borrador cuyo cobro nunca se abrio no se queda como "pendiente de
+          // pago" en la cuenta de quien compra: se cancela. Si el cierre falla se
+          // registra y se sigue; lo que importa a quien compra es el 503.
+          try {
+            const cancelled = applyPaymentState(
+              toCommerceOrder(draft),
+              "CANCELLED",
+              domain.clock.now(),
+              "PAID",
+            ).order;
+            await orders.applyPaymentState(draft.id, {
+              status: cancelled.status,
+              paymentState: cancelled.paymentState,
+              chargebackState: cancelled.chargebackState,
+              paidAt: cancelled.paidAt,
+              qualifiedAt: cancelled.qualifiedAt,
+              provider: paymentProvider.name,
+              providerPaymentId: cancelled.providerPaymentId,
+              providerOrderId: cancelled.providerOrderId,
+            });
+          } catch (cancelError) {
+            request.log.error(
+              {
+                event: "payment.session.draft_not_cancelled",
+                order_id: draft.id,
+                err: cancelError,
+              },
+              "no se pudo cancelar el borrador sin cobro",
+            );
+          }
+          throw new ApiError({
+            statusCode: 503,
+            code: "PAYMENT_PROVIDER_UNAVAILABLE",
+            cause: error,
+          });
         }
+
+        await orders.createCheckoutSession({
+          id: domain.ids.next(),
+          orderId: draft.id,
+          participantId: principal.participantId,
+          provider: paymentProvider.name,
+          providerSessionId: session.providerSessionId,
+          presentation: session.presentation,
+          idempotencyKey: `order:${draft.id}`,
+          expiresAt: session.expiresAt,
+        });
+
+        // DRAFT -> PENDING_PAYMENT. Sin este paso, el primer pago confirmado
+        // intentaria DRAFT -> CONFIRMED, que la maquina de estados no admite:
+        // el webhook quedaria en FAILED y el pedido pagado sin participaciones.
+        const pending = applyPaymentState(
+          toCommerceOrder(draft),
+          "REQUIRES_ACTION",
+          domain.clock.now(),
+          "PAID",
+        ).order;
+        await orders.applyPaymentState(draft.id, {
+          status: pending.status,
+          paymentState: pending.paymentState,
+          chargebackState: pending.chargebackState,
+          paidAt: pending.paidAt,
+          qualifiedAt: pending.qualifiedAt,
+          provider: paymentProvider.name,
+          providerPaymentId: pending.providerPaymentId,
+          providerOrderId: session.providerSessionId,
+        });
+
+        void reply.code(201);
+        return {
+          provider: paymentProvider.name,
+          mode: session.presentation,
+          client_config:
+            session.presentation === "hosted_redirect"
+              ? { redirect_url: session.redirectUrl }
+              : { client_token: session.clientToken },
+          order_draft_id: draft.id,
+        };
       },
     },
 

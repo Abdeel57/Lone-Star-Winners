@@ -1813,7 +1813,10 @@ el participante vio al pulsar, no el que hubiera cuando el proveedor liquide.
 
 Errors:
 409 CART_EMPTY
-503 PAYMENT_PROVIDER_NOT_CONFIGURED (hoy, siempre: el proveedor sigue sin elegir)
+503 PAYMENT_PROVIDER_NOT_CONFIGURED (`PAYMENT_PROVIDER=none`)
+503 PAYMENT_PROVIDER_UNAVAILABLE (el proveedor rechazó abrir el cobro: cuenta sin
+métodos de pago activos, clave revocada, caída. No se cobró nada y el borrador
+pasa a CANCELLED para no quedar como "pendiente de pago" en la cuenta)
 422 VALIDATION_FAILED
 
 Authorization: PARTICIPANT_SELF
