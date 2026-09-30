@@ -82,6 +82,19 @@ export const PAYMENT_WEBHOOK_URL = "/api/v1/webhooks/payments/:provider";
 
 const UUID_SHAPE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
 
+/**
+ * Un pedido fuera de promocion, con el cobro confirmado.
+ *
+ * Pasa por la maquina de estados como cualquier otro -PENDING_PAYMENT ->
+ * CONFIRMED, pago -> PAID- pero SIN `qualifiedAt`: calificar es hacerlo contra
+ * una promocion, y la CHECK `orders_qualified_requires_promotion` rechazaria
+ * un pedido calificado sin ella.
+ */
+export function paidOutsidePromotion(order: Order, at: Date): Order {
+  const change = applyPaymentState(order, "PAID", at, "PAID");
+  return { ...change.order, qualifiedAt: order.qualifiedAt };
+}
+
 const checkoutBodySchema = z.object({
   /**
    * SIN ninguna regla de jurisdiccion. La elegibilidad territorial la fijan las
@@ -274,7 +287,9 @@ export function buildOrdersRoutes(dependencies: AppDependencies): RouteDefinitio
   async function applyQualifyingPayment(order: Order, event: ProviderEvent): Promise<boolean> {
     if (order.promotionId === null) {
       // Compra fuera de promocion: se registra el pago y no hay nada que otorgar.
-      await persistPaymentState(order, event, "PAID");
+      // Se persiste el pedido YA TRANSICIONADO: guardar el de entrada dejaba el
+      // pedido en PENDING_PAYMENT aunque el cobro se hubiera confirmado.
+      await persistPaymentState(paidOutsidePromotion(order, event.occurredAt), event, "PAID");
       return true;
     }
 
