@@ -876,17 +876,35 @@ export function buildAuthRoutes(dependencies: AppDependencies): RouteDefinition[
         const record = await identity.identities.findById(session.identityId);
 
         if (record?.email == null || record.emailVerifiedAt !== null) {
+          request.log.info(
+            {
+              event: "email.verification.skipped",
+              reason: record?.email == null ? "no_email" : "already_verified",
+            },
+            "reenvio de verificacion sin envio",
+          );
           return ACKNOWLEDGED;
         }
 
         try {
-          await deliverLink({
+          const outcome = await deliverLink({
             identityId: record.id,
             address: record.email,
             purpose: "EMAIL_VERIFICATION",
             locale: emailLocaleFrom(request.headers["accept-language"]),
             now: new Date(),
           });
+
+          if (outcome === "THROTTLED") {
+            request.log.info(
+              {
+                event: "email.verification.skipped",
+                reason: "throttled",
+                to: maskEmail(record.email),
+              },
+              "reenvio de verificacion sin envio",
+            );
+          }
         } catch (error) {
           // Aqui SI hay a quien decirselo: la persona acaba de pulsar "reenviar"
           // y un "enviado" falso la dejaria esperando un correo que no llega.
@@ -926,24 +944,49 @@ export function buildAuthRoutes(dependencies: AppDependencies): RouteDefinition[
         const locale = emailLocaleFrom(request.headers["accept-language"]);
         const now = new Date();
 
+        // Cada salida sin envio deja su motivo en el log. La respuesta es la
+        // misma en todos los casos -eso es lo que impide enumerar cuentas-, asi
+        // que sin este registro una prueba que "no llega" no dice por que. El
+        // log es interno; la direccion va enmascarada.
+        const skipped = (reason: string): void => {
+          request.log.info(
+            { event: "email.password_reset.skipped", reason, to: maskEmail(body.email) },
+            "restablecimiento sin envio",
+          );
+        };
+
         inBackground(request, "email.password_reset.failed", async () => {
           const found = await identity.identities.findByEmail(body.email);
 
           // El expediente postal sin credencial, una cuenta suspendida o una
           // identidad sin correo no reciben nada: restablecer supone que ya
           // habia una contrasena.
-          if (found?.email == null || found.status !== "ACTIVE") return;
+          if (found?.email == null) {
+            skipped("no_account");
+            return;
+          }
+
+          if (found.status !== "ACTIVE") {
+            skipped("account_not_active");
+            return;
+          }
 
           const credential = await identity.identities.findCredential(found.id);
-          if (credential === null) return;
 
-          await deliverLink({
+          if (credential === null) {
+            skipped("no_password");
+            return;
+          }
+
+          const outcome = await deliverLink({
             identityId: found.id,
             address: found.email,
             purpose: "PASSWORD_RESET",
             locale,
             now,
           });
+
+          if (outcome === "THROTTLED") skipped("throttled");
         });
 
         return ACKNOWLEDGED;

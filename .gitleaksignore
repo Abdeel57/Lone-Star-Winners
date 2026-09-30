@@ -17,3 +17,14 @@
 5e10dd3ee505124fa505ab2aa2625b8f5ba701a0:apps/api/test/draw-export.test.ts:generic-api-key:240
 0a1a2c616687412e9dfb73095ba31c99936ab12c:tests/security/src/helpers/draw-fixtures.ts:generic-api-key:337
 d1463303949fc387c9c0448adc916dbea6234eef:.gitleaksignore:generic-api-key:9
+
+# DEC-058, commit 1c216f4 (revisado 2026-09-29). Las dos huellas son la MISMA
+# clave de relleno de Resend en `apps/api/test/env.test.ts`: el prefijo `re_`
+# seguido de digitos y letras en orden, para que el esquema de entorno de
+# produccion la acepte en el test. No es una credencial: la clave real vive solo
+# en Railway (EMAIL_PROVIDER_API_KEY) y se comprobo que su valor no aparece en
+# ningun commit. La primera la marca la regla propia `lsw-secret-assignment`
+# (asignacion a EMAIL_PROVIDER_API_KEY); la segunda, `generic-api-key` (la
+# asercion sobre `apiKey`).
+1c216f47843c4c96b5e1e38485445b3610cd768a:apps/api/test/env.test.ts:lsw-secret-assignment:113
+1c216f47843c4c96b5e1e38485445b3610cd768a:apps/api/test/env.test.ts:generic-api-key:127

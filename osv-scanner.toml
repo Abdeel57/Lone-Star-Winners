@@ -1,0 +1,29 @@
+# ---------------------------------------------------------------------------
+# Lone Star Winners - excepciones de osv-scanner
+#
+# Propietario: security-integration.
+# DEC-018: osv-scanner es gate bloqueante en CI (.github/workflows/security.yml).
+#
+# Cada excepcion lleva motivo y `ignoreUntil`. La fecha no es decorativa: al
+# pasar, el gate vuelve a fallar y obliga a revisar si el motivo sigue en pie.
+# Una vulnerabilidad con arreglo en la misma linea mayor NO va aqui: se corrige
+# con un override en `pnpm.overrides` del package.json raiz.
+# ---------------------------------------------------------------------------
+
+# vitest / @vitest/mocker 3.2.7 (CVE-2026-84373). Revisado 2026-09-29.
+#
+# Lectura de ficheros por un "redirect mock" que no valida la ruta. Solo es
+# explotable a traves de `mockerPlugin` / `interceptorPlugin` montados en un
+# servidor de desarrollo de terceros, o del modo navegador de vitest (RPC con
+# token). Aqui vitest es devDependency de los siete workspaces que lo usan, corre
+# en entorno node/jsdom sin modo navegador y nadie importa esos plugins: no
+# llega a produccion y no abre ningun socket alcanzable.
+#
+# El arreglo solo existe en vitest 4.1.11, un salto de version mayor que toca
+# la configuracion de siete suites, incluidas las de integracion y e2e que solo
+# corren en CI contra PostgreSQL. Se hara como cambio propio, no escondido en un
+# arreglo de seguridad.
+[[IgnoredVulns]]
+id = "GHSA-82fw-gwwq-j7x9"
+ignoreUntil = 2026-12-31T00:00:00Z
+reason = "vitest/@vitest/mocker: solo devDependency, sin modo navegador ni mockerPlugin/interceptorPlugin; migrar a vitest 4 antes de esta fecha."
