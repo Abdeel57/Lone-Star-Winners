@@ -338,6 +338,8 @@ describe("llamadas a la API", () => {
     expect(form.get("line_items[0][price_data][unit_amount]")).toBe("2599");
     expect(form.get("line_items[0][price_data][product_data][name]")).toBe("Lone Star Tee");
     expect(form.get("success_url")).toContain("draft=x");
+    // Se cobra en la moneda del pedido: sin conversion a la moneda del visitante.
+    expect(form.get("adaptive_pricing[enabled]")).toBe("false");
     expect(form.get("expires_at")).toBe((NOW_SECONDS + 3600).toString(10));
   });
 

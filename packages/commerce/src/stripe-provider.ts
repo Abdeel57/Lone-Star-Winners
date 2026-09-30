@@ -281,6 +281,12 @@ export class StripePaymentProvider implements PaymentProvider {
       // reserva para esto.
       ["client_reference_id", input.orderId],
       ["expires_at", expiresAtSeconds.toString(10)],
+      // Sin "Adaptive Pricing": la tienda cobra en la moneda del pedido y en
+      // ninguna otra. Con la conversion activa, Stripe cobraria en la moneda
+      // local del visitante (en pruebas desde Mexico cobro MXN), y los importes
+      // de reembolsos y disputas llegarian en esa moneda, no en la del pedido:
+      // el prorrateo de participaciones se calcularia sobre otra unidad.
+      ["adaptive_pricing[enabled]", "false"],
     ];
 
     for (const [key, value] of Object.entries(input.metadata)) {
