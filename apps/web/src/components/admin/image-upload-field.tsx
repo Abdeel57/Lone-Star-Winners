@@ -4,7 +4,8 @@ import { Checkbox, FOCUS_VISIBLE_CLASSES, FormField, cn, useFormField } from "@l
 import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "react";
 
-import { ADMIN_MEDIA_CONTENT_TYPES, ADMIN_MEDIA_MAX_BYTES } from "@/lib/api";
+// De la hoja y no del indice: el indice arrastra `http.ts`, que es de servidor.
+import { ADMIN_MEDIA_CONTENT_TYPES, ADMIN_MEDIA_MAX_BYTES } from "@/lib/api/admin-contract";
 import { safeImageUrl } from "@/lib/media-url";
 
 /**

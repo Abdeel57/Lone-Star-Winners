@@ -8,7 +8,9 @@ import { ImageUploadField } from "@/components/admin/image-upload-field";
 import { FormError, LocaleField, useFieldError } from "@/components/auth-form-shell";
 import type { Locale } from "@/i18n/locales";
 import { IDLE, type ActionResult } from "@/lib/action-result";
-import { pickLocalized, type AdminProductCategoryRow, type ProductKind } from "@/lib/api";
+import type { AdminProductCategoryRow, ProductKind } from "@/lib/api";
+// De la hoja y no del indice: el indice arrastra `http.ts`, que es de servidor.
+import { pickLocalized } from "@/lib/api/localized";
 
 /**
  * Alta y edicion de un producto.

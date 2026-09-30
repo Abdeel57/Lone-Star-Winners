@@ -7,7 +7,8 @@ import { useActionState, useState } from "react";
 import { FormError, LocaleField, useFieldError } from "@/components/auth-form-shell";
 import type { Locale } from "@/i18n/locales";
 import { IDLE, type ActionResult } from "@/lib/action-result";
-import { AMOE_MODES, type AmoeMode } from "@/lib/api";
+// De la hoja y no del indice: el indice arrastra `http.ts`, que es de servidor.
+import { AMOE_MODES, type AmoeMode } from "@/lib/api/contract";
 
 /**
  * Los tres gestos de la pantalla de ajustes (§13.9, HO-041 resolucion fase 1).

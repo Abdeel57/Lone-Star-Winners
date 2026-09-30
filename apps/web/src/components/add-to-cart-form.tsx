@@ -7,7 +7,9 @@ import { useActionState, useState } from "react";
 import { formatMoney } from "@/i18n/formatters";
 import type { Locale } from "@/i18n/locales";
 import { useAvailabilityLabel } from "@/i18n/storefront-labels";
-import { pickLocalized, type ProductDetail, type ProductVariant } from "@/lib/api";
+import type { ProductDetail, ProductVariant } from "@/lib/api";
+// De la hoja y no del indice: el indice arrastra `http.ts`, que es de servidor.
+import { pickLocalized } from "@/lib/api/localized";
 import { addToCartAction, type CartActionResult } from "@/lib/cart-actions";
 import { safeImageUrl } from "@/lib/media-url";
 

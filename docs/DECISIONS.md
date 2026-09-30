@@ -3035,7 +3035,11 @@ al pasarse responde 429.** Cuatro puntos:
    con "No hemos podido cargar esta sección".
 2. **La web reenvía la IP del visitante.** `apiRequest` manda en
    `X-Forwarded-For` la ÚLTIMA entrada de la cabecera entrante, que es la que
-   añade el proxy de Railway (`lib/api/visitor-address.ts`).
+   añade el proxy de Railway (`lib/api/visitor-address.ts`). Como `http.ts`
+   lee `next/headers`, un componente `"use client"` ya no puede importar
+   VALORES del índice `@/lib/api`: los toma de las hojas (`localized`,
+   `contract`, `admin-contract`). Lo vigila `client-imports.test.ts`; el primer
+   intento (d2d3c85) rompió `next build` por esto.
 3. **La API solo la cree del salto inmediato, y solo si es de red privada**
    (`http/trusted-proxy.ts`). Un cliente que llegara desde fuera no puede
    declarar su propia IP, y las entradas anteriores de la cabecera, que las
