@@ -40,11 +40,12 @@ vi.mock("@/lib/cart-actions", () => ({
   removeCartItemFormAction: () => Promise.resolve(undefined),
 }));
 
+import { OrderLineList } from "@/components/order-line-list";
 import { PrizeBand } from "@/components/prize-band";
 import { ProductCard } from "@/components/product-card";
 import { formatMoney } from "@/i18n/formatters";
 import type { Locale } from "@/i18n/locales";
-import type { ProductSummary, PromotionDetail } from "@/lib/api/contract";
+import type { OrderLine, ProductSummary, PromotionDetail } from "@/lib/api/contract";
 import { priceFrom } from "@/lib/product-price";
 import enMessages from "../../messages/en-US.json";
 import esMessages from "../../messages/es-US.json";
@@ -98,7 +99,31 @@ const realPromotion: PromotionDetail = {
   prize_value: { amount_minor: "6500000", currency: "USD" },
 };
 
+/**
+ * Linea de `GET /account/orders/{id}`: sin `variant_name` ni `image_url`. La API
+ * publica ademas `sweepstakes_eligible` y `refunded_quantity`, que el tipo del
+ * frontend no declara. Asi llego el primer pedido pagado (2026-09-30) y tumbo
+ * la confirmacion con `Cannot read properties of undefined (reading 'es-US')`.
+ */
+const realOrderLine: OrderLine = {
+  line_id: "48dd4706-a6bb-40c6-a7f8-586068fc832a",
+  sku: "LSW-NECKLIGHT-BLK-001-1",
+  product_slug: "lampara-cuello-lsw-negra",
+  product_name: { "en-US": "LSW Flexible Neck Light", "es-US": "Lámpara flexible para cuello LSW" },
+  quantity: 1,
+  unit_price: { amount_minor: "3000", currency: "USD" },
+  line_total: { amount_minor: "3000", currency: "USD" },
+};
+
 describe("escaparate contra la forma real de la API", () => {
+  it("las lineas de un pedido se pintan sin variant_name ni image_url", () => {
+    const { container } = renderIn("es", <OrderLineList lines={[realOrderLine]} locale="es" />);
+    expect(screen.getByText("Lámpara flexible para cuello LSW")).toBeInTheDocument();
+    expect(container.textContent).toContain("$30.00");
+    expect(container.textContent).not.toMatch(/undefined|NaN/u);
+    expect(container.querySelector("img")).toBeNull();
+  });
+
   it("la tarjeta de producto se pinta sin summary, categoria, imagen, price_from ni elegibilidad", () => {
     const { container } = renderIn("es", <ProductCard product={realProduct} locale="es" />);
     expect(screen.getByText("Camiseta API real")).toBeInTheDocument();

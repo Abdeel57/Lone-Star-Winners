@@ -1477,14 +1477,21 @@ export interface OrderSummary {
   readonly entries_granted: number | null;
 }
 
-/** [PROVISIONAL] Linea de un pedido. */
+/**
+ * [PROVISIONAL] Linea de un pedido.
+ *
+ * `variant_name` e `image_url` son OPCIONALES porque la API no los publica
+ * (`orderLineSchema` en `apps/api/src/http/schemas-b5.ts`). Declarados como
+ * obligatorios tumbaron la confirmacion y el detalle del primer pedido pagado
+ * de verdad (2026-09-30): `pickLocalized(undefined)`.
+ */
 export interface OrderLine {
   readonly line_id: string;
   readonly sku: string;
   readonly product_slug: string;
   readonly product_name: LocalizedText;
-  readonly variant_name: LocalizedText;
-  readonly image_url: string | null;
+  readonly variant_name?: LocalizedText;
+  readonly image_url?: string | null;
   readonly quantity: number;
   readonly unit_price: MoneyMinor;
   /** Total de linea CALCULADO POR EL BACKEND. */

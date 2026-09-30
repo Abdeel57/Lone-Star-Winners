@@ -33,7 +33,9 @@ export function OrderLineList({
     <ul className="flex list-none flex-col gap-s4">
       {lines.map((line) => {
         const name = pickLocalized(line.product_name, locale);
-        const variant = pickLocalized(line.variant_name, locale);
+        // La API no publica la variante; solo se pinta si llega.
+        const variant =
+          line.variant_name === undefined ? null : pickLocalized(line.variant_name, locale);
         const unitPrice = formatMoney(line.unit_price, locale);
         const lineTotal = formatMoney(line.line_total, locale);
 
@@ -81,7 +83,9 @@ export function OrderLineList({
 
             <div className="min-w-0 flex-1">
               <p className="text-body font-medium text-text">{name}</p>
-              <p className="mt-s1 text-body-sm text-text-muted">{variant}</p>
+              {variant === null ? null : (
+                <p className="mt-s1 text-body-sm text-text-muted">{variant}</p>
+              )}
               <p className="mt-s1 font-mono text-caption text-text-subtle">{line.sku}</p>
 
               <dl className="mt-s3 flex flex-wrap gap-x-s5 gap-y-s2">
