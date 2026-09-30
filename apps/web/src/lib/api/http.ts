@@ -1,6 +1,7 @@
 import { localeTag, type Locale } from "@/i18n/locales";
 
 import { failure, isApiErrorEnvelope, ok, type ApiResult } from "./result";
+import { visitorAddress } from "./visitor-address";
 
 /**
  * Adaptador HTTP hacia `apps/api` (DEC-004: es un proceso Fastify aparte, no
@@ -109,6 +110,11 @@ export async function apiRequest<T>(
   }
   if (options.body !== undefined) {
     headers.set("content-type", "application/json");
+  }
+  // DEC-061: la API limita peticiones por visitante, no por servidor web.
+  const visitor = await visitorAddress();
+  if (visitor !== null) {
+    headers.set("x-forwarded-for", visitor);
   }
 
   let response: Response;

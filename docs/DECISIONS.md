@@ -3016,3 +3016,38 @@ en-US/es-US, test), `packages/database` (`0031_verified_phone.sql`,
 
 Proposed by: sesión del usuario (2026-09-30)
 Agreed by: pendiente — backend-sweepstakes, security-integration, frontend-ux
+
+## DEC-061
+
+Status: Proposed
+
+Date: 2026-09-30
+
+Decision:
+**El límite de peticiones de la API es por visitante, no por servidor web, y
+al pasarse responde 429.** Cuatro puntos:
+
+1. **El defecto, medido en producción.** El navegador nunca habla con la API:
+   lo hace `apps/web` por la red privada. Con `trustProxy: false` la IP de todos
+   los visitantes era la del servidor web, y `API_RATE_LIMIT_MAX_REQUESTS` (120
+   por minuto) era un único cupo para la tienda entera. En las pruebas previas
+   al lanzamiento, un solo visitante lo agotó y las fichas de producto salieron
+   con "No hemos podido cargar esta sección".
+2. **La web reenvía la IP del visitante.** `apiRequest` manda en
+   `X-Forwarded-For` la ÚLTIMA entrada de la cabecera entrante, que es la que
+   añade el proxy de Railway (`lib/api/visitor-address.ts`).
+3. **La API solo la cree del salto inmediato, y solo si es de red privada**
+   (`http/trusted-proxy.ts`). Un cliente que llegara desde fuera no puede
+   declarar su propia IP, y las entradas anteriores de la cabecera, que las
+   escribe cualquiera, no eligen cubo. Fastify 5 trata un `trustProxy` numérico
+   como "no confiar en nadie" por ese mismo motivo, así que se usa una función.
+4. **429, no 500.** `errorResponseBuilder` devolvía el sobre y el plugin lo
+   lanzaba sin `statusCode`, así que el manejador lo trataba como error no
+   controlado. Ahora devuelve el `ApiError`. Al pasarse se registra
+   `rate_limit.exceeded` con la IP enmascarada (`203.0.x.x`).
+
+Affected areas: `apps/api` (`app.ts`, `http/trusted-proxy.ts`, test),
+`apps/web` (`lib/api/http.ts`, `lib/api/visitor-address.ts`, test).
+
+Proposed by: sesión del usuario (2026-09-30), pruebas previas al lanzamiento
+Agreed by: pendiente — security-integration, backend-sweepstakes, frontend-ux

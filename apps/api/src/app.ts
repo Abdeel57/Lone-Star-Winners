@@ -26,6 +26,11 @@ import { fastify, type FastifyInstance } from "fastify";
 import type { ApiConfig } from "./config/env.js";
 import { ApiError, ApiErrors } from "./http/errors.js";
 import { installRouteGuard, registerRoutes, type RouteDefinition } from "./http/route-registry.js";
+import {
+  isPrivateNetworkAddress,
+  maskAddress,
+  trustImmediatePrivatePeer,
+} from "./http/trusted-proxy.js";
 import { zodSerializerCompiler, zodValidatorCompiler } from "./http/zod-compilers.js";
 import { createLogger } from "./observability/logger.js";
 import {
@@ -201,10 +206,11 @@ export async function createApp(dependencies: AppDependencies): Promise<FastifyI
   const app = fastify({
     loggerInstance: logger,
     bodyLimit: config.http.bodyLimitBytes,
-    // `trustProxy` desactivado por defecto: activarlo sin saber cuantos
-    // proxies hay delante permite falsificar la IP de origen, y esa IP acaba
-    // en decisiones de rate limiting y de riesgo.
-    trustProxy: false,
+    // DEC-061: la IP del visitante la da el salto inmediato, y solo si esta en
+    // una red privada (el servidor web). Con `false` todos los visitantes eran
+    // la IP del servidor web y el limite de peticiones era uno solo para la
+    // tienda entera. Ver `http/trusted-proxy.ts`.
+    trustProxy: trustImmediatePrivatePeer,
     disableRequestLogging: false,
     genReqId: (request) =>
       sanitizeIncomingCorrelationId(request.headers[config.http.requestIdHeader]),
@@ -310,8 +316,24 @@ export async function createApp(dependencies: AppDependencies): Promise<FastifyI
     // El envelope de error tambien aqui: un 429 con otro formato obligaria al
     // frontend a tratar dos formas distintas de error (DEC-022, DEC-031). Se
     // construye con la misma fabrica que el resto para que no pueda divergir.
-    errorResponseBuilder: (request, context) =>
-      ApiErrors.rateLimited(Math.ceil(context.ttl / 1_000)).toEnvelope(request.id),
+    //
+    // Se devuelve el `ApiError` y NO su envelope: el plugin LANZA lo que
+    // devuelve esta funcion, y un objeto sin `statusCode` llegaba al manejador
+    // de errores como "error no controlado" y salia como 500 (DEC-061).
+    errorResponseBuilder: (_request, context) =>
+      ApiErrors.rateLimited(Math.ceil(context.ttl / 1_000)),
+    // Una pista enmascarada de a quien se limito: distingue "un visitante" de
+    // "el servidor web entero" sin guardar la IP completa en el log.
+    onExceeded: (request, key) => {
+      request.log.warn(
+        {
+          event: "rate_limit.exceeded",
+          visitor: maskAddress(key),
+          via_private_peer: isPrivateNetworkAddress(request.socket.remoteAddress ?? ""),
+        },
+        "limite de peticiones superado",
+      );
+    },
   });
 
   // ---- 6. Errores: un unico envelope (DEC-022) ----

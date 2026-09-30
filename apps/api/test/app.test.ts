@@ -164,6 +164,89 @@ describe("deny-by-default en tiempo de ejecucion (DEC-015)", () => {
   });
 });
 
+describe("limite de peticiones por visitante (DEC-061)", () => {
+  /** Dos peticiones por ventana: la tercera del mismo visitante ya sobra. */
+  function limitedDependencies(): AppDependencies {
+    const base = buildDependencies();
+    return {
+      ...base,
+      config: {
+        ...base.config,
+        http: { ...base.config.http, rateLimit: { windowSeconds: 60, maxRequests: 2 } },
+      },
+    };
+  }
+
+  /** Peticion como la hace `apps/web`: desde su IP privada, con la del visitante. */
+  const fromVisitor = (app: Awaited<ReturnType<typeof createApp>>, forwardedFor: string) =>
+    app.inject({
+      method: "GET",
+      url: "/api/v1/health",
+      remoteAddress: "10.0.0.5",
+      headers: { "x-forwarded-for": forwardedFor },
+    });
+
+  it("al pasarse responde 429 RATE_LIMITED con su envelope, no 500", async () => {
+    const app = await createApp(limitedDependencies());
+
+    await fromVisitor(app, "203.0.113.7");
+    await fromVisitor(app, "203.0.113.7");
+    const third = await fromVisitor(app, "203.0.113.7");
+
+    expect(third.statusCode).toBe(429);
+    const body = third.json<{
+      error: { code: string; details: { retry_after_seconds: number } };
+    }>();
+    expect(body.error.code).toBe("RATE_LIMITED");
+    expect(body.error.details.retry_after_seconds).toBeGreaterThan(0);
+    expect(third.headers["retry-after"]).toBeDefined();
+
+    await app.close();
+  });
+
+  it("dos visitantes detras del mismo servidor web no comparten el limite", async () => {
+    const app = await createApp(limitedDependencies());
+
+    await fromVisitor(app, "203.0.113.7");
+    await fromVisitor(app, "203.0.113.7");
+    expect((await fromVisitor(app, "198.51.100.23")).statusCode).toBe(200);
+    expect((await fromVisitor(app, "203.0.113.7")).statusCode).toBe(429);
+
+    await app.close();
+  });
+
+  it("un cliente que llega desde fuera no puede declarar su propia IP", async () => {
+    // Sin un intermediario de red privada delante, la cabecera no se cree: cada
+    // valor inventado seguiria contando contra la IP real del socket.
+    const app = await createApp(limitedDependencies());
+    const direct = (forwardedFor: string) =>
+      app.inject({
+        method: "GET",
+        url: "/api/v1/health",
+        remoteAddress: "198.51.100.200",
+        headers: { "x-forwarded-for": forwardedFor },
+      });
+
+    await direct("1.1.1.1");
+    await direct("2.2.2.2");
+    expect((await direct("3.3.3.3")).statusCode).toBe(429);
+
+    await app.close();
+  });
+
+  it("una X-Forwarded-For escrita por el cliente no le da un cubo nuevo", async () => {
+    // El proxy ANADE la IP real al final; solo esa cuenta. Si contara la
+    // primera, cada peticion con un valor inventado empezaria de cero.
+    const app = await createApp(limitedDependencies());
+
+    await fromVisitor(app, "1.1.1.1, 203.0.113.7");
+    await fromVisitor(app, "2.2.2.2, 203.0.113.7");
+    expect((await fromVisitor(app, "3.3.3.3, 203.0.113.7")).statusCode).toBe(429);
+
+    await app.close();
+  });
+});
+
 describe("cabeceras", () => {
   it("devuelve el `correlation_id` en la cabecera configurada", async () => {
     const app = await createApp(buildDependencies());
