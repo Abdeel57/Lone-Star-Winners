@@ -430,6 +430,16 @@ const INTEGRATION_VARS: readonly EnvVarSpec[] = Object.freeze([
     secret: true,
   }),
   v(
+    "TWILIO_API_KEY_SID",
+    "api",
+    "string",
+    NO_ENVIRONMENT,
+    "API Key de Twilio (SK...). Alternativa recomendada al Auth Token.",
+  ),
+  v("TWILIO_API_KEY_SECRET", "api", "string", NO_ENVIRONMENT, "Secreto de la API Key.", {
+    secret: true,
+  }),
+  v(
     "TWILIO_VERIFY_SERVICE_SID",
     "api",
     "string",

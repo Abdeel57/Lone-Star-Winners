@@ -237,6 +237,9 @@ export const environmentSchema = z
     SMS_PROVIDER: z.enum(["none", "console", "twilio"]).default("none"),
     TWILIO_ACCOUNT_SID: z.string().trim().min(1).optional(),
     TWILIO_AUTH_TOKEN: z.string().trim().min(1).optional(),
+    /** Alternativa al Auth Token: una API Key de la cuenta (SK...) y su secreto. */
+    TWILIO_API_KEY_SID: z.string().trim().min(1).optional(),
+    TWILIO_API_KEY_SECRET: z.string().trim().min(1).optional(),
     TWILIO_VERIFY_SERVICE_SID: z.string().trim().min(1).optional(),
     /**
      * Clave SECRETA de Cloudflare Turnstile. Con ella, pedir un codigo por SMS
@@ -360,14 +363,34 @@ export const environmentSchema = z
       return;
     }
 
+    // Credencial: una API Key (recomendada: se revoca sin tocar la cuenta, y
+    // es lo que puede crear un usuario con permiso de Developer) o, si no, el
+    // Auth Token de la cuenta.
+    const usesApiKey = env.TWILIO_API_KEY_SID !== undefined;
+
     const checks: readonly (readonly [keyof typeof env, RegExp, string])[] = [
       ["TWILIO_ACCOUNT_SID", /^AC[0-9a-f]{32}$/iu, "el Account SID de Twilio (AC + 32 caracteres)"],
-      ["TWILIO_AUTH_TOKEN", /^[0-9a-z]{32,}$/iu, "el Auth Token de Twilio"],
       [
         "TWILIO_VERIFY_SERVICE_SID",
         /^VA[0-9a-f]{32}$/iu,
         "el Service SID de Twilio Verify (VA + 32 caracteres)",
       ],
+      ...(usesApiKey
+        ? ([
+            [
+              "TWILIO_API_KEY_SID",
+              /^SK[0-9a-f]{32}$/iu,
+              "el SID de la API Key (SK + 32 caracteres)",
+            ],
+            ["TWILIO_API_KEY_SECRET", /^[0-9a-z]{16,}$/iu, "el secreto de la API Key"],
+          ] as const)
+        : ([
+            [
+              "TWILIO_AUTH_TOKEN",
+              /^[0-9a-z]{32,}$/iu,
+              "el Auth Token de Twilio, o una API Key (TWILIO_API_KEY_SID y TWILIO_API_KEY_SECRET)",
+            ],
+          ] as const)),
     ];
 
     for (const [name, shape, what] of checks) {
@@ -540,7 +563,13 @@ export interface ApiConfig {
     | {
         readonly provider: "twilio";
         readonly accountSid: string;
-        readonly authToken: string;
+        /**
+         * Credencial de autenticacion basica contra la API de Twilio: la API
+         * Key (`SK...` + secreto) si se configuro, o el Account SID + Auth
+         * Token. Twilio acepta las dos.
+         */
+        readonly apiUsername: string;
+        readonly apiPassword: string;
         readonly verifyServiceSid: string;
       };
   /** DEC-060: Cloudflare Turnstile. `null` = no se exige comprobacion anti-bots. */
@@ -651,21 +680,42 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): ApiConfig {
       publicUrl: env.WEB_PUBLIC_URL,
     },
     sms:
-      env.SMS_PROVIDER === "twilio" &&
-      env.TWILIO_ACCOUNT_SID !== undefined &&
-      env.TWILIO_AUTH_TOKEN !== undefined &&
-      env.TWILIO_VERIFY_SERVICE_SID !== undefined
-        ? {
-            provider: "twilio",
-            accountSid: env.TWILIO_ACCOUNT_SID,
-            authToken: env.TWILIO_AUTH_TOKEN,
-            verifyServiceSid: env.TWILIO_VERIFY_SERVICE_SID,
-          }
-        : env.SMS_PROVIDER === "console"
-          ? { provider: "console" }
-          : { provider: "none" },
+      twilioConfig(env) ??
+      (env.SMS_PROVIDER === "console" ? { provider: "console" } : { provider: "none" }),
     botCheck:
       env.TURNSTILE_SECRET_KEY === undefined ? null : { secretKey: env.TURNSTILE_SECRET_KEY },
     exposeOpenApiOverHttp: env.NODE_ENV !== "production",
+  };
+}
+
+/**
+ * Configuracion de Twilio ya validada, o `null` si el proveedor no es Twilio.
+ *
+ * La API Key gana si esta: es la credencial acotada y revocable. Los
+ * refinamientos del esquema ya garantizan que lo que se lee aqui existe.
+ */
+function twilioConfig(env: Environment): ApiConfig["sms"] | null {
+  if (
+    env.SMS_PROVIDER !== "twilio" ||
+    env.TWILIO_ACCOUNT_SID === undefined ||
+    env.TWILIO_VERIFY_SERVICE_SID === undefined
+  ) {
+    return null;
+  }
+
+  const credential =
+    env.TWILIO_API_KEY_SID !== undefined && env.TWILIO_API_KEY_SECRET !== undefined
+      ? { apiUsername: env.TWILIO_API_KEY_SID, apiPassword: env.TWILIO_API_KEY_SECRET }
+      : env.TWILIO_AUTH_TOKEN !== undefined
+        ? { apiUsername: env.TWILIO_ACCOUNT_SID, apiPassword: env.TWILIO_AUTH_TOKEN }
+        : null;
+
+  if (credential === null) return null;
+
+  return {
+    provider: "twilio",
+    accountSid: env.TWILIO_ACCOUNT_SID,
+    verifyServiceSid: env.TWILIO_VERIFY_SERVICE_SID,
+    ...credential,
   };
 }

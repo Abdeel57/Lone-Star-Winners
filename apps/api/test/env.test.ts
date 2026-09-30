@@ -242,8 +242,34 @@ describe("refuerzos que solo aplican en produccion", () => {
       expect(config.sms).toMatchObject({
         provider: "twilio",
         accountSid: TWILIO.TWILIO_ACCOUNT_SID,
+        apiUsername: TWILIO.TWILIO_ACCOUNT_SID,
+        apiPassword: TWILIO.TWILIO_AUTH_TOKEN,
       });
       expect(config.botCheck).toEqual({ secretKey: TWILIO.TURNSTILE_SECRET_KEY });
+    });
+
+    it("con una API Key en vez del Auth Token, autentica con la API Key", () => {
+      const apiKeySid = "SK00000000000000000000000000000000"; // gitleaks:allow — ficticio
+      const apiKeySecret = "lswfixturesecretnotreal0000000000"; // gitleaks:allow — ficticio
+      const withKey: NodeJS.ProcessEnv = {
+        ...PRODUCTION_BASE,
+        ...TWILIO,
+        TWILIO_API_KEY_SID: apiKeySid,
+        TWILIO_API_KEY_SECRET: apiKeySecret,
+      };
+      delete withKey.TWILIO_AUTH_TOKEN;
+
+      expect(loadConfig(withKey).sms).toMatchObject({
+        provider: "twilio",
+        apiUsername: apiKeySid,
+        apiPassword: apiKeySecret,
+      });
+    });
+
+    it("sin Auth Token ni API Key no arranca", () => {
+      const withoutCredential: NodeJS.ProcessEnv = { ...PRODUCTION_BASE, ...TWILIO };
+      delete withoutCredential.TWILIO_AUTH_TOKEN;
+      expect(() => loadConfig(withoutCredential)).toThrow(/TWILIO_AUTH_TOKEN/u);
     });
 
     it("en produccion Twilio sin Turnstile no arranca: el saldo quedaria expuesto", () => {

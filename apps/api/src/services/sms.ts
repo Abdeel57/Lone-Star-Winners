@@ -76,14 +76,16 @@ async function readJson(response: Response): Promise<Record<string, unknown>> {
 }
 
 export function createTwilioSmsVerifier(options: {
-  readonly accountSid: string;
-  readonly authToken: string;
+  /** API Key SID (`SK...`) o Account SID (`AC...`). */
+  readonly apiUsername: string;
+  /** Secreto de la API Key, o Auth Token. */
+  readonly apiPassword: string;
   readonly verifyServiceSid: string;
   readonly logger: SmsLogger;
   readonly fetchImpl?: typeof fetch;
 }): SmsVerifier {
   const doFetch = options.fetchImpl ?? fetch;
-  const authorization = `Basic ${Buffer.from(`${options.accountSid}:${options.authToken}`).toString("base64")}`;
+  const authorization = `Basic ${Buffer.from(`${options.apiUsername}:${options.apiPassword}`).toString("base64")}`;
   const service = `${TWILIO_VERIFY_BASE}/${encodeURIComponent(options.verifyServiceSid)}`;
   const { logger } = options;
 
@@ -207,8 +209,8 @@ export function createSmsVerifier(config: ApiConfig, logger: SmsLogger): SmsVeri
   switch (config.sms.provider) {
     case "twilio":
       return createTwilioSmsVerifier({
-        accountSid: config.sms.accountSid,
-        authToken: config.sms.authToken,
+        apiUsername: config.sms.apiUsername,
+        apiPassword: config.sms.apiPassword,
         verifyServiceSid: config.sms.verifyServiceSid,
         logger,
       });

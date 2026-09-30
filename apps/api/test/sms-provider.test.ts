@@ -49,8 +49,8 @@ function silentLogger() {
 
 function twilio(fetchImpl: typeof fetch, logger: never = silentLogger().logger) {
   return createTwilioSmsVerifier({
-    accountSid: ACCOUNT_SID,
-    authToken: AUTH_TOKEN,
+    apiUsername: ACCOUNT_SID,
+    apiPassword: AUTH_TOKEN,
     verifyServiceSid: SERVICE_SID,
     logger,
     fetchImpl,
