@@ -50,7 +50,9 @@ export async function waitForNextTotpWindow() {
 export async function loginParticipant(page, email) {
   await page.goto("/es/account/login");
 
-  await page.locator('input[name="email"]').fill(email);
+  // DEC-060: el campo acepta correo o celular y se llama `identifier`. El
+  // acceso del personal (`loginStaff`) sigue siendo solo por correo.
+  await page.locator('input[name="identifier"]').fill(email);
   await page.locator('input[name="password"]').fill(FAKE_PARTICIPANT_PASSWORD);
   await page.getByRole("button", { name: "Iniciar sesión" }).click();
 

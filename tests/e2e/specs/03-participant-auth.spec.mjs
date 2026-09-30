@@ -24,7 +24,8 @@ import { API_BASE_URL, FAKE_PARTICIPANT_PASSWORD, PARTICIPANT_EMAIL } from "../l
 test("la pantalla de acceso se sirve con sus dos campos @mockable", async ({ page }) => {
   await page.goto("/es/account/login");
 
-  await expect(page.locator('input[name="email"]')).toBeVisible();
+  // DEC-060: correo o celular en un solo campo.
+  await expect(page.locator('input[name="identifier"]')).toBeVisible();
   await expect(page.locator('input[name="password"]')).toBeVisible();
   await expect(page.getByRole("button", { name: "Iniciar sesión" })).toBeVisible();
 });
