@@ -3,7 +3,7 @@ import { hasLocale } from "next-intl";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 
 import { AuthPanel } from "@/components/auth-panel";
-import { ForgotPasswordForm } from "@/components/password-recovery-forms";
+import { ForgotPasswordChooser } from "@/components/password-recovery-forms";
 import { Link } from "@/i18n/navigation";
 import { routing } from "@/i18n/routing";
 
@@ -31,14 +31,14 @@ export default async function ForgotPasswordPage({
   return (
     <AuthPanel
       title={t("title")}
-      intro={t("intro")}
       footer={
         <Link href="/account/login" className="underline underline-offset-4">
           {t("backToLogin")}
         </Link>
       }
     >
-      <ForgotPasswordForm locale={locale} />
+      {/* DEC-060: por correo o por celular. La introduccion depende del canal. */}
+      <ForgotPasswordChooser locale={locale} />
     </AuthPanel>
   );
 }

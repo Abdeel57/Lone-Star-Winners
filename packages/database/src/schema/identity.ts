@@ -38,6 +38,9 @@ export const identities = pgTable(
     /** Columna generada por el motor: `lower(btrim(email))`. Solo lectura. */
     emailNormalized: text("email_normalized").generatedAlwaysAs(sql`lower(btrim(email))`),
     emailVerifiedAt: timestamp("email_verified_at", { withTimezone: true, mode: "date" }),
+    /** DEC-060 (0031): celular VERIFICADO con el que se puede iniciar sesion. */
+    phoneE164: text("phone_e164"),
+    phoneVerifiedAt: timestamp("phone_verified_at", { withTimezone: true, mode: "date" }),
     status: identityStatusEnum("status").notNull().default("PENDING_VERIFICATION"),
     anonymizedAt: timestamp("anonymized_at", { withTimezone: true, mode: "date" }),
     createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
@@ -47,6 +50,9 @@ export const identities = pgTable(
     uniqueIndex("identities_email_normalized_key")
       .on(table.emailNormalized)
       .where(sql`email_normalized IS NOT NULL`),
+    uniqueIndex("identities_phone_e164_key")
+      .on(table.phoneE164)
+      .where(sql`phone_e164 IS NOT NULL`),
   ],
 );
 
@@ -59,6 +65,7 @@ export const participants = pgTable(
       .unique()
       .references(() => identities.id, { onDelete: "restrict" }),
     displayName: text("display_name"),
+    /** Dato de CONTACTO, sin verificar. El celular con el que se entra es `identities.phoneE164`. */
     phoneE164: text("phone_e164"),
     /** Sin default: DEC-021 no admite un idioma por defecto. */
     preferredLocale: localeCodeEnum("preferred_locale").notNull(),

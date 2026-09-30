@@ -59,6 +59,7 @@ function world(options: WorldOptions = {}) {
           email: ADDRESS,
           emailVerifiedAt: null,
           status: "ACTIVE",
+          phoneE164: null,
           ...options.identity,
         };
 

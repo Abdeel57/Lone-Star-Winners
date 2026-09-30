@@ -175,7 +175,10 @@ export async function SiteHeader({ locale }: { readonly locale: Locale }) {
               label={t("account.menuLabel")}
               closeLabel={t("nav.closeMenu")}
               signOutLabel={t("auth.signOut")}
-              accountName={state.session.email}
+              // DEC-060: una cuenta creada con celular no tiene correo.
+              accountName={
+                state.session.email === "" ? (state.session.phone ?? "") : state.session.email
+              }
               destinations={accountDestinations}
             />
           ) : (

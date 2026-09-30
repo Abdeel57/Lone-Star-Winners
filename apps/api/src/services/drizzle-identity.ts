@@ -42,14 +42,34 @@ function toIdentity(row: {
   email: string | null;
   emailVerifiedAt: Date | null;
   status: string;
+  phoneE164?: string | null;
 }): IdentityRecord {
   return {
     id: row.id,
     email: row.email,
     emailVerifiedAt: row.emailVerifiedAt,
     status: row.status,
+    phoneE164: row.phoneE164 ?? null,
   };
 }
+
+/**
+ * Proyeccion comun de una identidad (DEC-060: con su celular verificado).
+ *
+ * `identities.phone_e164`, NO `participants.phone_e164`: el segundo es un dato
+ * de contacto sin verificar -el de una ficha postal transcrita, por ejemplo- y
+ * no puede servir para entrar en una cuenta.
+ */
+const identityProjection = {
+  id: identities.id,
+  email: identities.email,
+  emailVerifiedAt: identities.emailVerifiedAt,
+  status: identities.status,
+  phoneE164: identities.phoneE164,
+};
+
+/** Indice unico de `0031_verified_phone.sql`. */
+const PHONE_UNIQUE_INDEX = "identities_phone_e164_key";
 
 function toSession(row: {
   id: string;
@@ -85,6 +105,11 @@ const EMAIL_UNIQUE_INDEX = "identities_email_normalized_key";
  * iniciar sesion en una cuenta que no tiene.
  */
 function isEmailTaken(error: unknown): boolean {
+  return violatedUniqueIndex(error) === EMAIL_UNIQUE_INDEX;
+}
+
+/** Nombre del indice unico que rechazo la fila, o `null` si no fue eso. */
+function violatedUniqueIndex(error: unknown): string | null {
   const seen = new Set<unknown>();
   let current: unknown = error;
 
@@ -93,13 +118,13 @@ function isEmailTaken(error: unknown): boolean {
     const candidate = current as { code?: unknown; constraint?: unknown; cause?: unknown };
 
     if (candidate.code === "23505") {
-      return candidate.constraint === EMAIL_UNIQUE_INDEX;
+      return typeof candidate.constraint === "string" ? candidate.constraint : null;
     }
 
     current = candidate.cause;
   }
 
-  return false;
+  return null;
 }
 
 export function createIdentityRepositories(db: Database): IdentityRepositories {
@@ -149,6 +174,55 @@ export function createIdentityRepositories(db: Database): IdentityRepositories {
         }
       },
 
+      async registerParticipantWithPhone(input): Promise<IdentityRecord | null> {
+        try {
+          return await db.transaction(async (tx) => {
+            const [identity] = await tx
+              .insert(identities)
+              .values({
+                // Sin correo: DEC-060 admite cuentas solo con celular. `ACTIVE`
+                // porque el celular YA esta verificado al llegar aqui, y la
+                // CHECK de 0031 exige correo O celular.
+                email: null,
+                phoneE164: input.phoneE164,
+                phoneVerifiedAt: input.verifiedAt,
+                status: "ACTIVE",
+              })
+              .returning(identityProjection);
+
+            if (identity === undefined) throw new Error("identity_insert_returned_no_row");
+
+            await tx
+              .insert(identityCredentials)
+              .values({ identityId: identity.id, passwordHash: input.passwordHash });
+
+            await tx.insert(participants).values({
+              identityId: identity.id,
+              displayName: input.displayName,
+              preferredLocale: input.preferredLocale,
+              // Tambien como dato de contacto: es el que ve el panel.
+              phoneE164: input.phoneE164,
+            });
+
+            return toIdentity(identity);
+          });
+        } catch (error) {
+          if (violatedUniqueIndex(error) === PHONE_UNIQUE_INDEX) return null;
+          throw error;
+        }
+      },
+
+      async findByVerifiedPhone(phoneE164: string): Promise<IdentityRecord | null> {
+        const rows = await db
+          .select(identityProjection)
+          .from(identities)
+          .where(eq(identities.phoneE164, phoneE164))
+          .limit(1);
+
+        const row = rows[0];
+        return row === undefined ? null : toIdentity(row);
+      },
+
       async findByEmail(email: string): Promise<IdentityRecord | null> {
         // Se compara contra la columna GENERADA `email_normalized`
         // (`lower(btrim(email))`), no contra `email`. Comparar contra la cruda
@@ -157,12 +231,7 @@ export function createIdentityRepositories(db: Database): IdentityRepositories {
         const normalized = email.trim().toLowerCase();
 
         const rows = await db
-          .select({
-            id: identities.id,
-            email: identities.email,
-            emailVerifiedAt: identities.emailVerifiedAt,
-            status: identities.status,
-          })
+          .select(identityProjection)
           .from(identities)
           .where(eq(identities.emailNormalized, normalized))
           .limit(1);
@@ -173,12 +242,7 @@ export function createIdentityRepositories(db: Database): IdentityRepositories {
 
       async findById(identityId: string): Promise<IdentityRecord | null> {
         const rows = await db
-          .select({
-            id: identities.id,
-            email: identities.email,
-            emailVerifiedAt: identities.emailVerifiedAt,
-            status: identities.status,
-          })
+          .select(identityProjection)
           .from(identities)
           .where(eq(identities.id, identityId))
           .limit(1);

@@ -99,6 +99,12 @@ const TRANSLATED_CODES = [
   "VERIFICATION_TOKEN_INVALID",
   "VERIFICATION_TOKEN_EXPIRED",
   "MFA_CODE_INVALID",
+  // Celular verificado por SMS (DEC-060).
+  "SMS_NOT_CONFIGURED",
+  "PHONE_INVALID",
+  "PHONE_ALREADY_REGISTERED",
+  "SMS_CODE_INVALID",
+  "BOT_CHECK_FAILED",
   // Altas del panel (seccion 12) y validacion previa de sus formularios.
   "CATALOG_CONFLICT",
   "LIFECYCLE_REFUSED",
@@ -209,6 +215,16 @@ export function useApiErrorMessage(): (code: string | null) => string {
         return t("VERIFICATION_TOKEN_EXPIRED");
       case "MFA_CODE_INVALID":
         return t("MFA_CODE_INVALID");
+      case "SMS_NOT_CONFIGURED":
+        return t("SMS_NOT_CONFIGURED");
+      case "PHONE_INVALID":
+        return t("PHONE_INVALID");
+      case "PHONE_ALREADY_REGISTERED":
+        return t("PHONE_ALREADY_REGISTERED");
+      case "SMS_CODE_INVALID":
+        return t("SMS_CODE_INVALID");
+      case "BOT_CHECK_FAILED":
+        return t("BOT_CHECK_FAILED");
       case "CATALOG_CONFLICT":
         return t("CATALOG_CONFLICT");
       case "LIFECYCLE_REFUSED":

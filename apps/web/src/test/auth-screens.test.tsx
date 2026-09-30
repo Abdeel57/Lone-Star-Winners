@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
@@ -52,6 +52,8 @@ vi.mock("@/lib/auth-actions", () => {
     verifyEmailAction: () => Promise.resolve(idle),
     resendVerificationAction: () => Promise.resolve(idle),
     verifyMfaAction: () => Promise.resolve(idle),
+    sendPhoneCodeAction: () => Promise.resolve(idle),
+    resetPasswordSmsAction: () => Promise.resolve(idle),
   };
 });
 
@@ -93,10 +95,15 @@ function renderIn(locale: Locale, ui: ReactNode) {
 }
 
 describe("formulario de inicio de sesion", () => {
-  it.each(LOCALES)("pinta correo y contrasena en %s", (locale) => {
+  it.each(LOCALES)("pinta 'correo o celular' y contrasena en %s", (locale) => {
     const { container } = renderIn(locale, <LoginForm locale={locale} returnPath={null} />);
 
-    expect(container.querySelector('input[name="email"]')).not.toBeNull();
+    // DEC-060: un solo campo para los dos identificadores. `type="text"` y no
+    // `email`: el navegador rechazaria un telefono antes de enviarlo.
+    const identifier = container.querySelector('input[name="identifier"]');
+    expect(identifier).not.toBeNull();
+    expect(identifier?.getAttribute("type")).toBe("text");
+    expect(identifier?.getAttribute("autocomplete")).toBe("username");
     expect(container.querySelector('input[name="password"]')).not.toBeNull();
   });
 
@@ -191,6 +198,57 @@ describe("formulario de alta", () => {
         "new-password",
       );
     }
+  });
+});
+
+describe("alta con celular (DEC-060)", () => {
+  it.each(LOCALES)(
+    "el selector cambia a celular y pide el numero, no el correo, en %s",
+    (locale) => {
+      const { container } = renderIn(
+        locale,
+        <RegisterForm locale={locale} consents={[]} returnPath={null} />,
+      );
+
+      // Por defecto, correo: el alta de siempre.
+      expect(container.querySelector('input[name="email"]')).not.toBeNull();
+
+      const phoneButton = screen.getByRole("button", {
+        name: locale === "en" ? "Mobile number" : "Celular",
+      });
+      fireEvent.click(phoneButton);
+
+      expect(phoneButton.getAttribute("aria-pressed")).toBe("true");
+      expect(container.querySelector('input[name="email"]')).toBeNull();
+
+      const phone = container.querySelector('input[name="phone"]');
+      expect(phone).not.toBeNull();
+      expect(phone?.getAttribute("type")).toBe("tel");
+
+      // El primer paso pide el codigo: el proposito viaja en el formulario.
+      const purpose = container.querySelector('input[name="purpose"]');
+      expect(purpose?.getAttribute("value")).toBe("REGISTER");
+
+      // Se avisa de que se enviara un mensaje de texto ANTES de enviarlo.
+      expect(
+        screen.getByText(locale === "en" ? /one text message/iu : /mensaje de texto/iu),
+      ).not.toBeNull();
+
+      // Sin la clave publica de Turnstile no se pinta ningun widget.
+      expect(container.querySelector("iframe")).toBeNull();
+    },
+  );
+
+  it("el primer paso no pide contrasena ni ningun dato legal", () => {
+    const { container } = renderIn(
+      "es",
+      <RegisterForm locale="es" consents={[]} returnPath={null} />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Celular" }));
+
+    expect(container.querySelector('input[type="password"]')).toBeNull();
+    expect(container.querySelector('input[type="checkbox"]')).toBeNull();
+    expect(container.textContent).not.toMatch(/18|edad|residen/iu);
   });
 });
 

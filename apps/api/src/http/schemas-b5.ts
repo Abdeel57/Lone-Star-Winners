@@ -221,6 +221,11 @@ export const participantProfileSchema = z.object({
   email: z.string(),
   display_name: z.string().nullable(),
   email_verified: z.boolean(),
+  /**
+   * DEC-060: celular verificado de la cuenta (E.164) o `null`. En una cuenta
+   * creada con celular, `email` es cadena vacia y este es su contacto.
+   */
+  phone: z.string().nullable(),
   /** Etiqueta BCP-47, o `null` si no ha elegido (DEC-029). */
   language_preference: z.string().nullable(),
   created_at: z.string(),

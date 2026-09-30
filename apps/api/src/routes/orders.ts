@@ -46,6 +46,7 @@ import {
   buildRefundReversalIntent,
   eligibleRefundAmount,
   isCommerceError,
+  paymentTransitionIsValid,
   resolveQualifyingPaymentState,
   applyPaymentState,
   type Order,
@@ -78,6 +79,8 @@ import {
 
 /** Camino de la ruta del webhook. Lo necesita el parser de cuerpo crudo. */
 export const PAYMENT_WEBHOOK_URL = "/api/v1/webhooks/payments/:provider";
+
+const UUID_SHAPE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
 
 const checkoutBodySchema = z.object({
   /**
@@ -183,11 +186,20 @@ export function buildOrdersRoutes(dependencies: AppDependencies): RouteDefinitio
     }
 
     switch (event.kind) {
-      case "PAYMENT_SUCCEEDED":
-        return await applyQualifyingPayment(order, event);
+      case "PAYMENT_SUCCEEDED": {
+        const acted = await applyQualifyingPayment(order, event);
+        await settleCheckoutSession(order.id, "COMPLETED");
+        return acted;
+      }
       case "PAYMENT_FAILED":
-      case "PAYMENT_CANCELLED":
-        return await applyNonQualifyingPayment(order, event);
+      case "PAYMENT_CANCELLED": {
+        const acted = await applyNonQualifyingPayment(order, event);
+        await settleCheckoutSession(
+          order.id,
+          event.kind === "PAYMENT_FAILED" ? "FAILED" : "CANCELLED",
+        );
+        return acted;
+      }
       case "REFUND_SUCCEEDED":
         return await applyRefund(order, event);
       case "DISPUTE_OPENED":
@@ -215,8 +227,28 @@ export function buildOrdersRoutes(dependencies: AppDependencies): RouteDefinitio
     }
   }
 
+  /**
+   * La sesion de pago refleja el desenlace, para que la pantalla de vuelta del
+   * checkout deje de decir "procesando".
+   *
+   * Solo se mueve una sesion PENDING: el primer desenlace es el que cuenta, y un
+   * `expired` tardio no puede pisar un pago ya completado.
+   */
+  async function settleCheckoutSession(
+    orderId: string,
+    status: "COMPLETED" | "FAILED" | "CANCELLED",
+  ): Promise<void> {
+    const session = await orders.findLatestCheckoutSession(orderId);
+    if (session?.status === "PENDING") {
+      await orders.setCheckoutSessionStatus(session.id, status);
+    }
+  }
+
   async function findOrderForEvent(event: ProviderEvent): Promise<Order | null> {
-    if (event.orderReference !== null) {
+    // Solo se busca por referencia si TIENE forma de identificador de pedido.
+    // El proveedor puede traer referencias de otras integraciones de la misma
+    // cuenta, y un valor que no es UUID haria fallar la consulta en el motor.
+    if (event.orderReference !== null && UUID_SHAPE.test(event.orderReference)) {
       const byReference = await orders.findById(event.orderReference);
       if (byReference !== null) {
         return toCommerceOrder(byReference);
@@ -360,14 +392,47 @@ export function buildOrdersRoutes(dependencies: AppDependencies): RouteDefinitio
       });
 
       if (!recorded.created) {
-        // Reintento del proveedor. El efecto ya se aplico; repetirlo chocaria
-        // ademas contra la unicidad del ledger.
+        // Reintento del proveedor, o el eco de un reembolso que ya registro el
+        // panel (`POST /admin/orders/:id/refund`). El efecto sobre las
+        // participaciones ya se aplico; repetirlo chocaria contra la unicidad
+        // del ledger. Lo que SI se hace es dejar el estado del pedido al dia:
+        // el panel registra el abono, pero no mueve el estado de pago.
+        await settleRefundState(order, order.refundedAmountMinor, event);
         return false;
       }
 
-      await domain.reversal.reverseForRefund(intent);
+      await settleRefundState(order, order.refundedAmountMinor + amountMinor, event);
+
+      // Un pedido que nunca califico no tiene participaciones que revertir, y
+      // pedir la reversion lanzaria por falta de origen: el reembolso quedaria
+      // registrado pero el evento en FAILED para siempre.
+      if (order.promotionId !== null && order.qualifiedAt !== null) {
+        await domain.reversal.reverseForRefund(intent);
+      }
       return true;
     });
+  }
+
+  /**
+   * Mueve el estado de pago a PARTIALLY_REFUNDED o REFUNDED segun el acumulado.
+   *
+   * Solo si la maquina de estados lo admite desde donde esta el pedido: un
+   * reembolso sobre un pedido que no llego a cobrarse no tiene estado al que ir,
+   * y forzarlo lanzaria.
+   */
+  async function settleRefundState(
+    order: Order,
+    refundedTotal: bigint,
+    event: ProviderEvent,
+  ): Promise<void> {
+    const next = refundedTotal >= order.totalMinor ? "REFUNDED" : "PARTIALLY_REFUNDED";
+    // Tambien cubre el caso "ya estaba REFUNDED": REFUNDED -> REFUNDED no es una
+    // arista de la maquina, asi que no se reescribe nada.
+    if (!paymentTransitionIsValid(order.paymentState, next)) {
+      return;
+    }
+    const change = applyPaymentState(order, next, event.occurredAt, "PAID");
+    await persistPaymentState(change.order, event, next);
   }
 
   async function applyDispute(order: Order, event: ProviderEvent): Promise<boolean> {
@@ -478,6 +543,12 @@ export function buildOrdersRoutes(dependencies: AppDependencies): RouteDefinitio
           createdAt: domain.clock.now(),
         });
 
+        // La pantalla de vuelta necesita saber QUE pedido consultar, y quien la
+        // compone -`apps/web`- no puede saberlo: el pedido nace aqui. Se anade
+        // `draft` a la URL que recibe el proveedor, sin tocar el resto.
+        const returnTo = new URL(body.return_url);
+        returnTo.searchParams.set("draft", draft.id);
+
         try {
           const session = await paymentProvider.createCheckoutSession({
             orderId: draft.id,
@@ -500,8 +571,8 @@ export function buildOrdersRoutes(dependencies: AppDependencies): RouteDefinitio
               // de su tarjeta (`CLAUDE.md` seccion 1).
               description: line.name["en-US"],
             })),
-            successUrl: body.return_url,
-            cancelUrl: body.return_url,
+            successUrl: returnTo.toString(),
+            cancelUrl: returnTo.toString(),
             metadata: { order_id: draft.id },
           });
 
@@ -514,6 +585,26 @@ export function buildOrdersRoutes(dependencies: AppDependencies): RouteDefinitio
             presentation: session.presentation,
             idempotencyKey: `order:${draft.id}`,
             expiresAt: session.expiresAt,
+          });
+
+          // DRAFT -> PENDING_PAYMENT. Sin este paso, el primer pago confirmado
+          // intentaria DRAFT -> CONFIRMED, que la maquina de estados no admite:
+          // el webhook quedaria en FAILED y el pedido pagado sin participaciones.
+          const pending = applyPaymentState(
+            toCommerceOrder(draft),
+            "REQUIRES_ACTION",
+            domain.clock.now(),
+            "PAID",
+          ).order;
+          await orders.applyPaymentState(draft.id, {
+            status: pending.status,
+            paymentState: pending.paymentState,
+            chargebackState: pending.chargebackState,
+            paidAt: pending.paidAt,
+            qualifiedAt: pending.qualifiedAt,
+            provider: paymentProvider.name,
+            providerPaymentId: pending.providerPaymentId,
+            providerOrderId: session.providerSessionId,
           });
 
           void reply.code(201);

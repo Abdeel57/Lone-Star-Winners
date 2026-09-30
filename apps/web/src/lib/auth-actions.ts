@@ -11,6 +11,8 @@ import {
   requestPasswordReset,
   resendEmailVerification,
   resetPassword,
+  resetPasswordWithSms,
+  startPhoneVerification,
   verifyEmail,
   verifyMfa,
   type ConsentAcceptance,
@@ -95,6 +97,29 @@ function destinationFrom(formData: FormData): string {
   return returnPathFrom(formData.get("next")) ?? "/account";
 }
 
+/**
+ * Correo o celular, a partir de lo que se tecleo en un unico campo (DEC-060).
+ *
+ * La arroba decide, y nada mas: un correo sin arroba no existe y un telefono
+ * con arroba tampoco. La FORMA del celular no se valida aqui; la decide la API
+ * (`PHONE_INVALID`), para que no haya dos reglas de que es un numero valido.
+ */
+function identifierFrom(value: string): { readonly email: string } | { readonly phone: string } {
+  return value.includes("@") ? { email: value } : { phone: value };
+}
+
+/**
+ * Token del widget de Cloudflare Turnstile.
+ *
+ * El widget lo deja en un campo oculto con el nombre que fija Cloudflare
+ * (`cf-turnstile-response`). Ausente si el widget no esta configurado; la API
+ * decide si hacia falta.
+ */
+function botCheckTokenFrom(formData: FormData): string | undefined {
+  const raw = formData.get("cf-turnstile-response");
+  return typeof raw === "string" && raw.length > 0 ? raw : undefined;
+}
+
 /** Alta de participante. */
 export async function registerAction(
   _previous: ActionResult,
@@ -103,8 +128,17 @@ export async function registerAction(
   const locale = localeFrom(formData);
   if (locale === null) return invalid("VALIDATION_FAILED");
 
-  const email = textFrom(formData, "email");
-  if (email === null) return invalid("FIELD_REQUIRED", "email");
+  // DEC-060: el alta es con correo o con celular + codigo SMS.
+  const byPhone = textFrom(formData, "method") === "phone";
+
+  const email = byPhone ? null : textFrom(formData, "email");
+  if (!byPhone && email === null) return invalid("FIELD_REQUIRED", "email");
+
+  const phone = byPhone ? textFrom(formData, "phone") : null;
+  if (byPhone && phone === null) return invalid("FIELD_REQUIRED", "phone");
+
+  const smsCode = byPhone ? textFrom(formData, "sms_code") : null;
+  if (byPhone && smsCode === null) return invalid("FIELD_REQUIRED", "sms_code");
 
   /*
    * `chosen` y `repeated`, y no `password` y `confirmation`.
@@ -137,7 +171,9 @@ export async function registerAction(
   const session = await mutableSession();
   const result = await register(
     {
-      email,
+      ...(phone === null
+        ? { email: email ?? "" }
+        : { phone, sms_code: (smsCode ?? "").replace(/\s+/g, "") }),
       password: chosen,
       display_name: textFrom(formData, "display_name"),
       // El idioma de la cuenta se fija con el que la persona esta usando ahora
@@ -166,7 +202,83 @@ export async function registerAction(
 function registerFieldFor(code: string | null): string | null {
   if (code === "WEAK_PASSWORD") return "password";
   if (code === "EMAIL_ALREADY_REGISTERED") return "email";
+  if (code === "SMS_CODE_INVALID") return "sms_code";
   return null;
+}
+
+/**
+ * Enviar un codigo por SMS (DEC-060). Primer paso del alta con celular y de la
+ * recuperacion de contrasena de una cuenta con celular.
+ *
+ * El celular vuelve al formulario por el estado del cliente, no por esta
+ * accion: el resultado no lleva datos (ver `ActionResult`).
+ */
+export async function sendPhoneCodeAction(
+  _previous: ActionResult,
+  formData: FormData,
+): Promise<ActionResult> {
+  const locale = localeFrom(formData);
+  if (locale === null) return invalid("VALIDATION_FAILED");
+
+  const phone = textFrom(formData, "phone");
+  if (phone === null) return invalid("FIELD_REQUIRED", "phone");
+
+  const purpose =
+    textFrom(formData, "purpose") === "PASSWORD_RESET" ? "PASSWORD_RESET" : "REGISTER";
+  const token = botCheckTokenFrom(formData);
+
+  const result = await startPhoneVerification(
+    { phone, purpose, ...(token === undefined ? {} : { bot_check_token: token }) },
+    locale,
+  );
+
+  if (!result.ok) {
+    const code = result.error.kind === "http" ? result.error.code : null;
+    const field = code === "PHONE_INVALID" || code === "PHONE_ALREADY_REGISTERED" ? "phone" : null;
+    return fromFailure(result.error, field);
+  }
+
+  return SUCCEEDED;
+}
+
+/** Fijar la contrasena con el codigo SMS (DEC-060). */
+export async function resetPasswordSmsAction(
+  _previous: ActionResult,
+  formData: FormData,
+): Promise<ActionResult> {
+  const locale = localeFrom(formData);
+  if (locale === null) return invalid("VALIDATION_FAILED");
+
+  const phone = textFrom(formData, "phone");
+  if (phone === null) return invalid("FIELD_REQUIRED", "phone");
+
+  const typed = textFrom(formData, "sms_code");
+  if (typed === null) return invalid("FIELD_REQUIRED", "sms_code");
+
+  const chosen = secretFrom(formData, "password");
+  if (chosen === null) return invalid("FIELD_REQUIRED", "password");
+
+  const repeated = secretFrom(formData, "password_confirmation");
+  if (repeated === null) return invalid("FIELD_REQUIRED", "password_confirmation");
+
+  if (chosen !== repeated) {
+    return invalid("PASSWORD_CONFIRMATION_MISMATCH", "password_confirmation");
+  }
+
+  const result = await resetPasswordWithSms(
+    { phone, code: typed.replace(/\s+/g, ""), password: chosen },
+    locale,
+  );
+
+  if (!result.ok) {
+    const code = result.error.kind === "http" ? result.error.code : null;
+    return fromFailure(
+      result.error,
+      code === "SMS_CODE_INVALID" ? "sms_code" : code === "WEAK_PASSWORD" ? "password" : null,
+    );
+  }
+
+  return SUCCEEDED;
 }
 
 /** Inicio de sesion. */
@@ -177,14 +289,20 @@ export async function loginAction(
   const locale = localeFrom(formData);
   if (locale === null) return invalid("VALIDATION_FAILED");
 
-  const email = textFrom(formData, "email");
-  if (email === null) return invalid("FIELD_REQUIRED", "email");
+  // DEC-060: un solo campo, "correo o celular". `email` se sigue aceptando
+  // para no romper un formulario servido antes de este cambio.
+  const typedIdentifier = textFrom(formData, "identifier") ?? textFrom(formData, "email");
+  if (typedIdentifier === null) return invalid("FIELD_REQUIRED", "identifier");
 
   const credential = secretFrom(formData, "password");
   if (credential === null) return invalid("FIELD_REQUIRED", "password");
 
   const session = await mutableSession();
-  const result = await login({ email, password: credential }, locale, session);
+  const result = await login(
+    { ...identifierFrom(typedIdentifier), password: credential },
+    locale,
+    session,
+  );
 
   if (!result.ok) return fromFailure(result.error);
 

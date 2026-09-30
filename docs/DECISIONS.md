@@ -2924,3 +2924,95 @@ Affected areas: `apps/api` (`routes/auth.ts`, `services/email.ts`,
 
 Proposed by: sesión del usuario (2026-09-29)
 Agreed by: pendiente — backend-sweepstakes, security-integration, frontend-ux
+
+## DEC-059
+
+Status: Proposed
+
+Date: 2026-09-30
+
+Decision:
+**Procesador de pagos: Stripe Checkout (`hosted_redirect`), con un adaptador
+propio sobre el puerto `PaymentProvider` y sin SDK. Apagado por defecto
+(`PAYMENT_PROVIDER=none`).** Seis puntos:
+
+1. **Adaptador en `packages/commerce/src/stripe-provider.ts`.** Abre sesiones de
+   Checkout, lee PaymentIntents y reembolsa con `fetch` y
+   `application/x-www-form-urlencoded`; verifica la firma `Stripe-Signature`
+   (`t=…,v1=…`, HMAC-SHA256 del cuerpo crudo, tolerancia de reloj, varias `v1`
+   durante una rotación). El dominio no cambia: el puerto ya tenía la forma
+   correcta, que era lo que DEC-046 quería comprobar.
+2. **Eventos.** `checkout.session.completed` (solo `paid`),
+   `async_payment_succeeded/failed`, `checkout.session.expired`,
+   `refund.created/updated` (solo `succeeded`) y `charge.dispute.created/closed`.
+   Cualquier otro se normaliza a `UNKNOWN` y se registra como `IGNORED` con 200,
+   en vez de rechazarse: un 401 haría que Stripe reintentara días y desactivara
+   el endpoint. El reembolso se lee de `refund.*` porque desde la API
+   2022-11-15 el Charge ya no trae la lista de reembolsos.
+3. **Tres fallos del flujo que impedían cobrar, corregidos.** (a) El pedido
+   pasaba de `DRAFT` a `CONFIRMED`, transición que la máquina no admite: ahora
+   pasa a `PENDING_PAYMENT` al abrirse la sesión. (b) La sesión de checkout
+   nunca salía de `PENDING`: ahora se liquida con el desenlace. (c) La URL de
+   vuelta no llevaba el pedido: la API añade `?draft=<id>`. Además, un reembolso
+   de un pedido que nunca calificó ya no lanza, y todo reembolso deja el estado
+   de pago en `PARTIALLY_REFUNDED`/`REFUNDED`.
+4. **Clave de prueba en producción solo declarándolo.** `sk_test_` en producción
+   exige `PAYMENT_TEST_MODE=true`, y ese valor con una clave real no arranca. Hay
+   un único entorno desplegado y el checkout se prueba antes del lanzamiento.
+5. **El número de tarjeta nunca pasa por la plataforma.** Solo identificadores
+   e importes.
+6. **Riesgo abierto, no técnico.** La lista de negocios restringidos de Stripe
+   menciona "sweepstakes and contests". Está en `docs/LEGAL_PENDING.md` para el
+   abogado; esta decisión no lo resuelve.
+
+Affected areas: `packages/commerce` (`stripe-provider.ts`, `index.ts`, test),
+`apps/api` (`routes/orders.ts`, `config/env.ts`, `app.ts`, `server.ts`, test),
+`.env.example`, `packages/security` (registro de variables).
+
+Proposed by: sesión del usuario (2026-09-30)
+Agreed by: pendiente — backend-sweepstakes, security-integration, frontend-ux
+
+## DEC-060
+
+Status: Proposed
+
+Date: 2026-09-30
+
+Decision:
+**Registro, inicio de sesión y recuperación de contraseña con celular
+verificado por SMS (Twilio Verify), protegidos por Cloudflare Turnstile.
+Apagado por defecto (`SMS_PROVIDER=none`).** Siete puntos:
+
+1. **Correo O celular.** Lo eligió el cliente: una cuenta puede no tener correo.
+   La CHECK `identities_email_present_unless_anonymized` se sustituye por
+   `identities_contact_present_unless_anonymized` (correo o celular).
+2. **El celular que identifica va en `identities`** (`phone_e164`,
+   `phone_verified_at`, índice único), no en `participants.phone_e164`, que es un
+   dato de contacto sin verificar —puede venir de una ficha postal— y no puede
+   servir para entrar en una cuenta (migración `0031`).
+3. **Twilio Verify, no SMS propios.** Twilio genera, envía, caduca y comprueba
+   el código; la plataforma nunca lo ve. Twilio aplica además sus límites por
+   número y su detección de fraude.
+4. **Solo números de EE. UU.** La promoción es estadounidense y abrir otros
+   países invita al "SMS pumping".
+5. **Turnstile antes de cada SMS, obligatorio en producción.** Pedir un código
+   es la única acción pública que cuesta dinero; sin la clave secreta de
+   Turnstile, la API no arranca con `SMS_PROVIDER=twilio` en producción. La CSP
+   admite `https://challenges.cloudflare.com` en `script-src` y `frame-src`.
+6. **Sin enumeración donde se puede evitar.** La recuperación por SMS responde
+   igual exista o no la cuenta y envía en segundo plano. El alta revela
+   `PHONE_ALREADY_REGISTERED` —la misma concesión que DEC-057 hace con el
+   correo— y lo hace ANTES de enviar, para no cobrar un código inútil.
+7. **Pendiente legal.** El aviso de que se enviará un SMS y su consentimiento
+   deben revisarse por el abogado (`docs/LEGAL_PENDING.md`).
+
+Affected areas: `apps/api` (`routes/auth.ts`, `services/sms.ts`,
+`services/bot-check.ts`, `services/phone.ts`, `services/identity-ports.ts`,
+`services/drizzle-identity.ts`, `services/participant-lookup.ts`,
+`http/errors.ts`, `http/schemas-b5.ts`, `config/env.ts`, test), `apps/web`
+(registro, inicio de sesión, recuperación, widget de Turnstile, CSP, mensajes
+en-US/es-US, test), `packages/database` (`0031_verified_phone.sql`,
+`schema/identity.ts`), `docs/API_CONTRACT.md` §10, `.env.example`.
+
+Proposed by: sesión del usuario (2026-09-30)
+Agreed by: pendiente — backend-sweepstakes, security-integration, frontend-ux

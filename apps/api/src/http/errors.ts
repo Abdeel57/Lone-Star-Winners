@@ -147,6 +147,22 @@ export const ApiErrors = {
   resetTokenInvalid: (): ApiError => new ApiError({ statusCode: 422, code: "RESET_TOKEN_INVALID" }),
   resetTokenExpired: (): ApiError => new ApiError({ statusCode: 410, code: "RESET_TOKEN_EXPIRED" }),
 
+  /**
+   * Celular verificado por SMS (DEC-060).
+   *
+   * `PHONE_ALREADY_REGISTERED` revela que un numero tiene cuenta, con la misma
+   * concesion declarada que `EMAIL_ALREADY_REGISTERED` (DEC-057): el alta abre
+   * sesion en el acto, asi que "ya existe" y "creada" no pueden responder igual.
+   * Ademas se responde ANTES de enviar el SMS: no se cobra un codigo para una
+   * cuenta que no se va a poder crear.
+   */
+  smsNotConfigured: (): ApiError => new ApiError({ statusCode: 503, code: "SMS_NOT_CONFIGURED" }),
+  phoneInvalid: (): ApiError => new ApiError({ statusCode: 422, code: "PHONE_INVALID" }),
+  phoneAlreadyRegistered: (): ApiError =>
+    new ApiError({ statusCode: 409, code: "PHONE_ALREADY_REGISTERED" }),
+  smsCodeInvalid: (): ApiError => new ApiError({ statusCode: 422, code: "SMS_CODE_INVALID" }),
+  botCheckFailed: (): ApiError => new ApiError({ statusCode: 422, code: "BOT_CHECK_FAILED" }),
+
   notFound: (): ApiError => new ApiError({ statusCode: 404, code: "NOT_FOUND" }),
 
   validationFailed: (issues: readonly unknown[]): ApiError =>

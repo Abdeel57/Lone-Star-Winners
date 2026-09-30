@@ -34,6 +34,12 @@ export interface IdentityRecord {
    */
   readonly emailVerifiedAt: Date | null;
   readonly status: string;
+  /**
+   * DEC-060: celular VERIFICADO del participante, en E.164, o `null`. Un
+   * telefono sin verificar no aparece aqui: no sirve para iniciar sesion ni se
+   * publica como dato de la cuenta.
+   */
+  readonly phoneE164: string | null;
 }
 
 export interface MfaFactorRecord {
@@ -73,6 +79,16 @@ export interface RegisterParticipantInput {
   readonly preferredLocale: "en-US" | "es-US";
 }
 
+export interface RegisterParticipantWithPhoneInput {
+  /** E.164, ya normalizado y ya verificado por SMS. */
+  readonly phoneE164: string;
+  readonly passwordHash: string;
+  readonly displayName: string | null;
+  readonly preferredLocale: "en-US" | "es-US";
+  /** Instante de la verificacion: pasa a `phone_verified_at`. */
+  readonly verifiedAt: Date;
+}
+
 export interface IdentityRepository {
   /**
    * Alta de participante: identidad, credencial y perfil en UNA transaccion.
@@ -88,6 +104,18 @@ export interface IdentityRepository {
    * `findByEmail` y solo el motor puede desempatarlas.
    */
   registerParticipant(input: RegisterParticipantInput): Promise<IdentityRecord | null>;
+
+  /**
+   * DEC-060: alta con celular verificado y SIN correo, en UNA transaccion.
+   * Devuelve `null` si ese celular ya identifica otra cuenta: lo decide el
+   * indice unico `identities_phone_e164_key`, no una lectura previa.
+   */
+  registerParticipantWithPhone(
+    input: RegisterParticipantWithPhoneInput,
+  ): Promise<IdentityRecord | null>;
+
+  /** DEC-060: la cuenta cuyo participante tiene ese celular VERIFICADO. */
+  findByVerifiedPhone(phoneE164: string): Promise<IdentityRecord | null>;
 
   findByEmail(email: string): Promise<IdentityRecord | null>;
   findById(identityId: string): Promise<IdentityRecord | null>;

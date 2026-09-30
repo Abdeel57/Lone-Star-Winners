@@ -715,6 +715,24 @@
     },
     {
       "method": "POST",
+      "path": "/api/v1/auth/password/reset-sms",
+      "operation_id": "resetPasswordWithSms",
+      "authorization": "PUBLIC",
+      "requires_step_up": false,
+      "tags": ["auth"],
+      "summary": "Fijar una contrasena nueva con el codigo SMS."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/phone/start",
+      "operation_id": "startPhoneVerification",
+      "authorization": "PUBLIC",
+      "requires_step_up": false,
+      "tags": ["auth"],
+      "summary": "Enviar un codigo por SMS al celular."
+    },
+    {
+      "method": "POST",
       "path": "/api/v1/auth/register",
       "operation_id": "register",
       "authorization": "PUBLIC",

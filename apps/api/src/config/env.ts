@@ -196,10 +196,21 @@ export const environmentSchema = z
         error: "debe ser una clave de 32 bytes codificada en base64url",
       }),
 
-    // ----- Commerce -----
-    // El procesador de pagos NO esta decidido (CLAUDE.md seccion 7).
-    // `none` es el unico valor que este hito reconoce.
-    PAYMENT_PROVIDER: z.string().min(1),
+    // ----- Commerce (DEC-059) -----
+    // `none` deja montado el proveedor que rechaza todo: el checkout responde
+    // 503 PAYMENT_PROVIDER_NOT_CONFIGURED en vez de simular un cobro. `stripe`
+    // exige su clave y el secreto del webhook (refinamiento de abajo).
+    PAYMENT_PROVIDER: z.enum(["none", "stripe"]),
+    PAYMENT_PROVIDER_API_KEY: z.string().trim().min(1).optional(),
+    PAYMENT_WEBHOOK_SIGNING_SECRET: z.string().trim().min(1).optional(),
+    PAYMENT_WEBHOOK_TOLERANCE_SECONDS: integerFromEnv(30, 3_600).default(300),
+    /**
+     * Declaracion EXPRESA de que en produccion se usa una clave de prueba de
+     * Stripe. Existe porque solo hay un entorno desplegado y el checkout se
+     * prueba antes del lanzamiento con tarjetas de prueba. Sin ella, una clave
+     * `sk_test_` en produccion no arranca.
+     */
+    PAYMENT_TEST_MODE: booleanFromEnv.default(false),
     DEFAULT_CURRENCY: z.string().regex(/^[A-Z]{3}$/u, { error: "must_be_iso4217_uppercase" }),
 
     // ----- Correo transaccional (DEC-058) -----
@@ -217,6 +228,22 @@ export const environmentSchema = z
      * API. Es la del dominio que ve el cliente, no la interna de Railway.
      */
     WEB_PUBLIC_URL: z.url().default("http://localhost:3000"),
+
+    // ----- Celular verificado por SMS (DEC-060) -----
+    //
+    // `none` (defecto) apaga el registro y el inicio de sesion con celular:
+    // las rutas responden 503 SMS_NOT_CONFIGURED. `console` es solo para
+    // desarrollo. `twilio` exige sus tres identificadores.
+    SMS_PROVIDER: z.enum(["none", "console", "twilio"]).default("none"),
+    TWILIO_ACCOUNT_SID: z.string().trim().min(1).optional(),
+    TWILIO_AUTH_TOKEN: z.string().trim().min(1).optional(),
+    TWILIO_VERIFY_SERVICE_SID: z.string().trim().min(1).optional(),
+    /**
+     * Clave SECRETA de Cloudflare Turnstile. Con ella, pedir un codigo por SMS
+     * exige demostrar que quien pide es una persona. La clave PUBLICA del widget
+     * va en `apps/web` (NEXT_PUBLIC_TURNSTILE_SITE_KEY).
+     */
+    TURNSTILE_SECRET_KEY: z.string().trim().min(1).optional(),
   })
   // ----- Refinamientos que solo aplican en produccion -----
   .superRefine((env, ctx) => {
@@ -318,6 +345,102 @@ export const environmentSchema = z
       });
     }
   })
+  // ----- Coherencia del SMS y del anti-bots (DEC-060) -----
+  .superRefine((env, ctx) => {
+    if (env.SMS_PROVIDER === "console" && env.NODE_ENV === "production") {
+      ctx.addIssue({
+        code: "custom",
+        path: ["SMS_PROVIDER"],
+        message:
+          "DEC-060: SMS_PROVIDER=console no envia nada y acepta un codigo fijo. En produccion es `twilio` o `none`.",
+      });
+    }
+
+    if (env.SMS_PROVIDER !== "twilio") {
+      return;
+    }
+
+    const checks: readonly (readonly [keyof typeof env, RegExp, string])[] = [
+      ["TWILIO_ACCOUNT_SID", /^AC[0-9a-f]{32}$/iu, "el Account SID de Twilio (AC + 32 caracteres)"],
+      ["TWILIO_AUTH_TOKEN", /^[0-9a-z]{32,}$/iu, "el Auth Token de Twilio"],
+      [
+        "TWILIO_VERIFY_SERVICE_SID",
+        /^VA[0-9a-f]{32}$/iu,
+        "el Service SID de Twilio Verify (VA + 32 caracteres)",
+      ],
+    ];
+
+    for (const [name, shape, what] of checks) {
+      const value = env[name];
+      if (typeof value !== "string" || !shape.test(value) || looksLikePlaceholder(value)) {
+        ctx.addIssue({
+          code: "custom",
+          path: [name],
+          message: `DEC-060: SMS_PROVIDER=twilio necesita ${what}.`,
+        });
+      }
+    }
+
+    // Cada codigo cuesta dinero. En produccion no se abre el envio de SMS sin
+    // la comprobacion anti-bots que lo protege.
+    if (env.NODE_ENV === "production" && env.TURNSTILE_SECRET_KEY === undefined) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["TURNSTILE_SECRET_KEY"],
+        message:
+          "DEC-060: en produccion el envio de SMS exige la clave secreta de Cloudflare Turnstile. Sin ella, un programa podria pedir miles de codigos a costa del saldo de Twilio.",
+      });
+    }
+  })
+  // ----- Coherencia del proveedor de pagos, en cualquier entorno (DEC-059) -----
+  .superRefine((env, ctx) => {
+    if (env.PAYMENT_PROVIDER !== "stripe") {
+      return;
+    }
+
+    const key = env.PAYMENT_PROVIDER_API_KEY;
+    if (key === undefined || !/^(sk|rk)_(live|test)_/u.test(key) || looksLikePlaceholder(key)) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["PAYMENT_PROVIDER_API_KEY"],
+        message:
+          "DEC-059: PAYMENT_PROVIDER=stripe necesita la clave secreta de Stripe (sk_live_, sk_test_ o una restringida rk_).",
+      });
+    }
+
+    const secret = env.PAYMENT_WEBHOOK_SIGNING_SECRET;
+    if (secret === undefined || !secret.startsWith("whsec_") || looksLikePlaceholder(secret)) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["PAYMENT_WEBHOOK_SIGNING_SECRET"],
+        message:
+          "DEC-059: PAYMENT_PROVIDER=stripe necesita el secreto del webhook (whsec_). Sin el, cualquiera podria fabricar pagos y, con ellos, participaciones.",
+      });
+    }
+
+    // Clave de prueba en produccion: la tienda "cobraria" con tarjetas de
+    // prueba, y con una promocion activa otorgaria participaciones reales por
+    // cobros ficticios. Solo se admite declarandolo con PAYMENT_TEST_MODE=true.
+    const testKey = key !== undefined && /^(sk|rk)_test_/u.test(key);
+    if (env.NODE_ENV === "production" && testKey && !env.PAYMENT_TEST_MODE) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["PAYMENT_PROVIDER_API_KEY"],
+        message:
+          "DEC-059: clave de PRUEBA de Stripe en produccion. Si es a proposito (pruebas antes del lanzamiento), declara PAYMENT_TEST_MODE=true; si no, usa la clave sk_live_.",
+      });
+    }
+
+    // Y al reves: el modo de prueba declarado con una clave real mentiria en
+    // el log sobre lo que se esta cobrando.
+    if (env.PAYMENT_TEST_MODE && key !== undefined && !testKey) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["PAYMENT_TEST_MODE"],
+        message: "DEC-059: PAYMENT_TEST_MODE=true con una clave REAL de Stripe. Quita la variable.",
+      });
+    }
+  })
   // ----- Coherencia del proveedor de correo, en cualquier entorno -----
   .superRefine((env, ctx) => {
     if (env.EMAIL_PROVIDER !== "resend") {
@@ -376,6 +499,19 @@ export interface ApiConfig {
   readonly commerce: {
     readonly paymentProvider: string;
     readonly defaultCurrency: string;
+    /**
+     * DEC-059. Union discriminada: con `stripe` la clave y el secreto existen
+     * por construccion; con `none` no hay nada que olvidar.
+     */
+    readonly payment:
+      | { readonly provider: "none" }
+      | {
+          readonly provider: "stripe";
+          readonly secretKey: string;
+          readonly webhookSecret: string;
+          readonly webhookToleranceSeconds: number;
+          readonly testMode: boolean;
+        };
   };
   /**
    * Correo transaccional (DEC-058). Union discriminada: con `resend` la clave
@@ -397,6 +533,18 @@ export interface ApiConfig {
   readonly web: {
     readonly publicUrl: string;
   };
+  /** DEC-060: verificacion de celular por SMS. `none` apaga el registro con celular. */
+  readonly sms:
+    | { readonly provider: "none" }
+    | { readonly provider: "console" }
+    | {
+        readonly provider: "twilio";
+        readonly accountSid: string;
+        readonly authToken: string;
+        readonly verifyServiceSid: string;
+      };
+  /** DEC-060: Cloudflare Turnstile. `null` = no se exige comprobacion anti-bots. */
+  readonly botCheck: { readonly secretKey: string } | null;
   /**
    * El documento OpenAPI enumera toda la superficie administrativa. En
    * produccion no se sirve por HTTP: se publica como artefacto de build para
@@ -470,6 +618,18 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): ApiConfig {
     commerce: {
       paymentProvider: env.PAYMENT_PROVIDER,
       defaultCurrency: env.DEFAULT_CURRENCY,
+      payment:
+        env.PAYMENT_PROVIDER === "stripe" &&
+        env.PAYMENT_PROVIDER_API_KEY !== undefined &&
+        env.PAYMENT_WEBHOOK_SIGNING_SECRET !== undefined
+          ? {
+              provider: "stripe",
+              secretKey: env.PAYMENT_PROVIDER_API_KEY,
+              webhookSecret: env.PAYMENT_WEBHOOK_SIGNING_SECRET,
+              webhookToleranceSeconds: env.PAYMENT_WEBHOOK_TOLERANCE_SECONDS,
+              testMode: /^(sk|rk)_test_/u.test(env.PAYMENT_PROVIDER_API_KEY),
+            }
+          : { provider: "none" },
     },
     email:
       // La segunda condicion no es redundante para el lector: el refinamiento
@@ -490,6 +650,22 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): ApiConfig {
     web: {
       publicUrl: env.WEB_PUBLIC_URL,
     },
+    sms:
+      env.SMS_PROVIDER === "twilio" &&
+      env.TWILIO_ACCOUNT_SID !== undefined &&
+      env.TWILIO_AUTH_TOKEN !== undefined &&
+      env.TWILIO_VERIFY_SERVICE_SID !== undefined
+        ? {
+            provider: "twilio",
+            accountSid: env.TWILIO_ACCOUNT_SID,
+            authToken: env.TWILIO_AUTH_TOKEN,
+            verifyServiceSid: env.TWILIO_VERIFY_SERVICE_SID,
+          }
+        : env.SMS_PROVIDER === "console"
+          ? { provider: "console" }
+          : { provider: "none" },
+    botCheck:
+      env.TURNSTILE_SECRET_KEY === undefined ? null : { secretKey: env.TURNSTILE_SECRET_KEY },
     exposeOpenApiOverHttp: env.NODE_ENV !== "production",
   };
 }

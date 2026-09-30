@@ -139,6 +139,11 @@
     "VERIFICATION_TOKEN_INVALID": "Este enlace de verificación no es válido. Pide uno nuevo.",
     "VERIFICATION_TOKEN_EXPIRED": "Este enlace de verificación ha caducado. Pide uno nuevo.",
     "MFA_CODE_INVALID": "Ese código no es válido. Los códigos caducan enseguida y cada uno sirve una sola vez.",
+    "SMS_NOT_CONFIGURED": "El registro con celular todavía no está disponible. Usa tu correo por ahora.",
+    "PHONE_INVALID": "Ese número no es válido. Escribe un celular de EE. UU. de 10 dígitos.",
+    "PHONE_ALREADY_REGISTERED": "Ya existe una cuenta con ese celular. Inicia sesión o recupera tu contraseña.",
+    "SMS_CODE_INVALID": "Ese código no es válido o ya caducó. Pide uno nuevo.",
+    "BOT_CHECK_FAILED": "No pudimos confirmar que eres una persona. Completa la verificación e inténtalo de nuevo.",
     "CATALOG_CONFLICT": "Ya existe un producto o una promoción con ese SKU o esa dirección.",
     "LIFECYCLE_REFUSED": "El sistema no permite ese cambio de estado todavía.",
     "PRICE_INVALID": "El precio no tiene un formato válido para esa moneda.",
@@ -600,7 +605,11 @@
       "submit": "Enviar el enlace",
       "sentTitle": "Revisa tu correo",
       "sentBody": "Si esa dirección corresponde a una cuenta, el enlace va de camino. La respuesta es la misma en los dos casos, de modo que nadie puede usar esta página para averiguar quién tiene cuenta.",
-      "backToLogin": "Volver a iniciar sesión"
+      "backToLogin": "Volver a iniciar sesión",
+      "phoneIntro": "Escribe el celular de tu cuenta. Si corresponde a una cuenta, te enviamos un código por mensaje de texto para fijar una contraseña nueva.",
+      "phoneSentTitle": "Revisa tus mensajes de texto",
+      "phoneSentBody": "Si el {phone} corresponde a una cuenta, el código va de camino. La respuesta es la misma en los dos casos. Escribe el código abajo junto con tu contraseña nueva.",
+      "phoneSubmit": "Guardar la contraseña nueva"
     },
     "reset": {
       "title": "Fijar una contraseña nueva",
@@ -630,7 +639,25 @@
       "passwordHint": "Los requisitos se comprueban al enviar el formulario.",
       "passwordTooShort": "Usa al menos {count} caracteres. Una frase larga funciona bien.",
       "passwordConfirmation": "Repite tu contraseña",
-      "requiredHint": "Obligatorio"
+      "requiredHint": "Obligatorio",
+      "identifier": "Correo o celular",
+      "phone": "Celular",
+      "phoneHint": "Solo números de EE. UU., por ejemplo (512) 555-0100.",
+      "smsCode": "Código del mensaje de texto",
+      "smsCodeHint": "Vence en 10 minutos y sirve una sola vez."
+    },
+    "channel": {
+      "legend": "Usar",
+      "email": "Correo",
+      "phone": "Celular"
+    },
+    "phone": {
+      "sendCode": "Enviarme un código",
+      "sentTitle": "Código enviado",
+      "sentBody": "Enviamos un código por mensaje de texto al {phone}. Escríbelo abajo para continuar.",
+      "changeNumber": "Usar otro número",
+      "disclosure": "Te enviaremos un mensaje de texto con un código de verificación. Pueden aplicar tarifas de mensajes y datos.",
+      "botCheckUnavailable": "No se pudo cargar la verificación de seguridad. Recarga la página e inténtalo de nuevo."
     },
     "consent": {
       "heading": "Antes de continuar",

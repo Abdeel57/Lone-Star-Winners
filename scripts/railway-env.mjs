@@ -93,6 +93,10 @@ EMAIL_FROM_NAME=Lone Star Winners
 EMAIL_PROVIDER_API_KEY=REPLACE_con_la_clave_re_de_Resend
 WEB_PUBLIC_URL=https://REPLACE-dominio-del-portal.example`;
 
+// Stripe (DEC-059) y el SMS de Twilio con Turnstile (DEC-060) nacen APAGADOS
+// (`PAYMENT_PROVIDER=none` arriba; `SMS_PROVIDER` ausente = `none`). Se activan
+// anadiendo sus variables en Railway: ver `.env.example`.
+
 // Las tres lineas REPLACE de correo (DEC-058) se rellenan a mano en Railway:
 // la clave la da Resend y los dominios los decide el cliente. Si se quedan
 // asi, la API NO arranca: el esquema de entorno rechaza los marcadores.

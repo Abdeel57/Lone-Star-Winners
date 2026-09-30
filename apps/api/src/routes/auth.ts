@@ -63,6 +63,8 @@ import {
   type SessionCookieConfig,
 } from "../http/session-cookie.js";
 import { maskEmail } from "../services/email.js";
+import { maskPhone, normalizeUsPhone } from "../services/phone.js";
+import type { SmsVerifier } from "../services/sms.js";
 import {
   emailLocaleFrom,
   renderPasswordResetEmail,
@@ -84,46 +86,101 @@ import type { EmailTokenPurpose } from "../services/identity-ports.js";
 const LOCK_THRESHOLD = 5;
 const LOCK_MINUTES = 15;
 
-const loginBodySchema = z.object({
-  email: z.string().min(3).max(320),
-  password: z.string().min(1).max(1_024),
+/**
+ * Celular tal como lo teclea la persona. La forma la decide `normalizeUsPhone`
+ * en el handler, con su propio codigo (PHONE_INVALID); aqui solo se acota.
+ */
+const phoneInputSchema = z.string().trim().min(7).max(32);
+
+/** Codigo SMS de Twilio Verify: 4 a 10 digitos segun la configuracion del servicio. */
+const smsCodeSchema = z
+  .string()
+  .trim()
+  .regex(/^\d{4,10}$/u);
+
+/** Exactamente uno de los dos. Un cuerpo con ambos, o con ninguno, es ambiguo. */
+function exactlyOneOf(body: { email?: unknown; phone?: unknown }): boolean {
+  return (body.email === undefined) !== (body.phone === undefined);
+}
+
+const loginBodySchema = z
+  .object({
+    email: z.string().min(3).max(320).optional(),
+    /** DEC-060: iniciar sesion con el celular verificado. */
+    phone: phoneInputSchema.optional(),
+    password: z.string().min(1).max(1_024),
+  })
+  .refine(exactlyOneOf, { error: "email_xor_phone", path: ["email"] });
+
+const registerBodySchema = z
+  .object({
+    /**
+     * La misma forma y el mismo tope que las CHECK de `identities`
+     * (`identities_email_shape`, `identities_email_length`). Se repiten aqui
+     * porque un correo que solo rechazara el motor saldria como 500, y a quien se
+     * equivoca tecleando le corresponde un 422.
+     *
+     * DEC-060: opcional, porque el alta puede hacerse con celular. Exactamente
+     * uno de `email` y `phone` (refinamiento de abajo).
+     */
+    email: z
+      .string()
+      .trim()
+      .max(254)
+      .regex(/^[^@\s]+@[^@\s]+\.[^@\s]+$/u)
+      .optional(),
+    /** DEC-060: celular, con el codigo que llego por SMS a ese numero. */
+    phone: phoneInputSchema.optional(),
+    sms_code: smsCodeSchema.optional(),
+    /**
+     * Solo el tope, para acotar el trabajo de Argon2. La politica -longitud
+     * minima- la decide `assertPasswordAcceptable` en el handler, con su propio
+     * codigo de error.
+     */
+    password: z.string().min(1).max(MAXIMUM_PASSWORD_LENGTH),
+    /** Mismos limites que `participants_display_name_length`. */
+    display_name: z.string().trim().min(1).max(120).nullable().optional(),
+    /** Etiqueta BCP-47 completa (DEC-029). Sin default: DEC-021 no admite uno. */
+    language_preference: z.enum(["en-US", "es-US"]),
+    /**
+     * VACIO O NADA, y no es un descuido.
+     *
+     * `GET /config` no publica `required_consents` y no existe tabla donde
+     * guardar una aceptacion: que consentimientos hay que recoger es decision del
+     * abogado del cliente y sigue pendiente. Aceptar aqui una lista y tirarla
+     * seria perder en silencio una aceptacion legal; rechazarla obliga a que el
+     * dia que se publiquen, la persistencia exista antes.
+     */
+    consents: z
+      .array(z.object({ key: z.string().min(1).max(100), version: z.string().min(1).max(100) }))
+      .max(0)
+      .default([]),
+  })
+  .refine(exactlyOneOf, { error: "email_xor_phone", path: ["email"] })
+  .refine((body) => body.phone === undefined || body.sms_code !== undefined, {
+    error: "sms_code_required",
+    path: ["sms_code"],
+  });
+
+/**
+ * DEC-060: pedir un codigo por SMS.
+ *
+ * `purpose` separa los dos usos porque responden distinto: en el alta, un
+ * numero ya registrado es 409 ANTES de enviar (no se cobra un codigo inutil);
+ * en la recuperacion, la respuesta es la misma exista o no la cuenta.
+ */
+const phoneStartBodySchema = z.object({
+  phone: phoneInputSchema,
+  purpose: z.enum(["REGISTER", "PASSWORD_RESET"]),
+  /** Token del widget de Cloudflare Turnstile. Obligatorio si esta configurado. */
+  bot_check_token: z.string().min(1).max(2048).optional(),
 });
 
-const registerBodySchema = z.object({
-  /**
-   * La misma forma y el mismo tope que las CHECK de `identities`
-   * (`identities_email_shape`, `identities_email_length`). Se repiten aqui
-   * porque un correo que solo rechazara el motor saldria como 500, y a quien se
-   * equivoca tecleando le corresponde un 422.
-   */
-  email: z
-    .string()
-    .trim()
-    .max(254)
-    .regex(/^[^@\s]+@[^@\s]+\.[^@\s]+$/u),
-  /**
-   * Solo el tope, para acotar el trabajo de Argon2. La politica -longitud
-   * minima- la decide `assertPasswordAcceptable` en el handler, con su propio
-   * codigo de error.
-   */
+const resetPasswordSmsBodySchema = z.object({
+  phone: phoneInputSchema,
+  code: smsCodeSchema,
+  /** Solo el tope; la politica la decide `assertPasswordAcceptable`. */
   password: z.string().min(1).max(MAXIMUM_PASSWORD_LENGTH),
-  /** Mismos limites que `participants_display_name_length`. */
-  display_name: z.string().trim().min(1).max(120).nullable().optional(),
-  /** Etiqueta BCP-47 completa (DEC-029). Sin default: DEC-021 no admite uno. */
-  language_preference: z.enum(["en-US", "es-US"]),
-  /**
-   * VACIO O NADA, y no es un descuido.
-   *
-   * `GET /config` no publica `required_consents` y no existe tabla donde
-   * guardar una aceptacion: que consentimientos hay que recoger es decision del
-   * abogado del cliente y sigue pendiente. Aceptar aqui una lista y tirarla
-   * seria perder en silencio una aceptacion legal; rechazarla obliga a que el
-   * dia que se publiquen, la persistencia exista antes.
-   */
-  consents: z
-    .array(z.object({ key: z.string().min(1).max(100), version: z.string().min(1).max(100) }))
-    .max(0)
-    .default([]),
 });
 
 const mfaBodySchema = z.object({
@@ -181,8 +238,14 @@ const sessionResponseSchema = z.object({
   /** `MFA_PENDING` para personal que aun no ha completado el segundo factor. */
   state: z.enum(["ANONYMOUS", "ACTIVE", "MFA_PENDING"]),
   scope: z.enum(["PARTICIPANT", "STAFF"]).nullable(),
+  /** `null` en una cuenta creada solo con celular (DEC-060). */
   email: z.string().nullable(),
   email_verified: z.boolean(),
+  /**
+   * DEC-060: celular VERIFICADO de la cuenta, en E.164, o `null`. Es un dato
+   * de quien pregunta sobre si mismo; nunca el de otra persona.
+   */
+  phone: z.string().nullable(),
   roles: z.array(z.string()),
   /**
    * Capacidades EFECTIVAS de la sesion, resueltas por el servidor con el mismo
@@ -222,12 +285,45 @@ const ANONYMOUS: SessionResponse = {
   scope: null,
   email: null,
   email_verified: false,
+  phone: null,
   roles: [],
   capabilities: [],
 };
 
 export function buildAuthRoutes(dependencies: AppDependencies): RouteDefinition[] {
-  const { identity, config, email } = dependencies;
+  const { identity, config, email, sms, botCheck } = dependencies;
+
+  /** DEC-060: el verificador de SMS, o 503 si el registro con celular esta apagado. */
+  function requireSms(): SmsVerifier {
+    // `?? null`: el contrato se genera con dependencias vacias, y ahi `sms`
+    // llega `undefined`. Para esta ruta es lo mismo que no tener proveedor.
+    const verifier = sms ?? null;
+    if (verifier === null) throw ApiErrors.smsNotConfigured();
+    return verifier;
+  }
+
+  /** DEC-060: E.164 de EE. UU., o 422 PHONE_INVALID. */
+  function requirePhone(input: string): string {
+    const normalized = normalizeUsPhone(input);
+    if (normalized === null) throw ApiErrors.phoneInvalid();
+    return normalized;
+  }
+
+  /** La politica de contrasena, traducida a su codigo de error. */
+  function assertPassword(password: string): void {
+    try {
+      assertPasswordAcceptable(password);
+    } catch (error) {
+      if (error instanceof PasswordPolicyError) {
+        throw ApiErrors.weakPassword({
+          reason: error.reason,
+          minimum_length: MINIMUM_PASSWORD_LENGTH,
+          maximum_length: MAXIMUM_PASSWORD_LENGTH,
+        });
+      }
+      throw error;
+    }
+  }
 
   const cookieConfig: SessionCookieConfig = {
     name: config.session.cookieName,
@@ -369,7 +465,7 @@ export function buildAuthRoutes(dependencies: AppDependencies): RouteDefinition[
     task: () => Promise<unknown>,
   ): void {
     void task().catch((error: unknown) => {
-      request.log.error({ event, err: error }, "envio de correo fallido");
+      request.log.error({ event, err: error }, "envio en segundo plano fallido");
     });
   }
 
@@ -399,17 +495,18 @@ export function buildAuthRoutes(dependencies: AppDependencies): RouteDefinition[
         const body = request.body as z.infer<typeof registerBodySchema>;
         const now = new Date();
 
-        try {
-          assertPasswordAcceptable(body.password);
-        } catch (error) {
-          if (error instanceof PasswordPolicyError) {
-            throw ApiErrors.weakPassword({
-              reason: error.reason,
-              minimum_length: MINIMUM_PASSWORD_LENGTH,
-              maximum_length: MAXIMUM_PASSWORD_LENGTH,
-            });
-          }
-          throw error;
+        assertPassword(body.password);
+
+        // DEC-060: alta con celular. El codigo se comprueba ANTES de Argon2 y
+        // de tocar la base de datos: sin un codigo valido para ese numero no
+        // hay cuenta que crear, y un codigo inventado no cuesta un hash.
+        let verifiedPhone: string | null = null;
+        if (body.phone !== undefined) {
+          const verifier = requireSms();
+          const phone = requirePhone(body.phone);
+          const approved = await verifier.check(phone, body.sms_code ?? "");
+          if (!approved) throw ApiErrors.smsCodeInvalid();
+          verifiedPhone = phone;
         }
 
         // Se hashea ANTES de saber si el correo esta libre. El 409 de abajo ya
@@ -418,15 +515,27 @@ export function buildAuthRoutes(dependencies: AppDependencies): RouteDefinition[
         // milisegundos de Argon2 con una conexion del pool cogida.
         const passwordHash = await hashPassword(body.password);
 
-        const created = await identity.identities.registerParticipant({
-          email: body.email,
-          passwordHash,
-          displayName: body.display_name ?? null,
-          preferredLocale: body.language_preference,
-        });
+        const created =
+          verifiedPhone === null
+            ? await identity.identities.registerParticipant({
+                // El refinamiento del cuerpo garantiza correo si no hay celular.
+                email: body.email ?? "",
+                passwordHash,
+                displayName: body.display_name ?? null,
+                preferredLocale: body.language_preference,
+              })
+            : await identity.identities.registerParticipantWithPhone({
+                phoneE164: verifiedPhone,
+                passwordHash,
+                displayName: body.display_name ?? null,
+                preferredLocale: body.language_preference,
+                verifiedAt: now,
+              });
 
         if (created === null) {
-          throw ApiErrors.emailAlreadyRegistered();
+          throw verifiedPhone === null
+            ? ApiErrors.emailAlreadyRegistered()
+            : ApiErrors.phoneAlreadyRegistered();
         }
 
         // Siempre `PARTICIPANT`, sin pasar por `audienceForRoles`: una
@@ -458,6 +567,7 @@ export function buildAuthRoutes(dependencies: AppDependencies): RouteDefinition[
           scope: "PARTICIPANT" as const,
           email: created.email,
           email_verified: created.emailVerifiedAt !== null,
+          phone: created.phoneE164 ?? null,
           roles: [],
           capabilities: publishedCapabilities("ACTIVE", "PARTICIPANT", []),
         } satisfies SessionResponse;
@@ -490,7 +600,16 @@ export function buildAuthRoutes(dependencies: AppDependencies): RouteDefinition[
         const body = request.body as z.infer<typeof loginBodySchema>;
         const now = new Date();
 
-        const found = await identity.identities.findByEmail(body.email);
+        // DEC-060: por correo o por celular VERIFICADO. Un celular con forma
+        // imposible se trata como cuenta inexistente: mismo 401 y mismo trabajo,
+        // para que la forma del numero no sea otra pista.
+        const phone = body.phone === undefined ? null : normalizeUsPhone(body.phone);
+        const found =
+          body.phone === undefined
+            ? await identity.identities.findByEmail(body.email ?? "")
+            : phone === null
+              ? null
+              : await identity.identities.findByVerifiedPhone(phone);
         const credential =
           found === null ? null : await identity.identities.findCredential(found.id);
 
@@ -572,6 +691,7 @@ export function buildAuthRoutes(dependencies: AppDependencies): RouteDefinition[
           scope: audience,
           email: found.email,
           email_verified: found.emailVerifiedAt !== null,
+          phone: found.phoneE164 ?? null,
           roles: [...roles],
           capabilities: publishedCapabilities(state, audience, roles),
         } satisfies SessionResponse;
@@ -671,6 +791,7 @@ export function buildAuthRoutes(dependencies: AppDependencies): RouteDefinition[
           scope: session.scope,
           email: record?.email ?? null,
           email_verified: record?.emailVerifiedAt != null,
+          phone: record?.phoneE164 ?? null,
           roles: [...roles],
           capabilities: publishedCapabilities("ACTIVE", session.scope, roles as readonly RoleId[]),
         } satisfies SessionResponse;
@@ -742,6 +863,7 @@ export function buildAuthRoutes(dependencies: AppDependencies): RouteDefinition[
           scope: session.scope,
           email: record?.email ?? null,
           email_verified: record?.emailVerifiedAt != null,
+          phone: record?.phoneE164 ?? null,
           roles: [...roles],
           capabilities: publishedCapabilities(published, session.scope, roles as readonly RoleId[]),
         } satisfies SessionResponse;
@@ -1053,6 +1175,139 @@ export function buildAuthRoutes(dependencies: AppDependencies): RouteDefinition[
         // Si alguien entro con la contrasena vieja, esa sesion muere aqui. Es
         // la razon mas comun para restablecer una contrasena.
         await identity.sessions.revokeAllForIdentity(result.identityId, "password_reset", now);
+
+        return ACKNOWLEDGED;
+      },
+    },
+
+    // -----------------------------------------------------------------------
+    // DEC-060: celular verificado por SMS (Twilio Verify).
+    // -----------------------------------------------------------------------
+
+    {
+      method: "POST",
+      url: "/api/v1/auth/phone/start",
+      operationId: "startPhoneVerification",
+      summary: "Enviar un codigo por SMS al celular.",
+      description:
+        "`REGISTER`: responde 409 PHONE_ALREADY_REGISTERED si el numero ya tiene cuenta, ANTES de enviar. `PASSWORD_RESET`: responde siempre 200 y solo envia si el numero es el celular verificado de una cuenta ACTIVE; el envio va en segundo plano para que el tiempo de respuesta no lo delate. Solo numeros de EE. UU. Si hay comprobacion anti-bots configurada, `bot_check_token` es obligatorio.",
+      tags: ["auth"],
+      authorization: {
+        kind: "PUBLIC",
+        justification:
+          "Se usa sin cuenta (alta) o sin poder entrar (recuperacion). Cada envio cuesta dinero: lo protegen la comprobacion anti-bots de Cloudflare Turnstile, los limites por numero y la deteccion de fraude de Twilio Verify, y la restriccion a numeros de EE. UU.",
+      },
+      schema: {
+        body: phoneStartBodySchema,
+        response: {
+          200: acknowledgedResponseSchema,
+          409: errorEnvelopeSchema,
+          422: errorEnvelopeSchema,
+          429: errorEnvelopeSchema,
+          503: errorEnvelopeSchema,
+        },
+      },
+      handler: async (request) => {
+        const body = request.body as z.infer<typeof phoneStartBodySchema>;
+        const verifier = requireSms();
+        const phone = requirePhone(body.phone);
+        const locale = emailLocaleFrom(request.headers["accept-language"]);
+
+        const checker = botCheck ?? null;
+        if (checker !== null) {
+          // Sin IP: la que ve la API es la del servidor de `apps/web` (DEC-057),
+          // y mandarle a Cloudflare una IP que no es la del visitante empeora
+          // la comprobacion en vez de reforzarla.
+          const human =
+            body.bot_check_token !== undefined &&
+            (await checker.verify(body.bot_check_token, null));
+          if (!human) throw ApiErrors.botCheckFailed();
+        }
+
+        if (body.purpose === "PASSWORD_RESET") {
+          inBackground(request, "sms.password_reset.failed", async () => {
+            const found = await identity.identities.findByVerifiedPhone(phone);
+            if (found?.status !== "ACTIVE") {
+              request.log.info(
+                {
+                  event: "sms.password_reset.skipped",
+                  reason: found === null ? "no_account" : "account_not_active",
+                  to: maskPhone(phone),
+                },
+                "recuperacion por SMS sin envio",
+              );
+              return;
+            }
+            await verifier.start(phone, locale);
+          });
+          return ACKNOWLEDGED;
+        }
+
+        // REGISTER. Se comprueba antes de enviar: un codigo para un numero que
+        // ya tiene cuenta se cobraria y no serviria para nada.
+        if ((await identity.identities.findByVerifiedPhone(phone)) !== null) {
+          throw ApiErrors.phoneAlreadyRegistered();
+        }
+
+        let outcome;
+        try {
+          outcome = await verifier.start(phone, locale);
+        } catch {
+          // El detalle ya lo registro el adaptador; aqui solo se traduce.
+          throw ApiErrors.serviceUnavailable();
+        }
+
+        if (outcome === "INVALID_NUMBER") throw ApiErrors.phoneInvalid();
+        // Limite de Twilio para ese numero. El tiempo exacto no lo publica;
+        // diez minutos es su ventana por defecto.
+        if (outcome === "RATE_LIMITED") throw ApiErrors.rateLimited(600);
+
+        return ACKNOWLEDGED;
+      },
+    },
+
+    {
+      method: "POST",
+      url: "/api/v1/auth/password/reset-sms",
+      operationId: "resetPasswordWithSms",
+      summary: "Fijar una contrasena nueva con el codigo SMS.",
+      description:
+        "Para cuentas que se identifican con celular. Comprueba la politica de contrasena ANTES de gastar el codigo. Al fijarla: levanta el bloqueo por intentos y revoca TODAS las sesiones abiertas. Numero sin cuenta y codigo incorrecto responden igual (422 SMS_CODE_INVALID).",
+      tags: ["auth"],
+      authorization: {
+        kind: "PUBLIC",
+        justification:
+          "Se usa sin poder entrar. El codigo SMS es la prueba de control del celular: lo genera y lo caduca Twilio Verify, y un codigo correcto se consume al comprobarlo. No distingue numero sin cuenta de codigo incorrecto.",
+      },
+      schema: {
+        body: resetPasswordSmsBodySchema,
+        response: {
+          200: acknowledgedResponseSchema,
+          422: errorEnvelopeSchema,
+          503: errorEnvelopeSchema,
+        },
+      },
+      handler: async (request) => {
+        const body = request.body as z.infer<typeof resetPasswordSmsBodySchema>;
+        const now = new Date();
+        const verifier = requireSms();
+        const phone = requirePhone(body.phone);
+
+        assertPassword(body.password);
+
+        const found = await identity.identities.findByVerifiedPhone(phone);
+        // Sin cuenta no hubo codigo que enviar, asi que tampoco hay nada que
+        // comprobar: misma respuesta que un codigo incorrecto.
+        if (found === null) throw ApiErrors.smsCodeInvalid();
+
+        const approved = await verifier.check(phone, body.code);
+        if (!approved) throw ApiErrors.smsCodeInvalid();
+
+        await identity.identities.setPasswordAfterReset(
+          found.id,
+          await hashPassword(body.password),
+        );
+        await identity.sessions.revokeAllForIdentity(found.id, "password_reset", now);
 
         return ACKNOWLEDGED;
       },

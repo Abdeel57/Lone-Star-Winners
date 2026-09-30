@@ -1,25 +1,30 @@
 "use client";
 
-import { Button, Checkbox, FormField, Input } from "@lsw/ui";
+import { Alert, Button, Checkbox, FormField, Input } from "@lsw/ui";
 import { useTranslations } from "next-intl";
-import { useActionState } from "react";
+import { useActionState, useEffect, useState } from "react";
 
 import { useConsentText } from "@/i18n/account-labels";
 import type { Locale } from "@/i18n/locales";
-import { IDLE } from "@/lib/action-result";
+import { IDLE, type ActionResult } from "@/lib/action-result";
 import type { ConsentRequirement } from "@/lib/api";
-import { registerAction } from "@/lib/auth-actions";
+import { registerAction, sendPhoneCodeAction } from "@/lib/auth-actions";
 
 import {
+  ChannelSwitch,
   EmailField,
   FormError,
   LocaleField,
   PasswordField,
+  PhoneField,
+  SmsCodeField,
   useFieldError,
+  type AuthChannel,
 } from "./auth-form-shell";
+import { TurnstileWidget } from "./turnstile-widget";
 
 /**
- * Formulario de alta.
+ * Formulario de alta: con correo o con celular (DEC-060).
  *
  * LO QUE ESTE FORMULARIO NO PREGUNTA
  * ----------------------------------
@@ -40,6 +45,13 @@ import {
  *
  * La VERSION viaja de vuelta con cada consentimiento aceptado. "Acepto las
  * reglas" sin decir que version se acepto es una afirmacion sin fecha.
+ *
+ * CON CELULAR SON DOS PASOS
+ * -------------------------
+ * Primero se pide el codigo -con la comprobacion anti-bots, porque cada SMS se
+ * paga- y despues se escribe junto con la contrasena. El aviso de que se enviara
+ * un mensaje de texto esta pendiente de revision del abogado
+ * (`docs/LEGAL_PENDING.md`, consentimiento del SMS).
  */
 export function RegisterForm({
   locale,
@@ -50,20 +62,153 @@ export function RegisterForm({
   readonly consents: readonly ConsentRequirement[];
   readonly returnPath: string | null;
 }) {
+  const [channel, setChannel] = useState<AuthChannel>("email");
+
+  return (
+    <div className="flex flex-col gap-s5">
+      <ChannelSwitch value={channel} onChange={setChannel} />
+
+      {channel === "email" ? (
+        <EmailRegisterForm locale={locale} consents={consents} returnPath={returnPath} />
+      ) : (
+        <PhoneRegisterFlow locale={locale} consents={consents} returnPath={returnPath} />
+      )}
+    </div>
+  );
+}
+
+function EmailRegisterForm({
+  locale,
+  consents,
+  returnPath,
+}: {
+  readonly locale: Locale;
+  readonly consents: readonly ConsentRequirement[];
+  readonly returnPath: string | null;
+}) {
   const t = useTranslations("auth");
-  const consentText = useConsentText();
   const [state, formAction, pending] = useActionState(registerAction, IDLE);
-  const fieldError = useFieldError(state);
 
   return (
     <form action={formAction} className="flex flex-col gap-s5">
       <LocaleField locale={locale} />
+      <input type="hidden" name="method" value="email" />
       {returnPath === null ? null : <input type="hidden" name="next" value={returnPath} />}
 
       <FormError result={state} />
 
       <EmailField result={state} />
 
+      <ProfileAndPasswordFields result={state} consents={consents} />
+
+      <Button type="submit" variant="accent" size="lg" fullWidth loading={pending}>
+        {t("register.submit")}
+      </Button>
+    </form>
+  );
+}
+
+/**
+ * Alta con celular: pedir el codigo y, despues, crear la cuenta con el.
+ *
+ * El numero vive en el estado del cliente para sobrevivir al cambio de paso
+ * (ver `PhoneField`). El token anti-bots se renueva tras cada envio: cada uno
+ * sirve una sola vez.
+ */
+function PhoneRegisterFlow({
+  locale,
+  consents,
+  returnPath,
+}: {
+  readonly locale: Locale;
+  readonly consents: readonly ConsentRequirement[];
+  readonly returnPath: string | null;
+}) {
+  const t = useTranslations("auth");
+  const [phone, setPhone] = useState("");
+  const [step, setStep] = useState<"phone" | "code">("phone");
+  const [resetSignal, setResetSignal] = useState(0);
+
+  const [sendState, sendAction, sending] = useActionState(sendPhoneCodeAction, IDLE);
+  const [registerState, registerFormAction, registering] = useActionState(registerAction, IDLE);
+
+  useEffect(() => {
+    if (sendState.status === "idle") return;
+    setResetSignal((current) => current + 1);
+    if (sendState.status === "ok") setStep("code");
+  }, [sendState]);
+
+  if (step === "phone") {
+    return (
+      <form action={sendAction} className="flex flex-col gap-s5">
+        <LocaleField locale={locale} />
+        <input type="hidden" name="purpose" value="REGISTER" />
+
+        <FormError result={sendState} />
+
+        <PhoneField result={sendState} value={phone} onChange={setPhone} />
+
+        <p className="text-body-sm text-text-muted">{t("phone.disclosure")}</p>
+
+        <TurnstileWidget locale={locale} resetSignal={resetSignal} />
+
+        <Button type="submit" variant="accent" size="lg" fullWidth loading={sending}>
+          {t("phone.sendCode")}
+        </Button>
+      </form>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-s5">
+      <Alert tone="success" title={t("phone.sentTitle")}>
+        {t("phone.sentBody", { phone })}
+      </Alert>
+
+      <form action={registerFormAction} className="flex flex-col gap-s5">
+        <LocaleField locale={locale} />
+        <input type="hidden" name="method" value="phone" />
+        <input type="hidden" name="phone" value={phone} />
+        {returnPath === null ? null : <input type="hidden" name="next" value={returnPath} />}
+
+        <FormError result={registerState} />
+
+        <SmsCodeField result={registerState} />
+
+        <ProfileAndPasswordFields result={registerState} consents={consents} />
+
+        <Button type="submit" variant="accent" size="lg" fullWidth loading={registering}>
+          {t("register.submit")}
+        </Button>
+      </form>
+
+      <Button
+        type="button"
+        variant="secondary"
+        onClick={() => {
+          setStep("phone");
+        }}
+      >
+        {t("phone.changeNumber")}
+      </Button>
+    </div>
+  );
+}
+
+/** Nombre, contrasena y consentimientos: lo mismo con correo que con celular. */
+function ProfileAndPasswordFields({
+  result,
+  consents,
+}: {
+  readonly result: ActionResult;
+  readonly consents: readonly ConsentRequirement[];
+}) {
+  const t = useTranslations("auth");
+  const consentText = useConsentText();
+  const fieldError = useFieldError(result);
+
+  return (
+    <>
       <FormField
         label={t("fields.displayName")}
         description={t("fields.displayNameHint")}
@@ -73,7 +218,7 @@ export function RegisterForm({
       </FormField>
 
       <PasswordField
-        result={state}
+        result={result}
         name="password"
         label={t("fields.password")}
         purpose="new-password"
@@ -81,7 +226,7 @@ export function RegisterForm({
       />
 
       <PasswordField
-        result={state}
+        result={result}
         name="password_confirmation"
         label={t("fields.passwordConfirmation")}
         purpose="new-password"
@@ -124,10 +269,6 @@ export function RegisterForm({
           ))}
         </fieldset>
       )}
-
-      <Button type="submit" variant="accent" size="lg" fullWidth loading={pending}>
-        {t("register.submit")}
-      </Button>
-    </form>
+    </>
   );
 }

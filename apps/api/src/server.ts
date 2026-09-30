@@ -59,8 +59,14 @@ async function main(): Promise<void> {
       event: "server.started",
       port: config.http.port,
       payment_provider: config.commerce.paymentProvider,
+      // DEC-059. `true` = clave de PRUEBA de Stripe: cobros ficticios.
+      payment_test_mode:
+        config.commerce.payment.provider === "stripe" ? config.commerce.payment.testMode : null,
       // DEC-058. Si aqui sale `console` en produccion, algo salto la validacion.
       email_provider: config.email.provider,
+      // DEC-060. `none` = registro con celular apagado.
+      sms_provider: config.sms.provider,
+      bot_check: config.botCheck === null ? "none" : "turnstile",
       openapi_over_http: config.exposeOpenApiOverHttp,
     },
     "lsw-api escuchando",

@@ -162,6 +162,112 @@ describe("refuerzos que solo aplican en produccion", () => {
     });
   });
 
+  // Despues del bloque de correo a proposito: `.gitleaksignore` fija por
+  // NUMERO DE LINEA los dos falsos positivos de ese bloque, y un bloque nuevo
+  // encima los desplazaria.
+  describe("DEC-059: pagos con Stripe", () => {
+    // Valores con la FORMA de Stripe, ficticios (CLAUDE.md 8).
+    const STRIPE = {
+      PAYMENT_PROVIDER: "stripe",
+      PAYMENT_PROVIDER_API_KEY: "sk_live_lsw_fixture_not_a_real_key", // gitleaks:allow — ficticio
+      PAYMENT_WEBHOOK_SIGNING_SECRET: "whsec_lsw_fixture_not_a_real_secret", // gitleaks:allow — ficticio
+    };
+    const TEST_KEY = "sk_test_lsw_fixture_not_a_real_key"; // gitleaks:allow — ficticio
+
+    it("sin declarar nada sigue en `none`: el checkout responde 503, no cobra", () => {
+      expect(loadConfig(PRODUCTION_BASE).commerce.payment).toEqual({ provider: "none" });
+    });
+
+    it("con clave y secreto publica la configuracion de Stripe", () => {
+      expect(loadConfig({ ...PRODUCTION_BASE, ...STRIPE }).commerce.payment).toEqual({
+        provider: "stripe",
+        secretKey: STRIPE.PAYMENT_PROVIDER_API_KEY,
+        webhookSecret: STRIPE.PAYMENT_WEBHOOK_SIGNING_SECRET,
+        webhookToleranceSeconds: 300,
+        testMode: false,
+      });
+    });
+
+    it("stripe sin secreto del webhook no arranca: cualquiera fabricaria pagos", () => {
+      const withoutSecret: NodeJS.ProcessEnv = { ...PRODUCTION_BASE, ...STRIPE };
+      delete withoutSecret.PAYMENT_WEBHOOK_SIGNING_SECRET;
+      expect(() => loadConfig(withoutSecret)).toThrow(/PAYMENT_WEBHOOK_SIGNING_SECRET/u);
+    });
+
+    it("rechaza una clave publicable (pk_) o sin forma de Stripe", () => {
+      expect(() =>
+        loadConfig({ ...PRODUCTION_BASE, ...STRIPE, PAYMENT_PROVIDER_API_KEY: "pk_live_x" }),
+      ).toThrow(/PAYMENT_PROVIDER_API_KEY/u);
+    });
+
+    it("una clave de PRUEBA en produccion exige declararlo con PAYMENT_TEST_MODE", () => {
+      const test = { ...PRODUCTION_BASE, ...STRIPE, PAYMENT_PROVIDER_API_KEY: TEST_KEY };
+      expect(() => loadConfig(test)).toThrow(/PAYMENT_TEST_MODE/u);
+
+      const declared = loadConfig({ ...test, PAYMENT_TEST_MODE: "true" });
+      expect(declared.commerce.payment).toMatchObject({ provider: "stripe", testMode: true });
+    });
+
+    it("PAYMENT_TEST_MODE con una clave real no arranca: el log mentiria", () => {
+      expect(() =>
+        loadConfig({ ...PRODUCTION_BASE, ...STRIPE, PAYMENT_TEST_MODE: "true" }),
+      ).toThrow(/PAYMENT_TEST_MODE/u);
+    });
+
+    it("un proveedor desconocido no arranca", () => {
+      expect(() => loadConfig({ ...PRODUCTION_BASE, PAYMENT_PROVIDER: "paypal" })).toThrow(
+        EnvironmentValidationError,
+      );
+    });
+  });
+
+  describe("DEC-060: celular por SMS", () => {
+    // Identificadores con la FORMA de Twilio, ficticios (CLAUDE.md 8).
+    const TWILIO = {
+      SMS_PROVIDER: "twilio",
+      TWILIO_ACCOUNT_SID: "AC00000000000000000000000000000000", // gitleaks:allow — ficticio
+      TWILIO_AUTH_TOKEN: "00000000000000000000000000000000", // gitleaks:allow — ficticio
+      TWILIO_VERIFY_SERVICE_SID: "VA00000000000000000000000000000000", // gitleaks:allow — ficticio
+      TURNSTILE_SECRET_KEY: "0x-lsw-fixture-turnstile-secret", // gitleaks:allow — ficticio
+    };
+
+    it("sin declarar nada el registro con celular esta apagado", () => {
+      const config = loadConfig(PRODUCTION_BASE);
+      expect(config.sms).toEqual({ provider: "none" });
+      expect(config.botCheck).toBeNull();
+    });
+
+    it("con los tres identificadores y Turnstile publica la configuracion", () => {
+      const config = loadConfig({ ...PRODUCTION_BASE, ...TWILIO });
+      expect(config.sms).toMatchObject({
+        provider: "twilio",
+        accountSid: TWILIO.TWILIO_ACCOUNT_SID,
+      });
+      expect(config.botCheck).toEqual({ secretKey: TWILIO.TURNSTILE_SECRET_KEY });
+    });
+
+    it("en produccion Twilio sin Turnstile no arranca: el saldo quedaria expuesto", () => {
+      const withoutTurnstile: NodeJS.ProcessEnv = { ...PRODUCTION_BASE, ...TWILIO };
+      delete withoutTurnstile.TURNSTILE_SECRET_KEY;
+      expect(() => loadConfig(withoutTurnstile)).toThrow(/TURNSTILE_SECRET_KEY/u);
+    });
+
+    it("un Service SID sin forma de Verify no arranca", () => {
+      expect(() =>
+        loadConfig({ ...PRODUCTION_BASE, ...TWILIO, TWILIO_VERIFY_SERVICE_SID: "MG123" }),
+      ).toThrow(/TWILIO_VERIFY_SERVICE_SID/u);
+    });
+
+    it("console solo fuera de produccion", () => {
+      expect(() => loadConfig({ ...PRODUCTION_BASE, SMS_PROVIDER: "console" })).toThrow(
+        /SMS_PROVIDER/u,
+      );
+      expect(loadConfig(withEnv({ SMS_PROVIDER: "console" })).sms).toEqual({
+        provider: "console",
+      });
+    });
+  });
+
   it("rechaza una cookie de sesion sin Secure (DEC-006)", () => {
     expect(() => loadConfig({ ...PRODUCTION_BASE, SESSION_COOKIE_SECURE: "false" })).toThrow(
       /Secure/iu,

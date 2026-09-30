@@ -47,6 +47,8 @@ export * from "./errors.js";
 export * from "./payment-provider.js";
 export * from "./unconfigured-provider.js";
 export * from "./mock-provider.js";
+// DEC-059: adaptador real. El puerto no cambia; el dominio no lo importa.
+export * from "./stripe-provider.js";
 export * from "./order.js";
 export * from "./qualification.js";
 export * from "./payment-events.js";

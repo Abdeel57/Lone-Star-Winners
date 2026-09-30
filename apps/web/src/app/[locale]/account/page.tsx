@@ -95,7 +95,12 @@ export default async function AccountOverviewPage({
       <div className="flex flex-col gap-s8">
         <div>
           <p className="lsw-display text-heading-lg text-text">
-            {t("overview.greeting", { name: participant.display_name ?? participant.email })}
+            {t("overview.greeting", {
+              // DEC-060: sin nombre ni correo, el celular de la cuenta.
+              name:
+                participant.display_name ??
+                (participant.email === "" ? (participant.phone ?? "") : participant.email),
+            })}
           </p>
 
           <p className="mt-s2 text-caption text-text-subtle">
@@ -109,7 +114,8 @@ export default async function AccountOverviewPage({
           </p>
         </div>
 
-        {participant.email_verified ? null : (
+        {/* Una cuenta creada con celular (DEC-060) no tiene correo que verificar. */}
+        {participant.email_verified || participant.email === "" ? null : (
           <UnverifiedEmailNotice locale={locale} email={participant.email} />
         )}
 

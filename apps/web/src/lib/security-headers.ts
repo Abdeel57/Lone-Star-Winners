@@ -155,10 +155,20 @@ export function createNonce(): string {
  * - `base-uri 'self'`: impide que un `<base>` inyectado reescriba a donde
  *   apuntan todas las rutas relativas de la pagina.
  */
+/**
+ * Cloudflare Turnstile (DEC-060): el widget anti-bots del alta con celular.
+ *
+ * Carga un script de ese origen y pinta el desafio en un iframe del mismo, asi
+ * que hace falta en `script-src` y en `frame-src` -que sin declarar hereda
+ * `default-src 'self'` y bloquearia el iframe-. Es un unico origen concreto y
+ * publicado por Cloudflare para esto; nada mas de fuera entra en la politica.
+ */
+export const TURNSTILE_ORIGIN = "https://challenges.cloudflare.com";
+
 export function contentSecurityPolicy(options: CspOptions): string {
   const { nonce, isDevelopment, connectOrigins } = options;
 
-  const scriptSrc = ["'self'", `'nonce-${nonce}'`];
+  const scriptSrc = ["'self'", `'nonce-${nonce}'`, TURNSTILE_ORIGIN];
   if (isDevelopment) scriptSrc.push("'unsafe-eval'");
 
   const connectSrc = ["'self'", ...connectOrigins];
@@ -171,6 +181,7 @@ export function contentSecurityPolicy(options: CspOptions): string {
     "img-src 'self' data: blob:",
     "font-src 'self'",
     `connect-src ${connectSrc.join(" ")}`,
+    `frame-src ${TURNSTILE_ORIGIN}`,
     "frame-ancestors 'none'",
     "form-action 'self'",
     "object-src 'none'",

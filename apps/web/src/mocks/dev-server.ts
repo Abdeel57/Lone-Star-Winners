@@ -926,7 +926,10 @@ function resolveIdentity(
     (pathname === API_PATHS.authPasswordForgot ||
       pathname === API_PATHS.authPasswordReset ||
       pathname === API_PATHS.authVerifyEmail ||
-      pathname === API_PATHS.authVerifyEmailResend)
+      pathname === API_PATHS.authVerifyEmailResend ||
+      // DEC-060: pedir el codigo SMS y restablecer con el.
+      pathname === API_PATHS.authPhoneStart ||
+      pathname === API_PATHS.authPasswordResetSms)
   ) {
     return { body: { acknowledged: true } };
   }

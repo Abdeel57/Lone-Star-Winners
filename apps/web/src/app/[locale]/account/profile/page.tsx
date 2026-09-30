@@ -74,7 +74,8 @@ export default async function AccountProfilePage({
       <div className="flex flex-col gap-s8">
         <p className="max-w-[52rem] text-body-sm text-text-muted">{t("intro")}</p>
 
-        {participant.email_verified ? null : (
+        {/* Una cuenta creada con celular (DEC-060) no tiene correo que verificar. */}
+        {participant.email_verified || participant.email === "" ? null : (
           <UnverifiedEmailNotice locale={locale} email={participant.email} />
         )}
 

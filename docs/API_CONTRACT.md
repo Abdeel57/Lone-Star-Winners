@@ -222,6 +222,8 @@ markdown, y es lo que verifica el test de contrato de DEC-015.
 | POST   | /api/v1/auth/verify-email/resend        | `PARTICIPANT_SELF` |
 | POST   | /api/v1/auth/password/forgot            | `PUBLIC`           |
 | POST   | /api/v1/auth/password/reset             | `PUBLIC`           |
+| POST   | /api/v1/auth/phone/start                | `PUBLIC`           |
+| POST   | /api/v1/auth/password/reset-sms         | `PUBLIC`           |
 
 Las tres de infraestructura (`/api/v1/health`, `/api/v1/health/ready`,
 `/api/v1/openapi.json`) están documentadas más abajo y exentas de ese gate por
@@ -1353,9 +1355,10 @@ Status: PROPOSED
 
 ## 10. Autenticación (DEC-006, DEC-045)
 
-**Estado:** `IMPLEMENTED` para las nueve rutas de abajo. Verificación de email
-y restablecimiento de contraseña llegaron con DEC-058 (proveedor: Resend).
-Inscripción de MFA sigue en `TBD`.
+**Estado:** `IMPLEMENTED` para las once rutas de abajo. Verificación de email
+y restablecimiento de contraseña llegaron con DEC-058 (proveedor: Resend);
+registro, inicio de sesión y recuperación con celular, con DEC-060 (Twilio
+Verify + Cloudflare Turnstile). Inscripción de MFA sigue en `TBD`.
 
 ### Un solo sistema, dos políticas
 
@@ -1594,6 +1597,48 @@ contraseña corta no lo quema. Al fijarla: levanta el bloqueo por intentos,
 **invalida los demás enlaces de restablecimiento vivos y revoca todas las
 sesiones abiertas** de la cuenta. El personal sigue necesitando su segundo
 factor para entrar.
+
+### Celular verificado por SMS (DEC-060)
+
+Una cuenta se identifica con **correo o con celular**. El celular solo cuenta
+si se verificó con un código SMS de Twilio Verify; este proceso nunca ve el
+código. Solo números de EE. UU. (+1); se acepta como lo teclea la gente y se
+guarda en E.164. Si `SMS_PROVIDER=none`, las rutas de celular responden `503
+SMS_NOT_CONFIGURED`.
+
+`SessionState` lleva además **`phone`**: el celular verificado de la cuenta en
+E.164, o `null`. En una cuenta creada con celular, `email` es `null`.
+
+Cambios en rutas existentes:
+
+- **`POST /auth/register`** acepta `email` **o** `phone` + `sms_code`
+  (exactamente uno de `email`/`phone`). Con celular: `422 SMS_CODE_INVALID` si el
+  código no vale, `409 PHONE_ALREADY_REGISTERED` si el número ya tiene cuenta.
+  La política de contraseña se comprueba antes de gastar el código.
+- **`POST /auth/login`** acepta `email` **o** `phone`. Un número sin cuenta o
+  con forma imposible responde `401`, igual que un correo inexistente.
+
+### `POST /api/v1/auth/phone/start`
+
+`Authorization: PUBLIC`. Cuerpo: `{ "phone", "purpose": "REGISTER" |
+"PASSWORD_RESET", "bot_check_token"? }`.
+
+- `bot_check_token` es el token del widget de Cloudflare Turnstile. Obligatorio
+  si la API tiene `TURNSTILE_SECRET_KEY` (en producción lo tiene siempre que
+  haya SMS): sin él, `422 BOT_CHECK_FAILED`.
+- `REGISTER`: `409 PHONE_ALREADY_REGISTERED` **antes** de enviar, para no cobrar
+  un código inútil. `422 PHONE_INVALID` si Twilio no acepta el número, `429
+RATE_LIMITED` si se alcanzó su límite para ese número.
+- `PASSWORD_RESET`: **siempre `200`**, y el envío va en segundo plano. Solo se
+  envía si el número es el celular verificado de una cuenta `ACTIVE`.
+
+### `POST /api/v1/auth/password/reset-sms`
+
+`Authorization: PUBLIC`. Cuerpo: `{ "phone", "code", "password" }`.
+
+Respuestas: `200` · `422 SMS_CODE_INVALID` (código incorrecto **o** número sin
+cuenta; no se distinguen) · `422 WEAK_PASSWORD` · `503 SMS_NOT_CONFIGURED`. Al
+fijar la contraseña levanta el bloqueo por intentos y revoca todas las sesiones.
 
 ### La cabecera `Cookie` que reenvía `apps/web`
 

@@ -40,6 +40,8 @@ export interface ParticipantProfileRecord {
   readonly email: string;
   readonly display_name: string | null;
   readonly email_verified: boolean;
+  /** DEC-060: celular VERIFICADO con el que se entra, en E.164, o `null`. */
+  readonly phone: string | null;
   /**
    * Etiqueta BCP-47 (DEC-029). NUNCA es `null` aunque el contrato lo permita:
    * `participants.preferred_locale` es `NOT NULL` y sin default, porque DEC-021
@@ -75,6 +77,7 @@ export function createParticipantLookup(db: Database): ParticipantLookup {
         createdAt: participants.createdAt,
         email: identities.email,
         emailVerifiedAt: identities.emailVerifiedAt,
+        phone: identities.phoneE164,
       })
       .from(participants)
       .innerJoin(identities, eq(identities.id, participants.identityId))
@@ -97,6 +100,9 @@ export function createParticipantLookup(db: Database): ParticipantLookup {
       // sigue siendo el instante, que es lo que permite contestar "estaba
       // verificado ANTES de la compra" si las Official Rules lo exigen.
       email_verified: row.emailVerifiedAt !== null,
+      // DEC-060. En una cuenta creada con celular, `email` llega como cadena
+      // vacia (ver arriba) y ESTE es el dato de contacto de la cuenta.
+      phone: row.phone,
       language_preference: row.preferredLocale,
       created_at: row.createdAt.toISOString(),
     };

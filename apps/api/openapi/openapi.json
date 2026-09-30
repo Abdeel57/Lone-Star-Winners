@@ -24626,10 +24626,14 @@
                     "maxLength": 1024,
                     "minLength": 1,
                     "type": "string"
+                  },
+                  "phone": {
+                    "maxLength": 32,
+                    "minLength": 7,
+                    "type": "string"
                   }
                 },
                 "required": [
-                  "email",
                   "password"
                 ],
                 "type": "object"
@@ -24667,6 +24671,16 @@
                     "email_verified": {
                       "type": "boolean"
                     },
+                    "phone": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
                     "roles": {
                       "items": {
                         "type": "string"
@@ -24702,6 +24716,7 @@
                     "scope",
                     "email",
                     "email_verified",
+                    "phone",
                     "roles",
                     "capabilities"
                   ],
@@ -24930,6 +24945,16 @@
                     "email_verified": {
                       "type": "boolean"
                     },
+                    "phone": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
                     "roles": {
                       "items": {
                         "type": "string"
@@ -24965,6 +24990,7 @@
                     "scope",
                     "email",
                     "email_verified",
+                    "phone",
                     "roles",
                     "capabilities"
                   ],
@@ -25301,6 +25327,378 @@
         }
       }
     },
+    "/api/v1/auth/password/reset-sms": {
+      "post": {
+        "description": "Para cuentas que se identifican con celular. Comprueba la politica de contrasena ANTES de gastar el codigo. Al fijarla: levanta el bloqueo por intentos y revoca TODAS las sesiones abiertas. Numero sin cuenta y codigo incorrecto responden igual (422 SMS_CODE_INVALID).",
+        "operationId": "resetPasswordWithSms",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "code": {
+                    "pattern": "^\\d{4,10}$",
+                    "type": "string"
+                  },
+                  "password": {
+                    "maxLength": 1024,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "phone": {
+                    "maxLength": 32,
+                    "minLength": 7,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "phone",
+                  "code",
+                  "password"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "acknowledged": {
+                      "const": true,
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "acknowledged"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 200."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "additionalProperties": {},
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "request_id"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 422."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "additionalProperties": {},
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "request_id"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 503."
+          }
+        },
+        "summary": "Fijar una contrasena nueva con el codigo SMS.",
+        "tags": [
+          "auth"
+        ],
+        "x-lsw-authorization": {
+          "justification": "Se usa sin poder entrar. El codigo SMS es la prueba de control del celular: lo genera y lo caduca Twilio Verify, y un codigo correcto se consume al comprobarlo. No distingue numero sin cuenta de codigo incorrecto.",
+          "kind": "PUBLIC",
+          "requires_step_up": false
+        }
+      }
+    },
+    "/api/v1/auth/phone/start": {
+      "post": {
+        "description": "`REGISTER`: responde 409 PHONE_ALREADY_REGISTERED si el numero ya tiene cuenta, ANTES de enviar. `PASSWORD_RESET`: responde siempre 200 y solo envia si el numero es el celular verificado de una cuenta ACTIVE; el envio va en segundo plano para que el tiempo de respuesta no lo delate. Solo numeros de EE. UU. Si hay comprobacion anti-bots configurada, `bot_check_token` es obligatorio.",
+        "operationId": "startPhoneVerification",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "bot_check_token": {
+                    "maxLength": 2048,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "phone": {
+                    "maxLength": 32,
+                    "minLength": 7,
+                    "type": "string"
+                  },
+                  "purpose": {
+                    "enum": [
+                      "REGISTER",
+                      "PASSWORD_RESET"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "phone",
+                  "purpose"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "acknowledged": {
+                      "const": true,
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "acknowledged"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 200."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "additionalProperties": {},
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "request_id"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 409."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "additionalProperties": {},
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "request_id"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 422."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "additionalProperties": {},
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "request_id"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 429."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "additionalProperties": {},
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "request_id"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 503."
+          }
+        },
+        "summary": "Enviar un codigo por SMS al celular.",
+        "tags": [
+          "auth"
+        ],
+        "x-lsw-authorization": {
+          "justification": "Se usa sin cuenta (alta) o sin poder entrar (recuperacion). Cada envio cuesta dinero: lo protegen la comprobacion anti-bots de Cloudflare Turnstile, los limites por numero y la deteccion de fraude de Twilio Verify, y la restriccion a numeros de EE. UU.",
+          "kind": "PUBLIC",
+          "requires_step_up": false
+        }
+      }
+    },
     "/api/v1/auth/register": {
       "post": {
         "description": "Crea identidad, credencial Argon2id y perfil de participante en una transaccion, y abre sesion de escaparate en el acto. El correo nace SIN verificar (`email_verified: false`). Nunca crea personal: los roles administrativos no se conceden por aqui.",
@@ -25362,10 +25760,18 @@
                     "maxLength": 1024,
                     "minLength": 1,
                     "type": "string"
+                  },
+                  "phone": {
+                    "maxLength": 32,
+                    "minLength": 7,
+                    "type": "string"
+                  },
+                  "sms_code": {
+                    "pattern": "^\\d{4,10}$",
+                    "type": "string"
                   }
                 },
                 "required": [
-                  "email",
                   "password",
                   "language_preference"
                 ],
@@ -25404,6 +25810,16 @@
                     "email_verified": {
                       "type": "boolean"
                     },
+                    "phone": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
                     "roles": {
                       "items": {
                         "type": "string"
@@ -25439,6 +25855,7 @@
                     "scope",
                     "email",
                     "email_verified",
+                    "phone",
                     "roles",
                     "capabilities"
                   ],
@@ -25571,6 +25988,16 @@
                     "email_verified": {
                       "type": "boolean"
                     },
+                    "phone": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
                     "roles": {
                       "items": {
                         "type": "string"
@@ -25606,6 +26033,7 @@
                     "scope",
                     "email",
                     "email_verified",
+                    "phone",
                     "roles",
                     "capabilities"
                   ],
@@ -29051,6 +29479,16 @@
                           "type": "null"
                         }
                       ]
+                    },
+                    "phone": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
                     }
                   },
                   "required": [
@@ -29058,6 +29496,7 @@
                     "email",
                     "display_name",
                     "email_verified",
+                    "phone",
                     "language_preference",
                     "created_at"
                   ],
@@ -29196,6 +29635,16 @@
                           "type": "null"
                         }
                       ]
+                    },
+                    "phone": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
                     }
                   },
                   "required": [
@@ -29203,6 +29652,7 @@
                     "email",
                     "display_name",
                     "email_verified",
+                    "phone",
                     "language_preference",
                     "created_at"
                   ],

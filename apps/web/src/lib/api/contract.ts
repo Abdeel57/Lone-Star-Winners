@@ -1168,9 +1168,19 @@ export interface SessionState {
   readonly authenticated: boolean;
   readonly state: SessionLifecycle;
   readonly scope: SessionScope;
-  /** Correo de la sesion. Cadena vacia cuando es `ANONYMOUS`. */
+  /**
+   * Correo de la sesion. Cadena vacia cuando es `ANONYMOUS` y en una cuenta
+   * creada solo con celular (DEC-060): la API manda `null` en ese caso y
+   * `fetchSession` lo normaliza, para que ninguna pantalla tenga que tratar dos
+   * formas de "no hay correo".
+   */
   readonly email: string;
   readonly email_verified: boolean;
+  /**
+   * DEC-060: celular VERIFICADO de la cuenta (E.164), o `null`. Opcional para
+   * tolerar una API anterior a ese cambio.
+   */
+  readonly phone?: string | null;
   /** Roles del contrato. Vacio para un participante sin rol de personal. */
   readonly roles: readonly string[];
   /**
@@ -1213,10 +1223,16 @@ export interface LogoutResponse {
  */
 export interface ParticipantProfile {
   readonly id: string;
+  /** Cadena vacia en una cuenta creada solo con celular (DEC-060). */
   readonly email: string;
   /** Nombre para mostrar, o `null` si el participante no ha puesto ninguno. */
   readonly display_name: string | null;
   readonly email_verified: boolean;
+  /**
+   * DEC-060: celular verificado de la cuenta (E.164), o `null`. Opcional para
+   * tolerar una API anterior a ese cambio.
+   */
+  readonly phone?: string | null;
   /**
    * Idioma preferido como ETIQUETA BCP-47 (DEC-029), o `null` si no ha elegido.
    *

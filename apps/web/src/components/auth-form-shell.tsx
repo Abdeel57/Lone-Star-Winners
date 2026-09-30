@@ -1,6 +1,6 @@
 "use client";
 
-import { Alert, FormField, Input } from "@lsw/ui";
+import { Alert, Button, FormField, Input } from "@lsw/ui";
 import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 
@@ -157,4 +157,129 @@ export function PasswordField({
 /** Campo oculto con el locale, que la accion valida antes de usarlo. */
 export function LocaleField({ locale }: { readonly locale: string }) {
   return <input type="hidden" name="locale" value={locale} />;
+}
+
+/**
+ * "Correo o celular" en un solo campo (DEC-060), para iniciar sesion.
+ *
+ * `type="text"` y no `email`: el navegador rechazaria un telefono. Y
+ * `autoComplete="username"`, que es lo que el gestor de contrasenas asocia a la
+ * contrasena guardada sea cual sea el identificador.
+ */
+export function IdentifierField({ result }: { readonly result: ActionResult }) {
+  const t = useTranslations("auth.fields");
+  const fieldError = useFieldError(result);
+
+  return (
+    <FormField
+      label={t("identifier")}
+      required
+      requiredHint={t("requiredHint")}
+      error={fieldError("identifier")}
+    >
+      <Input
+        name="identifier"
+        type="text"
+        autoComplete="username"
+        autoCapitalize="none"
+        spellCheck={false}
+      />
+    </FormField>
+  );
+}
+
+/**
+ * Celular (DEC-060). `type="tel"` abre el teclado numerico en el movil.
+ *
+ * Controlado a proposito, al contrario que los demas campos: el numero tiene
+ * que sobrevivir al paso de "enviar codigo" a "escribir codigo", y ninguna
+ * accion devuelve datos. No es un secreto, asi que tenerlo en el estado del
+ * cliente no expone nada que el propio campo no ensene ya.
+ */
+export function PhoneField({
+  result,
+  value,
+  onChange,
+}: {
+  readonly result: ActionResult;
+  readonly value: string;
+  readonly onChange: (next: string) => void;
+}) {
+  const t = useTranslations("auth.fields");
+  const fieldError = useFieldError(result);
+
+  return (
+    <FormField
+      label={t("phone")}
+      description={t("phoneHint")}
+      required
+      requiredHint={t("requiredHint")}
+      error={fieldError("phone")}
+    >
+      <Input
+        name="phone"
+        type="tel"
+        inputMode="tel"
+        autoComplete="tel"
+        value={value}
+        onChange={(event) => {
+          onChange(event.target.value);
+        }}
+      />
+    </FormField>
+  );
+}
+
+/** Codigo que llego por SMS. `one-time-code` deja que el movil lo sugiera solo. */
+export function SmsCodeField({ result }: { readonly result: ActionResult }) {
+  const t = useTranslations("auth.fields");
+  const fieldError = useFieldError(result);
+
+  return (
+    <FormField
+      label={t("smsCode")}
+      description={t("smsCodeHint")}
+      required
+      requiredHint={t("requiredHint")}
+      error={fieldError("sms_code")}
+    >
+      <Input name="sms_code" type="text" inputMode="numeric" autoComplete="one-time-code" />
+    </FormField>
+  );
+}
+
+export type AuthChannel = "email" | "phone";
+
+/**
+ * Selector "Correo | Celular" (DEC-060).
+ *
+ * Dos botones con `aria-pressed` y no pestanas: no cambian de pagina ni de
+ * panel accesible, cambian que campos pide el formulario de abajo.
+ */
+export function ChannelSwitch({
+  value,
+  onChange,
+}: {
+  readonly value: AuthChannel;
+  readonly onChange: (next: AuthChannel) => void;
+}) {
+  const t = useTranslations("auth.channel");
+
+  return (
+    <div role="group" aria-label={t("legend")} className="grid grid-cols-2 gap-s2">
+      {(["email", "phone"] as const).map((channel) => (
+        <Button
+          key={channel}
+          type="button"
+          variant={value === channel ? "accent" : "secondary"}
+          aria-pressed={value === channel}
+          onClick={() => {
+            onChange(channel);
+          }}
+        >
+          {t(channel)}
+        </Button>
+      ))}
+    </div>
+  );
 }

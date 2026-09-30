@@ -128,6 +128,38 @@ poder acumular entries?
 generan las entries de una compra. Se implementa como feature flag, nunca como
 supuesto. Detectado por `security`.
 
+## SMS consent for phone verification (DEC-060)
+
+TBD
+
+¿Qué texto debe ver la persona antes de recibir el código por SMS, y hace falta
+una casilla de consentimiento expresa además del aviso?
+
+**Hoy, provisional y a revisar:** el formulario muestra el aviso "Te enviaremos
+un mensaje de texto con un código de verificación. Pueden aplicar tarifas de
+mensajes y datos." / "We'll send one text message with a verification code.
+Message and data rates may apply." Solo se envía un SMS por petición de la
+propia persona, para verificar su número; no hay SMS de marketing.
+
+**Por qué importa:** la normativa de mensajes de texto en EE. UU. (TCPA y las
+reglas de los operadores) regula el consentimiento. El texto lo decide el
+abogado, no el código. Mientras no lo apruebe, el registro con celular debe
+seguir apagado (`SMS_PROVIDER=none`) en producción.
+
+## Payment processor acceptance of the promotion model (DEC-059)
+
+TBD
+
+La lista de negocios restringidos de Stripe menciona "sweepstakes and
+contests". ¿Encaja el modelo de Lone Star Winners (venta de mercancía con
+participaciones promocionales y AMOE) en lo que Stripe acepta, o hace falta su
+aprobación por escrito?
+
+**Por qué importa:** si Stripe considera la cuenta fuera de su política, puede
+cerrarla y retener fondos. El adaptador está listo y apagado
+(`PAYMENT_PROVIDER=none`); activarlo en producción con clave real es una
+decisión de negocio y legal, no técnica.
+
 ## Controlling language of the Official Rules
 
 TBD

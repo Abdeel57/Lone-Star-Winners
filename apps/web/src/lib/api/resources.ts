@@ -146,6 +146,10 @@ export const API_PATHS = {
   authVerifyEmail: "/auth/verify-email",
   /** [CONTRATO] Reenvio del enlace de verificacion (DEC-058). */
   authVerifyEmailResend: "/auth/verify-email/resend",
+  /** [CONTRATO] Enviar un codigo por SMS al celular (DEC-060). */
+  authPhoneStart: "/auth/phone/start",
+  /** [CONTRATO] Fijar la contrasena con el codigo SMS (DEC-060). */
+  authPasswordResetSms: "/auth/password/reset-sms",
   /** [PROVISIONAL] Perfil del participante. No esta en el contrato. */
   me: "/me",
 
@@ -639,6 +643,13 @@ export async function fetchSession(
     return ok(ANONYMOUS_SESSION);
   }
 
+  // DEC-060: una cuenta creada con celular llega con `email: null`. Se
+  // normaliza a cadena vacia, la misma forma que ya usa la sesion anonima.
+  if (result.ok) {
+    const email = (result.data as { email: string | null }).email;
+    return ok({ ...result.data, email: email ?? "" });
+  }
+
   return result;
 }
 
@@ -670,7 +681,13 @@ export const ANONYMOUS_SESSION: SessionState = {
  */
 export function register(
   input: {
-    readonly email: string;
+    /**
+     * DEC-060: exactamente uno de `email` y `phone`. Con celular, `sms_code` es
+     * el codigo que llego por mensaje a ese numero.
+     */
+    readonly email?: string;
+    readonly phone?: string;
+    readonly sms_code?: string;
     readonly password: string;
     readonly display_name: string | null;
     readonly language_preference: string;
@@ -699,7 +716,10 @@ export function register(
  * 422 cuerpo invalido.
  */
 export function login(
-  input: { readonly email: string; readonly password: string },
+  /** DEC-060: `email` o `phone`, nunca los dos. */
+  input:
+    | { readonly email: string; readonly password: string }
+    | { readonly phone: string; readonly password: string },
   locale: Locale,
   session: SessionContext,
 ): Promise<ApiResult<SessionState>> {
@@ -707,6 +727,38 @@ export function login(
     locale,
     body: input,
     ...sessionOptions(session),
+  });
+}
+
+/**
+ * Enviar un codigo por SMS (DEC-060).
+ *
+ * `REGISTER` responde 409 `PHONE_ALREADY_REGISTERED` antes de enviar.
+ * `PASSWORD_RESET` responde lo mismo exista o no la cuenta. `bot_check_token`
+ * es el token del widget de Cloudflare Turnstile.
+ */
+export function startPhoneVerification(
+  input: {
+    readonly phone: string;
+    readonly purpose: "REGISTER" | "PASSWORD_RESET";
+    readonly bot_check_token?: string;
+  },
+  locale: Locale,
+): Promise<ApiResult<AcknowledgedResponse>> {
+  return apiRequest<AcknowledgedResponse>("POST", API_PATHS.authPhoneStart, {
+    locale,
+    body: input,
+  });
+}
+
+/** Fijar la contrasena con el codigo SMS (DEC-060). */
+export function resetPasswordWithSms(
+  input: { readonly phone: string; readonly code: string; readonly password: string },
+  locale: Locale,
+): Promise<ApiResult<AcknowledgedResponse>> {
+  return apiRequest<AcknowledgedResponse>("POST", API_PATHS.authPasswordResetSms, {
+    locale,
+    body: input,
   });
 }
 

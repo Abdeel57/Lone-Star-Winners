@@ -9,7 +9,7 @@ import { Link } from "@/i18n/navigation";
 import { IDLE } from "@/lib/action-result";
 import { loginAction } from "@/lib/auth-actions";
 
-import { EmailField, FormError, LocaleField, useFieldError } from "./auth-form-shell";
+import { FormError, IdentifierField, LocaleField, useFieldError } from "./auth-form-shell";
 
 /**
  * Formulario de inicio de sesion.
@@ -65,7 +65,8 @@ export function LoginForm({
         </p>
       )}
 
-      <EmailField result={state} />
+      {/* DEC-060: correo o celular verificado, en el mismo campo. */}
+      <IdentifierField result={state} />
 
       <FormField
         label={t("fields.password")}

@@ -57,9 +57,17 @@ export function ProfileForm({
        * Un campo deshabilitado no se envia, que es exactamente lo que se
        * quiere: la accion no manda el correo y el backend no lo lee.
        */}
-      <FormField label={t("emailLabel")} description={t("emailNote")}>
-        <Input name="email_display" type="email" defaultValue={participant.email} disabled />
-      </FormField>
+      {participant.email === "" ? (
+        // DEC-060: cuenta creada con celular. Se ensena el numero, igual de
+        // fijo: se cambia con su propia verificacion, no desde este formulario.
+        <FormField label={tField("phone")}>
+          <Input name="phone_display" type="tel" defaultValue={participant.phone ?? ""} disabled />
+        </FormField>
+      ) : (
+        <FormField label={t("emailLabel")} description={t("emailNote")}>
+          <Input name="email_display" type="email" defaultValue={participant.email} disabled />
+        </FormField>
+      )}
 
       <FormField
         label={tField("displayName")}

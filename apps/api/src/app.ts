@@ -16,7 +16,11 @@ import cors from "@fastify/cors";
 import helmet from "@fastify/helmet";
 import rateLimit from "@fastify/rate-limit";
 import { createDatabaseHandle, type DatabaseHandle } from "@lsw/database";
-import { UnconfiguredPaymentProvider, type PaymentProvider } from "@lsw/commerce";
+import {
+  StripePaymentProvider,
+  UnconfiguredPaymentProvider,
+  type PaymentProvider,
+} from "@lsw/commerce";
 import { fastify, type FastifyInstance } from "fastify";
 
 import type { ApiConfig } from "./config/env.js";
@@ -57,7 +61,9 @@ import { buildPortalRoutes } from "./routes/portal.js";
 import { installPrincipalResolver } from "./http/principal.js";
 import { createFeatureFlagPort } from "./services/draw-service.js";
 import { createIdentityRepositories } from "./services/drizzle-identity.js";
+import { createBotCheck, type BotCheck } from "./services/bot-check.js";
 import { createEmailSender, type EmailSender } from "./services/email.js";
+import { createSmsVerifier, type SmsVerifier } from "./services/sms.js";
 import { createParticipantLookup } from "./services/participant-lookup.js";
 import { createRepositories } from "./services/drizzle-repositories.js";
 import type { IdentityRepositories } from "./services/identity-ports.js";
@@ -77,6 +83,10 @@ export interface AppDependencies {
   readonly identity: IdentityRepositories;
   /** Correo transaccional (DEC-058): verificacion y recuperacion de contrasena. */
   readonly email: EmailSender;
+  /** DEC-060: codigos por SMS. `null` = registro con celular apagado. */
+  readonly sms: SmsVerifier | null;
+  /** DEC-060: anti-bots antes de enviar un SMS. `null` = no se exige. */
+  readonly botCheck: BotCheck | null;
 }
 
 export function createDependencies(config: ApiConfig): AppDependencies {
@@ -93,15 +103,29 @@ export function createDependencies(config: ApiConfig): AppDependencies {
     applicationName: "lsw-api",
   });
 
+  // Un logger para los adaptadores externos (correo, SMS, anti-bots). El de las
+  // peticiones lo crea `createApp`; estos registran fuera del ciclo de una.
+  const logger = createLogger(config);
+
   return {
     config,
     database,
     repositories: createRepositories(database.db),
     identity: createIdentityRepositories(database.db),
-    // `CLAUDE.md` seccion 7: el procesador de pagos no esta decidido. Hasta que
-    // lo este, el puerto falla ruidosamente en vez de simular exito.
-    paymentProvider: new UnconfiguredPaymentProvider(),
-    email: createEmailSender(config, createLogger(config)),
+    // DEC-059: Stripe si esta configurado. Si no, el puerto falla ruidosamente
+    // en vez de simular exito.
+    paymentProvider:
+      config.commerce.payment.provider === "stripe"
+        ? new StripePaymentProvider({
+            secretKey: config.commerce.payment.secretKey,
+            webhookSecret: config.commerce.payment.webhookSecret,
+            toleranceSeconds: config.commerce.payment.webhookToleranceSeconds,
+            now: () => new Date(),
+          })
+        : new UnconfiguredPaymentProvider(),
+    email: createEmailSender(config, logger),
+    sms: createSmsVerifier(config, logger),
+    botCheck: createBotCheck(config, logger),
   };
 }
 

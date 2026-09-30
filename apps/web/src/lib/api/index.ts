@@ -280,6 +280,8 @@ export {
   requestPasswordReset,
   resendEmailVerification,
   resetPassword,
+  resetPasswordWithSms,
+  startPhoneVerification,
   submitAmoe,
   putAdminRulesDocument,
   transcribeAmoeSubmission,

@@ -139,6 +139,11 @@
     "VERIFICATION_TOKEN_INVALID": "This verification link is not valid. Please ask for a new one.",
     "VERIFICATION_TOKEN_EXPIRED": "This verification link has expired. Please ask for a new one.",
     "MFA_CODE_INVALID": "That code is not valid. Codes expire quickly and each one works only once.",
+    "SMS_NOT_CONFIGURED": "Signing up with a mobile number isn't available yet. Please use your email for now.",
+    "PHONE_INVALID": "That number isn't valid. Enter a 10-digit US mobile number.",
+    "PHONE_ALREADY_REGISTERED": "There's already an account with that mobile number. Sign in or reset your password.",
+    "SMS_CODE_INVALID": "That code isn't valid or has expired. Ask for a new one.",
+    "BOT_CHECK_FAILED": "We couldn't confirm you're a person. Complete the check and try again.",
     "CATALOG_CONFLICT": "A product or promotion with that SKU or address already exists.",
     "LIFECYCLE_REFUSED": "The system does not allow that status change yet.",
     "PRICE_INVALID": "The price is not in a valid format for that currency.",
@@ -600,7 +605,11 @@
       "submit": "Send the link",
       "sentTitle": "Check your email",
       "sentBody": "If that address matches an account, the link is on its way. The message is the same either way, so nobody can use this page to find out who has an account.",
-      "backToLogin": "Back to sign in"
+      "backToLogin": "Back to sign in",
+      "phoneIntro": "Enter the mobile number on your account. If it matches an account, we text you a code to set a new password.",
+      "phoneSentTitle": "Check your text messages",
+      "phoneSentBody": "If {phone} matches an account, a code is on its way. The message is the same either way. Enter the code below with your new password.",
+      "phoneSubmit": "Save the new password"
     },
     "reset": {
       "title": "Set a new password",
@@ -630,7 +639,25 @@
       "passwordHint": "Requirements are checked when you submit.",
       "passwordTooShort": "Use at least {count} characters. A long phrase works well.",
       "passwordConfirmation": "Repeat your password",
-      "requiredHint": "Required"
+      "requiredHint": "Required",
+      "identifier": "Email or mobile number",
+      "phone": "Mobile number",
+      "phoneHint": "US numbers only, for example (512) 555-0100.",
+      "smsCode": "Code from the text message",
+      "smsCodeHint": "It expires in 10 minutes and works only once."
+    },
+    "channel": {
+      "legend": "Use",
+      "email": "Email",
+      "phone": "Mobile number"
+    },
+    "phone": {
+      "sendCode": "Text me a code",
+      "sentTitle": "Code sent",
+      "sentBody": "We texted a code to {phone}. Enter it below to continue.",
+      "changeNumber": "Use a different number",
+      "disclosure": "We'll send one text message with a verification code. Message and data rates may apply.",
+      "botCheckUnavailable": "The security check could not load. Refresh the page and try again."
     },
     "consent": {
       "heading": "Before you continue",

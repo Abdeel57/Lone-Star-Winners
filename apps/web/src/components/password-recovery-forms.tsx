@@ -2,14 +2,165 @@
 
 import { Alert, Button } from "@lsw/ui";
 import { useTranslations } from "next-intl";
-import { useActionState } from "react";
+import { useActionState, useEffect, useState } from "react";
 
 import type { Locale } from "@/i18n/locales";
 import { Link } from "@/i18n/navigation";
 import { IDLE } from "@/lib/action-result";
-import { forgotPasswordAction, resetPasswordAction } from "@/lib/auth-actions";
+import {
+  forgotPasswordAction,
+  resetPasswordAction,
+  resetPasswordSmsAction,
+  sendPhoneCodeAction,
+} from "@/lib/auth-actions";
 
-import { EmailField, FormError, LocaleField, PasswordField } from "./auth-form-shell";
+import {
+  ChannelSwitch,
+  EmailField,
+  FormError,
+  LocaleField,
+  PasswordField,
+  PhoneField,
+  SmsCodeField,
+  type AuthChannel,
+} from "./auth-form-shell";
+import { TurnstileWidget } from "./turnstile-widget";
+
+/**
+ * "He olvidado mi contrasena", por correo o por celular (DEC-060).
+ *
+ * Una cuenta creada con celular no tiene correo al que mandar el enlace, asi
+ * que su recuperacion va por codigo SMS. Cada camino explica lo suyo: el texto
+ * de introduccion lo pinta este componente y no la pagina, porque depende del
+ * canal elegido.
+ */
+export function ForgotPasswordChooser({ locale }: { readonly locale: Locale }) {
+  const t = useTranslations("auth.forgot");
+  const [channel, setChannel] = useState<AuthChannel>("email");
+
+  return (
+    <div className="flex flex-col gap-s5">
+      <ChannelSwitch value={channel} onChange={setChannel} />
+
+      <p className="text-body text-text-muted">
+        {channel === "email" ? t("intro") : t("phoneIntro")}
+      </p>
+
+      {channel === "email" ? (
+        <ForgotPasswordForm locale={locale} />
+      ) : (
+        <ForgotPasswordSmsFlow locale={locale} />
+      )}
+    </div>
+  );
+}
+
+/**
+ * Recuperacion por SMS: pedir el codigo y fijar la contrasena con el.
+ *
+ * El aviso tras pedir el codigo es el MISMO exista o no la cuenta, igual que
+ * con el correo: la API responde lo mismo en los dos casos y esta pantalla no
+ * pinta dos ramas.
+ */
+function ForgotPasswordSmsFlow({ locale }: { readonly locale: Locale }) {
+  const t = useTranslations("auth");
+  const [phone, setPhone] = useState("");
+  const [step, setStep] = useState<"phone" | "code">("phone");
+  const [resetSignal, setResetSignal] = useState(0);
+
+  const [sendState, sendAction, sending] = useActionState(sendPhoneCodeAction, IDLE);
+  const [resetState, resetAction, resetting] = useActionState(resetPasswordSmsAction, IDLE);
+
+  useEffect(() => {
+    if (sendState.status === "idle") return;
+    setResetSignal((current) => current + 1);
+    if (sendState.status === "ok") setStep("code");
+  }, [sendState]);
+
+  if (resetState.status === "ok") {
+    return (
+      <div className="flex flex-col gap-s4">
+        <Alert tone="success" title={t("reset.doneTitle")}>
+          {t("reset.doneBody")}
+        </Alert>
+
+        <Link
+          href="/account/login"
+          className="text-body-sm text-text-muted underline underline-offset-4"
+        >
+          {t("reset.signInLink")}
+        </Link>
+      </div>
+    );
+  }
+
+  if (step === "phone") {
+    return (
+      <form action={sendAction} className="flex flex-col gap-s5">
+        <LocaleField locale={locale} />
+        <input type="hidden" name="purpose" value="PASSWORD_RESET" />
+
+        <FormError result={sendState} />
+
+        <PhoneField result={sendState} value={phone} onChange={setPhone} />
+
+        <p className="text-body-sm text-text-muted">{t("phone.disclosure")}</p>
+
+        <TurnstileWidget locale={locale} resetSignal={resetSignal} />
+
+        <Button type="submit" variant="accent" size="lg" fullWidth loading={sending}>
+          {t("phone.sendCode")}
+        </Button>
+      </form>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-s5">
+      <Alert tone="success" title={t("forgot.phoneSentTitle")}>
+        {t("forgot.phoneSentBody", { phone })}
+      </Alert>
+
+      <form action={resetAction} className="flex flex-col gap-s5">
+        <LocaleField locale={locale} />
+        <input type="hidden" name="phone" value={phone} />
+
+        <FormError result={resetState} />
+
+        <SmsCodeField result={resetState} />
+
+        <PasswordField
+          result={resetState}
+          name="password"
+          label={t("fields.password")}
+          purpose="new-password"
+          description={t("fields.passwordHint")}
+        />
+
+        <PasswordField
+          result={resetState}
+          name="password_confirmation"
+          label={t("fields.passwordConfirmation")}
+          purpose="new-password"
+        />
+
+        <Button type="submit" variant="accent" size="lg" fullWidth loading={resetting}>
+          {t("forgot.phoneSubmit")}
+        </Button>
+      </form>
+
+      <Button
+        type="button"
+        variant="secondary"
+        onClick={() => {
+          setStep("phone");
+        }}
+      >
+        {t("phone.changeNumber")}
+      </Button>
+    </div>
+  );
+}
 
 /**
  * Los dos pasos del restablecimiento de contrasena.

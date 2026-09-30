@@ -48,6 +48,7 @@ export const CONTRACT_GENERATION_CONFIG: ApiConfig = {
   commerce: {
     paymentProvider: "none",
     defaultCurrency: "USD",
+    payment: { provider: "none" },
   },
   email: {
     provider: "console",
@@ -57,5 +58,7 @@ export const CONTRACT_GENERATION_CONFIG: ApiConfig = {
   web: {
     publicUrl: "http://localhost:3000",
   },
+  sms: { provider: "none" },
+  botCheck: null,
   exposeOpenApiOverHttp: true,
 };

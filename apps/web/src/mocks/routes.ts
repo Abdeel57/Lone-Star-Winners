@@ -203,6 +203,9 @@ export const mockRoutes: readonly MockRoute[] = [
   { method: "POST", path: API_PATHS.authPasswordReset, body: { acknowledged: true } },
   { method: "POST", path: API_PATHS.authVerifyEmail, body: { acknowledged: true } },
   { method: "POST", path: API_PATHS.authVerifyEmailResend, body: { acknowledged: true } },
+  // DEC-060: celular por SMS.
+  { method: "POST", path: API_PATHS.authPhoneStart, body: { acknowledged: true } },
+  { method: "POST", path: API_PATHS.authPasswordResetSms, body: { acknowledged: true } },
   { method: "GET", path: API_PATHS.me, body: participant },
   { method: "PATCH", path: API_PATHS.me, body: participant },
 

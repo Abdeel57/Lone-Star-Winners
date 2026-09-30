@@ -362,9 +362,17 @@ const INTEGRATION_VARS: readonly EnvVarSpec[] = Object.freeze([
   v(
     "PAYMENT_PROVIDER",
     "api",
-    "string",
+    "enum",
     ALL_ENVIRONMENTS,
-    "Procesador de pagos. SIN DECIDIR (CLAUDE.md seccion 7): `none` mientras no exista su DEC.",
+    "Procesador de pagos (DEC-059). `none` no cobra; `stripe` exige clave y secreto de webhook.",
+    { allowedValues: ["none", "stripe"] },
+  ),
+  v(
+    "PAYMENT_TEST_MODE",
+    "api",
+    "boolean",
+    NO_ENVIRONMENT,
+    "DEC-059: declara a proposito una clave sk_test_ de Stripe en produccion.",
   ),
   v("PAYMENT_PROVIDER_API_BASE_URL", "api", "url", NO_ENVIRONMENT, "Base de la API del proveedor."),
   v("PAYMENT_PROVIDER_API_KEY", "api", "string", NO_ENVIRONMENT, "Credencial del proveedor.", {
@@ -407,6 +415,42 @@ const INTEGRATION_VARS: readonly EnvVarSpec[] = Object.freeze([
   v("EMAIL_PROVIDER_API_KEY", "api", "string", NO_ENVIRONMENT, "Credencial del proveedor.", {
     secret: true,
   }),
+
+  // ----- Celular por SMS y anti-bots (DEC-060) ----------------------------
+  v(
+    "SMS_PROVIDER",
+    "api",
+    "enum",
+    NO_ENVIRONMENT,
+    "Verificacion de celular. `none` la apaga; `console` solo en desarrollo.",
+    { allowedValues: ["none", "console", "twilio"] },
+  ),
+  v("TWILIO_ACCOUNT_SID", "api", "string", NO_ENVIRONMENT, "Account SID de Twilio (AC...)."),
+  v("TWILIO_AUTH_TOKEN", "api", "string", NO_ENVIRONMENT, "Auth Token de Twilio.", {
+    secret: true,
+  }),
+  v(
+    "TWILIO_VERIFY_SERVICE_SID",
+    "api",
+    "string",
+    NO_ENVIRONMENT,
+    "Service SID de Twilio Verify (VA...).",
+  ),
+  v(
+    "TURNSTILE_SECRET_KEY",
+    "api",
+    "string",
+    NO_ENVIRONMENT,
+    "Clave secreta de Cloudflare Turnstile. Obligatoria en produccion si hay SMS.",
+    { secret: true },
+  ),
+  v(
+    "NEXT_PUBLIC_TURNSTILE_SITE_KEY",
+    "web",
+    "string",
+    NO_ENVIRONMENT,
+    "Clave PUBLICA del widget de Turnstile. Publica por diseno.",
+  ),
 
   // ----- Observabilidad -------------------------------------------------
   v("OTEL_ENABLED", "api", "boolean", ALL_ENVIRONMENTS, "Activar telemetria."),
