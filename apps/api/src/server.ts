@@ -59,6 +59,8 @@ async function main(): Promise<void> {
       event: "server.started",
       port: config.http.port,
       payment_provider: config.commerce.paymentProvider,
+      // DEC-058. Si aqui sale `console` en produccion, algo salto la validacion.
+      email_provider: config.email.provider,
       openapi_over_http: config.exposeOpenApiOverHttp,
     },
     "lsw-api escuchando",

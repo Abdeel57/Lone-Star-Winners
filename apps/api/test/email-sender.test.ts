@@ -29,24 +29,39 @@ const MESSAGE = {
   kind: "email_verification",
 } as const;
 
-function capturingFetch(status = 200) {
+function capturingFetch(status = 200, body = "{}") {
   const calls: { url: string; init: RequestInit }[] = [];
   const fetchImpl = ((url: string, init: RequestInit) => {
     calls.push({ url, init });
-    return Promise.resolve(new Response("{}", { status }));
+    return Promise.resolve(new Response(body, { status }));
   }) as unknown as typeof fetch;
   return { calls, fetchImpl };
+}
+
+/** Logger falso: guarda cada registro, sin mensaje. */
+function capturingLogger() {
+  const entries: { level: "info" | "error"; payload: Record<string, unknown> }[] = [];
+  const logger = {
+    info: (payload: Record<string, unknown>) => entries.push({ level: "info", payload }),
+    error: (payload: Record<string, unknown>) => entries.push({ level: "error", payload }),
+  } as never;
+  return { entries, logger };
+}
+
+function resendSender(fetchImpl: typeof fetch, logger: never) {
+  return createResendEmailSender({
+    apiKey: "re_prueba",
+    fromAddress: "no-reply@lsw-pruebas.com",
+    fromName: "Lone Star Winners",
+    logger,
+    fetchImpl,
+  });
 }
 
 describe("Resend", () => {
   it("envia a la API de Resend con la clave en la cabecera y el remitente con nombre", async () => {
     const { calls, fetchImpl } = capturingFetch();
-    const sender = createResendEmailSender({
-      apiKey: "re_prueba",
-      fromAddress: "no-reply@lsw-pruebas.com",
-      fromName: "Lone Star Winners",
-      fetchImpl,
-    });
+    const sender = resendSender(fetchImpl, capturingLogger().logger);
 
     await sender.send(MESSAGE);
 
@@ -69,12 +84,7 @@ describe("Resend", () => {
 
   it("un rechazo del proveedor lanza con el status y sin el contenido", async () => {
     const { fetchImpl } = capturingFetch(403);
-    const sender = createResendEmailSender({
-      apiKey: "re_prueba",
-      fromAddress: "no-reply@lsw-pruebas.com",
-      fromName: "Lone Star Winners",
-      fetchImpl,
-    });
+    const sender = resendSender(fetchImpl, capturingLogger().logger);
 
     const failure = await sender.send(MESSAGE).catch((error: unknown) => error);
 
@@ -82,6 +92,70 @@ describe("Resend", () => {
     expect((failure as EmailDeliveryError).status).toBe(403);
     expect(String((failure as Error).message)).not.toContain("persona@");
     expect(String((failure as Error).message)).not.toContain("re_prueba");
+  });
+
+  it("registra email.send.start y email.send.ok con el id que devuelve Resend", async () => {
+    const { fetchImpl } = capturingFetch(200, '{"id":"4ef9a417-02e9-4d39-ad75-9611e0fcc33c"}');
+    const { entries, logger } = capturingLogger();
+
+    await resendSender(fetchImpl, logger).send(MESSAGE);
+
+    expect(entries.map((entry) => entry.payload.event)).toEqual([
+      "email.send.start",
+      "email.send.ok",
+    ]);
+    expect(entries[1]?.payload).toMatchObject({
+      provider: "resend",
+      kind: "email_verification",
+      to: "p***@example.invalid",
+      provider_message_id: "4ef9a417-02e9-4d39-ad75-9611e0fcc33c",
+    });
+  });
+
+  it("un rechazo registra email.send.error con el motivo de Resend y la direccion enmascarada", async () => {
+    const { fetchImpl } = capturingFetch(
+      422,
+      '{"statusCode":422,"name":"validation_error","message":"Invalid `to` field: persona@example.invalid"}',
+    );
+    const { entries, logger } = capturingLogger();
+
+    await resendSender(fetchImpl, logger)
+      .send(MESSAGE)
+      .catch(() => undefined);
+
+    const failure = entries.find((entry) => entry.payload.event === "email.send.error");
+    expect(failure?.level).toBe("error");
+    expect(failure?.payload).toMatchObject({
+      status: 422,
+      provider_error: "validation_error",
+      provider_message: "Invalid `to` field: p***@example.invalid",
+    });
+    expect(entries.some((entry) => entry.payload.event === "email.send.ok")).toBe(false);
+  });
+
+  it("si Resend no responde registra email.send.error y lanza", async () => {
+    const fetchImpl = (() => Promise.reject(new Error("timeout"))) as unknown as typeof fetch;
+    const { entries, logger } = capturingLogger();
+
+    const failure = await resendSender(fetchImpl, logger)
+      .send(MESSAGE)
+      .catch((error: unknown) => error);
+
+    expect(failure).toBeInstanceOf(EmailDeliveryError);
+    expect(entries.at(-1)?.payload).toMatchObject({ event: "email.send.error", status: null });
+  });
+
+  it("nunca registra el cuerpo, el asunto ni la clave", async () => {
+    const { fetchImpl } = capturingFetch(200, '{"id":"x"}');
+    const { entries, logger } = capturingLogger();
+
+    await resendSender(fetchImpl, logger).send({ ...MESSAGE, text: "token=SECRETO" });
+
+    const logged = JSON.stringify(entries);
+    expect(logged).not.toContain("SECRETO");
+    expect(logged).not.toContain("Asunto");
+    expect(logged).not.toContain("re_prueba");
+    expect(logged).not.toContain("persona@example.invalid");
   });
 });
 
