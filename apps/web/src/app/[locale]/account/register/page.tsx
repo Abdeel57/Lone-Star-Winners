@@ -9,6 +9,7 @@ import { routing } from "@/i18n/routing";
 import { fetchSiteConfig, type ConsentRequirement } from "@/lib/api";
 import { returnPathFrom } from "@/lib/form-input";
 import { loadSession } from "@/lib/participant-server";
+import { passwordMinimumFrom } from "@/lib/password-policy";
 
 export const dynamic = "force-dynamic";
 
@@ -79,7 +80,12 @@ export default async function RegisterPage({
         </p>
       }
     >
-      <RegisterForm locale={locale} consents={consents} returnPath={returnPath} />
+      <RegisterForm
+        locale={locale}
+        consents={consents}
+        returnPath={returnPath}
+        passwordMinimum={passwordMinimumFrom(configResult)}
+      />
     </AuthPanel>
   );
 }

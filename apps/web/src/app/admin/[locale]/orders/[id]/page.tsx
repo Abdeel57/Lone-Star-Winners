@@ -7,6 +7,7 @@ import { AdminChrome } from "@/components/admin/admin-chrome";
 import { openAdminScreen } from "@/components/admin/admin-screen";
 import { AdminSectionError } from "@/components/admin/admin-section-error";
 import { EntryCalculationTrace } from "@/components/entry-calculation-trace";
+import { OrderAddress } from "@/components/order-address";
 import { OrderLineList } from "@/components/order-line-list";
 import { adminHref } from "@/i18n/admin-routing";
 import { formatMoney, formatZonedDateTime } from "@/i18n/formatters";
@@ -115,6 +116,13 @@ export default async function AdminOrderDetailPage({
               <OrderLineList lines={result.data.items} locale={locale} />
             </div>
           </section>
+
+          {/*
+           * A donde va el pedido. La ruta ya la servia (`orderDetailSchema`, la
+           * misma forma que ve el participante) y la pantalla no la pintaba, asi
+           * que no habia forma de saber a donde mandarlo.
+           */}
+          <OrderAddress address={result.data.shipping_address} />
 
           <section aria-labelledby="order-trace">
             <h2 id="order-trace" className="lsw-display text-heading-lg text-text">

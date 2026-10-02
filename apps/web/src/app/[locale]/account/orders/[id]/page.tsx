@@ -6,6 +6,7 @@ import { getTranslations, setRequestLocale } from "next-intl/server";
 import { AccountShell, MfaRequired, SignInRequired } from "@/components/account-shell";
 import { ApiErrorState } from "@/components/api-error-state";
 import { EntryCalculationTrace } from "@/components/entry-calculation-trace";
+import { OrderAddress } from "@/components/order-address";
 import { OrderLineList } from "@/components/order-line-list";
 import {
   useOrderEntryStateBody,
@@ -16,7 +17,7 @@ import { formatEntryCount, formatMoney, formatZonedDate } from "@/i18n/formatter
 import type { Locale } from "@/i18n/locales";
 import { Link } from "@/i18n/navigation";
 import { routing } from "@/i18n/routing";
-import { fetchActivePromotion, fetchOrder, type OrderDetail, type PostalAddress } from "@/lib/api";
+import { fetchActivePromotion, fetchOrder, type OrderDetail } from "@/lib/api";
 import { loadParticipant } from "@/lib/participant-server";
 
 export const dynamic = "force-dynamic";
@@ -239,48 +240,6 @@ function OrderTotals({ order, locale }: { readonly order: OrderDetail; readonly 
           </div>
         ))}
       </dl>
-    </Card>
-  );
-}
-
-/**
- * Direccion de envio.
- *
- * Se pinta LINEA A LINEA tal como llega, sin recomponerla en un formato
- * nacional concreto: el orden de ciudad, region y codigo postal no es el mismo
- * en todas partes, y una plantilla fija seria una regla de jurisdiccion
- * escondida en una pantalla.
- */
-function OrderAddress({ address }: { readonly address: PostalAddress | null }) {
-  const t = useTranslations("account.order");
-
-  return (
-    <Card elevation="raised" padding="lg">
-      <CardTitle as="h2" size="sm">
-        {t("addressHeading")}
-      </CardTitle>
-
-      {address === null ? (
-        <p className="mt-s4 text-body-sm text-text-muted">{t("noAddress")}</p>
-      ) : (
-        <address className="mt-s4 not-italic text-body-sm text-text-muted">
-          {[
-            address.full_name,
-            address.line1,
-            address.line2,
-            address.city,
-            address.region,
-            address.postal_code,
-            address.country,
-          ]
-            .filter((line): line is string => line !== null && line.length > 0)
-            .map((line) => (
-              <span key={line} className="block">
-                {line}
-              </span>
-            ))}
-        </address>
-      )}
     </Card>
   );
 }

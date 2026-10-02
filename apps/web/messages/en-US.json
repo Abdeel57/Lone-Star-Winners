@@ -129,7 +129,7 @@
     "CART_EMPTY": "There is nothing in your cart.",
     "CHECKOUT_UNAVAILABLE": "Checkout is not available right now. Nothing has been charged.",
     "SHIPPING_ADDRESS_INVALID": "We could not use that shipping address. Please check it and try again.",
-    "INVALID_CREDENTIALS": "That email and password do not match an account.",
+    "INVALID_CREDENTIALS": "Those details and password do not match an account. Check they are typed correctly; the password is case-sensitive.",
     "EMAIL_ALREADY_REGISTERED": "There is already an account with that email.",
     "WEAK_PASSWORD": "That password does not meet our requirements. Please choose another one.",
     "ACCOUNT_LOCKED": "This account is locked. Please contact us.",
@@ -147,6 +147,7 @@
     "CATALOG_CONFLICT": "A product or promotion with that SKU or address already exists.",
     "LIFECYCLE_REFUSED": "The system does not allow that status change yet.",
     "PRICE_INVALID": "The price is not in a valid format for that currency.",
+    "COUNTRY_INVALID": "We don't recognize that country. Type its name or its two-letter code, for example US.",
     "DATETIME_INVALID": "That date and time do not exist in the legal time zone.",
     "TIMEZONE_INVALID": "That time zone is not valid.",
     "CONFIRMATION_REQUIRED": "Tick the confirmation box to continue.",
@@ -154,6 +155,7 @@
     "MEDIA_TYPE_UNSUPPORTED": "That file is not a valid image. Use a JPG, PNG or WebP photo.",
     "PAYLOAD_TOO_LARGE": "What you sent is too large. Try lighter images.",
     "FLAG_LEGALLY_MATERIAL": "This setting is legally material and cannot be changed here. Use the change request instead.",
+    "STEP_UP_REQUIRED": "This action needs a recent code from your app. Select “Confirm code” at the top, enter the current code and try again.",
     "SETTING_CHANGE_SELF_APPROVAL_FORBIDDEN": "You asked for this change, so someone else has to decide it.",
     "SEPARATION_OF_DUTIES": "Whoever transcribed this card cannot approve it. Someone else has to review it.",
     "AMOE_MODE_NOT_ONLINE": "This promotion's free method of entry is not an online form. The Official Rules explain how to take part.",
@@ -637,6 +639,7 @@
       "displayNameHint": "Optional. It is how we address you on this site.",
       "password": "Password",
       "passwordHint": "Requirements are checked when you submit.",
+      "passwordHintMinimum": "At least {count} characters. A long phrase works well.",
       "passwordTooShort": "Use at least {count} characters. A long phrase works well.",
       "passwordConfirmation": "Repeat your password",
       "requiredHint": "Required",
@@ -871,7 +874,8 @@
       "city": "City",
       "region": "State or region",
       "postalCode": "Postal code",
-      "country": "Country"
+      "country": "Country",
+      "countryHint": "The name or the two-letter code. For example: United States or US."
     },
     "return": {
       "title": "Back from the payment provider",
@@ -911,6 +915,7 @@
       "brand": "Lone Star Winners",
       "panelLabel": "Admin",
       "signOut": "Sign out",
+      "confirmCode": "Confirm code",
       "noRoles": "No role assigned",
       "mainLandmark": "Admin content",
       "provisionalCapabilities": "This session did not include the capabilities published by the backend, so the menu is empty. It usually means the deployed API is older than the panel; once it is updated, the menu comes back on its own."
@@ -956,7 +961,9 @@
       "mfaBody": "Your password was accepted. Enter the current code to open the session.",
       "nothingToVerifyTitle": "There is nothing to verify",
       "nothingToVerifyBody": "No session is waiting for a second factor. Sign in first.",
-      "signInCta": "Go to sign in"
+      "signInCta": "Go to sign in",
+      "renewTitle": "Confirm with a new code",
+      "renewBody": "Activating or closing a promotion, activating rules, approving changes or refunding a payment needs a code entered in the last few minutes. Enter the current code from your app and you will go back to where you were."
     },
     "dashboard": {
       "title": "Dashboard",
@@ -1605,6 +1612,9 @@
       "fields": {
         "perParticipantMax": "Maximum entries per person",
         "perOrderMax": "Maximum entries per order",
+        "qualifyingPaymentState": "A purchase counts once the payment is (PAID = confirmed, AUTHORIZED = authorized)",
+        "productEligibilityMode": "Which products earn entries (ALL_PRODUCTS = all of them)",
+        "productEligibilitySkus": "SKUs in the list, if not all (comma separated)",
         "merchandiseNumerator": "Merchandise: entries",
         "merchandiseDenominator": "Merchandise: divided by",
         "merchandiseAmountUnit": "Merchandise: amount unit (minor units)",
@@ -1616,6 +1626,7 @@
         "partialRefundRounding": "Partial refund rounding",
         "entryExpiration": "Entry expiration",
         "amoeMode": "Free entry mode",
+        "amoeRequiresReview": "A person reviews every card (required for mail-in)",
         "amoeWindowStart": "Submission window opens",
         "amoeWindowEnd": "Submission window closes",
         "amoeEntriesPerSubmission": "Entries per approved card",
@@ -1650,6 +1661,11 @@
       "created": "The card was added to the review queue.",
       "participantEmailLabel": "Participant email",
       "participantEmailHint": "If there is no account with this address, one is created without credentials so the entries can be assigned.",
+      "preferredLocaleLabel": "Language of the card",
+      "preferredLocaleHint": "The language it is written in. It becomes the language of the account created if this email had none.",
+      "preferredLocaleUnset": "Choose a language",
+      "preferredLocaleEs": "Spanish",
+      "preferredLocaleEn": "English",
       "envelopeLabel": "Envelope reference",
       "envelopeHint": "However your team labels the envelope.",
       "cardsLabel": "Cards in this envelope",

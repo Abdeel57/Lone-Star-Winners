@@ -398,4 +398,15 @@ export const publicConfigSchema = z.object({
   feature_flags: z.record(z.string(), z.boolean()),
   amoe_mode: z.enum(["ONLINE_FORM", "MAIL_IN_REVIEW", "CODE", "EXTERNAL_INSTRUCTIONS"]).nullable(),
   supported_locales: z.array(z.enum(["en-US", "es-US"])),
+  /**
+   * La politica de contrasenas de `packages/security`, publicada para que el
+   * formulario la diga ANTES de enviar. Sin ella, el minimo solo llegaba con el
+   * 422 `WEAK_PASSWORD`, y quien se daba de alta con el celular lo descubria
+   * despues de pedir el SMS. Es la misma constante que aplica el alta: no hay
+   * una segunda copia del numero en la web.
+   */
+  password_policy: z.object({
+    minimum_length: z.number().int().positive(),
+    maximum_length: z.number().int().positive(),
+  }),
 });

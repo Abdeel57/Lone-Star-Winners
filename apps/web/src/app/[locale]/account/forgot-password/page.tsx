@@ -6,6 +6,8 @@ import { AuthPanel } from "@/components/auth-panel";
 import { ForgotPasswordChooser } from "@/components/password-recovery-forms";
 import { Link } from "@/i18n/navigation";
 import { routing } from "@/i18n/routing";
+import { fetchSiteConfig } from "@/lib/api";
+import { passwordMinimumFrom } from "@/lib/password-policy";
 
 export const dynamic = "force-dynamic";
 
@@ -27,6 +29,8 @@ export default async function ForgotPasswordPage({
   setRequestLocale(locale);
 
   const t = await getTranslations("auth.forgot");
+  // El camino por SMS fija la contrasena nueva en esta misma pantalla.
+  const passwordMinimum = passwordMinimumFrom(await fetchSiteConfig(locale));
 
   return (
     <AuthPanel
@@ -38,7 +42,7 @@ export default async function ForgotPasswordPage({
       }
     >
       {/* DEC-060: por correo o por celular. La introduccion depende del canal. */}
-      <ForgotPasswordChooser locale={locale} />
+      <ForgotPasswordChooser locale={locale} passwordMinimum={passwordMinimum} />
     </AuthPanel>
   );
 }

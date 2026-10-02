@@ -32,6 +32,7 @@ export const defaultConfig: SiteConfigResponse = {
   feature_flags: defaultFlags(),
   amoe_mode: null,
   supported_locales: ["en-US", "es-US"],
+  password_policy: { minimum_length: 12, maximum_length: 1024 },
 };
 
 /**

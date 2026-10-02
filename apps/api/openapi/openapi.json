@@ -29261,6 +29261,26 @@
                       },
                       "type": "object"
                     },
+                    "password_policy": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "maximum_length": {
+                          "exclusiveMinimum": 0,
+                          "maximum": 9007199254740991,
+                          "type": "integer"
+                        },
+                        "minimum_length": {
+                          "exclusiveMinimum": 0,
+                          "maximum": 9007199254740991,
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "minimum_length",
+                        "maximum_length"
+                      ],
+                      "type": "object"
+                    },
                     "supported_locales": {
                       "items": {
                         "enum": [
@@ -29275,7 +29295,8 @@
                   "required": [
                     "feature_flags",
                     "amoe_mode",
-                    "supported_locales"
+                    "supported_locales",
+                    "password_policy"
                   ],
                   "type": "object"
                 }

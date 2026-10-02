@@ -5,6 +5,7 @@ import { getTranslations, setRequestLocale } from "next-intl/server";
 
 import { MfaRequired, SignInRequired } from "@/components/account-shell";
 import { ApiErrorState } from "@/components/api-error-state";
+import { CheckoutPendingRefresh } from "@/components/checkout-pending-refresh";
 import { Link, redirect } from "@/i18n/navigation";
 import { routing } from "@/i18n/routing";
 import type { Locale } from "@/i18n/locales";
@@ -111,6 +112,10 @@ export default async function CheckoutReturnPage({
 
   return (
     <ReturnShell title={t("title")}>
+      {/* Pendiente suele ser cuestion de segundos: la pagina vuelve a preguntar
+          sola y salta a la confirmacion del pedido en cuanto el pago consta. */}
+      {status === "PENDING" ? <CheckoutPendingRefresh /> : null}
+
       <Alert tone={toneFor(status)} title={titleFor(status, t)}>
         {bodyFor(status, t)}
       </Alert>

@@ -109,6 +109,8 @@ const TRANSLATED_CODES = [
   "CATALOG_CONFLICT",
   "LIFECYCLE_REFUSED",
   "PRICE_INVALID",
+  // Pais de la direccion de envio que no corresponde a ninguno (`country-code.ts`).
+  "COUNTRY_INVALID",
   "DATETIME_INVALID",
   "TIMEZONE_INVALID",
   "CONFIRMATION_REQUIRED",
@@ -120,6 +122,20 @@ const TRANSLATED_CODES = [
   "MEDIA_TOO_LARGE",
   "MEDIA_TYPE_UNSUPPORTED",
   "PAYLOAD_TOO_LARGE",
+  /*
+   * Panel: tenian texto en `apiErrors` y no estaban en esta lista, asi que
+   * caian al generico "ha ocurrido un problema por nuestra parte". El peor era
+   * `STEP_UP_REQUIRED`: quien activaba una promocion leia un fallo nuestro
+   * cuando lo que faltaba era volver a escribir su codigo.
+   */
+  "STEP_UP_REQUIRED",
+  "SEPARATION_OF_DUTIES",
+  "SETTING_CHANGE_SELF_APPROVAL_FORBIDDEN",
+  "FLAG_LEGALLY_MATERIAL",
+  "AMOE_MODE_NOT_ONLINE",
+  "AMOE_ENTRY_CAP_REACHED",
+  "CONFIG_JSON_INVALID",
+  "MULTIPLIER_INVALID",
 ] as const;
 
 type TranslatedCode = (typeof TRANSLATED_CODES)[number];
@@ -231,6 +247,8 @@ export function useApiErrorMessage(): (code: string | null) => string {
         return t("LIFECYCLE_REFUSED");
       case "PRICE_INVALID":
         return t("PRICE_INVALID");
+      case "COUNTRY_INVALID":
+        return t("COUNTRY_INVALID");
       case "DATETIME_INVALID":
         return t("DATETIME_INVALID");
       case "TIMEZONE_INVALID":
@@ -243,6 +261,22 @@ export function useApiErrorMessage(): (code: string | null) => string {
         return t("MEDIA_TYPE_UNSUPPORTED");
       case "PAYLOAD_TOO_LARGE":
         return t("PAYLOAD_TOO_LARGE");
+      case "STEP_UP_REQUIRED":
+        return t("STEP_UP_REQUIRED");
+      case "SEPARATION_OF_DUTIES":
+        return t("SEPARATION_OF_DUTIES");
+      case "SETTING_CHANGE_SELF_APPROVAL_FORBIDDEN":
+        return t("SETTING_CHANGE_SELF_APPROVAL_FORBIDDEN");
+      case "FLAG_LEGALLY_MATERIAL":
+        return t("FLAG_LEGALLY_MATERIAL");
+      case "AMOE_MODE_NOT_ONLINE":
+        return t("AMOE_MODE_NOT_ONLINE");
+      case "AMOE_ENTRY_CAP_REACHED":
+        return t("AMOE_ENTRY_CAP_REACHED");
+      case "CONFIG_JSON_INVALID":
+        return t("CONFIG_JSON_INVALID");
+      case "MULTIPLIER_INVALID":
+        return t("MULTIPLIER_INVALID");
     }
   };
 }

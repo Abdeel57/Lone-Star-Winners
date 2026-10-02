@@ -92,6 +92,7 @@ import {
  * un flag a una y no a la otra, y la que se quedaria corta es siempre la copia.
  */
 import { FEATURE_FLAGS, flagRequiresDualControl } from "@lsw/security";
+import { QUALIFYING_PAYMENT_STATES } from "@lsw/commerce";
 import { z } from "zod";
 
 import type { AppDependencies } from "../app.js";
@@ -375,7 +376,27 @@ interface ConfigValidation {
   readonly amoe: SliceState;
   readonly bonus_rules: SliceState;
   readonly issues: readonly { readonly path: string; readonly code: string }[];
+  /**
+   * `order_qualification.qualifying_payment_state` declarado y valido.
+   *
+   * No sale en la respuesta: decide `activatable` y la negativa de activar.
+   */
+  readonly orderQualificationResolved: boolean;
 }
+
+/**
+ * La rebanada que dice EN QUE ESTADO DE PAGO califica un pedido.
+ *
+ * Es el mismo enum que lee el webhook (`resolveQualifyingPaymentState` de
+ * `@lsw/commerce`). No esta entre las claves que exige el trigger de DEC-012,
+ * y por eso una version podia activarse sin ella: la promocion se abria, los
+ * pagos se cobraban y CADA webhook fallaba con
+ * `ORDER_QUALIFICATION_NOT_CONFIGURED`, sin una sola participacion. Ahora la
+ * exige la activacion (ver `assertOrderQualificationResolved`).
+ */
+const orderQualificationSchema = z.object({
+  qualifying_payment_state: z.enum(QUALIFYING_PAYMENT_STATES),
+});
 
 function issuePath(path: readonly PropertyKey[]): string {
   return path.map((segment) => String(segment)).join(".");
@@ -411,6 +432,29 @@ function validateConfig(config: unknown): ConfigValidation {
     }
   }
 
+  // Sin punto de calificacion el motor calcula, pero el webhook no otorga
+  // nada: para quien mira el panel, el calculo de participaciones NO esta
+  // resuelto. Ausente o en TBD es pendiente; presente y mal formado es error.
+  let orderQualificationResolved = false;
+  const rawQualification = record.order_qualification;
+  const declaredState =
+    typeof rawQualification === "object" && rawQualification !== null
+      ? (rawQualification as Record<string, unknown>).qualifying_payment_state
+      : rawQualification;
+  if (declaredState === undefined || declaredState === null || declaredState === "TBD") {
+    if (calculation === "OK") calculation = "UNRESOLVED";
+  } else {
+    const parsed = orderQualificationSchema.safeParse(rawQualification);
+    if (parsed.success) {
+      orderQualificationResolved = true;
+    } else {
+      calculation = "INVALID";
+      for (const issue of parsed.error.issues) {
+        issues.push({ path: `order_qualification.${issuePath(issue.path)}`, code: issue.code });
+      }
+    }
+  }
+
   let amoe: SliceState = "ABSENT";
   const rawAmoe = record.amoe;
   if (rawAmoe !== undefined && rawAmoe !== null && rawAmoe !== "TBD") {
@@ -435,7 +479,26 @@ function validateConfig(config: unknown): ConfigValidation {
     }
   }
 
-  return { calculation, amoe, bonus_rules: bonus, issues };
+  return { calculation, amoe, bonus_rules: bonus, issues, orderQualificationResolved };
+}
+
+/**
+ * 409 si la version no declara en que estado de pago califica un pedido.
+ *
+ * Mismo codigo y misma forma que las negativas del motor (`LIFECYCLE_REFUSED`
+ * con `details.engine`), porque el panel ya sabe ensenar esas: el texto sale
+ * tal cual delante de quien activa.
+ */
+function assertOrderQualificationResolved(config: unknown): void {
+  if (validateConfig(config).orderQualificationResolved) return;
+  throw new ApiError({
+    statusCode: 409,
+    code: "LIFECYCLE_REFUSED",
+    details: {
+      engine:
+        "Falta order_qualification.qualifying_payment_state (PAID o AUTHORIZED): sin ella ninguna compra otorga participaciones. Anadela en la configuracion de la version antes de activarla.",
+    },
+  });
 }
 
 function presentRulesVersion(row: RulesVersionRow): z.infer<typeof rulesVersionSchema> {
@@ -455,7 +518,8 @@ function presentRulesVersion(row: RulesVersionRow): z.infer<typeof rulesVersionS
       row.unresolvedRequiredKeys.length === 0 &&
       validation.calculation !== "INVALID" &&
       validation.amoe !== "INVALID" &&
-      validation.bonus_rules !== "INVALID",
+      validation.bonus_rules !== "INVALID" &&
+      validation.orderQualificationResolved,
     validation: {
       calculation: validation.calculation,
       amoe: validation.amoe,
@@ -925,6 +989,10 @@ export function buildAdminRulesRoutes(dependencies: AppDependencies): RouteDefin
         // ocurrir sin haber tocado la version de reglas.
         const reasonCode = requireReasonCode(body.reason_code);
 
+        const current = await repo().findRulesVersion(params.promotion_id, params.rules_version_id);
+        if (current === null) throw ApiErrors.notFound();
+        assertOrderQualificationResolved(current.config);
+
         try {
           const activated = await repo().activateRulesVersion(
             params.promotion_id,
@@ -1075,6 +1143,11 @@ export function buildAdminRulesRoutes(dependencies: AppDependencies): RouteDefin
             },
           ],
         };
+
+        // La version nueva hereda la configuracion de la activa; si a esa le
+        // faltara el punto de calificacion, el bonus se activaria igual de
+        // inutil. Misma negativa que en la activacion manual.
+        assertOrderQualificationResolved(config);
 
         try {
           // Clonar, activar y auditar EN LA MISMA transaccion. Con la version

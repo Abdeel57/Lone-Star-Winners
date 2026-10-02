@@ -10,6 +10,7 @@ import type { AdminActor } from "@/lib/admin/capabilities";
 import { visibleNavFor, type AdminNavKey } from "@/lib/admin/navigation";
 
 import { AdminLanguageSwitcher } from "./admin-language-switcher";
+import { ConfirmCodeLink } from "./confirm-code-link";
 
 /**
  * Cromo del panel: cabecera, navegacion por capacidad y contenedor.
@@ -170,6 +171,7 @@ async function AdminHeader({
           {actor === null ? null : (
             <>
               <AdminIdentity actor={actor} locale={locale} />
+              <ConfirmCodeLink locale={locale} label={t("confirmCode")} />
               <AdminLogout locale={locale} label={t("signOut")} />
             </>
           )}

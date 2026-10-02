@@ -129,7 +129,7 @@
     "CART_EMPTY": "No hay nada en tu carrito.",
     "CHECKOUT_UNAVAILABLE": "Ahora mismo no se puede finalizar la compra. No se ha cobrado nada.",
     "SHIPPING_ADDRESS_INVALID": "No hemos podido usar esa dirección de envío. Revísala e inténtalo de nuevo.",
-    "INVALID_CREDENTIALS": "Ese correo y esa contraseña no corresponden a ninguna cuenta.",
+    "INVALID_CREDENTIALS": "Esos datos y esa contraseña no corresponden a ninguna cuenta. Revisa que estén bien escritos; la contraseña distingue mayúsculas de minúsculas.",
     "EMAIL_ALREADY_REGISTERED": "Ya existe una cuenta con ese correo.",
     "WEAK_PASSWORD": "Esa contraseña no cumple nuestros requisitos. Elige otra.",
     "ACCOUNT_LOCKED": "Esta cuenta está bloqueada. Ponte en contacto con nosotros.",
@@ -147,6 +147,7 @@
     "CATALOG_CONFLICT": "Ya existe un producto o una promoción con ese SKU o esa dirección.",
     "LIFECYCLE_REFUSED": "El sistema no permite ese cambio de estado todavía.",
     "PRICE_INVALID": "El precio no tiene un formato válido para esa moneda.",
+    "COUNTRY_INVALID": "No reconocemos ese país. Escribe su nombre o su código de dos letras, por ejemplo US.",
     "DATETIME_INVALID": "Esa fecha y hora no existen en la zona horaria legal.",
     "TIMEZONE_INVALID": "Esa zona horaria no es válida.",
     "CONFIRMATION_REQUIRED": "Marca la casilla de confirmación para continuar.",
@@ -154,6 +155,7 @@
     "MEDIA_TYPE_UNSUPPORTED": "Ese archivo no es una imagen válida. Usa una foto JPG, PNG o WebP.",
     "PAYLOAD_TOO_LARGE": "Lo que enviaste pesa demasiado. Prueba con imágenes más ligeras.",
     "FLAG_LEGALLY_MATERIAL": "Este ajuste es legalmente material y no se cambia por aquí. Usa la solicitud de cambio.",
+    "STEP_UP_REQUIRED": "Esta acción exige confirmar con un código reciente de tu app. Pulsa «Confirmar código» arriba, escribe el código actual y repítela.",
     "SETTING_CHANGE_SELF_APPROVAL_FORBIDDEN": "Este cambio lo pediste tú, así que tiene que decidirlo otra persona.",
     "SEPARATION_OF_DUTIES": "Quien transcribió esta ficha no puede aprobarla. Tiene que revisarla otra persona.",
     "AMOE_MODE_NOT_ONLINE": "El método gratuito de esta promoción no es un formulario en línea. Las Reglas Oficiales explican cómo participar.",
@@ -637,6 +639,7 @@
       "displayNameHint": "Opcional. Es como nos dirigimos a ti en este sitio.",
       "password": "Contraseña",
       "passwordHint": "Los requisitos se comprueban al enviar el formulario.",
+      "passwordHintMinimum": "Al menos {count} caracteres. Una frase larga funciona bien.",
       "passwordTooShort": "Usa al menos {count} caracteres. Una frase larga funciona bien.",
       "passwordConfirmation": "Repite tu contraseña",
       "requiredHint": "Obligatorio",
@@ -871,7 +874,8 @@
       "city": "Ciudad",
       "region": "Estado o región",
       "postalCode": "Código postal",
-      "country": "País"
+      "country": "País",
+      "countryHint": "El nombre o el código de dos letras. Por ejemplo: Estados Unidos o US."
     },
     "return": {
       "title": "De vuelta del proveedor de pago",
@@ -911,6 +915,7 @@
       "brand": "Lone Star Winners",
       "panelLabel": "Administración",
       "signOut": "Cerrar sesión",
+      "confirmCode": "Confirmar código",
       "noRoles": "Sin rol asignado",
       "mainLandmark": "Contenido de administración",
       "provisionalCapabilities": "Esta sesión no trae las capacidades publicadas por el backend, así que el menú se muestra vacío. Suele significar que la API desplegada es anterior a la versión del panel; en cuanto se actualice, el menú vuelve solo."
@@ -956,7 +961,9 @@
       "mfaBody": "Tu contraseña se aceptó. Introduce el código vigente para abrir la sesión.",
       "nothingToVerifyTitle": "No hay nada que verificar",
       "nothingToVerifyBody": "No hay ninguna sesión esperando un segundo factor. Inicia sesión primero.",
-      "signInCta": "Ir a iniciar sesión"
+      "signInCta": "Ir a iniciar sesión",
+      "renewTitle": "Confirma con un código nuevo",
+      "renewBody": "Activar o cerrar una promoción, activar reglas, aprobar cambios o devolver un pago exige un código escrito hace pocos minutos. Escribe el código actual de tu app y volverás a donde estabas."
     },
     "dashboard": {
       "title": "Panel",
@@ -1605,6 +1612,9 @@
       "fields": {
         "perParticipantMax": "Máximo de participaciones por persona",
         "perOrderMax": "Máximo de participaciones por pedido",
+        "qualifyingPaymentState": "Una compra cuenta cuando el pago está (PAID = confirmado, AUTHORIZED = autorizado)",
+        "productEligibilityMode": "Qué productos dan participaciones (ALL_PRODUCTS = todos)",
+        "productEligibilitySkus": "SKU de la lista, si no son todos (separados por comas)",
         "merchandiseNumerator": "Mercancía: participaciones",
         "merchandiseDenominator": "Mercancía: dividido entre",
         "merchandiseAmountUnit": "Mercancía: unidad de importe (unidad menor)",
@@ -1616,6 +1626,7 @@
         "partialRefundRounding": "Redondeo en reembolsos parciales",
         "entryExpiration": "Caducidad de participaciones",
         "amoeMode": "Modalidad gratuita",
+        "amoeRequiresReview": "Cada ficha la revisa una persona (obligatorio por correo postal)",
         "amoeWindowStart": "Apertura de la ventana de envío",
         "amoeWindowEnd": "Cierre de la ventana de envío",
         "amoeEntriesPerSubmission": "Participaciones por ficha aprobada",
@@ -1650,6 +1661,11 @@
       "created": "La ficha entró en la cola de revisión.",
       "participantEmailLabel": "Correo del participante",
       "participantEmailHint": "Si no hay cuenta con esa dirección, se crea una sin credenciales para poder asignarle las participaciones.",
+      "preferredLocaleLabel": "Idioma de la ficha",
+      "preferredLocaleHint": "El idioma en que está escrita. Es el de la cuenta que se crea si ese correo no tenía una.",
+      "preferredLocaleUnset": "Elige un idioma",
+      "preferredLocaleEs": "Español",
+      "preferredLocaleEn": "Inglés",
       "envelopeLabel": "Referencia del sobre",
       "envelopeHint": "Como vuestro equipo etiquete el sobre.",
       "cardsLabel": "Fichas en este sobre",

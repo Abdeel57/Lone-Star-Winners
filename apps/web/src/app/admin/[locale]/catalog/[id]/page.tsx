@@ -229,7 +229,13 @@ export default async function AdminProductPage({
               <VariantEditor
                 locale={locale}
                 productId={result.data.id}
-                variants={result.data.variants ?? []}
+                variants={(result.data.variants ?? []).map((variant) => ({
+                  ...variant,
+                  priceText:
+                    variant.price_amount_minor === null
+                      ? ""
+                      : minorUnitsToPriceText(variant.price_amount_minor, result.data.currency),
+                }))}
                 createAction={createVariantAction}
                 updateAction={updateVariantAction}
                 editable={canWrite}

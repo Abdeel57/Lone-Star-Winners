@@ -19,6 +19,7 @@ import { getPathname } from "@/i18n/navigation";
 import { createCheckoutSession, type PostalAddress } from "@/lib/api";
 
 import { fromFailure, invalid, type ActionResult } from "./action-result";
+import { countryCodeFrom } from "./country-code";
 import { localeFrom, textFrom } from "./form-input";
 import { mutableSession } from "./session-server";
 
@@ -53,13 +54,22 @@ import { mutableSession } from "./session-server";
  * fijan las Official Rules y sigue en `docs/LEGAL_PENDING.md`. Lo unico que se
  * comprueba es que los campos que el formulario marca como obligatorios no
  * lleguen vacios, y el backend valida lo demas (CLAUDE.md #2 y #14).
+ *
+ * El pais se traduce a su codigo de dos letras, que es lo que la API admite:
+ * "Estados Unidos" -> "US". Se reconoce cualquier pais (`countryCodeFrom`), asi
+ * que sigue sin haber lista de admitidos.
  */
-function addressFrom(formData: FormData): PostalAddress | { readonly missing: string } {
+function addressFrom(
+  formData: FormData,
+): PostalAddress | { readonly missing: string } | { readonly unknownCountry: true } {
   const required = ["full_name", "line1", "city", "region", "postal_code", "country"] as const;
 
   for (const field of required) {
     if (textFrom(formData, field) === null) return { missing: field };
   }
+
+  const country = countryCodeFrom(textFrom(formData, "country") ?? "");
+  if (country === null) return { unknownCountry: true };
 
   return {
     full_name: textFrom(formData, "full_name") ?? "",
@@ -68,7 +78,7 @@ function addressFrom(formData: FormData): PostalAddress | { readonly missing: st
     city: textFrom(formData, "city") ?? "",
     region: textFrom(formData, "region") ?? "",
     postal_code: textFrom(formData, "postal_code") ?? "",
-    country: textFrom(formData, "country") ?? "",
+    country,
   };
 }
 
@@ -135,6 +145,7 @@ export async function startCheckoutAction(
 
   const address = addressFrom(formData);
   if ("missing" in address) return invalid("FIELD_REQUIRED", address.missing);
+  if ("unknownCountry" in address) return invalid("COUNTRY_INVALID", "country");
 
   const session = await mutableSession();
   const result = await createCheckoutSession(

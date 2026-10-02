@@ -3055,3 +3055,58 @@ Affected areas: `apps/api` (`app.ts`, `http/trusted-proxy.ts`, test),
 
 Proposed by: sesión del usuario (2026-09-30), pruebas previas al lanzamiento
 Agreed by: pendiente — security-integration, backend-sweepstakes, frontend-ux
+
+## DEC-062
+
+Status: Proposed
+
+Date: 2026-10-01
+
+Decision:
+**Un pago confirmado no puede quedarse sin participaciones, y una versión de
+reglas no se activa sin decir en qué estado de pago califica un pedido.**
+Revisión previa al lanzamiento de la primera edición. Cinco puntos:
+
+1. **Primero se otorga y después se confirma el pedido**
+   (`applyQualifyingPayment`, `routes/orders.ts`). Todo el webhook corre en
+   una transacción y el procesador CAPTURA el error del manejador para marcar
+   el evento `FAILED` y confirmarla. Con el orden anterior, un award que
+   fallaba dejaba el pedido `PAID` y calificado sin ledger, y el reintento no
+   otorgaba (`justQualified` salía `false`). Ahora un fallo deja el pedido en
+   `PENDING_PAYMENT`, y si lo que falla es confirmar el pedido tras otorgar, el
+   reintento encuentra `ALREADY_AWARDED` (idempotencia por `order:<id>`).
+2. **Pago fuera del periodo = pagado sin participaciones, no un fallo.**
+   `PROMOTION_WINDOW_CLOSED` y `PROMOTION_NOT_ACCEPTING_ENTRIES` registran el
+   cobro sin calificar (`paidOutsidePromotion`); el presentador lo enseña como
+   `NOT_APPLICABLE` en vez de "pendiente de confirmación de pago".
+3. **Un evento `FAILED` responde 500**, para que el proveedor reintente. Antes
+   se respondía 200 porque reintentar no arreglaba nada; con el punto 1 sí lo
+   hace (un corte de la base, una versión de reglas corregida), y si el fallo
+   persiste el proveedor avisa por correo.
+4. **`order_qualification.qualifying_payment_state` la exige la activación.**
+   No está entre las claves del trigger de DEC-012, así que una versión podía
+   activarse sin ella y cada webhook fallaba con
+   `ORDER_QUALIFICATION_NOT_CONFIGURED`. La API la exige al activar (409
+   `LIFECYCLE_REFUSED` con `details.engine`), en el atajo de bonificación, y
+   `activatable` la tiene en cuenta; `validation.calculation` sale
+   `UNRESOLVED` sin ella. El VALOR (PAID o AUTHORIZED) sigue siendo del
+   abogado: la API no pone ninguno.
+5. **El panel la escribe sin JSON**, junto con `product_eligibility` y
+   `amoe.requires_review`; y `GET /config` publica `password_policy` para que
+   el alta diga el mínimo de la contraseña antes de enviar.
+
+Alternatives:
+A — Punto de guardado (SAVEPOINT) alrededor del manejador (descartado: exige
+ampliar el puerto `UnitOfWork` en tres paquetes para lo que resuelve el orden
+de dos llamadas). B — Añadir `order_qualification` a las claves del trigger
+(descartado por ahora: es una migración que aquí no se puede probar contra
+PostgreSQL, y la API ya la cierra en el único camino de activación).
+
+Affected areas: `apps/api` (`routes/orders.ts`, `routes/admin-rules.ts`,
+`routes/storefront.ts`, `http/schemas.ts`, `services/order-presenter.ts`,
+tests, `openapi/openapi.json`), `apps/web` (formularios de contraseña,
+configuración de reglas, transcripción AMOE, segundo factor del panel),
+`docs/API_CONTRACT.md`.
+
+Proposed by: sesión del usuario (2026-10-01), revisión previa al lanzamiento
+Agreed by: pendiente — backend-sweepstakes, security-integration, frontend-ux

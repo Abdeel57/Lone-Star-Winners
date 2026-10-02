@@ -18,7 +18,13 @@ import {
   type ConsentAcceptance,
 } from "@/lib/api";
 
-import { fromFailure, invalid, SUCCEEDED, type ActionResult } from "./action-result";
+import {
+  fromCredentialFailure,
+  fromFailure,
+  invalid,
+  SUCCEEDED,
+  type ActionResult,
+} from "./action-result";
 import { checkboxFrom, localeFrom, returnPathFrom, secretFrom, textFrom } from "./form-input";
 import { mutableSession } from "./session-server";
 
@@ -304,7 +310,7 @@ export async function loginAction(
     session,
   );
 
-  if (!result.ok) return fromFailure(result.error);
+  if (!result.ok) return fromCredentialFailure(result.error, "INVALID_CREDENTIALS");
 
   /*
    * UN 200 AQUI NO SIGNIFICA ESTAR DENTRO.
@@ -351,7 +357,7 @@ export async function verifyMfaAction(
   const session = await mutableSession();
   const result = await verifyMfa({ code: typed.replace(/\s+/g, "") }, locale, session);
 
-  if (!result.ok) return fromFailure(result.error, "code");
+  if (!result.ok) return fromCredentialFailure(result.error, "MFA_CODE_INVALID", "code");
 
   /*
    * Si el backend responde 200 y la sesion sigue sin autenticar, NO se sale de

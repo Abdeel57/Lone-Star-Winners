@@ -24,6 +24,7 @@
  *   (`services/availability.ts`).
  */
 
+import { MAXIMUM_PASSWORD_LENGTH, MINIMUM_PASSWORD_LENGTH } from "@lsw/security";
 import { z } from "zod";
 
 import type { AppDependencies } from "../app.js";
@@ -194,6 +195,10 @@ export function buildStorefrontRoutes(dependencies: AppDependencies): RouteDefin
           feature_flags: config.featureFlags,
           amoe_mode: config.amoeMode,
           supported_locales: ["en-US", "es-US"] as const,
+          password_policy: {
+            minimum_length: MINIMUM_PASSWORD_LENGTH,
+            maximum_length: MAXIMUM_PASSWORD_LENGTH,
+          },
         };
       },
     },

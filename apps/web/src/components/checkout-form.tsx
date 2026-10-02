@@ -84,7 +84,12 @@ export function CheckoutForm({ locale }: { readonly locale: Locale }) {
           />
         </FormField>
 
-        <FormField label={t("fields.country")} required error={fieldError("country")}>
+        <FormField
+          label={t("fields.country")}
+          description={t("fields.countryHint")}
+          required
+          error={fieldError("country")}
+        >
           <Input name="country" type="text" autoComplete="shipping country-name" />
         </FormField>
       </div>

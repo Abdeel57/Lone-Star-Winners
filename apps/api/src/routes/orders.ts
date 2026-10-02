@@ -52,7 +52,7 @@ import {
   type Order,
   type ProviderEvent,
 } from "@lsw/commerce";
-import { minorAmountSchema, type QualifiedOrder } from "@lsw/sweepstakes";
+import { isSweepstakesError, minorAmountSchema, type QualifiedOrder } from "@lsw/sweepstakes";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 
@@ -189,8 +189,14 @@ export function buildOrdersRoutes(dependencies: AppDependencies): RouteDefinitio
    * `IGNORED`, que no es lo mismo que `PROCESSED`: un `DISPUTE_WON` que no
    * cambia nada y un `PAYMENT_SUCCEEDED` que otorgo participaciones no deben
    * verse igual en la cola de operaciones.
+   *
+   * `paidOrderIds` recoge los pedidos que este evento deja pagados, para que el
+   * webhook cierre su carrito DESPUES de confirmar la transaccion.
    */
-  async function handleProviderEvent(event: ProviderEvent): Promise<boolean> {
+  async function handleProviderEvent(
+    event: ProviderEvent,
+    paidOrderIds: string[],
+  ): Promise<boolean> {
     const order = await findOrderForEvent(event);
     if (order === null) {
       // Evento de un pago que no conocemos. NO es un fallo: puede ser de otro
@@ -202,6 +208,7 @@ export function buildOrdersRoutes(dependencies: AppDependencies): RouteDefinitio
       case "PAYMENT_SUCCEEDED": {
         const acted = await applyQualifyingPayment(order, event);
         await settleCheckoutSession(order.id, "COMPLETED");
+        paidOrderIds.push(order.id);
         return acted;
       }
       case "PAYMENT_FAILED":
@@ -279,10 +286,19 @@ export function buildOrdersRoutes(dependencies: AppDependencies): RouteDefinitio
   /**
    * Aplica un pago que puede hacer calificar al pedido, y si califica, otorga.
    *
-   * Las dos escrituras -estado del pedido y fila del ledger- van en la MISMA
-   * transaccion. Si el pedido quedara confirmado y el award fallara, el
-   * participante veria un pedido pagado sin participaciones y nadie sabria que
-   * faltan.
+   * PRIMERO SE OTORGA Y DESPUES SE CONFIRMA EL PEDIDO, y el orden es la
+   * garantia. Todo esto corre dentro de la transaccion del webhook, y el
+   * procesador CAPTURA el error del manejador para marcar el evento FAILED y
+   * confirmar esa transaccion. Con el orden al reves, un award que fallaba
+   * dejaba el pedido PAID y calificado sin una sola fila de ledger, y el
+   * reintento ya no otorgaba nada: `justQualified` salia `false` porque el
+   * pedido constaba como calificado.
+   *
+   * Asi, si el award falla, el pedido sigue en PENDING_PAYMENT y el reintento
+   * lo repite entero. Si lo que falla es confirmar el pedido despues de
+   * otorgar, el reintento encuentra la concesion hecha (`ALREADY_AWARDED`, es
+   * idempotente por `order:<id>`) y solo confirma. En ningun caso queda un
+   * pedido cobrado sin participaciones ni participaciones duplicadas.
    */
   async function applyQualifyingPayment(order: Order, event: ProviderEvent): Promise<boolean> {
     if (order.promotionId === null) {
@@ -305,14 +321,10 @@ export function buildOrdersRoutes(dependencies: AppDependencies): RouteDefinitio
 
     return await domain.repositories.unitOfWork.withTransaction(async () => {
       const change = applyPaymentState(order, "PAID", event.occurredAt, qualifyingState);
-      await persistPaymentState(change.order, event, "PAID");
-
-      if (!change.justQualified) {
-        return true;
-      }
 
       const qualifiedAt = change.order.qualifiedAt;
-      if (qualifiedAt === null) {
+      if (!change.justQualified || qualifiedAt === null) {
+        await persistPaymentState(change.order, event, "PAID");
         return true;
       }
 
@@ -333,9 +345,30 @@ export function buildOrdersRoutes(dependencies: AppDependencies): RouteDefinitio
         })),
       };
 
-      await domain.award.awardForQualifiedOrder(qualified);
+      try {
+        await domain.award.awardForQualifiedOrder(qualified);
+      } catch (error) {
+        if (!outsidePromotionWindow(error)) throw error;
+        // Pago fuera del periodo de la promocion -antes de `starts_at`, despues
+        // de `ends_at`, o con la promocion ya en exportacion-. No es un fallo:
+        // las Official Rules no dan participaciones fuera del periodo. Se
+        // registra el cobro SIN calificar, igual que una compra sin promocion;
+        // reintentarlo no cambiaria nada y dejaria el pedido sin confirmar.
+        await persistPaymentState(paidOutsidePromotion(order, event.occurredAt), event, "PAID");
+        return true;
+      }
+
+      await persistPaymentState(change.order, event, "PAID");
       return true;
     });
+  }
+
+  /** El award rechazo el pedido por el periodo o el estado de la promocion, no por un fallo. */
+  function outsidePromotionWindow(error: unknown): boolean {
+    return (
+      isSweepstakesError(error, "PROMOTION_WINDOW_CLOSED") ||
+      isSweepstakesError(error, "PROMOTION_NOT_ACCEPTING_ENTRIES")
+    );
   }
 
   async function applyNonQualifyingPayment(order: Order, event: ProviderEvent): Promise<boolean> {
@@ -865,6 +898,7 @@ export function buildOrdersRoutes(dependencies: AppDependencies): RouteDefinitio
         // TODO el ciclo va dentro de UNA transaccion: la reclamacion del evento
         // es un `pg_try_advisory_xact_lock`, y fuera de transaccion se liberaria
         // al instante y dejaria de serializar las entregas concurrentes.
+        const paidOrderIds: string[] = [];
         const outcome = await domain.repositories.unitOfWork.withTransaction(() =>
           processor.receive(
             {
@@ -872,9 +906,26 @@ export function buildOrdersRoutes(dependencies: AppDependencies): RouteDefinitio
               headers: request.headers,
               receivedAt: domain.clock.now(),
             },
-            handleProviderEvent,
+            (event) => handleProviderEvent(event, paidOrderIds),
           ),
         );
+
+        // Lo pagado sale del carrito: sin esto seguia abierto con lo mismo
+        // dentro, y un segundo "Finalizar pedido" lo cobraba otra vez. Va
+        // DESPUES de confirmar la transaccion y sin propagar errores: cerrar un
+        // carrito no puede deshacer un cobro ni unas participaciones otorgadas.
+        if (outcome.status === "PROCESSED") {
+          for (const orderId of paidOrderIds) {
+            try {
+              await repositories.carts.convertForPaidOrder(orderId);
+            } catch (error) {
+              request.log.warn(
+                { event: "webhook.cart_not_converted", order_id: orderId, err: error },
+                "el pedido quedo pagado pero su carrito sigue abierto",
+              );
+            }
+          }
+        }
 
         switch (outcome.status) {
           case "REJECTED":
@@ -902,10 +953,17 @@ export function buildOrdersRoutes(dependencies: AppDependencies): RouteDefinitio
               { event: "webhook.handler_failed", error_code: outcome.errorCode },
               "el manejador del webhook fallo",
             );
-            // 200 igualmente: el evento quedo persistido en FAILED y visible en
-            // la cola de reproceso. Un 5xx solo conseguiria que el proveedor
-            // reintentara contra el mismo fallo.
-            return { received: true as const };
+            // 500, para que el proveedor REINTENTE. El evento ya quedo en FAILED
+            // -la transaccion de arriba lo confirmo- y un reintento lo reclama
+            // y lo procesa otra vez. Antes se respondia 200 porque reintentar
+            // no arreglaba nada: el pedido quedaba pagado y calificado sin
+            // participaciones. Desde que `applyQualifyingPayment` otorga ANTES
+            // de confirmar el pedido, un fallo no deja nada a medias y el
+            // reintento si lo completa: un corte de la base, o una version de
+            // reglas corregida despues. Y si el fallo persiste, Stripe avisa
+            // por correo de que el endpoint falla, que es la unica alarma que
+            // hay mientras el panel no ensene la cola de webhooks.
+            throw ApiErrors.internal();
           case "PROCESSED":
           case "IGNORED":
           default:

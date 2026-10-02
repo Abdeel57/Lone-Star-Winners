@@ -1,6 +1,6 @@
 "use client";
 
-import { Alert, Button, FormField, Input, Textarea } from "@lsw/ui";
+import { Alert, Button, FormField, Input, Select, Textarea } from "@lsw/ui";
 import { useTranslations } from "next-intl";
 import { useActionState } from "react";
 
@@ -91,6 +91,25 @@ export function AmoeTranscribeForm({
         error={fieldError("participant_email")}
       >
         <Input name="participant_email" type="email" autoComplete="off" required />
+      </FormField>
+
+      {/* El idioma del TITULAR de la ficha. La API lo exige y sin valor por
+          defecto (DEC-021): es el de la cuenta que se crea si ese correo no
+          tenia una, y quien teclea la ficha sabe en que idioma esta escrita.
+          Sin este campo, cada transcripcion volvia con un 422. */}
+      <FormField
+        label={t("preferredLocaleLabel")}
+        description={t("preferredLocaleHint")}
+        required
+        error={fieldError("preferred_locale")}
+      >
+        <Select name="preferred_locale" required defaultValue="">
+          <option value="" disabled>
+            {t("preferredLocaleUnset")}
+          </option>
+          <option value="es-US">{t("preferredLocaleEs")}</option>
+          <option value="en-US">{t("preferredLocaleEn")}</option>
+        </Select>
       </FormField>
 
       <div className="grid grid-cols-1 gap-s4 sm:grid-cols-2">

@@ -44,7 +44,13 @@ import {
   updateAdminProduct,
   updateAdminPromotion,
 } from "@/lib/api";
-import { fromFailure, invalid, SUCCEEDED, type ActionResult } from "@/lib/action-result";
+import {
+  fromCredentialFailure,
+  fromFailure,
+  invalid,
+  SUCCEEDED,
+  type ActionResult,
+} from "@/lib/action-result";
 import { checkboxFrom, localeFrom, secretFrom, textFrom } from "@/lib/form-input";
 import { isIanaTimeZone, priceToMinorUnits, zonedWallTimeToIso } from "@/lib/admin/catalog-input";
 import { checkImage, imageFrom } from "@/lib/admin/image-upload";
@@ -132,7 +138,7 @@ export async function staffLoginAction(
   const session = await mutableSession();
   const result = await login({ email, password: credential }, locale, session);
 
-  if (!result.ok) return fromFailure(result.error);
+  if (!result.ok) return fromCredentialFailure(result.error, "INVALID_CREDENTIALS");
 
   const destination = adminDestination(formData, locale);
 
@@ -180,7 +186,7 @@ export async function staffMfaAction(
   // No se comprueba que sean seis: la longitud es politica del backend.
   const result = await verifyMfa({ code: typed.replace(/\s+/g, "") }, locale, session);
 
-  if (!result.ok) return fromFailure(result.error, "code");
+  if (!result.ok) return fromCredentialFailure(result.error, "MFA_CODE_INVALID", "code");
 
   /*
    * Escrita EN POSITIVO (HO-027). Si el backend responde 200 y la sesion sigue
@@ -1712,6 +1718,13 @@ export async function transcribeAmoeAction(
   const email = textFrom(formData, "participant_email");
   if (email === null) return invalid("FIELD_REQUIRED", "participant_email");
 
+  // El idioma del titular de la ficha, no el del panel. Sin valor por defecto:
+  // la API tampoco lo tiene (DEC-021).
+  const preferredLocale = textFrom(formData, "preferred_locale");
+  if (preferredLocale !== "en-US" && preferredLocale !== "es-US") {
+    return invalid("FIELD_REQUIRED", "preferred_locale");
+  }
+
   const keysRaw = textFrom(formData, "payload_keys");
   if (keysRaw === null) return invalid("VALIDATION_FAILED", "payload_keys");
 
@@ -1735,6 +1748,7 @@ export async function transcribeAmoeAction(
     {
       promotion_id: promotionId,
       participant_email: email,
+      preferred_locale: preferredLocale,
       payload,
       ...(envelope === null ? {} : { envelope_reference: envelope }),
       ...(cards === null ? {} : { cards_in_envelope: cards }),

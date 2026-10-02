@@ -20,12 +20,13 @@ import type { ActionResult } from "@/lib/action-result";
  *
  * NINGUNA DE ESTAS PIEZAS CONTIENE UNA REGLA
  * ------------------------------------------
- * No hay longitud minima de contrasena, ni patron de correo mas alla del
- * `type="email"` del navegador, ni edad, ni jurisdiccion. La politica de
- * contrasenas es de `packages/security` (DEC-006) y la elegibilidad es de las
- * Official Rules: escribir aqui un `minLength` seria fijar en el frontend una
+ * No hay longitud minima de contrasena escrita aqui, ni patron de correo mas
+ * alla del `type="email"` del navegador, ni edad, ni jurisdiccion. La politica
+ * de contrasenas es de `packages/security` (DEC-006) y la elegibilidad es de
+ * las Official Rules: escribir aqui un `12` seria fijar en el frontend una
  * regla que vive en otro sitio, y el dia que cambiara, esta pantalla
- * rechazaria contrasenas que el backend acepta.
+ * rechazaria contrasenas que el backend acepta. El minimo que SI se ensena
+ * llega publicado por `GET /config` (`password_policy`).
  */
 
 /**
@@ -123,7 +124,9 @@ export function EmailField({
  * `current-password` ofrece la guardada. Poner el mismo en los dos sitios
  * rompe justo la funcion que hace que la gente use contrasenas buenas.
  *
- * SIN `minLength` NI `pattern`. La politica es de `packages/security`.
+ * `minLength` solo cuando llega `minimumLength`, que es el que publica el
+ * backend. Sin el, ni `minLength` ni `pattern`: la politica es de
+ * `packages/security`.
  */
 export function PasswordField({
   result,
@@ -131,12 +134,14 @@ export function PasswordField({
   label,
   purpose,
   description,
+  minimumLength,
 }: {
   readonly result: ActionResult;
   readonly name: string;
   readonly label: string;
   readonly purpose: "new-password" | "current-password";
   readonly description?: ReactNode;
+  readonly minimumLength?: number | null;
 }) {
   const t = useTranslations("auth.fields");
   const fieldError = useFieldError(result);
@@ -149,8 +154,59 @@ export function PasswordField({
       error={fieldError(name)}
       {...(description === undefined ? {} : { description })}
     >
-      <Input name={name} type="password" autoComplete={purpose} />
+      <Input
+        name={name}
+        type="password"
+        autoComplete={purpose}
+        {...(minimumLength === undefined || minimumLength === null
+          ? {}
+          : { minLength: minimumLength })}
+      />
     </FormField>
+  );
+}
+
+/**
+ * Contrasena nueva y su repeticion: alta, restablecimiento por correo y por SMS.
+ *
+ * Con `minimumLength` (de `GET /config`, `password_policy.minimum_length`) la
+ * pista dice cuantos caracteres hacen falta ANTES de enviar y el navegador
+ * frena una contrasena corta sin gastar el viaje. Sin el -una API anterior o un
+ * fallo de configuracion- vuelve a la pista generica y el numero llega con el
+ * 422, como antes.
+ */
+export function NewPasswordFields({
+  result,
+  minimumLength,
+}: {
+  readonly result: ActionResult;
+  readonly minimumLength: number | null;
+}) {
+  const t = useTranslations("auth.fields");
+
+  return (
+    <>
+      <PasswordField
+        result={result}
+        name="password"
+        label={t("password")}
+        purpose="new-password"
+        description={
+          minimumLength === null
+            ? t("passwordHint")
+            : t("passwordHintMinimum", { count: minimumLength })
+        }
+        minimumLength={minimumLength}
+      />
+
+      <PasswordField
+        result={result}
+        name="password_confirmation"
+        label={t("passwordConfirmation")}
+        purpose="new-password"
+        minimumLength={minimumLength}
+      />
+    </>
   );
 }
 

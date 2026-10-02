@@ -140,6 +140,7 @@ function draftV2Config(overrides: Record<string, unknown> = {}): Record<string, 
     entry_limits: { per_order_max: null, per_participant_max: 10000 },
     partial_refund_rounding_policy: "FLOOR",
     currency: "USD",
+    order_qualification: { qualifying_payment_state: "PAID" },
     ...overrides,
   };
 }
@@ -477,6 +478,7 @@ describe("versiones de reglas (13.7)", () => {
 
   it("activar deja traza: quien, cuando y por que", async () => {
     shared.rules = {
+      findRulesVersion: () => Promise.resolve(rulesVersionRow({ status: "DRAFT" })),
       activateRulesVersion: () => Promise.resolve(rulesVersionRow()),
     };
 
@@ -489,6 +491,53 @@ describe("versiones de reglas (13.7)", () => {
 
     expect(response.statusCode).toBe(200);
     expect(auditEvents.map((event) => event.action)).toContain("rules.version.activated");
+    await app.close();
+  });
+
+  it("no activa una version que no declara en que estado de pago califica un pedido", async () => {
+    // Sin `order_qualification` el trigger de DEC-012 dejaba activar, y despues
+    // cada webhook de pago fallaba: compras cobradas, ninguna participacion.
+    const { order_qualification: _omitted, ...withoutQualification } = draftV2Config();
+    let activated = false;
+    shared.rules = {
+      findRulesVersion: () =>
+        Promise.resolve(rulesVersionRow({ status: "DRAFT", config: withoutQualification })),
+      activateRulesVersion: () => {
+        activated = true;
+        return Promise.resolve(rulesVersionRow());
+      },
+    };
+
+    const app = await openApp();
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/v1/admin/promotions/${PROMOTION_ID}/rules-versions/${RULES_VERSION_ID}/activate`,
+      payload: { reason_code: "activate_v2" },
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json<{ error: { code: string } }>().error.code).toBe("LIFECYCLE_REFUSED");
+    expect(activated).toBe(false);
+    await app.close();
+  });
+
+  it("sin punto de calificacion el borrador no es activable y el calculo queda pendiente", async () => {
+    const { order_qualification: _omitted, ...withoutQualification } = draftV2Config();
+    shared.rules = {
+      listRulesVersions: () =>
+        Promise.resolve([rulesVersionRow({ status: "DRAFT", config: withoutQualification })]),
+    };
+
+    const app = await openApp();
+    const body = (
+      await app.inject({
+        method: "GET",
+        url: `/api/v1/admin/promotions/${PROMOTION_ID}/rules-versions`,
+      })
+    ).json<{ items: { activatable: boolean; validation: { calculation: string } }[] }>();
+
+    expect(body.items[0]?.activatable).toBe(false);
+    expect(body.items[0]?.validation.calculation).toBe("UNRESOLVED");
     await app.close();
   });
 

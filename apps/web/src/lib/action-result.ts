@@ -116,6 +116,27 @@ export function fromFailure(failure: ApiFailure, field: string | null = null): A
 }
 
 /**
+ * Fallo de una ruta de CREDENCIALES: entrar o verificar el segundo factor.
+ *
+ * Ahi el backend responde `401 UNAUTHENTICATED` tanto a una contrasena mala
+ * como a una cuenta inexistente o a un codigo caducado, a proposito: distinguir
+ * los casos convertiria el login en un comprobador de cuentas. Pero el texto
+ * generico de ese codigo es "Tienes que iniciar sesion para hacer eso", que en
+ * la pantalla de iniciar sesion no significa nada, y la gente lo leia como un
+ * fallo de la pagina. Aqui el 401 se dice como lo que es en este contexto -la
+ * credencial no vale- sin revelar cual de los casos fue. El resto de fallos
+ * (bloqueo, limite, red) siguen con su propio codigo.
+ */
+export function fromCredentialFailure(
+  failure: ApiFailure,
+  code: "INVALID_CREDENTIALS" | "MFA_CODE_INVALID",
+  field: string | null = null,
+): ActionResult {
+  const result = fromFailure(failure, field);
+  return failure.kind === "http" && failure.status === 401 ? { ...result, code } : result;
+}
+
+/**
  * Extrae `minimum_length` de un 422 `WEAK_PASSWORD`, y solo cuando el motivo es
  * `too_short`: anunciar un minimo a quien se paso del maximo seria mandarle en
  * la direccion contraria. Misma comprobacion en tiempo de ejecucion que

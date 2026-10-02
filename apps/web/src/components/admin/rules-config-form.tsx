@@ -77,6 +77,34 @@ const FIELDS = [
   },
 
   // --- Tasa por tipo de producto (§13.1)
+  //
+  // Las tres primeras solo se podian escribir en la vista JSON, y la primera es
+  // la que decide si una compra otorga algo: sin ella el webhook no califica
+  // ningun pedido. Al vaciarlas, la que viaja es la clave ENTERA en su estado
+  // pendiente (`clearPath`), no un `{ mode: null }` que la API rechazaria.
+  {
+    id: "qualifyingPaymentState",
+    path: "order_qualification.qualifying_payment_state",
+    clearPath: "order_qualification",
+    kind: "qualifying",
+    empty: "TBD",
+    group: "rates",
+  },
+  {
+    id: "productEligibilityMode",
+    path: "product_eligibility.mode",
+    clearPath: "product_eligibility",
+    kind: "eligibility",
+    empty: "TBD",
+    group: "rates",
+  },
+  {
+    id: "productEligibilitySkus",
+    path: "product_eligibility.skus",
+    kind: "list",
+    empty: "null",
+    group: "rates",
+  },
   {
     id: "merchandiseNumerator",
     path: "purchase_entry_formula.rates.MERCHANDISE.entries_per_amount_unit.numerator",
@@ -152,6 +180,13 @@ const FIELDS = [
 
   // --- AMOE postal (§13.2)
   { id: "amoeMode", path: "amoe.mode", kind: "amoeMode", empty: "null", group: "amoe" },
+  {
+    id: "amoeRequiresReview",
+    path: "amoe.requires_review",
+    kind: "boolean",
+    empty: "null",
+    group: "amoe",
+  },
   {
     id: "amoeWindowStart",
     path: "amoe.submission_window.starts_at",
@@ -334,6 +369,16 @@ const AMOE_MODE_VALUES = [
   "EXTERNAL_INSTRUCTIONS",
 ] as const;
 
+/**
+ * Estados de pago que pueden calificar un pedido (`QUALIFYING_PAYMENT_STATES`
+ * de `@lsw/commerce`). Cual se usa lo decide el abogado; la lista la cierra
+ * el dominio.
+ */
+const QUALIFYING_PAYMENT_STATES = ["PAID", "AUTHORIZED"] as const;
+
+/** Modos de elegibilidad de producto (`productEligibilitySchema` del motor). */
+const PRODUCT_ELIGIBILITY_MODES = ["ALL_PRODUCTS", "ALLOW_LIST", "DENY_LIST"] as const;
+
 export function RulesConfigForm({
   locale,
   action,
@@ -371,10 +416,10 @@ export function RulesConfigForm({
   const config = parseConfig(configText);
 
   /** Escribe una ruta y vuelve a serializar. El objeto vive en el texto. */
-  const update = (path: string, value: unknown): void => {
+  const update = (field: FieldSpec, value: unknown): void => {
     if (config === null) return;
 
-    const next = setPath(config, path, value);
+    const next = withCompanions(field, setFieldValue(config, field, value));
     setConfigText(JSON.stringify(next, null, 2));
     setParseError(false);
   };
@@ -459,7 +504,7 @@ export function RulesConfigForm({
                     value={readPath(config, field.path)}
                     editable={editable}
                     onChange={(value) => {
-                      update(field.path, value);
+                      update(field, value);
                     }}
                   />
                 </FormField>
@@ -534,13 +579,14 @@ function FieldControl({
     );
   }
 
-  if (field.kind === "rounding" || field.kind === "conflict" || field.kind === "amoeMode") {
-    const options =
-      field.kind === "rounding"
-        ? ROUNDING_POLICIES
-        : field.kind === "conflict"
-          ? CONFLICT_STRATEGIES
-          : AMOE_MODE_VALUES;
+  if (
+    field.kind === "rounding" ||
+    field.kind === "conflict" ||
+    field.kind === "amoeMode" ||
+    field.kind === "qualifying" ||
+    field.kind === "eligibility"
+  ) {
+    const options = enumOptions(field.kind);
 
     return (
       <Select
@@ -587,6 +633,85 @@ function FieldControl({
       }}
     />
   );
+}
+
+/** Las listas cerradas del dominio, una por tipo de desplegable. */
+function enumOptions(
+  kind: "rounding" | "conflict" | "amoeMode" | "qualifying" | "eligibility",
+): readonly string[] {
+  switch (kind) {
+    case "rounding":
+      return ROUNDING_POLICIES;
+    case "conflict":
+      return CONFLICT_STRATEGIES;
+    case "amoeMode":
+      return AMOE_MODE_VALUES;
+    case "qualifying":
+      return QUALIFYING_PAYMENT_STATES;
+    case "eligibility":
+      return PRODUCT_ELIGIBILITY_MODES;
+  }
+}
+
+/**
+ * Escribe el valor de un campo.
+ *
+ * Con `clearPath`, vaciar el campo escribe el valor pendiente (`empty`) en la
+ * clave ENTERA: `product_eligibility: "TBD"`, no `{ mode: null }`. El trigger
+ * de DEC-012 reconoce lo primero como pendiente; lo segundo es una rebanada
+ * presente y mal formada, y la API rechazaria el guardado entero.
+ */
+function setFieldValue(
+  config: Record<string, unknown>,
+  field: FieldSpec,
+  value: unknown,
+): Record<string, unknown> {
+  const clearPath = "clearPath" in field ? field.clearPath : undefined;
+  if (clearPath !== undefined && (value === null || value === "TBD")) {
+    return setPath(config, clearPath, field.empty === "TBD" ? "TBD" : null);
+  }
+
+  if (clearPath !== undefined) {
+    // La clave estaba en su estado pendiente ("TBD", una cadena): se reemplaza
+    // por un objeto antes de escribir dentro.
+    const current = readPath(config, clearPath);
+    if (typeof current !== "object" || current === null) {
+      return setPath(setPath(config, clearPath, {}), field.path, value);
+    }
+  }
+
+  return setPath(config, field.path, value);
+}
+
+/**
+ * Claves hermanas que el dominio exige juntas.
+ *
+ * - `entry_limits` lleva SIEMPRE sus dos topes; rellenar uno solo dejaba el
+ *   objeto sin el otro y el calculo pasaba a INVALID.
+ * - `multipliers` necesita `periods` en cuanto tiene estrategia; sin el, la API
+ *   rechazaba el guardado con 422. Una lista vacia no inventa nada: los periodos
+ *   se anaden con el atajo de bonificacion.
+ */
+function withCompanions(
+  field: FieldSpec,
+  config: Record<string, unknown>,
+): Record<string, unknown> {
+  let next = config;
+
+  if (field.path.startsWith("entry_limits.")) {
+    for (const sibling of ["entry_limits.per_order_max", "entry_limits.per_participant_max"]) {
+      if (readPath(next, sibling) === undefined) next = setPath(next, sibling, null);
+    }
+  }
+
+  if (
+    field.path === "multipliers.conflict_strategy" &&
+    readPath(next, "multipliers.periods") === undefined
+  ) {
+    next = setPath(next, "multipliers.periods", []);
+  }
+
+  return next;
 }
 
 function groupLabel(

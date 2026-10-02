@@ -273,6 +273,16 @@ export interface CartRepository {
    */
   setItemQuantity(cartId: string, itemId: string, quantity: number): Promise<CartRecord | null>;
   removeItem(cartId: string, itemId: string): Promise<CartRecord | null>;
+  /**
+   * Cierra (`CONVERTED`) el carrito del que salio un pedido ya pagado.
+   *
+   * Sin esto el carrito seguia abierto despues de pagar, con lo mismo dentro, y
+   * un segundo "Finalizar pedido" cobraba otra vez lo ya cobrado. Se busca por
+   * `orders.cart_id` y no por el dueno: si el participante ya abrio un carrito
+   * nuevo, ese no se toca. Solo mueve un carrito OPEN, asi que repetir el
+   * webhook no hace nada.
+   */
+  convertForPaidOrder(orderId: string): Promise<void>;
 }
 
 // ---------------------------------------------------------------------------

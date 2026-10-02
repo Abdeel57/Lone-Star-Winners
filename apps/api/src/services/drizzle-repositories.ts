@@ -27,6 +27,7 @@ import {
   carts,
   featureFlagSettings,
   featureFlags,
+  orders,
   productCategories,
   productCategoryTranslations,
   productTranslations,
@@ -605,6 +606,23 @@ function createCartRepository(db: Database): CartRepository {
         .returning({ id: cartItems.id });
 
       return deleted.length === 0 ? null : read(cartId);
+    },
+
+    convertForPaidOrder: async (orderId) => {
+      // `IN (subconsulta)`: un pedido sin `cart_id` devuelve NULL y no casa con
+      // ningun carrito, que es exactamente lo que tiene que pasar.
+      await db
+        .update(carts)
+        .set({ status: "CONVERTED" })
+        .where(
+          and(
+            eq(carts.status, "OPEN"),
+            inArray(
+              carts.id,
+              db.select({ id: orders.cartId }).from(orders).where(eq(orders.id, orderId)),
+            ),
+          ),
+        );
     },
   };
 }

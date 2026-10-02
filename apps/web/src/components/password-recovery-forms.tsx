@@ -19,7 +19,7 @@ import {
   EmailField,
   FormError,
   LocaleField,
-  PasswordField,
+  NewPasswordFields,
   PhoneField,
   SmsCodeField,
   type AuthChannel,
@@ -34,7 +34,14 @@ import { TurnstileWidget } from "./turnstile-widget";
  * de introduccion lo pinta este componente y no la pagina, porque depende del
  * canal elegido.
  */
-export function ForgotPasswordChooser({ locale }: { readonly locale: Locale }) {
+export function ForgotPasswordChooser({
+  locale,
+  passwordMinimum = null,
+}: {
+  readonly locale: Locale;
+  /** `password_policy.minimum_length` de `GET /config`; `null` si no se publico. */
+  readonly passwordMinimum?: number | null;
+}) {
   const t = useTranslations("auth.forgot");
   const [channel, setChannel] = useState<AuthChannel>("email");
 
@@ -49,7 +56,7 @@ export function ForgotPasswordChooser({ locale }: { readonly locale: Locale }) {
       {channel === "email" ? (
         <ForgotPasswordForm locale={locale} />
       ) : (
-        <ForgotPasswordSmsFlow locale={locale} />
+        <ForgotPasswordSmsFlow locale={locale} passwordMinimum={passwordMinimum} />
       )}
     </div>
   );
@@ -62,7 +69,13 @@ export function ForgotPasswordChooser({ locale }: { readonly locale: Locale }) {
  * con el correo: la API responde lo mismo en los dos casos y esta pantalla no
  * pinta dos ramas.
  */
-function ForgotPasswordSmsFlow({ locale }: { readonly locale: Locale }) {
+function ForgotPasswordSmsFlow({
+  locale,
+  passwordMinimum,
+}: {
+  readonly locale: Locale;
+  readonly passwordMinimum: number | null;
+}) {
   const t = useTranslations("auth");
   const [phone, setPhone] = useState("");
   const [step, setStep] = useState<"phone" | "code">("phone");
@@ -129,20 +142,7 @@ function ForgotPasswordSmsFlow({ locale }: { readonly locale: Locale }) {
 
         <SmsCodeField result={resetState} />
 
-        <PasswordField
-          result={resetState}
-          name="password"
-          label={t("fields.password")}
-          purpose="new-password"
-          description={t("fields.passwordHint")}
-        />
-
-        <PasswordField
-          result={resetState}
-          name="password_confirmation"
-          label={t("fields.passwordConfirmation")}
-          purpose="new-password"
-        />
+        <NewPasswordFields result={resetState} minimumLength={passwordMinimum} />
 
         <Button type="submit" variant="accent" size="lg" fullWidth loading={resetting}>
           {t("forgot.phoneSubmit")}
@@ -225,9 +225,12 @@ export function ForgotPasswordForm({ locale }: { readonly locale: Locale }) {
 export function ResetPasswordForm({
   locale,
   token,
+  passwordMinimum = null,
 }: {
   readonly locale: Locale;
   readonly token: string;
+  /** `password_policy.minimum_length` de `GET /config`; `null` si no se publico. */
+  readonly passwordMinimum?: number | null;
 }) {
   const t = useTranslations("auth");
   const [state, formAction, pending] = useActionState(resetPasswordAction, IDLE);
@@ -256,20 +259,7 @@ export function ResetPasswordForm({
 
       <FormError result={state} />
 
-      <PasswordField
-        result={state}
-        name="password"
-        label={t("fields.password")}
-        purpose="new-password"
-        description={t("fields.passwordHint")}
-      />
-
-      <PasswordField
-        result={state}
-        name="password_confirmation"
-        label={t("fields.passwordConfirmation")}
-        purpose="new-password"
-      />
+      <NewPasswordFields result={state} minimumLength={passwordMinimum} />
 
       <Button type="submit" variant="accent" size="lg" fullWidth loading={pending}>
         {t("reset.submit")}

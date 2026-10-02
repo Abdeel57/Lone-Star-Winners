@@ -1073,6 +1073,18 @@ export interface SiteConfigResponse {
    * sean lo decide el abogado del cliente y lo publica el backend.
    */
   readonly required_consents?: readonly ConsentRequirement[];
+  /**
+   * [CONTRATO] Politica de contrasenas de `packages/security`.
+   *
+   * Opcional en el tipo por la misma razon que `feature_flags` es `Partial`: una
+   * API anterior no la publica, y entonces el formulario vuelve a decir solo
+   * que los requisitos se comprueban al enviar. El numero NUNCA se escribe en
+   * la web: llega de aqui o con el 422 `WEAK_PASSWORD`.
+   */
+  readonly password_policy?: {
+    readonly minimum_length: number;
+    readonly maximum_length: number;
+  };
 }
 
 /**

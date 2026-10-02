@@ -7,6 +7,8 @@ import { AuthPanel } from "@/components/auth-panel";
 import { ResetPasswordForm } from "@/components/password-recovery-forms";
 import { Link } from "@/i18n/navigation";
 import { routing } from "@/i18n/routing";
+import { fetchSiteConfig } from "@/lib/api";
+import { passwordMinimumFrom } from "@/lib/password-policy";
 
 export const dynamic = "force-dynamic";
 
@@ -60,9 +62,11 @@ export default async function ResetPasswordPage({
     );
   }
 
+  const passwordMinimum = passwordMinimumFrom(await fetchSiteConfig(locale));
+
   return (
     <AuthPanel title={t("title")} intro={t("intro")}>
-      <ResetPasswordForm locale={locale} token={linkToken} />
+      <ResetPasswordForm locale={locale} token={linkToken} passwordMinimum={passwordMinimum} />
     </AuthPanel>
   );
 }

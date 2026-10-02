@@ -405,6 +405,12 @@ export function createFakeRepositories(options: FakeOptions = {}): FakeRepositor
       cart.updatedAt = tick();
       return Promise.resolve(toCartRecord(cart));
     },
+    /**
+     * El doble no guarda pedidos, asi que no sabe de que carrito salio cada
+     * uno y no toca nada. La consulta real (por `orders.cart_id`) vive en
+     * `drizzle-repositories.ts`.
+     */
+    convertForPaidOrder: () => Promise.resolve(),
   };
 
   const config: ConfigRepository = {

@@ -350,8 +350,15 @@ Response: 200
     "dual_approval_for_sensitive_actions_enabled": true
   },
   "amoe_mode": null,
-  "supported_locales": ["en-US", "es-US"]
+  "supported_locales": ["en-US", "es-US"],
+  "password_policy": { "minimum_length": 12, "maximum_length": 1024 }
 }
+
+`password_policy` publica la política de `packages/security`
+(`MINIMUM_PASSWORD_LENGTH`, `MAXIMUM_PASSWORD_LENGTH`) para que los
+formularios de alta y de restablecimiento la digan ANTES de enviar (añadido
+2026-10-01). Es la misma constante que aplica `POST /auth/register`; la web no
+tiene copia del número.
 
 Las 12 claves son las de DEC-032. `amoe_mode` es un enum
 (`ONLINE_FORM` | `MAIL_IN_REVIEW` | `CODE` | `EXTERNAL_INSTRUCTIONS`) o `null`

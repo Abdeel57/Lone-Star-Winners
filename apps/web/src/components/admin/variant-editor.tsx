@@ -21,6 +21,16 @@ import type { AdminProductVariantRow } from "@/lib/api";
 const VARIANT_STATUSES = ["ACTIVE", "ARCHIVED"] as const;
 
 /**
+ * Variante tal como la edita el formulario.
+ *
+ * `priceText` llega YA convertido a texto con decimales ("25.00"), igual que el
+ * del producto en `ProductForm`. La accion lee el campo como un precio
+ * tecleado; rellenarlo con `price_amount_minor` ("2500") hacia que guardar la
+ * variante sin retocar el precio la subiera de $25.00 a $2,500.00.
+ */
+export type EditableVariant = AdminProductVariantRow & { readonly priceText: string };
+
+/**
  * Variantes de un producto (§13.6, DEC-053).
  *
  * POR QUE UNA POR UNA Y NO UN GUARDADO MASIVO
@@ -55,7 +65,7 @@ export function VariantEditor({
 }: {
   readonly locale: Locale;
   readonly productId: string;
-  readonly variants: readonly AdminProductVariantRow[];
+  readonly variants: readonly EditableVariant[];
   readonly createAction: (previous: ActionResult, formData: FormData) => Promise<ActionResult>;
   readonly updateAction: (previous: ActionResult, formData: FormData) => Promise<ActionResult>;
   readonly editable: boolean;
@@ -128,7 +138,7 @@ function VariantForm({
   readonly action: (previous: ActionResult, formData: FormData) => Promise<ActionResult>;
   readonly productId: string;
   /** `undefined` al crear. */
-  readonly variant?: AdminProductVariantRow;
+  readonly variant?: EditableVariant;
 }) {
   const t = useTranslations("admin.catalog");
   const [state, formAction, pending] = useActionState(action, IDLE);
@@ -168,7 +178,7 @@ function VariantForm({
             name="price"
             inputMode="decimal"
             required
-            defaultValue={variant?.price_amount_minor ?? ""}
+            defaultValue={variant?.priceText ?? ""}
           />
         </FormField>
 

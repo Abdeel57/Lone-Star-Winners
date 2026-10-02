@@ -129,6 +129,13 @@ export async function entryStateForOrder(
   });
 
   if (award === null) {
+    // Cobrado y NUNCA calificado: el pago llego fuera del periodo de la
+    // promocion y se registro sin calificar (`applyQualifyingPayment` en
+    // `routes/orders.ts`). No hay nada pendiente, y decir "pendiente de
+    // confirmacion de pago" de un pedido pagado seria falso.
+    if (order.paidAt !== null && order.qualifiedAt === null) {
+      return { state: "NOT_APPLICABLE", entriesGranted: null };
+    }
     return { state: "PENDING_QUALIFICATION", entriesGranted: null };
   }
 

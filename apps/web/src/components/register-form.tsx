@@ -15,7 +15,7 @@ import {
   EmailField,
   FormError,
   LocaleField,
-  PasswordField,
+  NewPasswordFields,
   PhoneField,
   SmsCodeField,
   useFieldError,
@@ -57,35 +57,34 @@ export function RegisterForm({
   locale,
   consents,
   returnPath,
+  passwordMinimum = null,
 }: {
   readonly locale: Locale;
   readonly consents: readonly ConsentRequirement[];
   readonly returnPath: string | null;
+  /** `password_policy.minimum_length` de `GET /config`; `null` si no se publico. */
+  readonly passwordMinimum?: number | null;
 }) {
   const [channel, setChannel] = useState<AuthChannel>("email");
+  const shared = { locale, consents, returnPath, passwordMinimum };
 
   return (
     <div className="flex flex-col gap-s5">
       <ChannelSwitch value={channel} onChange={setChannel} />
 
-      {channel === "email" ? (
-        <EmailRegisterForm locale={locale} consents={consents} returnPath={returnPath} />
-      ) : (
-        <PhoneRegisterFlow locale={locale} consents={consents} returnPath={returnPath} />
-      )}
+      {channel === "email" ? <EmailRegisterForm {...shared} /> : <PhoneRegisterFlow {...shared} />}
     </div>
   );
 }
 
-function EmailRegisterForm({
-  locale,
-  consents,
-  returnPath,
-}: {
+interface RegisterFlowProps {
   readonly locale: Locale;
   readonly consents: readonly ConsentRequirement[];
   readonly returnPath: string | null;
-}) {
+  readonly passwordMinimum: number | null;
+}
+
+function EmailRegisterForm({ locale, consents, returnPath, passwordMinimum }: RegisterFlowProps) {
   const t = useTranslations("auth");
   const [state, formAction, pending] = useActionState(registerAction, IDLE);
 
@@ -99,7 +98,11 @@ function EmailRegisterForm({
 
       <EmailField result={state} />
 
-      <ProfileAndPasswordFields result={state} consents={consents} />
+      <ProfileAndPasswordFields
+        result={state}
+        consents={consents}
+        passwordMinimum={passwordMinimum}
+      />
 
       <Button type="submit" variant="accent" size="lg" fullWidth loading={pending}>
         {t("register.submit")}
@@ -115,15 +118,7 @@ function EmailRegisterForm({
  * (ver `PhoneField`). El token anti-bots se renueva tras cada envio: cada uno
  * sirve una sola vez.
  */
-function PhoneRegisterFlow({
-  locale,
-  consents,
-  returnPath,
-}: {
-  readonly locale: Locale;
-  readonly consents: readonly ConsentRequirement[];
-  readonly returnPath: string | null;
-}) {
+function PhoneRegisterFlow({ locale, consents, returnPath, passwordMinimum }: RegisterFlowProps) {
   const t = useTranslations("auth");
   const [phone, setPhone] = useState("");
   const [step, setStep] = useState<"phone" | "code">("phone");
@@ -175,7 +170,11 @@ function PhoneRegisterFlow({
 
         <SmsCodeField result={registerState} />
 
-        <ProfileAndPasswordFields result={registerState} consents={consents} />
+        <ProfileAndPasswordFields
+          result={registerState}
+          consents={consents}
+          passwordMinimum={passwordMinimum}
+        />
 
         <Button type="submit" variant="accent" size="lg" fullWidth loading={registering}>
           {t("register.submit")}
@@ -199,9 +198,11 @@ function PhoneRegisterFlow({
 function ProfileAndPasswordFields({
   result,
   consents,
+  passwordMinimum,
 }: {
   readonly result: ActionResult;
   readonly consents: readonly ConsentRequirement[];
+  readonly passwordMinimum: number | null;
 }) {
   const t = useTranslations("auth");
   const consentText = useConsentText();
@@ -217,20 +218,7 @@ function ProfileAndPasswordFields({
         <Input name="display_name" type="text" autoComplete="name" />
       </FormField>
 
-      <PasswordField
-        result={result}
-        name="password"
-        label={t("fields.password")}
-        purpose="new-password"
-        description={t("fields.passwordHint")}
-      />
-
-      <PasswordField
-        result={result}
-        name="password_confirmation"
-        label={t("fields.passwordConfirmation")}
-        purpose="new-password"
-      />
+      <NewPasswordFields result={result} minimumLength={passwordMinimum} />
 
       {consents.length === 0 ? null : (
         <fieldset className="flex flex-col gap-s3 border-0 p-0">

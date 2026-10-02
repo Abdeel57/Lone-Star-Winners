@@ -492,6 +492,8 @@ export interface AdminSettingChangeDecisionInput extends AdminReasonInput {
 export interface AdminAmoeTranscriptionInput {
   readonly promotion_id: string;
   readonly participant_email: string;
+  /** Idioma del titular de la ficha. Obligatorio y sin defecto (DEC-021). */
+  readonly preferred_locale: "en-US" | "es-US";
   readonly payload: Readonly<Record<string, string>>;
   readonly envelope_reference?: string;
   readonly cards_in_envelope?: number;

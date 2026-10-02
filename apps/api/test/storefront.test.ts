@@ -7,6 +7,7 @@
  * directamente saltaria las dos.
  */
 
+import { MAXIMUM_PASSWORD_LENGTH, MINIMUM_PASSWORD_LENGTH } from "@lsw/security";
 import { describe, expect, it } from "vitest";
 
 import { createApp, type AppDependencies } from "../src/app.js";
@@ -43,6 +44,19 @@ describe("GET /api/v1/config", () => {
     expect(Object.keys(body.feature_flags)).toHaveLength(12);
     expect(body.feature_flags.internal_draw_enabled).toBe(false);
     expect(body.supported_locales).toEqual(["en-US", "es-US"]);
+    await app.close();
+  });
+
+  it("publica la politica de contrasenas de packages/security", async () => {
+    // El formulario de alta la dice ANTES de enviar. Tiene que ser la misma
+    // constante que aplica el alta, no una copia.
+    const app = await createApp(buildDependencies());
+    const response = await app.inject({ method: "GET", url: "/api/v1/config" });
+
+    expect(response.json<{ password_policy: unknown }>().password_policy).toEqual({
+      minimum_length: MINIMUM_PASSWORD_LENGTH,
+      maximum_length: MAXIMUM_PASSWORD_LENGTH,
+    });
     await app.close();
   });
 
