@@ -301,6 +301,17 @@ export function buildOrdersRoutes(dependencies: AppDependencies): RouteDefinitio
    * pedido cobrado sin participaciones ni participaciones duplicadas.
    */
   async function applyQualifyingPayment(order: Order, event: ProviderEvent): Promise<boolean> {
+    // Un "pagado" que llega cuando el pedido ya paso de PAID -reembolsado- es un
+    // duplicado tardio: el cobro ya consta y el estado posterior manda. Lanzar
+    // lo dejaba reintentandose para siempre.
+    if (
+      order.paidAt !== null &&
+      order.paymentState !== "PAID" &&
+      !paymentTransitionIsValid(order.paymentState, "PAID")
+    ) {
+      return false;
+    }
+
     if (order.promotionId === null) {
       // Compra fuera de promocion: se registra el pago y no hay nada que otorgar.
       // Se persiste el pedido YA TRANSICIONADO: guardar el de entrada dejaba el
@@ -373,6 +384,12 @@ export function buildOrdersRoutes(dependencies: AppDependencies): RouteDefinitio
 
   async function applyNonQualifyingPayment(order: Order, event: ProviderEvent): Promise<boolean> {
     const next = event.kind === "PAYMENT_FAILED" ? "FAILED" : "CANCELLED";
+    // Un "fallido" o "caducado" que llega cuando el pedido ya esta en un estado
+    // que no admite ese cambio -cobrado, reembolsado- no tiene nada que hacer:
+    // manda el estado posterior. Lanzar lo dejaba reintentandose para siempre.
+    if (order.paymentState !== next && !paymentTransitionIsValid(order.paymentState, next)) {
+      return false;
+    }
     const change = applyPaymentState(order, next, event.occurredAt, "PAID");
     await persistPaymentState(change.order, event, next);
     return true;
@@ -420,7 +437,13 @@ export function buildOrdersRoutes(dependencies: AppDependencies): RouteDefinitio
     };
 
     const basis = eligibleRefundAmount(order, refundEvent);
-    const intent = buildRefundReversalIntent(order, refundEvent);
+    // FULL/PARTIAL por el acumulado, con el mismo criterio que
+    // `buildRefundReversalIntent`. Se calcula aqui porque esa funcion EXIGE
+    // promocion y se llamaba antes de mirar si la habia: todo reembolso de una
+    // compra sin promocion lanzaba, el reembolso no se registraba y el webhook
+    // fallaba (2026-10-02, avisos de Stripe en sandbox). La intencion de
+    // reversal se construye mas abajo, solo cuando hay algo que revertir.
+    const kind = order.refundedAmountMinor + amountMinor >= order.totalMinor ? "FULL" : "PARTIAL";
 
     return await domain.repositories.unitOfWork.withTransaction(async () => {
       const recorded = await orders.recordRefund({
@@ -430,7 +453,7 @@ export function buildOrdersRoutes(dependencies: AppDependencies): RouteDefinitio
         providerRefundId: refundId,
         amountMinor,
         currency: order.currency,
-        kind: intent.kind,
+        kind,
         eligibleBasis: basis.basis,
         eligibleAmountMinor: basis.amountMinor,
         occurredAt: event.occurredAt,
@@ -455,10 +478,28 @@ export function buildOrdersRoutes(dependencies: AppDependencies): RouteDefinitio
       // pedir la reversion lanzaria por falta de origen: el reembolso quedaria
       // registrado pero el evento en FAILED para siempre.
       if (order.promotionId !== null && order.qualifiedAt !== null) {
-        await domain.reversal.reverseForRefund(intent);
+        const intent = buildRefundReversalIntent(order, refundEvent);
+        await reverseIfAwarded(() => domain.reversal.reverseForRefund(intent));
       }
       return true;
     });
+  }
+
+  /**
+   * Revierte, salvo que no haya concesion que revertir.
+   *
+   * Un pedido puede calificar y no tener fila de ledger: el calculo dio cero
+   * (la persona ya estaba en el tope) o la concesion quedo retenida. Devolverlo
+   * o disputarlo es entonces un hecho que se registra sin nada que revertir, no
+   * un fallo; tratarlo como fallo dejaba el evento reintentandose para siempre.
+   */
+  async function reverseIfAwarded(reverse: () => Promise<unknown>): Promise<void> {
+    try {
+      await reverse();
+    } catch (error) {
+      if (isSweepstakesError(error, "ORIGIN_TRANSACTION_NOT_FOUND")) return;
+      throw error;
+    }
   }
 
   /**
@@ -485,7 +526,6 @@ export function buildOrdersRoutes(dependencies: AppDependencies): RouteDefinitio
 
   async function applyDispute(order: Order, event: ProviderEvent): Promise<boolean> {
     const disputeId = event.relatedEventReference ?? event.providerEventId;
-    const intent = buildChargebackReversalIntent(order, disputeId, event.occurredAt, null);
 
     return await domain.repositories.unitOfWork.withTransaction(async () => {
       const recorded = await orders.recordDispute({
@@ -505,9 +545,19 @@ export function buildOrdersRoutes(dependencies: AppDependencies): RouteDefinitio
         return false;
       }
 
-      const change = applyPaymentState(order, "DISPUTED", event.occurredAt, "PAID");
-      await persistPaymentState(change.order, event, "DISPUTED");
-      await domain.reversal.reverseForChargeback(intent);
+      // Solo si la maquina de estados lo admite desde donde esta el pedido, igual
+      // que en los reembolsos.
+      if (paymentTransitionIsValid(order.paymentState, "DISPUTED")) {
+        const change = applyPaymentState(order, "DISPUTED", event.occurredAt, "PAID");
+        await persistPaymentState(change.order, event, "DISPUTED");
+      }
+
+      // `buildChargebackReversalIntent` EXIGE promocion: antes se llamaba al
+      // principio y una disputa sobre una compra sin promocion fallaba siempre.
+      if (order.promotionId !== null && order.qualifiedAt !== null) {
+        const intent = buildChargebackReversalIntent(order, disputeId, event.occurredAt, null);
+        await reverseIfAwarded(() => domain.reversal.reverseForChargeback(intent));
+      }
       return true;
     });
   }

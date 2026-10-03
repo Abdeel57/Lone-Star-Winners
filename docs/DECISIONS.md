@@ -3110,3 +3110,16 @@ configuración de reglas, transcripción AMOE, segundo factor del panel),
 
 Proposed by: sesión del usuario (2026-10-01), revisión previa al lanzamiento
 Agreed by: pendiente — backend-sweepstakes, security-integration, frontend-ux
+
+**Addendum 2026-10-03 — casos de negocio que no son fallos.** El punto 3 (500
+en `FAILED`) hizo visibles fallos que antes se tapaban con un 200, y Stripe
+avisó de que el endpoint de sandbox fallaba. La causa: `applyRefund` y
+`applyDispute` construían la intención de reversal ANTES de mirar si el pedido
+tenía promoción, y `buildRefundReversalIntent`/`buildChargebackReversalIntent`
+lanzan sin ella. Con ninguna promoción abierta, todo reembolso de prueba
+fallaba, y el reembolso ni siquiera quedaba registrado. Ahora el reembolso y la
+disputa se registran siempre; la reversal solo se construye si el pedido
+calificó, y `ORIGIN_TRANSACTION_NOT_FOUND` (calificó sin concesión: tope o
+retención) no es un fallo. Un "fallido"/"caducado" o un "pagado" que llega
+cuando el pedido ya está en un estado que no admite ese cambio se ignora
+(`IGNORED`, 200). Lo que siga fallando es un fallo de verdad y responde 500.

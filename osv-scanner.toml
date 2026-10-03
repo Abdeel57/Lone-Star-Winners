@@ -27,3 +27,19 @@
 id = "GHSA-82fw-gwwq-j7x9"
 ignoreUntil = 2026-12-31T00:00:00Z
 reason = "vitest/@vitest/mocker: solo devDependency, sin modo navegador ni mockerPlugin/interceptorPlugin; migrar a vitest 4 antes de esta fecha."
+
+# braces 3.0.3 (GHSA-vfj7-8cjw-p6xm). Revisado 2026-10-03.
+#
+# Desbordamiento de pila al EXPANDIR un patron con llaves anidadas a mucha
+# profundidad. Solo es explotable si alguien controla el PATRON que se le pasa a
+# braces. Aqui llega unicamente por `tailwindcss` (micromatch y chokidar, al
+# generar el CSS en el build) y por `@next/eslint-plugin-next` (fast-glob, en el
+# lint). Los patrones son los de su configuracion, escritos por nosotros; nada de
+# eso corre en produccion ni recibe datos de un visitante.
+#
+# No hay version corregida: el aviso cubre "hasta 3.0.3", que es la ultima. En
+# cuanto salga, se fuerza con un override y esta excepcion se borra.
+[[IgnoredVulns]]
+id = "GHSA-vfj7-8cjw-p6xm"
+ignoreUntil = 2026-11-30T00:00:00Z
+reason = "braces: solo via tailwindcss y el lint de Next, en build; patrones propios, nunca de un visitante. Sin version corregida aun."
