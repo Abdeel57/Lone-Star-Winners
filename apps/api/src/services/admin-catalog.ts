@@ -568,10 +568,17 @@ export function createAdminCatalogRepository(db: Database): AdminCatalogReposito
 
           // La variante sigue al producto: una variante ACTIVE colgando de un
           // producto ARCHIVED sigue siendo comprable por su identificador
-          // aunque el producto no aparezca en ningun listado.
+          // aunque el producto no aparezca en ningun listado. Con su marca
+          // temporal: `product_variants_archived_consistency` exige que
+          // ARCHIVED y `archived_at` vayan juntos, y sin ella archivar
+          // cualquier producto era un 500.
           await tx
             .update(productVariants)
-            .set({ status: input.status, updatedAt: now })
+            .set({
+              status: input.status,
+              updatedAt: now,
+              archivedAt: input.status === "ARCHIVED" ? now : null,
+            })
             .where(eq(productVariants.productId, productId));
         }
 
