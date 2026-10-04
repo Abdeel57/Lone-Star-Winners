@@ -32,6 +32,7 @@ import type {
   RulesVersionRecord,
 } from "../../src/services/ports.js";
 import { FEATURE_FLAG_KEYS, type FeatureFlagKey } from "../../src/http/feature-flag-catalog.js";
+import { pageOfCatalog } from "../../src/services/catalog-order.js";
 
 export const PROMOTION_ID = "11111111-1111-4111-8111-111111111111";
 export const RULES_VERSION_ID = "22222222-2222-4222-8222-222222222222";
@@ -315,10 +316,8 @@ export function createFakeRepositories(options: FakeOptions = {}): FakeRepositor
             categoryKey === null ||
             product.category?.key === categoryKey,
         );
-      const filtered = after === null ? visible : visible.filter((row) => row.slug > after);
-      return Promise.resolve(
-        [...filtered].sort((a, b) => a.slug.localeCompare(b.slug)).slice(0, limit),
-      );
+      // El mismo orden y el mismo cursor que el adaptador real.
+      return Promise.resolve(pageOfCatalog(visible, after, limit));
     },
     listCategoriesWithActiveProducts: () => {
       // Igual que el adaptador real: solo las que tienen algo que ensenar.

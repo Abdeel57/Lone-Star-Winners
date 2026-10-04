@@ -50,6 +50,7 @@ import {
  * encabezado de `services/availability.ts`.
  */
 import { availabilityFor, CATALOG_PROBE_QUANTITY } from "../services/availability.js";
+import { catalogSortKey } from "../services/catalog-order.js";
 import type { ProductRecord, PromotionRecord } from "../services/ports.js";
 
 const slugParamsSchema = z.object({
@@ -413,7 +414,10 @@ export function buildStorefrontRoutes(dependencies: AppDependencies): RouteDefin
           }),
           entryOfferContext(),
         ]);
-        const page = buildPage(rows, query.limit, (row) => ({ sortKey: row.slug, id: row.id }));
+        const page = buildPage(rows, query.limit, (row) => ({
+          sortKey: catalogSortKey(row),
+          id: row.id,
+        }));
 
         return {
           items: page.items.map((product) => toProductSummary(product, offerContext)),

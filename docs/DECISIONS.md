@@ -3123,3 +3123,34 @@ calificó, y `ORIGIN_TRANSACTION_NOT_FOUND` (calificó sin concesión: tope o
 retención) no es un fallo. Un "fallido"/"caducado" o un "pagado" que llega
 cuando el pedido ya está en un estado que no admite ese cambio se ignora
 (`IGNORED`, 200). Lo que siga fallando es un fallo de verdad y responde 500.
+
+## DEC-064
+
+Status: Proposed
+
+Date: 2026-10-03
+
+Decision:
+**El catálogo público tiene un orden elegido, no el alfabético.** Al cargar el
+catálogo real, el cliente pidió la mercancía con foto primero y los paquetes al
+final, de menor a mayor (Bronce, Plata, Gold, Diamante). `GET /products` ordena
+por una clave compuesta (`services/catalog-order.ts`): tipo (mercancía antes
+que paquetes), con imagen antes que sin ella, `position` de la categoría (sin
+categoría al final), precio "desde" de la variante activa más barata y `slug`.
+Los tramos son de ancho fijo, así que la clave es una cadena comparable y el
+cursor opaco la guarda sin cambiar de forma. Se ordena en memoria tras leer lo
+publicado: el catálogo es de decenas de productos.
+
+Alternatives:
+A — Columna `position` por producto editable en el panel (descartada por
+ahora: migración que aquí no se puede probar contra PostgreSQL y un campo más
+en el formulario; el orden pedido sale de datos que ya existen). B — Ordenar
+en la web (descartada: la paginación es del servidor y la segunda página no
+sabría qué hubo en la primera).
+
+Affected areas: `apps/api` (`services/catalog-order.ts`,
+`services/drizzle-repositories.ts`, `routes/storefront.ts`, tests),
+`docs/API_CONTRACT.md`.
+
+Proposed by: sesión del usuario (2026-10-03), carga del catálogo
+Agreed by: pendiente — backend-sweepstakes, frontend-ux

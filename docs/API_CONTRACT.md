@@ -686,8 +686,13 @@ decida, se documenta aquí antes de implementarse.
 Sólo salen productos y variantes en `ACTIVE`. El parámetro `promotion_slug` que
 figuraba en la propuesta **no está implementado**: la elegibilidad no vive en el
 catálogo (DEC-012), así que filtrar por promoción exigiría que el listado
-aplicase reglas legales, que es justo lo que este endpoint no debe hacer. El
-cursor ordena por `slug`.
+aplicase reglas legales, que es justo lo que este endpoint no debe hacer.
+
+Orden (DEC-064): mercancía antes que paquetes; dentro de cada tipo, con imagen
+antes que sin ella; después la `position` de la categoría (sin categoría, al
+final), el precio "desde" de menor a mayor y, por último, el `slug`. Así los
+paquetes salen Bronce, Plata, Gold, Diamante sin un campo de "rango". El cursor
+sigue siendo opaco y guarda esa clave de orden.
 
 ---
 

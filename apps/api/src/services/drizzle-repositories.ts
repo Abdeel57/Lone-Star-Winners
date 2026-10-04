@@ -41,6 +41,8 @@ import {
 } from "@lsw/database";
 import { FEATURE_FLAG_KEYS, type FeatureFlagKey } from "../http/feature-flag-catalog.js";
 
+import { pageOfCatalog } from "./catalog-order.js";
+
 import type {
   CartOwnerRef,
   CartRecord,
@@ -342,9 +344,6 @@ function createCatalogRepository(db: Database): CatalogRepository {
   return {
     listPublic: async ({ limit, after, kind, categoryKey }) => {
       const conditions = [eq(products.status, "ACTIVE"), isNull(products.archivedAt)];
-      if (after !== null) {
-        conditions.push(gt(products.slug, after));
-      }
       if (kind !== undefined && kind !== null) {
         conditions.push(eq(products.kind, kind));
       }
@@ -352,14 +351,15 @@ function createCatalogRepository(db: Database): CatalogRepository {
         conditions.push(eq(products.categoryKey, categoryKey));
       }
 
+      // Todo lo publicado que pasa los filtros, y el orden y el cursor se
+      // aplican despues: la clave mezcla precio de variante y posicion de
+      // categoria (ver `catalog-order.ts`).
       const rows = await db
         .select()
         .from(products)
-        .where(and(...conditions))
-        .orderBy(asc(products.slug))
-        .limit(limit);
+        .where(and(...conditions));
 
-      return hydrate(rows);
+      return pageOfCatalog(await hydrate(rows), after, limit);
     },
 
     listCategoriesWithActiveProducts: async () => {

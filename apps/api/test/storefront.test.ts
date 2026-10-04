@@ -466,3 +466,143 @@ describe("paginacion por cursor", () => {
     await app.close();
   });
 });
+
+/**
+ * Catalogo con la forma del real (DEC-064): mercancia de varias categorias,
+ * una sin foto y los cuatro paquetes, dados en un orden que no es ninguno.
+ */
+let nextCatalogId = 1;
+
+function catalogProduct(
+  slug: string,
+  options: {
+    kind?: ProductRecord["kind"];
+    position: number | null;
+    price: bigint;
+    image: boolean;
+  },
+): ProductRecord {
+  const [base] = FIXTURE_PRODUCT.variants;
+  if (base === undefined) throw new Error("FIXTURE_PRODUCT sin variante");
+  const sequence = String(nextCatalogId++).padStart(12, "0");
+  return {
+    ...FIXTURE_PRODUCT,
+    id: `00000000-0000-4000-8000-${sequence}`,
+    sku: slug.toUpperCase(),
+    slug,
+    kind: options.kind ?? "MERCHANDISE",
+    category:
+      options.position === null
+        ? null
+        : {
+            key: `cat-${options.position}`,
+            name: { "en-US": "c", "es-US": "c" },
+            position: options.position,
+          },
+    imageUrl: options.image ? `/media/${slug}.jpg` : null,
+    variants: [
+      {
+        ...base,
+        id: `00000000-0000-4000-9000-${sequence}`,
+        sku: `${slug.toUpperCase()}-1`,
+        priceAmountMinor: options.price,
+      },
+    ],
+  };
+}
+
+const ORDER_CATALOG: ProductRecord[] = [
+  catalogProduct("paquete-diamante", {
+    kind: "ENTRY_PACKAGE",
+    position: 80,
+    price: 20000n,
+    image: true,
+  }),
+  catalogProduct("termo", { position: 60, price: 3499n, image: true }),
+  catalogProduct("paquete-bronce", {
+    kind: "ENTRY_PACKAGE",
+    position: 80,
+    price: 1500n,
+    image: true,
+  }),
+  catalogProduct("sin-foto", { position: 5, price: 100n, image: false }),
+  catalogProduct("paquete-gold", {
+    kind: "ENTRY_PACKAGE",
+    position: 80,
+    price: 10000n,
+    image: true,
+  }),
+  catalogProduct("llavero", { position: 10, price: 1999n, image: true }),
+  catalogProduct("sin-categoria", { position: null, price: 500n, image: true }),
+  catalogProduct("paquete-plata", {
+    kind: "ENTRY_PACKAGE",
+    position: 80,
+    price: 5000n,
+    image: true,
+  }),
+];
+
+const EXPECTED_ORDER = [
+  // Mercancia con foto, por posicion de categoria; sin categoria al final.
+  "llavero",
+  "termo",
+  "sin-categoria",
+  // Mercancia sin foto, despues de toda la que tiene.
+  "sin-foto",
+  // Paquetes al final, de menor a mayor precio.
+  "paquete-bronce",
+  "paquete-plata",
+  "paquete-gold",
+  "paquete-diamante",
+];
+
+describe("orden del catalogo (DEC-064)", () => {
+  it("mercancia con foto primero y los paquetes al final, de Bronce a Diamante", async () => {
+    const app = await createApp(buildDependencies({ products: ORDER_CATALOG }));
+    const body = (await app.inject({ method: "GET", url: "/api/v1/products" })).json<{
+      items: { slug: string }[];
+    }>();
+
+    expect(body.items.map((item) => item.slug)).toEqual(EXPECTED_ORDER);
+    await app.close();
+  });
+
+  it("el cursor sigue ese mismo orden pagina a pagina, sin repetir ni saltar", async () => {
+    const app = await createApp(buildDependencies({ products: ORDER_CATALOG }));
+    const seen: string[] = [];
+    let cursor: string | null = null;
+
+    for (let page = 0; page < 5; page += 1) {
+      const url: string =
+        cursor === null
+          ? "/api/v1/products?limit=3"
+          : `/api/v1/products?limit=3&cursor=${encodeURIComponent(cursor)}`;
+      const body = (await app.inject({ method: "GET", url })).json<{
+        items: { slug: string }[];
+        next_cursor: string | null;
+      }>();
+      seen.push(...body.items.map((item) => item.slug));
+      cursor = body.next_cursor;
+      if (cursor === null) break;
+    }
+
+    expect(seen).toEqual(EXPECTED_ORDER);
+    expect(cursor).toBeNull();
+    await app.close();
+  });
+
+  it("filtrar por tipo conserva el orden: los paquetes, de menor a mayor", async () => {
+    const app = await createApp(buildDependencies({ products: ORDER_CATALOG }));
+    const body = (
+      await app.inject({ method: "GET", url: "/api/v1/products?kind=ENTRY_PACKAGE" })
+    ).json<{ items: { slug: string }[] }>();
+
+    expect(body.items.map((item) => item.slug)).toEqual([
+      "paquete-bronce",
+      "paquete-plata",
+      "paquete-gold",
+      "paquete-diamante",
+    ]);
+    await app.close();
+  });
+});
