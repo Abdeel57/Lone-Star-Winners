@@ -192,6 +192,14 @@ function buildRulesConfig(window) {
       rounding_policy: "FLOOR",
     },
 
+    /*
+     * En que estado de pago cuenta la compra (DEC-062). Sin esta clave la
+     * version no se puede activar, y el atajo del bonus -que clona la version
+     * activa y activa la copia- respondia 409. PAID es lo que se propuso al
+     * abogado; no es una decision legal tomada aqui.
+     */
+    order_qualification: { qualifying_payment_state: "PAID" },
+
     official_rules_document: FILLER,
     controlling_language: FILLER,
     winner_drawing_method: FILLER,
