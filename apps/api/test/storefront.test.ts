@@ -157,7 +157,58 @@ describe("GET /api/v1/promotions/{slug}: foto del premio (DEC-065)", () => {
       hero_url: "/media/3f2b8c1e-5d4a-4b7e-9c2f-1a2b3c4d5e6f.jpg",
       square_url: null,
       alt,
+      // DEC-066: con una sola foto, el carrusel trae solo esa.
+      gallery: [{ url: "/media/3f2b8c1e-5d4a-4b7e-9c2f-1a2b3c4d5e6f.jpg", alt }],
     });
+    await app.close();
+  });
+
+  it("DEC-066: el carrusel es la principal seguida de las adicionales, en orden", async () => {
+    const app = await createApp(
+      buildDependencies({
+        activePromotion: {
+          ...FIXTURE_PROMOTION,
+          heroImageUrl: "/media/principal.jpg",
+          heroImageAlt: null,
+          heroGallery: [
+            {
+              url: "/media/segunda.jpg",
+              alt: { "en-US": "Red pickup", "es-US": "Camioneta roja" },
+            },
+            { url: "/media/tercera.jpg", alt: null },
+          ],
+        },
+      }),
+    );
+    const body = (
+      await app.inject({ method: "GET", url: "/api/v1/promotions/fixture-promotion" })
+    ).json<{ media: { hero_url: string; gallery: { url: string }[] } }>();
+
+    expect(body.media.hero_url).toBe("/media/principal.jpg");
+    expect(body.media.gallery.map((image) => image.url)).toEqual([
+      "/media/principal.jpg",
+      "/media/segunda.jpg",
+      "/media/tercera.jpg",
+    ]);
+    await app.close();
+  });
+
+  it("DEC-066: sin principal pero con adicionales, la primera adicional hace de principal", async () => {
+    const app = await createApp(
+      buildDependencies({
+        activePromotion: {
+          ...FIXTURE_PROMOTION,
+          heroImageUrl: null,
+          heroImageAlt: null,
+          heroGallery: [{ url: "/media/segunda.jpg", alt: null }],
+        },
+      }),
+    );
+    const body = (
+      await app.inject({ method: "GET", url: "/api/v1/promotions/fixture-promotion" })
+    ).json<{ media: { hero_url: string } | null }>();
+
+    expect(body.media?.hero_url).toBe("/media/segunda.jpg");
     await app.close();
   });
 

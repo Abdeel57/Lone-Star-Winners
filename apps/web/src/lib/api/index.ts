@@ -102,6 +102,7 @@ export type {
   PromotionDetail,
   PromotionListResponse,
   PromotionMedia,
+  PromotionMediaImage,
   PromotionPrize,
   PromotionStatus,
   LogoutResponse,

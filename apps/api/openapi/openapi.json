@@ -15798,6 +15798,45 @@
                               }
                             ]
                           },
+                          "hero_gallery": {
+                            "items": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "alt": {
+                                  "anyOf": [
+                                    {
+                                      "additionalProperties": false,
+                                      "properties": {
+                                        "en-US": {
+                                          "type": "string"
+                                        },
+                                        "es-US": {
+                                          "type": "string"
+                                        }
+                                      },
+                                      "required": [
+                                        "es-US",
+                                        "en-US"
+                                      ],
+                                      "type": "object"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "image_url": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "image_url",
+                                "alt"
+                              ],
+                              "type": "object"
+                            },
+                            "type": "array"
+                          },
                           "hero_image_alt": {
                             "anyOf": [
                               {
@@ -15914,6 +15953,7 @@
                           "tagline",
                           "hero_image_url",
                           "hero_image_alt",
+                          "hero_gallery",
                           "created_at",
                           "updated_at"
                         ],
@@ -16150,6 +16190,45 @@
                         }
                       ]
                     },
+                    "hero_gallery": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "alt": {
+                            "anyOf": [
+                              {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "en-US": {
+                                    "type": "string"
+                                  },
+                                  "es-US": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "es-US",
+                                  "en-US"
+                                ],
+                                "type": "object"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "image_url": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "image_url",
+                          "alt"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
                     "hero_image_alt": {
                       "anyOf": [
                         {
@@ -16266,6 +16345,7 @@
                     "tagline",
                     "hero_image_url",
                     "hero_image_alt",
+                    "hero_gallery",
                     "created_at",
                     "updated_at"
                   ],
@@ -16495,6 +16575,45 @@
                         }
                       ]
                     },
+                    "hero_gallery": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "alt": {
+                            "anyOf": [
+                              {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "en-US": {
+                                    "type": "string"
+                                  },
+                                  "es-US": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "es-US",
+                                  "en-US"
+                                ],
+                                "type": "object"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "image_url": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "image_url",
+                          "alt"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
                     "hero_image_alt": {
                       "anyOf": [
                         {
@@ -16611,6 +16730,7 @@
                     "tagline",
                     "hero_image_url",
                     "hero_image_alt",
+                    "hero_gallery",
                     "created_at",
                     "updated_at"
                   ],
@@ -16785,6 +16905,51 @@
                       }
                     ]
                   },
+                  "hero_gallery": {
+                    "items": {
+                      "properties": {
+                        "alt": {
+                          "anyOf": [
+                            {
+                              "properties": {
+                                "en-US": {
+                                  "maxLength": 300,
+                                  "minLength": 1,
+                                  "type": "string"
+                                },
+                                "es-US": {
+                                  "maxLength": 300,
+                                  "minLength": 1,
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "es-US",
+                                "en-US"
+                              ],
+                              "type": "object"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "image_url": {
+                          "maxLength": 2000,
+                          "minLength": 1,
+                          "pattern": "^\\/[^/\\s]\\S*$",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "image_url",
+                        "alt"
+                      ],
+                      "type": "object"
+                    },
+                    "maxItems": 5,
+                    "type": "array"
+                  },
                   "hero_image_alt": {
                     "anyOf": [
                       {
@@ -16925,6 +17090,45 @@
                         }
                       ]
                     },
+                    "hero_gallery": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "alt": {
+                            "anyOf": [
+                              {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "en-US": {
+                                    "type": "string"
+                                  },
+                                  "es-US": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "es-US",
+                                  "en-US"
+                                ],
+                                "type": "object"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "image_url": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "image_url",
+                          "alt"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
                     "hero_image_alt": {
                       "anyOf": [
                         {
@@ -17041,6 +17245,7 @@
                     "tagline",
                     "hero_image_url",
                     "hero_image_alt",
+                    "hero_gallery",
                     "created_at",
                     "updated_at"
                   ],
@@ -17338,6 +17543,45 @@
                         }
                       ]
                     },
+                    "hero_gallery": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "alt": {
+                            "anyOf": [
+                              {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "en-US": {
+                                    "type": "string"
+                                  },
+                                  "es-US": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "es-US",
+                                  "en-US"
+                                ],
+                                "type": "object"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "image_url": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "image_url",
+                          "alt"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
                     "hero_image_alt": {
                       "anyOf": [
                         {
@@ -17454,6 +17698,7 @@
                     "tagline",
                     "hero_image_url",
                     "hero_image_alt",
+                    "hero_gallery",
                     "created_at",
                     "updated_at"
                   ],
@@ -18318,6 +18563,45 @@
                         }
                       ]
                     },
+                    "hero_gallery": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "alt": {
+                            "anyOf": [
+                              {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "en-US": {
+                                    "type": "string"
+                                  },
+                                  "es-US": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "es-US",
+                                  "en-US"
+                                ],
+                                "type": "object"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "image_url": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "image_url",
+                          "alt"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
                     "hero_image_alt": {
                       "anyOf": [
                         {
@@ -18434,6 +18718,7 @@
                     "tagline",
                     "hero_image_url",
                     "hero_image_alt",
+                    "hero_gallery",
                     "created_at",
                     "updated_at"
                   ],
@@ -23238,6 +23523,45 @@
                         }
                       ]
                     },
+                    "hero_gallery": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "alt": {
+                            "anyOf": [
+                              {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "en-US": {
+                                    "type": "string"
+                                  },
+                                  "es-US": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "es-US",
+                                  "en-US"
+                                ],
+                                "type": "object"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "image_url": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "image_url",
+                          "alt"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
                     "hero_image_alt": {
                       "anyOf": [
                         {
@@ -23354,6 +23678,7 @@
                     "tagline",
                     "hero_image_url",
                     "hero_image_alt",
+                    "hero_gallery",
                     "created_at",
                     "updated_at"
                   ],
@@ -32586,6 +32911,45 @@
                                 }
                               ]
                             },
+                            "gallery": {
+                              "items": {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "alt": {
+                                    "anyOf": [
+                                      {
+                                        "additionalProperties": false,
+                                        "properties": {
+                                          "en-US": {
+                                            "type": "string"
+                                          },
+                                          "es-US": {
+                                            "type": "string"
+                                          }
+                                        },
+                                        "required": [
+                                          "en-US",
+                                          "es-US"
+                                        ],
+                                        "type": "object"
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  },
+                                  "url": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "url",
+                                  "alt"
+                                ],
+                                "type": "object"
+                              },
+                              "type": "array"
+                            },
                             "hero_url": {
                               "type": "string"
                             },
@@ -32603,7 +32967,8 @@
                           "required": [
                             "hero_url",
                             "square_url",
-                            "alt"
+                            "alt",
+                            "gallery"
                           ],
                           "type": "object"
                         },

@@ -178,6 +178,16 @@ export const promotionDetailSchema = promotionSummarySchema.extend({
       hero_url: z.string(),
       square_url: z.string().nullable(),
       alt: localizedTextSchema.nullable(),
+      /**
+       * DEC-066: TODAS las fotos del carrusel, en orden, empezando por la de
+       * `hero_url`. Con una sola foto, la lista trae solo esa.
+       */
+      gallery: z.array(
+        z.object({
+          url: z.string(),
+          alt: localizedTextSchema.nullable(),
+        }),
+      ),
     })
     .nullable(),
 });

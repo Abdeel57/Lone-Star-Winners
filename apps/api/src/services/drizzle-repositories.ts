@@ -34,6 +34,7 @@ import {
   productVariantTranslations,
   productVariants,
   products,
+  promotionHeroImages,
   promotionRulesDocuments,
   promotionRulesVersions,
   promotionTranslations,
@@ -127,6 +128,18 @@ function createPromotionRepository(db: Database): PromotionRepository {
         ),
       );
 
+    // DEC-066: fotos adicionales del carrusel, ya en orden.
+    const heroImages = await db
+      .select()
+      .from(promotionHeroImages)
+      .where(
+        inArray(
+          promotionHeroImages.promotionId,
+          rows.map((row) => row.id),
+        ),
+      )
+      .orderBy(asc(promotionHeroImages.position));
+
     return rows.map((row) => {
       const own = translations.filter((translation) => translation.promotionId === row.id);
       return {
@@ -141,6 +154,15 @@ function createPromotionRepository(db: Database): PromotionRepository {
         rulesVersionId: row.activeRulesVersionId,
         heroImageUrl: row.heroImageUrl,
         heroImageAlt: heroAltOf(own),
+        heroGallery: heroImages
+          .filter((image) => image.promotionId === row.id)
+          .map((image) => ({
+            url: image.imageUrl,
+            alt:
+              image.altEn === null || image.altEs === null
+                ? null
+                : { "en-US": image.altEn, "es-US": image.altEs },
+          })),
       };
     });
   }

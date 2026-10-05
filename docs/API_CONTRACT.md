@@ -581,6 +581,10 @@ adivina.
   `null`, nunca con uno solo.
 - `summary` (de `PromotionSummary`) es el lema que se edita en el panel
   (`tagline`); `""` en un idioma sin lema.
+- **Añadido por DEC-066:** `media.gallery`, lista `[{ "url", "alt" }]` con TODAS
+  las fotos del carrusel en orden, empezando por la de `hero_url`. Con una sola
+  foto trae solo esa. Sin foto principal pero con adicionales, la primera
+  adicional ocupa `hero_url`.
 
 ---
 
@@ -2930,6 +2934,12 @@ desde DEC-065:
 
 En los tres, `null` borra y la clave ausente no toca el valor. La respuesta
 (`AdminPromotion`) incluye `tagline`, `hero_image_url` y `hero_image_alt`.
+
+- `hero_gallery` (DEC-066): lista de hasta 5 `{ "image_url", "alt" }` con las
+  fotos ADICIONALES del carrusel, en orden, con las mismas reglas que
+  `hero_image_url` y `hero_image_alt`. Sustituye la lista entera; `[]` la vacía
+  y la clave ausente no la toca. Más de 5 → 422. La respuesta incluye
+  `hero_gallery` siempre (lista, quizá vacía).
 
 **La zona horaria legal no se edita**, a propósito: cambiarla después de haber
 evaluado plazos contra ella movería retroactivamente el momento en que la

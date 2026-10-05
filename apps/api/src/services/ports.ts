@@ -79,6 +79,19 @@ export interface PromotionRecord {
    * decorativa. Nunca un idioma solo: el panel exige los dos o ninguno.
    */
   readonly heroImageAlt: LocalizedText | null;
+  /**
+   * DEC-066: fotos ADICIONALES del carrusel, en orden (hasta 5). La primera
+   * del carrusel es `heroImageUrl`; esta lista va detras.
+   */
+  readonly heroGallery: readonly PromotionHeroImage[];
+}
+
+/** Una foto adicional del carrusel del hero (DEC-066). */
+export interface PromotionHeroImage {
+  /** Ruta del propio sitio. */
+  readonly url: string;
+  /** Los dos idiomas o `null` (decorativa). */
+  readonly alt: LocalizedText | null;
 }
 
 export interface RulesDocumentRecord {

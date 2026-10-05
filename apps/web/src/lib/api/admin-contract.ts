@@ -224,9 +224,22 @@ export interface AdminPromotionRow {
   readonly hero_image_url?: string | null;
   /** DEC-065: descripcion de esa foto en los dos idiomas, o `null` (decorativa). */
   readonly hero_image_alt?: LocalizedText | null;
+  /** DEC-066: fotos ADICIONALES del carrusel, en orden. */
+  readonly hero_gallery?: readonly AdminHeroImage[];
   readonly created_at: string;
   readonly updated_at: string;
 }
+
+/** Una foto adicional del carrusel del hero (DEC-066). */
+export interface AdminHeroImage {
+  /** Ruta del propio sitio (`/media/...`). */
+  readonly image_url: string;
+  /** Los dos idiomas o `null` (decorativa). */
+  readonly alt: LocalizedText | null;
+}
+
+/** Cuantas fotos adicionales admite el carrusel (CHECK de 0033). */
+export const ADMIN_HERO_GALLERY_MAX = 5;
 
 export type AdminPromotionPage = CursorPage<AdminPromotionRow>;
 
@@ -248,6 +261,8 @@ export interface AdminPromotionPatch {
   readonly tagline?: LocalizedText | null;
   readonly hero_image_url?: string | null;
   readonly hero_image_alt?: LocalizedText | null;
+  /** DEC-066. Sustituye la lista entera; `[]` la vacia. */
+  readonly hero_gallery?: readonly AdminHeroImage[];
 }
 
 /**

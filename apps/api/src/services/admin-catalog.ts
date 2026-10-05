@@ -36,6 +36,7 @@ import {
   productVariantTranslations,
   productVariants,
   products,
+  promotionHeroImages,
   promotionTranslations,
   promotions,
 } from "@lsw/database";
@@ -114,8 +115,16 @@ export interface AdminPromotionRow {
   readonly heroImageUrl: string | null;
   /** DEC-065: descripcion de la foto. Los dos idiomas o `null` (decorativa). */
   readonly heroImageAlt: LocalizedInput | null;
+  /** DEC-066: fotos adicionales del carrusel, en orden. */
+  readonly heroGallery: readonly AdminHeroImage[];
   readonly createdAt: Date;
   readonly updatedAt: Date;
+}
+
+/** Una foto adicional del carrusel (DEC-066). */
+export interface AdminHeroImage {
+  readonly imageUrl: string;
+  readonly alt: LocalizedInput | null;
 }
 
 /**
@@ -207,6 +216,8 @@ export interface UpdatePromotionInput {
   readonly tagline?: LocalizedInput | null;
   readonly heroImageUrl?: string | null;
   readonly heroImageAlt?: LocalizedInput | null;
+  /** DEC-066. Sustituye la lista entera; ausente no la toca. */
+  readonly heroGallery?: readonly AdminHeroImage[];
 }
 
 export interface AdminCatalogRepository {
@@ -424,6 +435,12 @@ async function readPromotion(db: Reader, promotionId: string): Promise<AdminProm
     .from(promotionTranslations)
     .where(eq(promotionTranslations.promotionId, promotionId));
 
+  const gallery = await db
+    .select()
+    .from(promotionHeroImages)
+    .where(eq(promotionHeroImages.promotionId, promotionId))
+    .orderBy(asc(promotionHeroImages.position));
+
   return {
     id: promotion.id,
     slug: promotion.slug,
@@ -441,6 +458,13 @@ async function readPromotion(db: Reader, promotionId: string): Promise<AdminProm
     heroImageAlt: pairOrNull(
       translations.map((row) => ({ locale: row.locale, value: row.heroImageAlt })),
     ),
+    heroGallery: gallery.map((image) => ({
+      imageUrl: image.imageUrl,
+      alt:
+        image.altEs === null || image.altEn === null
+          ? null
+          : { "es-US": image.altEs, "en-US": image.altEn },
+    })),
     createdAt: promotion.createdAt,
     updatedAt: promotion.updatedAt,
   };
@@ -907,6 +931,26 @@ export function createAdminCatalogRepository(db: Database): AdminCatalogReposito
                   eq(promotionTranslations.locale, locale),
                 ),
               );
+          }
+        }
+
+        // DEC-066: la galeria se sustituye entera, en la misma transaccion. Las
+        // posiciones salen del orden de la lista (1..n): el panel no las elige.
+        if (input.heroGallery !== undefined) {
+          await tx
+            .delete(promotionHeroImages)
+            .where(eq(promotionHeroImages.promotionId, promotionId));
+
+          if (input.heroGallery.length > 0) {
+            await tx.insert(promotionHeroImages).values(
+              input.heroGallery.map((image, index) => ({
+                promotionId,
+                position: index + 1,
+                imageUrl: image.imageUrl,
+                altEs: image.alt?.["es-US"] ?? null,
+                altEn: image.alt?.["en-US"] ?? null,
+              })),
+            );
           }
         }
 

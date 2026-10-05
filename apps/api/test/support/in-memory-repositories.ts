@@ -73,6 +73,7 @@ export const FIXTURE_PROMOTION: PromotionRecord = {
   rulesVersionId: RULES_VERSION_ID,
   heroImageUrl: null,
   heroImageAlt: null,
+  heroGallery: [],
 };
 
 export const FIXTURE_RULES_VERSION: RulesVersionRecord = {

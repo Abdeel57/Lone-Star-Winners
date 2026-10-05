@@ -181,6 +181,38 @@ describe("PromotionForm (alta)", () => {
     expect(screen.getByLabelText(/^Descripción de la foto \(inglés\)/u)).toHaveValue("Red pickup");
   });
 
+  it("DEC-066: al editar, cada hueco del carrusel trae su foto y su descripcion, en orden", () => {
+    renderIn(
+      "es",
+      <PromotionForm
+        locale="es"
+        action={capturing().action}
+        promotion={{
+          id: "prm_1",
+          slug: "silverado-1500-2025",
+          internalName: "Silverado 2025",
+          legalTimezone: "America/Chicago",
+          publicName: { "es-US": "Gana", "en-US": "Win" },
+          startsAtWall: null,
+          endsAtWall: null,
+          heroGallery: [
+            {
+              imageUrl: "/media/0b1c2d3e-4f50-4a6b-8c7d-9e0f1a2b3c4d.jpg",
+              alt: { "es-US": "GMC Sierra roja", "en-US": "Red GMC Sierra" },
+            },
+          ],
+        }}
+      />,
+    );
+
+    // Cinco huecos, numerados desde el 2: el 1 es la foto principal.
+    expect(screen.getByLabelText(/^Descripción de la foto 2 \(español\)/u)).toHaveValue(
+      "GMC Sierra roja",
+    );
+    expect(screen.getByLabelText(/^Descripción de la foto 6 \(inglés\)/u)).toHaveValue("");
+    expect(screen.queryByLabelText(/^Descripción de la foto 7/u)).toBeNull();
+  });
+
   it("DEC-065: en el alta no hay seccion de portada", () => {
     renderIn("es", <PromotionForm locale="es" action={capturing().action} />);
 

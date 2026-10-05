@@ -109,6 +109,7 @@ function promotionFixture(overrides: Record<string, unknown> = {}): Record<strin
     tagline: null,
     heroImageUrl: null,
     heroImageAlt: null,
+    heroGallery: [],
     createdAt: NOW,
     updatedAt: NOW,
     ...overrides,
@@ -485,6 +486,105 @@ describe("PATCH /admin/promotions/:promotion_id (DEC-065: foto del premio y lema
       method: "PATCH",
       url: `/api/v1/admin/promotions/${PROMOTION_ID}`,
       payload: { hero_image_alt: { "es-US": "Camioneta roja" } },
+    });
+
+    expect(response.statusCode).toBe(422);
+  });
+});
+
+describe("PATCH /admin/promotions/:promotion_id (DEC-066: carrusel)", () => {
+  const GMC = "/media/0b1c2d3e-4f50-4a6b-8c7d-9e0f1a2b3c4d.jpg";
+  const BOTH = "/media/5a6b7c8d-9e0f-4a1b-8c2d-3e4f5a6b7c8d.jpg";
+  const ALT = { "es-US": "GMC Sierra roja", "en-US": "Red GMC Sierra" };
+
+  it("sustituye la lista de fotos adicionales, en el orden recibido", async () => {
+    let received: unknown = null;
+    shared.repository = {
+      updatePromotion: (_id: string, input: unknown) => {
+        received = input;
+        return Promise.resolve(
+          promotionFixture({
+            heroGallery: [
+              { imageUrl: GMC, alt: ALT },
+              { imageUrl: BOTH, alt: null },
+            ],
+          }),
+        );
+      },
+    };
+
+    const app = await appAllowingPermissions();
+    const response = await app.inject({
+      method: "PATCH",
+      url: `/api/v1/admin/promotions/${PROMOTION_ID}`,
+      payload: {
+        hero_gallery: [
+          { image_url: GMC, alt: ALT },
+          { image_url: BOTH, alt: null },
+        ],
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(received).toEqual({
+      heroGallery: [
+        { imageUrl: GMC, alt: ALT },
+        { imageUrl: BOTH, alt: null },
+      ],
+    });
+    expect(response.json()).toMatchObject({
+      hero_gallery: [
+        { image_url: GMC, alt: ALT },
+        { image_url: BOTH, alt: null },
+      ],
+    });
+  });
+
+  it("una lista vacia vacia la galeria: llega al repositorio como []", async () => {
+    let received: unknown = null;
+    shared.repository = {
+      updatePromotion: (_id: string, input: unknown) => {
+        received = input;
+        return Promise.resolve(promotionFixture());
+      },
+    };
+
+    const app = await appAllowingPermissions();
+    const response = await app.inject({
+      method: "PATCH",
+      url: `/api/v1/admin/promotions/${PROMOTION_ID}`,
+      payload: { hero_gallery: [] },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(received).toEqual({ heroGallery: [] });
+  });
+
+  it("rechaza mas de cinco fotos adicionales", async () => {
+    shared.repository = { updatePromotion: () => Promise.resolve(promotionFixture()) };
+
+    const app = await appAllowingPermissions();
+    const response = await app.inject({
+      method: "PATCH",
+      url: `/api/v1/admin/promotions/${PROMOTION_ID}`,
+      payload: {
+        hero_gallery: Array.from({ length: 6 }, () => ({ image_url: GMC, alt: null })),
+      },
+    });
+
+    expect(response.statusCode).toBe(422);
+  });
+
+  it("rechaza una foto adicional con URL https, igual que la principal", async () => {
+    shared.repository = { updatePromotion: () => Promise.resolve(promotionFixture()) };
+
+    const app = await appAllowingPermissions();
+    const response = await app.inject({
+      method: "PATCH",
+      url: `/api/v1/admin/promotions/${PROMOTION_ID}`,
+      payload: {
+        hero_gallery: [{ image_url: "https://cdn.example.com/gmc.jpg", alt: null }],
+      },
     });
 
     expect(response.statusCode).toBe(422);

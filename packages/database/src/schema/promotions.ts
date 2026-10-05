@@ -75,6 +75,31 @@ export const promotionTranslations = pgTable(
 );
 
 /**
+ * DEC-066 (0033): fotos ADICIONALES del carrusel del hero, posiciones 1 a 5.
+ * La primera foto sigue siendo `promotions.heroImageUrl`. Se reemplaza la
+ * lista entera (borrar e insertar): `lsw_app` no tiene UPDATE aqui.
+ */
+export const promotionHeroImages = pgTable(
+  "promotion_hero_images",
+  {
+    promotionId: uuid("promotion_id")
+      .notNull()
+      .references(() => promotions.id, { onDelete: "cascade" }),
+    position: integer("position").notNull(),
+    imageUrl: text("image_url").notNull(),
+    altEs: text("alt_es"),
+    altEn: text("alt_en"),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+  },
+  (table) => [
+    primaryKey({
+      name: "promotion_hero_images_pkey",
+      columns: [table.promotionId, table.position],
+    }),
+  ],
+);
+
+/**
  * DEC-012: configuracion legal inmutable y versionada.
  *
  * `unresolvedRequiredKeys` es una columna GENERADA por PostgreSQL a partir de

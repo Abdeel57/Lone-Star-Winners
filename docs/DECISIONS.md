@@ -3245,3 +3245,47 @@ formulario y acción de promoción del panel, mensajes en-US/es-US),
 
 Proposed by: sesión del usuario (2026-10-04), pedido del cliente
 Agreed by: pendiente — frontend-ux, backend-sweepstakes, security-integration
+
+## DEC-066
+
+Status: Proposed
+
+Date: 2026-10-04
+
+Decision:
+**El hero muestra varias fotos del premio en un carrusel.** Lo pidió el usuario
+tras subir la foto principal (DEC-065): el premio es elegir entre dos
+camionetas y una foto no las enseña. Cuatro puntos:
+
+1. **La foto principal no se mueve.** `promotions.hero_image_url` sigue siendo
+   la primera del carrusel. Migración `0033`: tabla `promotion_hero_images`
+   con hasta 5 fotos ADICIONALES (posición 1–5, ruta del propio sitio,
+   descripción en los dos idiomas o en ninguno). Nada que migrar: lo publicado
+   sigue igual.
+2. **Se reemplaza la lista entera.** `PATCH /admin/promotions/{id}` acepta
+   `hero_gallery` (lista ordenada); la API borra e inserta en una transacción.
+   `lsw_app` tiene SELECT, INSERT y DELETE sobre la tabla, sin UPDATE.
+3. **El detalle público publica `media.gallery`**: todas las fotos en orden,
+   empezando por la de `hero_url`. Si no hay principal pero sí adicionales, la
+   primera adicional hace de principal.
+4. **Carrusel por fundido, no por desplazamiento** (`hero-carousel.tsx`): el
+   degradado y el titular no se mueven, así que el contraste medido en DEC-042
+   vale para todas las fotos. Cambia cada 6 s, se puede pausar (WCAG 2.2.2), se
+   detiene con el foco en sus controles, no rota con `prefers-reduced-motion` y
+   solo la foto visible existe para un lector de pantalla. Con una sola foto se
+   pinta como antes.
+
+Alternatives:
+A — Galería de miniaturas bajo el hero (descartada por el usuario frente al
+carrusel). B — Mover la foto principal a la tabla nueva (descartada: exige
+migrar datos y deja una columna muerta sin ganar nada).
+
+Affected areas: `packages/database` (`0033_promotion_hero_gallery.sql`,
+`schema/promotions.ts`), `apps/api` (`routes/storefront.ts`,
+`routes/admin-catalog.ts`, `services/admin-catalog.ts`,
+`services/drizzle-repositories.ts`, `services/ports.ts`, `http/schemas.ts`,
+tests), `apps/web` (`hero-carousel.tsx`, `promotion-hero.tsx`, formulario y
+acción de promoción del panel, mensajes, tests), `docs/API_CONTRACT.md`.
+
+Proposed by: sesión del usuario (2026-10-04)
+Agreed by: pendiente — frontend-ux, backend-sweepstakes

@@ -416,6 +416,20 @@ export interface PromotionMedia {
   readonly square_url: string | null;
   /** Texto alternativo, o `null` si la imagen es decorativa. */
   readonly alt: LocalizedText | null;
+  /**
+   * DEC-066: TODAS las fotos del carrusel del hero, en orden, empezando por la
+   * de `hero_url`. Opcional: una API anterior a DEC-066 no la publica, y
+   * entonces el hero pinta solo `hero_url`.
+   */
+  readonly gallery?: readonly PromotionMediaImage[] | undefined;
+}
+
+/** Una foto del carrusel del hero (DEC-066). */
+export interface PromotionMediaImage {
+  /** Ruta del propio sitio. */
+  readonly url: string;
+  /** Texto alternativo, o `null` si es decorativa. */
+  readonly alt: LocalizedText | null;
 }
 
 /*

@@ -306,6 +306,15 @@
     "country": "Estados Unidos"
   },
   "home": {
+    "heroCarousel": {
+      "roleDescription": "carrusel",
+      "label": "Fotos del premio",
+      "slideRoleDescription": "foto",
+      "slide": "Foto {current} de {total}",
+      "goTo": "Ver la foto {current} de {total}",
+      "pause": "Pausar las fotos",
+      "play": "Reanudar las fotos"
+    },
     "closesLabel": "Cierra",
     "entriesDisclaimer": "Las participaciones promocionales se otorgan conforme a las Reglas Oficiales de cada promoción.",
     "eyebrow": "Promoción vigente",
@@ -1125,6 +1134,10 @@
       "fieldHeroAltEs": "Descripción de la foto (español)",
       "fieldHeroAltEn": "Descripción de la foto (inglés)",
       "fieldHeroAltHint": "Lo que se ve en la foto, para quien no puede verla. Deja los dos vacíos si no añade nada al título.",
+      "gallerySectionHint": "Más fotos para el carrusel de la portada, que salen después de la foto del premio en este orden. Hasta 5; deja un hueco vacío para saltarlo.",
+      "fieldGalleryImage": "Foto {number} del carrusel",
+      "fieldGalleryAltEs": "Descripción de la foto {number} (español)",
+      "fieldGalleryAltEn": "Descripción de la foto {number} (inglés)",
       "bothLanguages": "Los dos idiomas son obligatorios: la tienda se muestra en ambos.",
       "createSubmit": "Crear promoción",
       "saveSubmit": "Guardar cambios",

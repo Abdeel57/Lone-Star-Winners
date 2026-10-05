@@ -99,6 +99,33 @@ function toPromotionSummary(promotion: PromotionRecord): z.infer<typeof promotio
   };
 }
 
+/**
+ * Las fotos del premio para el hero (DEC-065, DEC-066), o `null` sin ninguna.
+ *
+ * El carrusel es la foto principal seguida de las adicionales. Si no hay
+ * principal pero si adicionales, la primera adicional hace de principal: un
+ * hero sin foto teniendo fotos subidas seria un olvido del panel castigado en
+ * la portada.
+ */
+function heroMediaOf(promotion: PromotionRecord) {
+  const images = [
+    ...(promotion.heroImageUrl === null
+      ? []
+      : [{ url: promotion.heroImageUrl, alt: promotion.heroImageAlt }]),
+    ...promotion.heroGallery,
+  ];
+
+  const [first] = images;
+  if (first === undefined) return null;
+
+  return {
+    hero_url: first.url,
+    square_url: null,
+    alt: first.alt,
+    gallery: images.map((image) => ({ url: image.url, alt: image.alt })),
+  };
+}
+
 function toProductSummary(
   product: ProductRecord,
   offerContext: EntryOfferContext | null,
@@ -318,12 +345,9 @@ export function buildStorefrontRoutes(dependencies: AppDependencies): RouteDefin
                   // de arranque de este despliegue.
                   defaultCurrency: dependencies.config.commerce.defaultCurrency,
                 }),
-          // DEC-065: la foto del premio que sube el panel. Sin foto, `null`, y
-          // el hero pinta la marca de agua.
-          media:
-            promotion.heroImageUrl === null
-              ? null
-              : { hero_url: promotion.heroImageUrl, square_url: null, alt: promotion.heroImageAlt },
+          // DEC-065/066: las fotos del premio que sube el panel. Sin ninguna,
+          // `null`, y el hero pinta la marca de agua.
+          media: heroMediaOf(promotion),
         };
       },
     },

@@ -306,6 +306,15 @@
     "country": "United States"
   },
   "home": {
+    "heroCarousel": {
+      "roleDescription": "carousel",
+      "label": "Prize photos",
+      "slideRoleDescription": "photo",
+      "slide": "Photo {current} of {total}",
+      "goTo": "Show photo {current} of {total}",
+      "pause": "Pause the photos",
+      "play": "Play the photos"
+    },
     "closesLabel": "Closes",
     "entriesDisclaimer": "Promotional entries are awarded and governed by the Official Rules of each promotion.",
     "eyebrow": "Current promotion",
@@ -1125,6 +1134,10 @@
       "fieldHeroAltEs": "Photo description (Spanish)",
       "fieldHeroAltEn": "Photo description (English)",
       "fieldHeroAltHint": "What the photo shows, for people who cannot see it. Leave both empty if it adds nothing to the title.",
+      "gallerySectionHint": "More photos for the home page carousel, shown after the prize photo in this order. Up to 5; leave a slot empty to skip it.",
+      "fieldGalleryImage": "Carousel photo {number}",
+      "fieldGalleryAltEs": "Photo {number} description (Spanish)",
+      "fieldGalleryAltEn": "Photo {number} description (English)",
       "bothLanguages": "Both languages are required: the store is shown in both.",
       "createSubmit": "Create promotion",
       "saveSubmit": "Save changes",

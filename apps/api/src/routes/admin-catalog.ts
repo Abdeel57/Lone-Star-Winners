@@ -324,6 +324,17 @@ const updatePromotionBodySchema = z
     tagline: promotionCopySchema.nullable().optional(),
     hero_image_url: heroImageUrlSchema.nullable().optional(),
     hero_image_alt: promotionCopySchema.nullable().optional(),
+    // DEC-066: fotos ADICIONALES del carrusel, en orden. Sustituye la lista
+    // entera; `[]` la vacia y ausente no la toca. Cinco como mucho (0033).
+    hero_gallery: z
+      .array(
+        z.object({
+          image_url: heroImageUrlSchema,
+          alt: promotionCopySchema.nullable(),
+        }),
+      )
+      .max(5)
+      .optional(),
   })
   .refine((body) => Object.keys(body).length > 0, {
     message: "Un PATCH sin ningun campo no es una edicion.",
@@ -416,6 +427,12 @@ const promotionSchema = z.object({
   tagline: z.object({ "es-US": z.string(), "en-US": z.string() }).nullable(),
   hero_image_url: z.string().nullable(),
   hero_image_alt: z.object({ "es-US": z.string(), "en-US": z.string() }).nullable(),
+  hero_gallery: z.array(
+    z.object({
+      image_url: z.string(),
+      alt: z.object({ "es-US": z.string(), "en-US": z.string() }).nullable(),
+    }),
+  ),
   created_at: z.string(),
   updated_at: z.string(),
 });
@@ -481,6 +498,10 @@ function presentPromotion(row: AdminPromotionRow): z.infer<typeof promotionSchem
     tagline: row.tagline,
     hero_image_url: row.heroImageUrl,
     hero_image_alt: row.heroImageAlt,
+    hero_gallery: row.heroGallery.map((image) => ({
+      image_url: image.imageUrl,
+      alt: image.alt,
+    })),
     created_at: row.createdAt.toISOString(),
     updated_at: row.updatedAt.toISOString(),
   };
@@ -1116,6 +1137,14 @@ export function buildAdminCatalogRoutes(dependencies: AppDependencies): RouteDef
             ...(body.tagline === undefined ? {} : { tagline: body.tagline }),
             ...(body.hero_image_url === undefined ? {} : { heroImageUrl: body.hero_image_url }),
             ...(body.hero_image_alt === undefined ? {} : { heroImageAlt: body.hero_image_alt }),
+            ...(body.hero_gallery === undefined
+              ? {}
+              : {
+                  heroGallery: body.hero_gallery.map((image) => ({
+                    imageUrl: image.image_url,
+                    alt: image.alt,
+                  })),
+                }),
           });
 
           if (updated === null) throw ApiErrors.notFound();

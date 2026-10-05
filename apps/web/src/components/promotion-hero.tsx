@@ -11,6 +11,7 @@ import { safeImageUrl } from "@/lib/media-url";
 import { presentPromotion } from "@/lib/promotion-state";
 
 import { BonusAnnouncement } from "./bonus-announcement";
+import { HeroCarousel, type HeroSlide } from "./hero-carousel";
 import { RateList } from "./entry-rate-lines";
 import { PromotionCountdown } from "./promotion-countdown";
 import { PromotionStateNotice } from "./promotion-state-notice";
@@ -101,6 +102,12 @@ import { PromotionStatusBadge } from "./promotion-status-badge";
  * gigantes nadie los lee. Los tres siguen formando parte de este componente
  * -no de la pagina- porque acompanan a la promocion alla donde se muestre.
  */
+/** Tamanos de la foto del hero para `next/image`: media pantalla en escritorio. */
+const HERO_IMAGE_SIZES = "(min-width: 1024px) 56vw, 100vw";
+
+/** Encuadre de la foto del hero. El motivo, junto a la `<Image>` de abajo. */
+const HERO_IMAGE_POSITION = "object-[38%_35%]";
+
 export function PromotionHero({
   promotion,
   detail,
@@ -237,6 +244,28 @@ export function PromotionHero({
   const heroAltText = media?.alt ?? null;
   const heroAlt = heroAltText === null ? "" : pickLocalized(heroAltText, locale);
 
+  /*
+   * LAS FOTOS DEL CARRUSEL (DEC-066).
+   *
+   * `media.gallery` trae todas, empezando por la de `hero_url`. Cada una pasa
+   * por el mismo filtro que la principal: una URL que no se puede pintar se
+   * cae de la lista en vez de dejar un hueco. Sin galeria -API anterior a
+   * DEC-066- o con todas filtradas, queda la principal sola.
+   */
+  const gallerySlides: readonly HeroSlide[] = (media?.gallery ?? []).flatMap((image) => {
+    const src = safeImageUrl(image.url);
+    return src === null
+      ? []
+      : [{ src, alt: image.alt === null ? "" : pickLocalized(image.alt, locale) }];
+  });
+  const slides: readonly HeroSlide[] =
+    gallerySlides.length > 0
+      ? gallerySlides
+      : heroImage === null
+        ? []
+        : [{ src: heroImage, alt: heroAlt }];
+  const primarySlide = slides[0] ?? null;
+
   const prize = detail?.prize ?? null;
   const prizeName = prize === null ? null : pickLocalized(prize.name, locale);
 
@@ -285,7 +314,7 @@ export function PromotionHero({
         aria-labelledby="promotion-title"
         className="lsw-atmosphere lsw-grain relative isolate overflow-hidden"
       >
-        {heroImage === null ? (
+        {primarySlide === null ? (
           /*
            * Sin fotografia del premio, la marca de agua.
            *
@@ -341,35 +370,45 @@ export function PromotionHero({
              * empaquetado de `output: standalone` lo dejara fuera, las imagenes
              * fallarian solo en produccion.
              */}
-            <Image
-              src={heroImage}
-              alt={heroAlt}
-              fill
-              priority
-              sizes="(min-width: 1024px) 56vw, 100vw"
-              /*
-               * ENCUADRE DE ESTA FOTOGRAFIA (DEC-042).
-               *
-               * `38%` en horizontal: el hueco es mas estrecho que la imagen en
-               * todos los tamanos, asi que `cover` recorta A LO ANCHO y hay que
-               * decidir que parte de la camioneta se queda. Desplazado a la
-               * izquierda del centro conserva el frontal completo -parrilla,
-               * emblema, faro y rueda delantera-, que es lo que identifica al
-               * vehiculo, y sacrifica la caja, que no dice nada.
-               *
-               * `35%` en vertical: en las dos disposiciones el eje vertical no
-               * recorta nada -se ve la altura entera- y este valor da igual. Solo
-               * entra en juego en una ventana muy ancha y baja, y ahi tira hacia
-               * ARRIBA a proposito: lo que hay que salvar es el techo de la
-               * cabina, no el asfalto del pie, que ademas queda bajo el degradado.
-               *
-               * El rotulo del concesionario que aparecia sobre el techo NO se
-               * quita desde aqui: es imposible con `cover` en un hueco mas
-               * estrecho que la imagen. Se recorta en origen; ver
-               * `scripts/build-prize-assets.mjs`.
-               */
-              className="object-cover object-[38%_35%]"
-            />
+            {slides.length > 1 ? (
+              /* DEC-066: varias fotos, carrusel. Mismo hueco, mismos tamanos
+                 y mismo encuadre que la foto unica de abajo. */
+              <HeroCarousel
+                slides={slides}
+                sizes={HERO_IMAGE_SIZES}
+                imageClassName={HERO_IMAGE_POSITION}
+              />
+            ) : (
+              <Image
+                src={primarySlide.src}
+                alt={primarySlide.alt}
+                fill
+                priority
+                sizes={HERO_IMAGE_SIZES}
+                /*
+                 * ENCUADRE DE ESTA FOTOGRAFIA (DEC-042).
+                 *
+                 * `38%` en horizontal: el hueco es mas estrecho que la imagen en
+                 * todos los tamanos, asi que `cover` recorta A LO ANCHO y hay que
+                 * decidir que parte de la camioneta se queda. Desplazado a la
+                 * izquierda del centro conserva el frontal completo -parrilla,
+                 * emblema, faro y rueda delantera-, que es lo que identifica al
+                 * vehiculo, y sacrifica la caja, que no dice nada.
+                 *
+                 * `35%` en vertical: en las dos disposiciones el eje vertical no
+                 * recorta nada -se ve la altura entera- y este valor da igual. Solo
+                 * entra en juego en una ventana muy ancha y baja, y ahi tira hacia
+                 * ARRIBA a proposito: lo que hay que salvar es el techo de la
+                 * cabina, no el asfalto del pie, que ademas queda bajo el degradado.
+                 *
+                 * El rotulo del concesionario que aparecia sobre el techo NO se
+                 * quita desde aqui: es imposible con `cover` en un hueco mas
+                 * estrecho que la imagen. Se recorta en origen; ver
+                 * `scripts/build-prize-assets.mjs`.
+                 */
+                className={`object-cover ${HERO_IMAGE_POSITION}`}
+              />
+            )}
 
             {/* Degradado de fundido. Cambia de EJE con el tamano de pantalla
                 porque el texto tambien cambia de sitio: en telefono el titular
@@ -413,7 +452,7 @@ export function PromotionHero({
               // El bloque sube sobre la mitad inferior de la fotografia, que ya
               // esta fundida en negro por el degradado. En escritorio no hay
               // nada que solapar: la imagen esta al lado, no encima.
-              heroImage === null ? "pt-s16" : "-mt-[13svh] pt-0 lg:mt-0",
+              primarySlide === null ? "pt-s16" : "-mt-[13svh] pt-0 lg:mt-0",
               "lg:max-w-[52%]",
             )}
           >

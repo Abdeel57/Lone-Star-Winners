@@ -8,6 +8,7 @@ import { FormError, LocaleField, useFieldError } from "@/components/auth-form-sh
 import { ImageUploadField } from "@/components/admin/image-upload-field";
 import type { Locale } from "@/i18n/locales";
 import { IDLE, type ActionResult } from "@/lib/action-result";
+import { ADMIN_HERO_GALLERY_MAX } from "@/lib/api/admin-contract";
 import { OFFERED_TIME_ZONES } from "@/lib/admin/catalog-input";
 
 /**
@@ -55,6 +56,11 @@ export function PromotionForm({
     readonly tagline?: { readonly "es-US": string; readonly "en-US": string } | null;
     readonly heroImageUrl?: string | null;
     readonly heroImageAlt?: { readonly "es-US": string; readonly "en-US": string } | null;
+    /** DEC-066: fotos adicionales del carrusel, en orden. */
+    readonly heroGallery?: readonly {
+      readonly imageUrl: string;
+      readonly alt: { readonly "es-US": string; readonly "en-US": string } | null;
+    }[];
   };
 }) {
   const t = useTranslations("admin.promotions");
@@ -245,6 +251,52 @@ export function PromotionForm({
               />
             </FormField>
           </div>
+
+          {/* DEC-066: fotos adicionales del carrusel. Un hueco por foto y en
+              orden: el carrusel las pasa en el mismo orden, detras de la
+              principal. Un hueco vacio no cuenta. */}
+          <p className="text-caption text-text-subtle">{t("gallerySectionHint")}</p>
+
+          {Array.from({ length: ADMIN_HERO_GALLERY_MAX }, (_, slot) => {
+            const current = promotion.heroGallery?.[slot] ?? null;
+            const prefix = `hero_gallery_${String(slot)}`;
+            return (
+              <div key={prefix} className="flex flex-col gap-s3 border-t border-border pt-s4">
+                <ImageUploadField
+                  name={prefix}
+                  label={t("fieldGalleryImage", { number: slot + 2 })}
+                  currentUrl={current?.imageUrl ?? null}
+                  error={fieldError(`${prefix}_file`)}
+                />
+
+                <div className="grid grid-cols-1 gap-s4 sm:grid-cols-2">
+                  <FormField
+                    label={t("fieldGalleryAltEs", { number: slot + 2 })}
+                    error={fieldError(`${prefix}_alt_es`)}
+                  >
+                    <Input
+                      name={`${prefix}_alt_es`}
+                      lang="es"
+                      maxLength={300}
+                      defaultValue={current?.alt?.["es-US"] ?? ""}
+                    />
+                  </FormField>
+
+                  <FormField
+                    label={t("fieldGalleryAltEn", { number: slot + 2 })}
+                    error={fieldError(`${prefix}_alt_en`)}
+                  >
+                    <Input
+                      name={`${prefix}_alt_en`}
+                      lang="en"
+                      maxLength={300}
+                      defaultValue={current?.alt?.["en-US"] ?? ""}
+                    />
+                  </FormField>
+                </div>
+              </div>
+            );
+          })}
         </fieldset>
       ) : null}
 

@@ -54,6 +54,7 @@ import {
 import { checkboxFrom, localeFrom, secretFrom, textFrom } from "@/lib/form-input";
 import { isIanaTimeZone, priceToMinorUnits, zonedWallTimeToIso } from "@/lib/admin/catalog-input";
 import { checkImage, imageFrom } from "@/lib/admin/image-upload";
+import { ADMIN_HERO_GALLERY_MAX } from "@/lib/api/admin-contract";
 import {
   BONUS_PERIOD_REASONS,
   FLAG_UPDATE_REASONS,
@@ -520,6 +521,14 @@ function optionalLocalizedFrom(
   if (en === null) return { ok: false, result: invalid("FIELD_REQUIRED", `${prefix}_en`) };
 
   return { ok: true, value: { "es-US": es, "en-US": en } };
+}
+
+/** Prefijos de los huecos del carrusel en el formulario (DEC-066), en orden. */
+function galleryPrefixes(): readonly string[] {
+  return Array.from(
+    { length: ADMIN_HERO_GALLERY_MAX },
+    (_, slot) => `hero_gallery_${String(slot)}`,
+  );
 }
 
 /** Alta de un producto. Redirige a su ficha, que es donde se publica. */
@@ -1005,9 +1014,21 @@ export async function updatePromotionAction(
   if (!heroAlt.ok) return heroAlt.result;
 
   // Antes de subir nada: un fichero que no es imagen o que pesa demasiado se
-  // rechaza sin gastar una peticion.
+  // rechaza sin gastar una peticion. Tambien los del carrusel (DEC-066): si la
+  // cuarta foto es un PDF, no se han subido ya las tres primeras.
   const heroCheck = checkImage(formData, "hero_image");
   if (heroCheck !== null) return heroCheck;
+
+  const gallerySlots = galleryPrefixes();
+  const galleryAlts: ({ readonly "es-US": string; readonly "en-US": string } | null)[] = [];
+  for (const prefix of gallerySlots) {
+    const rejected = checkImage(formData, prefix);
+    if (rejected !== null) return rejected;
+
+    const alt = optionalLocalizedFrom(formData, `${prefix}_alt`);
+    if (!alt.ok) return alt.result;
+    galleryAlts.push(alt.value);
+  }
 
   const session = await mutableSession();
 
@@ -1027,6 +1048,28 @@ export async function updatePromotionAction(
   const heroImage = await imageFrom(formData, "hero_image", locale, session);
   if (!heroImage.ok) return heroImage.result;
 
+  /*
+   * EL CARRUSEL SE MANDA ENTERO Y COMPACTO (DEC-066).
+   *
+   * Cada hueco del formulario es la foto de esa posicion: sin fichero nuevo se
+   * conserva la que ya estaba -se lee de la PROMOCION, no de un campo oculto-,
+   * con fichero nuevo la sustituye, y con "quitar" desaparece. Los huecos que
+   * quedan vacios no cuentan, asi que la lista llega sin agujeros y la API
+   * numera en ese orden.
+   */
+  const currentGallery = current.data.hero_gallery ?? [];
+  const gallery: { image_url: string; alt: { "es-US": string; "en-US": string } | null }[] = [];
+  for (const [slot, prefix] of gallerySlots.entries()) {
+    const uploaded = await imageFrom(formData, prefix, locale, session);
+    if (!uploaded.ok) return uploaded.result;
+
+    const url =
+      uploaded.value === undefined ? (currentGallery[slot]?.image_url ?? null) : uploaded.value;
+    if (url === null) continue;
+
+    gallery.push({ image_url: url, alt: galleryAlts[slot] ?? null });
+  }
+
   const result = await updateAdminPromotion(
     promotionId,
     {
@@ -1037,6 +1080,7 @@ export async function updatePromotionAction(
       tagline: tagline.value,
       hero_image_alt: heroAlt.value,
       ...(heroImage.value === undefined ? {} : { hero_image_url: heroImage.value }),
+      hero_gallery: gallery,
     },
     locale,
     session,

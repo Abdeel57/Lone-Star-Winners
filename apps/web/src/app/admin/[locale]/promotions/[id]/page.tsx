@@ -211,6 +211,11 @@ export default async function AdminPromotionDetailPage({
                     tagline: promotion.data.tagline ?? null,
                     heroImageUrl: promotion.data.hero_image_url ?? null,
                     heroImageAlt: promotion.data.hero_image_alt ?? null,
+                    // DEC-066.
+                    heroGallery: (promotion.data.hero_gallery ?? []).map((image) => ({
+                      imageUrl: image.image_url,
+                      alt: image.alt,
+                    })),
                   }}
                 />
               ) : (
