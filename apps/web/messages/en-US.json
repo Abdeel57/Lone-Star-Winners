@@ -350,6 +350,26 @@
     "prizeBand": {
       "eyebrow": "The prize",
       "note": "The stated value, the prize itself and everything about how it is awarded are governed by the Official Rules."
+    },
+    "comingSoon": {
+      "eyebrow": "Coming soon",
+      "title": "LSW Cap",
+      "lead": "The official Lone Star Winners cap is coming in seven colors. Soon in the shop.",
+      "backdrop": "Coming soon",
+      "badge": "Soon",
+      "hint": "Swipe to see all seven colors",
+      "imageAlt": "LSW Cap in {color}",
+      "note": "Price and release date to be announced.",
+      "cta": "View the shop",
+      "colors": {
+        "black": "Black",
+        "navy": "Navy",
+        "white": "White",
+        "khaki": "Khaki",
+        "olive": "Olive",
+        "darkGrey": "Dark grey",
+        "wine": "Wine"
+      }
     }
   },
   "legal": {

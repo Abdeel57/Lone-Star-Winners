@@ -5,6 +5,7 @@ import { getTranslations, setRequestLocale } from "next-intl/server";
 
 import { AmoeCallout } from "@/components/amoe-callout";
 import { ApiErrorState } from "@/components/api-error-state";
+import { ComingSoonBand } from "@/components/coming-soon-band";
 import { EntryOfferPanel } from "@/components/entry-offer-panel";
 import { EntryPackageBand } from "@/components/entry-package-band";
 import { MarqueeBand } from "@/components/marquee-band";
@@ -449,6 +450,10 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
           DEC-069: sus dos acciones -Reglas Oficiales y preguntas frecuentes-
           siguen en el menu y en el pie, y el pie ya lleva su propio bloque de
           Reglas Oficiales, que es lo ultimo que se lee antes de salir. */}
+
+      {/* PROXIMAMENTE (DEC-076): la gorra LSW Cap, que todavia no se vende.
+          Cierra la portada con expectativa: sin precio ni compra. */}
+      <ComingSoonBand />
     </>
   );
 }

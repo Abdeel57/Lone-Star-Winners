@@ -350,6 +350,26 @@
     "prizeBand": {
       "eyebrow": "El premio",
       "note": "El valor declarado, el premio y todo lo relativo a su entrega se rigen por las Reglas Oficiales."
+    },
+    "comingSoon": {
+      "eyebrow": "Próximamente",
+      "title": "LSW Cap",
+      "lead": "La gorra oficial de Lone Star Winners llega en siete colores. Muy pronto en la tienda.",
+      "backdrop": "Coming soon",
+      "badge": "Pronto",
+      "hint": "Desliza para ver los siete colores",
+      "imageAlt": "Gorra LSW Cap en color {color}",
+      "note": "Precio y fecha de lanzamiento por anunciar.",
+      "cta": "Ver la tienda",
+      "colors": {
+        "black": "Negro",
+        "navy": "Azul marino",
+        "white": "Blanco",
+        "khaki": "Caqui",
+        "olive": "Verde olivo",
+        "darkGrey": "Gris oscuro",
+        "wine": "Vino"
+      }
     }
   },
   "legal": {

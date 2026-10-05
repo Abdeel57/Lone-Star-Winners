@@ -3707,3 +3707,45 @@ tienda, `section-heading.tsx`, `entry-package-band.tsx`, `product-card.tsx`,
 
 Proposed by: sesión del usuario (2026-10-05)
 Agreed by: pendiente — frontend-ux
+
+## DEC-076
+
+Status: Proposed
+
+Date: 2026-10-05
+
+Decision:
+**La portada termina con un "Próximamente": la gorra LSW Cap en siete
+colores.** El cliente aún no la vende y quiere generar expectativa.
+
+1. **Es un adelanto, no un producto a la venta.** No hay precio, ni botón de
+   compra, ni ficha: las tarjetas no son enlaces. El precio y la fecha se dicen
+   "por anunciar" en vez de inventarlos. La única acción es "Ver la tienda".
+   Nada sobre participaciones.
+2. **Presentación (`ComingSoonBand`):**
+   - negro con un foco rojo y un "COMING SOON" gigante en contorno que deriva
+     al fondo;
+   - antetítulo "Próximamente" con un punto que late, el título "LSW Cap" en
+     cromo y las siete muestras de color, que aparecen una a una;
+   - en escritorio, la negra destacada en 2×2 y las otras seis alrededor; en
+     teléfono, carrusel horizontal.
+3. **Las gorras "se encienden".** Al llegar a la sección cada tarjeta está a
+   oscuras (silueta), con su "PRONTO" rojo encima, y se ilumina con un destello,
+   una tras otra (`data-reveal="lights"`, mismo `ScrollReveal` de DEC-075). Sin
+   JS o con `prefers-reduced-motion` se ven encendidas.
+4. **Las fotos son las del cliente tal cual**, con su rótulo "LSW CAP · Color",
+   pasadas a WebP de 960 px (31–71 KB) en `public/coming-soon/`. No se
+   recortaron: cada mockup lleva una segunda gorra pequeña y un recorte la dejaba
+   asomando. El nombre del color se repite debajo en el idioma de la página.
+
+Alternatives:
+A — Recortar cada foto a la gorra principal (descartada: restos de la segunda
+gorra en los bordes). B — Añadirlas como productos "agotados" en la tienda
+(descartada: sugeriría que se vendieron, y no han salido).
+
+Affected areas: `apps/web` (`coming-soon-band.tsx`, `scroll-reveal.tsx`,
+`globals.css`, portada, `public/coming-soon/`, mensajes `home.comingSoon`,
+`coming-soon-band.test.tsx`).
+
+Proposed by: sesión del usuario (2026-10-05)
+Agreed by: pendiente — frontend-ux

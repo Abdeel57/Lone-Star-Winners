@@ -7,6 +7,9 @@ import { usePathname } from "@/i18n/navigation";
 /** Lo que dura la entrada en `globals.css`, con un margen. */
 const REVEAL_MS = 800;
 
+/** "Encenderse" (DEC-076): el filtro y el destello duran mas. */
+const LIGHTS_MS = 1700;
+
 /**
  * Aparicion al desplazarse (DEC-075).
  *
@@ -46,7 +49,8 @@ export function ScrollReveal() {
         () => {
           if (element.dataset.revealState === "shown") element.dataset.revealState = "done";
         },
-        (Number.isFinite(delay) ? delay : 0) + REVEAL_MS,
+        (Number.isFinite(delay) ? delay : 0) +
+          (element.dataset.reveal === "lights" ? LIGHTS_MS : REVEAL_MS),
       );
     };
 
