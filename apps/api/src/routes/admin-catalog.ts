@@ -170,6 +170,31 @@ const imageUrlSchema = z
   .max(2000)
   .regex(/^(?:https:\/\/\S+|\/[^/\s]\S*)$/u, "https:// o ruta raiz del propio sitio");
 
+/**
+ * Foto del premio para el hero (DEC-065). SOLO ruta raiz del propio sitio.
+ *
+ * Mas estrecho que `imageUrlSchema`, y no por gusto: el hero la pinta con
+ * `next/image`, que rechaza en el render cualquier dominio que no este
+ * declarado en la configuracion de la web. Una `https://` aqui pasaria la
+ * validacion y dejaria la portada sin hero. El CHECK
+ * `promotions_hero_image_url_shape` (0032) dice lo mismo en la base.
+ */
+const heroImageUrlSchema = z
+  .string()
+  .min(1)
+  .max(2000)
+  .regex(/^\/[^/\s]\S*$/u, "ruta raiz del propio sitio");
+
+/**
+ * Texto por idioma de la promocion que NO es su nombre: el lema bajo el titular
+ * (`tagline`) y la descripcion de la foto del hero. Los dos idiomas o ninguno
+ * (`null`): la mitad del publico sin texto es peor que nadie con el.
+ */
+const promotionCopySchema = z.object({
+  "es-US": z.string().trim().min(1).max(300),
+  "en-US": z.string().trim().min(1).max(300),
+});
+
 /** DEC-052: etiqueta de catalogo. NO dice cuantas participaciones da nada. */
 const productKindSchema = z.enum(["MERCHANDISE", "ENTRY_PACKAGE"]);
 
@@ -295,6 +320,10 @@ const updatePromotionBodySchema = z
     public_name: localizedTextSchema.optional(),
     starts_at: z.iso.datetime().nullable().optional(),
     ends_at: z.iso.datetime().nullable().optional(),
+    // DEC-065. `null` borra; ausente no toca.
+    tagline: promotionCopySchema.nullable().optional(),
+    hero_image_url: heroImageUrlSchema.nullable().optional(),
+    hero_image_alt: promotionCopySchema.nullable().optional(),
   })
   .refine((body) => Object.keys(body).length > 0, {
     message: "Un PATCH sin ningun campo no es una edicion.",
@@ -384,6 +413,9 @@ const promotionSchema = z.object({
   ends_at: z.string().nullable(),
   active_rules_version_id: z.uuid().nullable(),
   public_name: z.object({ "es-US": z.string(), "en-US": z.string() }),
+  tagline: z.object({ "es-US": z.string(), "en-US": z.string() }).nullable(),
+  hero_image_url: z.string().nullable(),
+  hero_image_alt: z.object({ "es-US": z.string(), "en-US": z.string() }).nullable(),
   created_at: z.string(),
   updated_at: z.string(),
 });
@@ -446,6 +478,9 @@ function presentPromotion(row: AdminPromotionRow): z.infer<typeof promotionSchem
     ends_at: row.endsAt?.toISOString() ?? null,
     active_rules_version_id: row.activeRulesVersionId,
     public_name: row.publicName,
+    tagline: row.tagline,
+    hero_image_url: row.heroImageUrl,
+    hero_image_alt: row.heroImageAlt,
     created_at: row.createdAt.toISOString(),
     updated_at: row.updatedAt.toISOString(),
   };
@@ -1046,9 +1081,9 @@ export function buildAdminCatalogRoutes(dependencies: AppDependencies): RouteDef
       method: "PATCH",
       url: "/api/v1/admin/promotions/:promotion_id",
       operationId: "updateAdminPromotion",
-      summary: "Editar nombre y ventana de una promocion.",
+      summary: "Editar nombre, ventana, lema y foto del premio de una promocion.",
       description:
-        "No cambia el estado ni la zona horaria legal. La zona no se edita a proposito: cambiarla despues de haber evaluado plazos contra ella movería retroactivamente el momento en que abrio o cerro la promocion.",
+        "No cambia el estado ni la zona horaria legal. La zona no se edita a proposito: cambiarla despues de haber evaluado plazos contra ella movería retroactivamente el momento en que abrio o cerro la promocion. DEC-065: `tagline` es el lema bajo el titular del hero y `hero_image_url` la foto del premio, una ruta del propio sitio (la que devuelve `POST /admin/media`); `hero_image_alt` la describe en los dos idiomas. `null` borra el campo; ausente no lo toca.",
       tags: ["admin"],
       authorization: { kind: "PERMISSION", permission: "promotion.update" },
       schema: {
@@ -1078,6 +1113,9 @@ export function buildAdminCatalogRoutes(dependencies: AppDependencies): RouteDef
             ...(body.ends_at === undefined
               ? {}
               : { endsAt: body.ends_at === null ? null : new Date(body.ends_at) }),
+            ...(body.tagline === undefined ? {} : { tagline: body.tagline }),
+            ...(body.hero_image_url === undefined ? {} : { heroImageUrl: body.hero_image_url }),
+            ...(body.hero_image_alt === undefined ? {} : { heroImageAlt: body.hero_image_alt }),
           });
 
           if (updated === null) throw ApiErrors.notFound();

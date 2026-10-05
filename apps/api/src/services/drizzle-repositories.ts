@@ -81,6 +81,22 @@ function localized(rows: readonly { locale: string; value: string | null }[]): L
 // Promociones
 // ---------------------------------------------------------------------------
 
+/**
+ * Texto alternativo de la foto del hero (DEC-065), o `null`.
+ *
+ * A diferencia de `localized`, aqui un idioma vacio NO se rellena con `""`:
+ * `null` significa "decorativa" y el hero lo pinta como `alt=""` en los dos
+ * idiomas. Un alternativo en un idioma y vacio en el otro describiria la foto a
+ * la mitad del publico, asi que se trata como ausente.
+ */
+function heroAltOf(
+  rows: readonly { locale: string; heroImageAlt: string | null }[],
+): LocalizedText | null {
+  const en = rows.find((row) => row.locale === "en-US")?.heroImageAlt ?? null;
+  const es = rows.find((row) => row.locale === "es-US")?.heroImageAlt ?? null;
+  return en === null || es === null ? null : { "en-US": en, "es-US": es };
+}
+
 /** Todo menos DRAFT. Ver la cabecera. */
 const PUBLIC_PROMOTION_STATUSES = [
   "SCHEDULED",
@@ -123,6 +139,8 @@ function createPromotionRepository(db: Database): PromotionRepository {
         startsAt: row.startsAt,
         endsAt: row.endsAt,
         rulesVersionId: row.activeRulesVersionId,
+        heroImageUrl: row.heroImageUrl,
+        heroImageAlt: heroAltOf(own),
       };
     });
   }

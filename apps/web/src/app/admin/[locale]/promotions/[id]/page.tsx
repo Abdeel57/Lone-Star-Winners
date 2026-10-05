@@ -207,6 +207,10 @@ export default async function AdminPromotionDetailPage({
                       promotion.data.ends_at === null
                         ? null
                         : isoToZonedWallTime(promotion.data.ends_at, promotion.data.legal_timezone),
+                    // DEC-065. `?? null`: una API anterior no publica las claves.
+                    tagline: promotion.data.tagline ?? null,
+                    heroImageUrl: promotion.data.hero_image_url ?? null,
+                    heroImageAlt: promotion.data.hero_image_alt ?? null,
                   }}
                 />
               ) : (

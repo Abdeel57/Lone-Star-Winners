@@ -318,6 +318,12 @@ export function buildStorefrontRoutes(dependencies: AppDependencies): RouteDefin
                   // de arranque de este despliegue.
                   defaultCurrency: dependencies.config.commerce.defaultCurrency,
                 }),
+          // DEC-065: la foto del premio que sube el panel. Sin foto, `null`, y
+          // el hero pinta la marca de agua.
+          media:
+            promotion.heroImageUrl === null
+              ? null
+              : { hero_url: promotion.heroImageUrl, square_url: null, alt: promotion.heroImageAlt },
         };
       },
     },

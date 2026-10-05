@@ -43,6 +43,11 @@ export const promotions = pgTable(
       (): AnyPgColumn => promotionRulesVersions.id,
       { onDelete: "restrict" },
     ),
+    /**
+     * DEC-065 (0032): fotografia del premio para el hero. Ruta del propio
+     * sitio, nunca `https://` (CHECK `promotions_hero_image_url_shape`).
+     */
+    heroImageUrl: text("hero_image_url"),
     createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
   },
@@ -59,6 +64,8 @@ export const promotionTranslations = pgTable(
     locale: localeCodeEnum("locale").notNull(),
     publicName: text("public_name").notNull(),
     tagline: text("tagline"),
+    /** DEC-065 (0032): descripcion de la foto del hero. `null` = decorativa. */
+    heroImageAlt: text("hero_image_alt"),
     createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
   },

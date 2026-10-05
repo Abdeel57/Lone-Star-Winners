@@ -15798,6 +15798,39 @@
                               }
                             ]
                           },
+                          "hero_image_alt": {
+                            "anyOf": [
+                              {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "en-US": {
+                                    "type": "string"
+                                  },
+                                  "es-US": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "es-US",
+                                  "en-US"
+                                ],
+                                "type": "object"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "hero_image_url": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
                           "id": {
                             "format": "uuid",
                             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
@@ -15841,6 +15874,29 @@
                           "status": {
                             "type": "string"
                           },
+                          "tagline": {
+                            "anyOf": [
+                              {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "en-US": {
+                                    "type": "string"
+                                  },
+                                  "es-US": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "es-US",
+                                  "en-US"
+                                ],
+                                "type": "object"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
                           "updated_at": {
                             "type": "string"
                           }
@@ -15855,6 +15911,9 @@
                           "ends_at",
                           "active_rules_version_id",
                           "public_name",
+                          "tagline",
+                          "hero_image_url",
+                          "hero_image_alt",
                           "created_at",
                           "updated_at"
                         ],
@@ -16091,6 +16150,39 @@
                         }
                       ]
                     },
+                    "hero_image_alt": {
+                      "anyOf": [
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "en-US": {
+                              "type": "string"
+                            },
+                            "es-US": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "es-US",
+                            "en-US"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "hero_image_url": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
                     "id": {
                       "format": "uuid",
                       "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
@@ -16134,6 +16226,29 @@
                     "status": {
                       "type": "string"
                     },
+                    "tagline": {
+                      "anyOf": [
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "en-US": {
+                              "type": "string"
+                            },
+                            "es-US": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "es-US",
+                            "en-US"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
                     "updated_at": {
                       "type": "string"
                     }
@@ -16148,6 +16263,9 @@
                     "ends_at",
                     "active_rules_version_id",
                     "public_name",
+                    "tagline",
+                    "hero_image_url",
+                    "hero_image_alt",
                     "created_at",
                     "updated_at"
                   ],
@@ -16377,6 +16495,39 @@
                         }
                       ]
                     },
+                    "hero_image_alt": {
+                      "anyOf": [
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "en-US": {
+                              "type": "string"
+                            },
+                            "es-US": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "es-US",
+                            "en-US"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "hero_image_url": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
                     "id": {
                       "format": "uuid",
                       "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
@@ -16420,6 +16571,29 @@
                     "status": {
                       "type": "string"
                     },
+                    "tagline": {
+                      "anyOf": [
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "en-US": {
+                              "type": "string"
+                            },
+                            "es-US": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "es-US",
+                            "en-US"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
                     "updated_at": {
                       "type": "string"
                     }
@@ -16434,6 +16608,9 @@
                     "ends_at",
                     "active_rules_version_id",
                     "public_name",
+                    "tagline",
+                    "hero_image_url",
+                    "hero_image_alt",
                     "created_at",
                     "updated_at"
                   ],
@@ -16577,7 +16754,7 @@
         }
       },
       "patch": {
-        "description": "No cambia el estado ni la zona horaria legal. La zona no se edita a proposito: cambiarla despues de haber evaluado plazos contra ella movería retroactivamente el momento en que abrio o cerro la promocion.",
+        "description": "No cambia el estado ni la zona horaria legal. La zona no se edita a proposito: cambiarla despues de haber evaluado plazos contra ella movería retroactivamente el momento en que abrio o cerro la promocion. DEC-065: `tagline` es el lema bajo el titular del hero y `hero_image_url` la foto del premio, una ruta del propio sitio (la que devuelve `POST /admin/media`); `hero_image_alt` la describe en los dos idiomas. `null` borra el campo; ausente no lo toca.",
         "operationId": "updateAdminPromotion",
         "parameters": [
           {
@@ -16601,6 +16778,45 @@
                       {
                         "format": "date-time",
                         "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$",
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "hero_image_alt": {
+                    "anyOf": [
+                      {
+                        "properties": {
+                          "en-US": {
+                            "maxLength": 300,
+                            "minLength": 1,
+                            "type": "string"
+                          },
+                          "es-US": {
+                            "maxLength": 300,
+                            "minLength": 1,
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "es-US",
+                          "en-US"
+                        ],
+                        "type": "object"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "hero_image_url": {
+                    "anyOf": [
+                      {
+                        "maxLength": 2000,
+                        "minLength": 1,
+                        "pattern": "^\\/[^/\\s]\\S*$",
                         "type": "string"
                       },
                       {
@@ -16643,6 +16859,32 @@
                         "type": "null"
                       }
                     ]
+                  },
+                  "tagline": {
+                    "anyOf": [
+                      {
+                        "properties": {
+                          "en-US": {
+                            "maxLength": 300,
+                            "minLength": 1,
+                            "type": "string"
+                          },
+                          "es-US": {
+                            "maxLength": 300,
+                            "minLength": 1,
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "es-US",
+                          "en-US"
+                        ],
+                        "type": "object"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
                   }
                 },
                 "type": "object"
@@ -16674,6 +16916,39 @@
                       "type": "string"
                     },
                     "ends_at": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "hero_image_alt": {
+                      "anyOf": [
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "en-US": {
+                              "type": "string"
+                            },
+                            "es-US": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "es-US",
+                            "en-US"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "hero_image_url": {
                       "anyOf": [
                         {
                           "type": "string"
@@ -16726,6 +17001,29 @@
                     "status": {
                       "type": "string"
                     },
+                    "tagline": {
+                      "anyOf": [
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "en-US": {
+                              "type": "string"
+                            },
+                            "es-US": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "es-US",
+                            "en-US"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
                     "updated_at": {
                       "type": "string"
                     }
@@ -16740,6 +17038,9 @@
                     "ends_at",
                     "active_rules_version_id",
                     "public_name",
+                    "tagline",
+                    "hero_image_url",
+                    "hero_image_alt",
                     "created_at",
                     "updated_at"
                   ],
@@ -16950,7 +17251,7 @@
             "sessionCookie": []
           }
         ],
-        "summary": "Editar nombre y ventana de una promocion.",
+        "summary": "Editar nombre, ventana, lema y foto del premio de una promocion.",
         "tags": [
           "admin"
         ],
@@ -17037,6 +17338,39 @@
                         }
                       ]
                     },
+                    "hero_image_alt": {
+                      "anyOf": [
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "en-US": {
+                              "type": "string"
+                            },
+                            "es-US": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "es-US",
+                            "en-US"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "hero_image_url": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
                     "id": {
                       "format": "uuid",
                       "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
@@ -17080,6 +17414,29 @@
                     "status": {
                       "type": "string"
                     },
+                    "tagline": {
+                      "anyOf": [
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "en-US": {
+                              "type": "string"
+                            },
+                            "es-US": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "es-US",
+                            "en-US"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
                     "updated_at": {
                       "type": "string"
                     }
@@ -17094,6 +17451,9 @@
                     "ends_at",
                     "active_rules_version_id",
                     "public_name",
+                    "tagline",
+                    "hero_image_url",
+                    "hero_image_alt",
                     "created_at",
                     "updated_at"
                   ],
@@ -17958,6 +18318,39 @@
                         }
                       ]
                     },
+                    "hero_image_alt": {
+                      "anyOf": [
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "en-US": {
+                              "type": "string"
+                            },
+                            "es-US": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "es-US",
+                            "en-US"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "hero_image_url": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
                     "id": {
                       "format": "uuid",
                       "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
@@ -18001,6 +18394,29 @@
                     "status": {
                       "type": "string"
                     },
+                    "tagline": {
+                      "anyOf": [
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "en-US": {
+                              "type": "string"
+                            },
+                            "es-US": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "es-US",
+                            "en-US"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
                     "updated_at": {
                       "type": "string"
                     }
@@ -18015,6 +18431,9 @@
                     "ends_at",
                     "active_rules_version_id",
                     "public_name",
+                    "tagline",
+                    "hero_image_url",
+                    "hero_image_alt",
                     "created_at",
                     "updated_at"
                   ],
@@ -22819,6 +23238,39 @@
                         }
                       ]
                     },
+                    "hero_image_alt": {
+                      "anyOf": [
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "en-US": {
+                              "type": "string"
+                            },
+                            "es-US": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "es-US",
+                            "en-US"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "hero_image_url": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
                     "id": {
                       "format": "uuid",
                       "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
@@ -22862,6 +23314,29 @@
                     "status": {
                       "type": "string"
                     },
+                    "tagline": {
+                      "anyOf": [
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "en-US": {
+                              "type": "string"
+                            },
+                            "es-US": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "es-US",
+                            "en-US"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
                     "updated_at": {
                       "type": "string"
                     }
@@ -22876,6 +23351,9 @@
                     "ends_at",
                     "active_rules_version_id",
                     "public_name",
+                    "tagline",
+                    "hero_image_url",
+                    "hero_image_alt",
                     "created_at",
                     "updated_at"
                   ],
@@ -32080,6 +32558,60 @@
                     "legal_timezone": {
                       "type": "string"
                     },
+                    "media": {
+                      "anyOf": [
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "alt": {
+                              "anyOf": [
+                                {
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "en-US": {
+                                      "type": "string"
+                                    },
+                                    "es-US": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "en-US",
+                                    "es-US"
+                                  ],
+                                  "type": "object"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "hero_url": {
+                              "type": "string"
+                            },
+                            "square_url": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            }
+                          },
+                          "required": [
+                            "hero_url",
+                            "square_url",
+                            "alt"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
                     "prize_value": {
                       "anyOf": [
                         {
@@ -32231,7 +32763,8 @@
                     "rules_version_id",
                     "prize_value",
                     "rules_version",
-                    "entry_offer"
+                    "entry_offer",
+                    "media"
                   ],
                   "type": "object"
                 }

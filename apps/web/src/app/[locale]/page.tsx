@@ -6,22 +6,28 @@ import { getTranslations, setRequestLocale } from "next-intl/server";
 import { AmoeCallout } from "@/components/amoe-callout";
 import { ApiErrorState } from "@/components/api-error-state";
 import { EntryOfferPanel } from "@/components/entry-offer-panel";
+import { EntryPackageBand } from "@/components/entry-package-band";
 import { MarqueeBand } from "@/components/marquee-band";
 import { MerchandiseBand } from "@/components/merchandise-band";
 import { PrizeBand } from "@/components/prize-band";
+import type { CardBonus } from "@/components/product-card";
 import { PromotionHero } from "@/components/promotion-hero";
 import { SectionHeading } from "@/components/section-heading";
 import { TrustBand } from "@/components/trust-band";
 import { WinnersShowcase, type PublishedWinner } from "@/components/winners-showcase";
+import type { Locale } from "@/i18n/locales";
 import { Link } from "@/i18n/navigation";
 import { routing } from "@/i18n/routing";
 import {
   fetchActivePromotion,
   fetchProducts,
   fetchPromotion,
+  fetchPromotions,
   type ProductSummary,
   type PromotionDetail,
+  type PromotionSummary,
 } from "@/lib/api";
+import { normalizeEntryOffer } from "@/lib/entry-offer";
 import { isFeatureEnabled } from "@/lib/flags";
 import { loadServerUiConfig } from "@/lib/flags-server";
 import { presentPromotion } from "@/lib/promotion-state";
@@ -52,6 +58,37 @@ export const dynamic = "force-dynamic";
  * lo que cambio es la rejilla debajo.
  */
 const FEATURED_COUNT = 4;
+
+/**
+ * Tope de paquetes en la banda de niveles. Hoy son cuatro; el tope solo evita
+ * que un catalogo con decenas de paquetes convierta la portada en una tienda.
+ */
+const PACKAGES_LIMIT = 8;
+
+/**
+ * La promocion SCHEDULED que abre antes, o `null`.
+ *
+ * Es de mejor esfuerzo: un fallo del listado deja la portada en su estado
+ * vacio, que es exactamente lo que habia antes de buscarla. Solo mira la
+ * primera pagina; mas de un punado de promociones programadas a la vez no es un
+ * caso de este negocio.
+ */
+async function findUpcomingPromotion(
+  locale: Locale,
+  nowIso: string,
+): Promise<PromotionSummary | null> {
+  const result = await fetchPromotions(locale, { limit: 50 });
+  if (!result.ok) return null;
+
+  // `Date.parse` y no comparacion de cadenas: dos ISO validos pueden diferir
+  // en los milisegundos y entonces el orden lexicografico miente.
+  const now = Date.parse(nowIso);
+  const upcoming = result.data.items
+    .filter((item) => item.status === "SCHEDULED" && Date.parse(item.ends_at) > now)
+    .sort((a, b) => Date.parse(a.starts_at) - Date.parse(b.starts_at));
+
+  return upcoming[0] ?? null;
+}
 
 /** Los tres pasos de "como funciona", en orden. */
 const STEPS = ["step1", "step2", "step3"] as const;
@@ -95,8 +132,9 @@ const PUBLISHED_WINNERS: readonly PublishedWinner[] = [];
  * ---------------------------------------------------------------------------
  * Bloques de gran contraste que se suceden, cada uno con su propio fondo:
  *
- *   hero a pantalla completa -> avisos -> oferta y via gratuita -> como
- *   funciona -> mercancia destacada -> cierre de confianza
+ *   hero a pantalla completa -> paquetes por niveles (DEC-065) -> avisos ->
+ *   oferta y via gratuita -> como funciona -> mercancia destacada -> cierre
+ *   de confianza
  *
  * El orden no cambia respecto de la version anterior, y no es casual: lo
  * primero que se afirma despues del premio es que aqui se adquiere MERCANCIA, y
@@ -118,16 +156,19 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
   const t = await getTranslations();
   const nowIso = new Date().toISOString();
 
-  // Las dos lecturas van en paralelo: la configuracion no depende de la
-  // promocion ni al reves, y encadenarlas sumaria dos viajes al render.
-  const [promotionResult, uiConfig, productsResult] = await Promise.all([
+  // Las lecturas van en paralelo: ninguna depende de otra, y encadenarlas
+  // sumaria viajes al render.
+  const [promotionResult, uiConfig, productsResult, packagesResult] = await Promise.all([
     fetchActivePromotion(locale),
     loadServerUiConfig(locale),
-    fetchProducts(locale, { limit: FEATURED_COUNT }),
+    // DEC-065: la franja destacada es SOLO mercancia. Los paquetes tienen su
+    // propia banda, por niveles, y no se mezclan con la rejilla de producto.
+    fetchProducts(locale, { kind: "MERCHANDISE", limit: FEATURED_COUNT }),
+    fetchProducts(locale, { kind: "ENTRY_PACKAGE", limit: PACKAGES_LIMIT }),
   ]);
 
   /*
-   * La mercancia destacada es informacion ADICIONAL.
+   * La mercancia destacada y los paquetes son informacion ADICIONAL.
    *
    * Un fallo del catalogo no puede tumbar la portada ni dejar un estado de
    * error en mitad de ella: la promocion vigente y las Reglas Oficiales siguen
@@ -137,8 +178,21 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
   const featured: readonly ProductSummary[] = productsResult.ok
     ? productsResult.data.items.slice(0, FEATURED_COUNT)
     : [];
+  const packages: readonly ProductSummary[] = packagesResult.ok ? packagesResult.data.items : [];
 
-  const promotion = promotionResult.ok ? promotionResult.data : null;
+  /*
+   * SIN PROMOCION ACTIVA, LA PROXIMA (DEC-065).
+   *
+   * Entre que una edicion se programa y se activa, `/promotions/active` da 404
+   * y la portada se quedaba en el estado vacio aunque el premio ya estuviera
+   * anunciado. Ahora busca en el listado publico la promocion SCHEDULED que
+   * abre antes y la presenta: el hero ya sabe pintar ese estado -cuenta atras
+   * hacia la APERTURA, sin invitacion a comprar (`presentPromotion`)- y sin
+   * Reglas activas pasa a su estado contenido (DEC-044).
+   */
+  const active = promotionResult.ok ? promotionResult.data : null;
+  const promotion =
+    active ?? (promotionResult.ok ? await findUpcomingPromotion(locale, nowIso) : null);
   const presentation = promotion === null ? null : presentPromotion(promotion.status);
 
   // El detalle solo se pide si hay promocion. Un fallo aqui NO tumba la
@@ -158,6 +212,21 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
    * el mismo resultado, pero dejaria dos sitios donde olvidarse de comprobarlos.
    */
   const multipliersEnabled = isFeatureEnabled(uiConfig.flags, "entry_multipliers_enabled");
+
+  /*
+   * El bonus vigente, solo para NOMBRAR el multiplicador en la banda de
+   * paquetes. Los mismos cerrojos que `/shop`: el flag del sitio y el de la
+   * propia oferta. Las cifras de cada paquete llegan ya evaluadas del catalogo.
+   */
+  const offer = normalizeEntryOffer(detail?.entry_offer, nowIso);
+  const packageBonus: CardBonus | null =
+    promotion === null ||
+    !multipliersEnabled ||
+    offer === null ||
+    !offer.multipliersEnabled ||
+    offer.activeBonus === null
+      ? null
+      : { period: offer.activeBonus, timeZone: promotion.legal_timezone };
 
   /**
    * Copy de un paso, resuelto con `switch` exhaustivo.
@@ -233,6 +302,12 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
           multipliersEnabled={multipliersEnabled}
         />
       )}
+
+      {/* PAQUETES DE PARTICIPACIONES POR NIVELES (DEC-065). Justo despues del
+          premio, como en la referencia del cliente: lo primero que se ve es que
+          se sortea y lo segundo, los niveles. Sin paquetes publicados no se
+          renderiza. */}
+      <EntryPackageBand packages={packages} locale={locale} bonus={packageBonus} />
 
       {/* Oferta vigente y via gratuita. Las dos son informacion de la promocion
           y por eso comparten banda; con `amoe_enabled` apagado, la de la derecha

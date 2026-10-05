@@ -167,6 +167,19 @@ export const promotionDetailSchema = promotionSummarySchema.extend({
     .nullable(),
   /** `null` sin version de reglas activa, o si su configuracion no parsea. */
   entry_offer: promotionEntryOfferSchema.nullable(),
+  /**
+   * DEC-065: fotografia del premio para el hero, o `null` si la promocion no
+   * tiene. `hero_url` es una ruta del propio sitio (`/media/<id>.<ext>`).
+   * `square_url` existe en la forma que pidio el frontend (HO-039) y hoy es
+   * siempre `null`: el panel sube una sola imagen. `alt` `null` = decorativa.
+   */
+  media: z
+    .object({
+      hero_url: z.string(),
+      square_url: z.string().nullable(),
+      alt: localizedTextSchema.nullable(),
+    })
+    .nullable(),
 });
 
 export const officialRulesSchema = z.object({

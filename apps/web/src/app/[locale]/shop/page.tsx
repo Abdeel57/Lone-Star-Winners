@@ -4,6 +4,7 @@ import { hasLocale } from "next-intl";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 
 import { ApiErrorState } from "@/components/api-error-state";
+import { EntryPackageBand } from "@/components/entry-package-band";
 import { MerchandiseBand } from "@/components/merchandise-band";
 import { SectionHeading } from "@/components/section-heading";
 import { ShopFilters } from "@/components/shop-filters";
@@ -36,6 +37,9 @@ export const dynamic = "force-dynamic";
 
 /** Tamano de pagina. Solicitud al backend, no un tope del cliente. */
 const PAGE_SIZE = 24;
+
+/** Tope de la banda de paquetes (DEC-065). El mismo que en la portada. */
+const PACKAGES_LIMIT = 8;
 
 /**
  * Catalogo de mercancia elegible.
@@ -106,11 +110,23 @@ export default async function ShopPage({
   const category = singleParam(query.category);
   const kind = kindParam(query.kind);
 
+  /*
+   * SIN FILTROS, LA REJILLA ES SOLO MERCANCIA (DEC-065).
+   *
+   * Los paquetes de participaciones tienen su banda propia, por niveles, encima
+   * de la rejilla, y el cliente pidio que no se mezclen con el producto. Quien
+   * filtra a proposito -por tipo o por categoria- sigue viendo exactamente lo
+   * que pidio, paquetes incluidos.
+   */
+  const unfiltered = kind === null && category === null;
+  const gridKind: ProductKind | null = unfiltered ? "MERCHANDISE" : kind;
+  const showsPackageBand = unfiltered && cursor === null;
+
   const request: ProductListQuery = {
     limit: PAGE_SIZE,
     ...(cursor === null ? {} : { cursor }),
     ...(category === null ? {} : { category }),
-    ...(kind === null ? {} : { kind }),
+    ...(gridKind === null ? {} : { kind: gridKind }),
   };
 
   /*
@@ -122,12 +138,18 @@ export default async function ShopPage({
    * las cifras de los paquetes. Un fallo en cualquiera de ellas degrada -menos
    * filtro, menos frase- y no rompe.
    */
-  const [result, categoriesResult, promotionResult, flags] = await Promise.all([
+  const [result, categoriesResult, promotionResult, flags, packagesResult] = await Promise.all([
     fetchProducts(locale, request),
     fetchProductCategories(locale),
     fetchActivePromotion(locale),
     loadFeatureFlags(locale),
+    // La banda de paquetes es adorno de la primera pagina sin filtros: un fallo
+    // aqui la omite y la tienda sigue.
+    showsPackageBand
+      ? fetchProducts(locale, { kind: "ENTRY_PACKAGE", limit: PACKAGES_LIMIT })
+      : Promise.resolve(null),
   ]);
+  const packages = packagesResult?.ok === true ? packagesResult.data.items : [];
 
   const categories: readonly ProductCategory[] = categoriesResult.ok
     ? categoriesResult.data.items
@@ -229,6 +251,17 @@ export default async function ShopPage({
           )}
         </div>
       </div>
+
+      {/* Paquetes por niveles (DEC-065), antes de la mercancia. Solo en la
+          primera pagina sin filtros; sin paquetes publicados no se pinta. */}
+      {showsPackageBand ? (
+        <EntryPackageBand
+          packages={packages}
+          locale={locale}
+          bonus={bonus}
+          className="border-b border-light-border"
+        />
+      ) : null}
 
       {!result.ok ? (
         <div className="lsw-container pt-s10">

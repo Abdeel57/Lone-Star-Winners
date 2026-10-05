@@ -3189,3 +3189,59 @@ Affected areas: `apps/api` (`services/catalog-order.ts`,
 
 Proposed by: sesión del usuario (2026-10-03), carga del catálogo
 Agreed by: pendiente — backend-sweepstakes, frontend-ux
+
+## DEC-065
+
+Status: Proposed
+
+Date: 2026-10-04
+
+Decision:
+**La portada presenta el premio con su fotografía y los paquetes de
+participaciones en una banda propia, por niveles.** Lo pidió el cliente con una
+referencia delante. Cinco puntos:
+
+1. **Foto del premio subida desde el panel.** Migración `0032`:
+   `promotions.hero_image_url` (solo ruta del propio sitio, CHECK
+   `promotions_hero_image_url_shape`) y `promotion_translations.hero_image_alt`
+   (descripción por idioma). Se sube con el mismo `POST /admin/media` que las
+   fotos de producto (DEC-056) y se fija con `PATCH /admin/promotions/{id}`,
+   que también acepta `tagline` (el lema bajo el titular). El detalle público
+   (`GET /promotions/{slug}`) publica `media: { hero_url, square_url: null, alt }`
+   o `null`: la forma que el frontend pidió en HO-039. No se admite `https://`
+   porque el hero la pinta con `next/image`, que rechaza dominios no declarados.
+2. **Sin promoción activa, la próxima.** Si `/promotions/active` da 404, la
+   portada presenta la promoción SCHEDULED que abre antes (del listado
+   público). El hero ya pintaba ese estado: cuenta atrás hacia la apertura y,
+   sin Reglas activas, el estado contenido de DEC-044.
+3. **Los paquetes salen de la rejilla de mercancía.** La portada y `/shop` sin
+   filtros piden `kind=MERCHANDISE` para la rejilla y `kind=ENTRY_PACKAGE` para
+   la banda nueva (`entry-package-band.tsx`). Quien filtra en `/shop` por tipo o
+   categoría ve lo que pidió, paquetes incluidos.
+4. **Se copia el aspecto, no el vocabulario.** Un pase con el metal del nivel
+   (bronce, plata, oro, diamante, por orden de precio), troquel con muescas,
+   banda de bonus y botón de compra en la tarjeta. La referencia dibuja un
+   boleto con código de barras; aquí la palabra sigue siendo "paquete de
+   participaciones" y donde iba el código va la cifra. La cifra es la que
+   evalúa el backend (`entry_offer`); sin promoción activa se muestra el nombre
+   del paquete, que la declara. "Recomendado" marca el tercer nivel: es una
+   recomendación, no un dato de ventas.
+5. **Añadir al carrito desde la tarjeta** solo si el paquete tiene una variante
+   (`PackageQuickAdd`, la misma server action que la ficha). Con varias, la
+   tarjeta enlaza a la ficha.
+
+Alternatives:
+A — Foto fija en el código de la web por edición (descartada por el usuario:
+cada edición exigiría un despliegue). B — Mostrar paquetes y mercancía en la
+misma rejilla con otra tarjeta (descartada: es lo que el cliente pidió quitar).
+
+Affected areas: `packages/database` (`0032_promotion_hero_image.sql`,
+`schema/promotions.ts`), `apps/api` (`http/schemas.ts`, `routes/storefront.ts`,
+`routes/admin-catalog.ts`, `services/admin-catalog.ts`,
+`services/drizzle-repositories.ts`, `services/ports.ts`, tests), `apps/web`
+(portada, `/shop`, `entry-package-band.tsx`, `package-quick-add.tsx`,
+formulario y acción de promoción del panel, mensajes en-US/es-US),
+`docs/API_CONTRACT.md`.
+
+Proposed by: sesión del usuario (2026-10-04), pedido del cliente
+Agreed by: pendiente — frontend-ux, backend-sweepstakes, security-integration

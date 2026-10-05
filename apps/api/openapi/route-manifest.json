@@ -486,7 +486,7 @@
       "authorization": "promotion.update",
       "requires_step_up": false,
       "tags": ["admin"],
-      "summary": "Editar nombre y ventana de una promocion."
+      "summary": "Editar nombre, ventana, lema y foto del premio de una promocion."
     },
     {
       "method": "POST",

@@ -215,6 +215,15 @@ export interface AdminPromotionRow {
   /** `null` significa que NO puede activarse todavia (DEC-012). */
   readonly active_rules_version_id: string | null;
   readonly public_name: LocalizedText;
+  /**
+   * DEC-065: lema bajo el titular del hero, en los dos idiomas o `null`.
+   * Opcional en el tipo: una API anterior a DEC-065 no lo publica.
+   */
+  readonly tagline?: LocalizedText | null;
+  /** DEC-065: foto del premio para el hero (ruta `/media/...`), o `null`. */
+  readonly hero_image_url?: string | null;
+  /** DEC-065: descripcion de esa foto en los dos idiomas, o `null` (decorativa). */
+  readonly hero_image_alt?: LocalizedText | null;
   readonly created_at: string;
   readonly updated_at: string;
 }
@@ -235,6 +244,10 @@ export interface AdminPromotionPatch {
   readonly public_name?: LocalizedText;
   readonly starts_at?: string | null;
   readonly ends_at?: string | null;
+  /** DEC-065. `null` borra; ausente no toca. */
+  readonly tagline?: LocalizedText | null;
+  readonly hero_image_url?: string | null;
+  readonly hero_image_alt?: LocalizedText | null;
 }
 
 /**

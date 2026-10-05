@@ -106,6 +106,9 @@ function promotionFixture(overrides: Record<string, unknown> = {}): Record<strin
     endsAt: null,
     activeRulesVersionId: null,
     publicName: { "es-US": "Gana una GMC Denali 2025", "en-US": "Win a 2025 GMC Denali" },
+    tagline: null,
+    heroImageUrl: null,
+    heroImageAlt: null,
     createdAt: NOW,
     updatedAt: NOW,
     ...overrides,
@@ -387,6 +390,101 @@ describe("POST /admin/promotions", () => {
         internal_name: "GMC Denali 2025",
         public_name: { "es-US": "Gana", "en-US": "Win" },
       },
+    });
+
+    expect(response.statusCode).toBe(422);
+  });
+});
+
+describe("PATCH /admin/promotions/:promotion_id (DEC-065: foto del premio y lema)", () => {
+  const HERO = "/media/3f2b8c1e-5d4a-4b7e-9c2f-1a2b3c4d5e6f.jpg";
+  const ALT = {
+    "es-US": "Chevrolet Silverado 1500 2025 roja, vista frontal",
+    "en-US": "Red 2025 Chevrolet Silverado 1500, front view",
+  };
+  const TAGLINE = { "es-US": "Del 5 de octubre al 8 de noviembre", "en-US": "Oct 5 to Nov 8" };
+
+  it("guarda la foto, su descripcion y el lema, y los devuelve", async () => {
+    let received: unknown = null;
+    shared.repository = {
+      updatePromotion: (_id: string, input: unknown) => {
+        received = input;
+        return Promise.resolve(
+          promotionFixture({ heroImageUrl: HERO, heroImageAlt: ALT, tagline: TAGLINE }),
+        );
+      },
+    };
+
+    const app = await appAllowingPermissions();
+    const response = await app.inject({
+      method: "PATCH",
+      url: `/api/v1/admin/promotions/${PROMOTION_ID}`,
+      payload: { hero_image_url: HERO, hero_image_alt: ALT, tagline: TAGLINE },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(received).toEqual({ heroImageUrl: HERO, heroImageAlt: ALT, tagline: TAGLINE });
+    expect(response.json()).toMatchObject({
+      hero_image_url: HERO,
+      hero_image_alt: ALT,
+      tagline: TAGLINE,
+    });
+  });
+
+  it("`null` borra la foto: llega al repositorio como null, no se omite", async () => {
+    let received: unknown = null;
+    shared.repository = {
+      updatePromotion: (_id: string, input: unknown) => {
+        received = input;
+        return Promise.resolve(promotionFixture());
+      },
+    };
+
+    const app = await appAllowingPermissions();
+    const response = await app.inject({
+      method: "PATCH",
+      url: `/api/v1/admin/promotions/${PROMOTION_ID}`,
+      payload: { hero_image_url: null, hero_image_alt: null },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(received).toEqual({ heroImageUrl: null, heroImageAlt: null });
+  });
+
+  it("rechaza una URL https: el hero la pinta con next/image y no se veria", async () => {
+    shared.repository = { updatePromotion: () => Promise.resolve(promotionFixture()) };
+
+    const app = await appAllowingPermissions();
+    const response = await app.inject({
+      method: "PATCH",
+      url: `/api/v1/admin/promotions/${PROMOTION_ID}`,
+      payload: { hero_image_url: "https://cdn.example.com/silverado.jpg" },
+    });
+
+    expect(response.statusCode).toBe(422);
+  });
+
+  it("rechaza `//otro-dominio`, que el navegador resolveria fuera del sitio", async () => {
+    shared.repository = { updatePromotion: () => Promise.resolve(promotionFixture()) };
+
+    const app = await appAllowingPermissions();
+    const response = await app.inject({
+      method: "PATCH",
+      url: `/api/v1/admin/promotions/${PROMOTION_ID}`,
+      payload: { hero_image_url: "//evil.example/x.jpg" },
+    });
+
+    expect(response.statusCode).toBe(422);
+  });
+
+  it("exige la descripcion en los dos idiomas o en ninguno", async () => {
+    shared.repository = { updatePromotion: () => Promise.resolve(promotionFixture()) };
+
+    const app = await appAllowingPermissions();
+    const response = await app.inject({
+      method: "PATCH",
+      url: `/api/v1/admin/promotions/${PROMOTION_ID}`,
+      payload: { hero_image_alt: { "es-US": "Camioneta roja" } },
     });
 
     expect(response.statusCode).toBe(422);

@@ -162,6 +162,13 @@
       "when": 1787616031000,
       "tag": "0031_verified_phone",
       "breakpoints": false
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1787616032000,
+      "tag": "0032_promotion_hero_image",
+      "breakpoints": false
     }
   ]
 }

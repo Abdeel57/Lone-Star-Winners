@@ -152,6 +152,40 @@ describe("PromotionForm (alta)", () => {
     expect(screen.getByLabelText(/^Ends/u)).toHaveValue("");
     expect(screen.getAllByText(/America\/Chicago/u).length).toBeGreaterThan(0);
   });
+
+  it("DEC-065: al editar, la portada trae el lema y la descripcion de la foto actuales", () => {
+    renderIn(
+      "es",
+      <PromotionForm
+        locale="es"
+        action={capturing().action}
+        promotion={{
+          id: "prm_1",
+          slug: "silverado-1500-2025",
+          internalName: "Silverado 2025",
+          legalTimezone: "America/Chicago",
+          publicName: { "es-US": "Gana", "en-US": "Win" },
+          startsAtWall: null,
+          endsAtWall: null,
+          tagline: { "es-US": "Del 5 de octubre", "en-US": "From October 5" },
+          heroImageUrl: "/media/3f2b8c1e-5d4a-4b7e-9c2f-1a2b3c4d5e6f.jpg",
+          heroImageAlt: { "es-US": "Camioneta roja", "en-US": "Red pickup" },
+        }}
+      />,
+    );
+
+    expect(screen.getByRole("group", { name: "Portada" })).toBeInTheDocument();
+    expect(screen.getByLabelText(/^Línea bajo el título \(español\)/u)).toHaveValue(
+      "Del 5 de octubre",
+    );
+    expect(screen.getByLabelText(/^Descripción de la foto \(inglés\)/u)).toHaveValue("Red pickup");
+  });
+
+  it("DEC-065: en el alta no hay seccion de portada", () => {
+    renderIn("es", <PromotionForm locale="es" action={capturing().action} />);
+
+    expect(screen.queryByRole("group", { name: "Portada" })).toBeNull();
+  });
 });
 
 describe("PromotionTransitionForm", () => {

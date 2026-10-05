@@ -558,6 +558,30 @@ El cursor de `GET /promotions` ordena por `slug`. Es opaco: no se interpreta.
 idioma controlante sigue en `TBD` (`docs/LEGAL_PENDING.md`) y el sistema no lo
 adivina.
 
+> **Añadido por DEC-065:** `media`, la fotografía del premio para el hero, o
+> `null` si la promoción no tiene. Es la forma que el frontend pidió en HO-039.
+
+```json
+{
+  "media": {
+    "hero_url": "/media/3f2b8c1e-5d4a-4b7e-9c2f-1a2b3c4d5e6f.jpg",
+    "square_url": null,
+    "alt": {
+      "en-US": "Red 2025 Chevrolet Silverado 1500",
+      "es-US": "Chevrolet Silverado 1500 2025 roja"
+    }
+  }
+}
+```
+
+- `hero_url` es siempre una ruta del propio sitio (`/media/<id>.<ext>`), nunca
+  `https://`: el hero la pinta con `next/image`.
+- `square_url` es hoy siempre `null`: el panel sube una sola imagen.
+- `alt` `null` significa decorativa (`alt=""`). Llega con los dos idiomas o
+  `null`, nunca con uno solo.
+- `summary` (de `PromotionSummary`) es el lema que se edita en el panel
+  (`tagline`); `""` en un idioma sin lema.
+
 ---
 
 ## 4. Storefront: catálogo
@@ -2894,7 +2918,18 @@ zona horaria no la conoce el servidor · 422 · 401 · 403.
 
     Authorization: promotion.update
 
-Campos opcionales: `internal_name`, `public_name`, `starts_at`, `ends_at`.
+Campos opcionales: `internal_name`, `public_name`, `starts_at`, `ends_at`, y
+desde DEC-065:
+
+- `tagline`: `{ "es-US", "en-US" }` (1-300 caracteres cada uno) o `null`. Lema
+  bajo el titular del hero; se publica como `summary`.
+- `hero_image_url`: ruta del propio sitio (la `url` que devuelve
+  `POST /admin/media`) o `null`. `https://` y `//host` se rechazan con 422.
+- `hero_image_alt`: `{ "es-US", "en-US" }` (1-300) o `null` (decorativa). Los
+  dos idiomas o ninguno.
+
+En los tres, `null` borra y la clave ausente no toca el valor. La respuesta
+(`AdminPromotion`) incluye `tagline`, `hero_image_url` y `hero_image_alt`.
 
 **La zona horaria legal no se edita**, a propósito: cambiarla después de haber
 evaluado plazos contra ella movería retroactivamente el momento en que la

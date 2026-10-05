@@ -71,6 +71,8 @@ export const FIXTURE_PROMOTION: PromotionRecord = {
   startsAt: new Date("2026-09-01T05:00:00.000Z"),
   endsAt: new Date("2026-10-01T05:00:00.000Z"),
   rulesVersionId: RULES_VERSION_ID,
+  heroImageUrl: null,
+  heroImageAlt: null,
 };
 
 export const FIXTURE_RULES_VERSION: RulesVersionRecord = {

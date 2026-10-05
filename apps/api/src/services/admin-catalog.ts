@@ -108,6 +108,12 @@ export interface AdminPromotionRow {
   readonly endsAt: Date | null;
   readonly activeRulesVersionId: string | null;
   readonly publicName: LocalizedInput;
+  /** DEC-065: lema bajo el titular del hero. Los dos idiomas o `null`. */
+  readonly tagline: LocalizedInput | null;
+  /** DEC-065: foto del premio, ruta del propio sitio. */
+  readonly heroImageUrl: string | null;
+  /** DEC-065: descripcion de la foto. Los dos idiomas o `null` (decorativa). */
+  readonly heroImageAlt: LocalizedInput | null;
   readonly createdAt: Date;
   readonly updatedAt: Date;
 }
@@ -197,6 +203,10 @@ export interface UpdatePromotionInput {
   readonly publicName?: LocalizedInput;
   readonly startsAt?: Date | null;
   readonly endsAt?: Date | null;
+  /** DEC-065. `null` borra; ausente no toca. */
+  readonly tagline?: LocalizedInput | null;
+  readonly heroImageUrl?: string | null;
+  readonly heroImageAlt?: LocalizedInput | null;
 }
 
 export interface AdminCatalogRepository {
@@ -405,7 +415,12 @@ async function readPromotion(db: Reader, promotionId: string): Promise<AdminProm
   if (promotion === undefined) return null;
 
   const translations = await db
-    .select({ locale: promotionTranslations.locale, value: promotionTranslations.publicName })
+    .select({
+      locale: promotionTranslations.locale,
+      publicName: promotionTranslations.publicName,
+      tagline: promotionTranslations.tagline,
+      heroImageAlt: promotionTranslations.heroImageAlt,
+    })
     .from(promotionTranslations)
     .where(eq(promotionTranslations.promotionId, promotionId));
 
@@ -418,10 +433,32 @@ async function readPromotion(db: Reader, promotionId: string): Promise<AdminProm
     startsAt: promotion.startsAt,
     endsAt: promotion.endsAt,
     activeRulesVersionId: promotion.activeRulesVersionId,
-    publicName: localized(translations),
+    publicName: localized(
+      translations.map((row) => ({ locale: row.locale, value: row.publicName })),
+    ),
+    tagline: pairOrNull(translations.map((row) => ({ locale: row.locale, value: row.tagline }))),
+    heroImageUrl: promotion.heroImageUrl,
+    heroImageAlt: pairOrNull(
+      translations.map((row) => ({ locale: row.locale, value: row.heroImageAlt })),
+    ),
     createdAt: promotion.createdAt,
     updatedAt: promotion.updatedAt,
   };
+}
+
+/**
+ * Texto opcional por idioma (DEC-065): los dos idiomas, o `null`.
+ *
+ * El panel escribe siempre los dos o ninguno. Si la base tuviera uno solo -un
+ * dato escrito por otra via-, se presenta como ausente en vez de con un hueco:
+ * es lo mismo que hace el escaparate con el texto alternativo.
+ */
+function pairOrNull(
+  rows: readonly { readonly locale: string; readonly value: string | null }[],
+): LocalizedInput | null {
+  const es = rows.find((row) => row.locale === "es-US")?.value ?? null;
+  const en = rows.find((row) => row.locale === "en-US")?.value ?? null;
+  return es === null || en === null ? null : { "es-US": es, "en-US": en };
 }
 
 export function createAdminCatalogRepository(db: Database): AdminCatalogRepository {
@@ -836,15 +873,34 @@ export function createAdminCatalogRepository(db: Database): AdminCatalogReposito
             ...(input.internalName === undefined ? {} : { internalName: input.internalName }),
             ...(input.startsAt === undefined ? {} : { startsAt: input.startsAt }),
             ...(input.endsAt === undefined ? {} : { endsAt: input.endsAt }),
+            ...(input.heroImageUrl === undefined ? {} : { heroImageUrl: input.heroImageUrl }),
             updatedAt: now,
           })
           .where(eq(promotions.id, promotionId));
 
-        if (input.publicName !== undefined) {
+        // Una sola sentencia por idioma con todo lo que cambia en el: nombre,
+        // lema (DEC-065) y descripcion de la foto (DEC-065).
+        const touchesTranslations =
+          input.publicName !== undefined ||
+          input.tagline !== undefined ||
+          input.heroImageAlt !== undefined;
+
+        if (touchesTranslations) {
           for (const locale of ["es-US", "en-US"] as const) {
             await tx
               .update(promotionTranslations)
-              .set({ publicName: input.publicName[locale], updatedAt: now })
+              .set({
+                ...(input.publicName === undefined ? {} : { publicName: input.publicName[locale] }),
+                ...(input.tagline === undefined
+                  ? {}
+                  : { tagline: input.tagline === null ? null : input.tagline[locale] }),
+                ...(input.heroImageAlt === undefined
+                  ? {}
+                  : {
+                      heroImageAlt: input.heroImageAlt === null ? null : input.heroImageAlt[locale],
+                    }),
+                updatedAt: now,
+              })
               .where(
                 and(
                   eq(promotionTranslations.promotionId, promotionId),

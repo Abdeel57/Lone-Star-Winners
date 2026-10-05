@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { useActionState } from "react";
 
 import { FormError, LocaleField, useFieldError } from "@/components/auth-form-shell";
+import { ImageUploadField } from "@/components/admin/image-upload-field";
 import type { Locale } from "@/i18n/locales";
 import { IDLE, type ActionResult } from "@/lib/action-result";
 import { OFFERED_TIME_ZONES } from "@/lib/admin/catalog-input";
@@ -24,6 +25,11 @@ import { OFFERED_TIME_ZONES } from "@/lib/admin/catalog-input";
  *
  * Direccion y nombre interno: la direccion no se edita (esta en enlaces); el
  * nombre interno si.
+ *
+ * PORTADA (DEC-065), SOLO AL EDITAR: el lema bajo el titular del hero, la foto
+ * del premio y su descripcion. La foto se sube igual que las de producto
+ * (DEC-056). No estan en el alta porque el alta crea una promocion en borrador
+ * que nadie ve todavia: la portada se prepara despues, con la ficha delante.
  */
 export function PromotionForm({
   locale,
@@ -42,6 +48,13 @@ export function PromotionForm({
     /** Ya convertidos a hora de pared de la zona legal, o `null`. */
     readonly startsAtWall: string | null;
     readonly endsAtWall: string | null;
+    /**
+     * DEC-065. `null` = sin lema / sin foto / foto decorativa. Opcionales: una
+     * API anterior a DEC-065 no los publica, y el formulario se pinta vacio.
+     */
+    readonly tagline?: { readonly "es-US": string; readonly "en-US": string } | null;
+    readonly heroImageUrl?: string | null;
+    readonly heroImageAlt?: { readonly "es-US": string; readonly "en-US": string } | null;
   };
 }) {
   const t = useTranslations("admin.promotions");
@@ -172,6 +185,68 @@ export function PromotionForm({
           />
         </FormField>
       </div>
+
+      {editing ? (
+        <fieldset className="flex flex-col gap-s4 border-t border-border pt-s5">
+          <legend className="lsw-display text-heading-sm text-text">{t("heroSection")}</legend>
+          <p className="text-caption text-text-subtle">{t("heroSectionHint")}</p>
+
+          <div className="grid grid-cols-1 gap-s4 sm:grid-cols-2">
+            <FormField
+              label={t("fieldTaglineEs")}
+              description={t("fieldTaglineHint")}
+              error={fieldError("tagline_es")}
+            >
+              <Input
+                name="tagline_es"
+                lang="es"
+                maxLength={300}
+                defaultValue={promotion.tagline?.["es-US"] ?? ""}
+              />
+            </FormField>
+
+            <FormField label={t("fieldTaglineEn")} error={fieldError("tagline_en")}>
+              <Input
+                name="tagline_en"
+                lang="en"
+                maxLength={300}
+                defaultValue={promotion.tagline?.["en-US"] ?? ""}
+              />
+            </FormField>
+          </div>
+
+          <ImageUploadField
+            name="hero_image"
+            label={t("fieldHeroImage")}
+            currentUrl={promotion.heroImageUrl ?? null}
+            error={fieldError("hero_image_file")}
+          />
+
+          <div className="grid grid-cols-1 gap-s4 sm:grid-cols-2">
+            <FormField
+              label={t("fieldHeroAltEs")}
+              description={t("fieldHeroAltHint")}
+              error={fieldError("hero_image_alt_es")}
+            >
+              <Input
+                name="hero_image_alt_es"
+                lang="es"
+                maxLength={300}
+                defaultValue={promotion.heroImageAlt?.["es-US"] ?? ""}
+              />
+            </FormField>
+
+            <FormField label={t("fieldHeroAltEn")} error={fieldError("hero_image_alt_en")}>
+              <Input
+                name="hero_image_alt_en"
+                lang="en"
+                maxLength={300}
+                defaultValue={promotion.heroImageAlt?.["en-US"] ?? ""}
+              />
+            </FormField>
+          </div>
+        </fieldset>
+      ) : null}
 
       <Button
         type="submit"

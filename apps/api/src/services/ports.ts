@@ -69,6 +69,16 @@ export interface PromotionRecord {
   readonly endsAt: Date | null;
   /** `null` mientras no haya version de reglas activa. */
   readonly rulesVersionId: string | null;
+  /**
+   * DEC-065: fotografia del premio para el hero, ruta del propio sitio.
+   * `null` = sin fotografia.
+   */
+  readonly heroImageUrl: string | null;
+  /**
+   * Descripcion de esa fotografia en los dos idiomas, o `null` si es
+   * decorativa. Nunca un idioma solo: el panel exige los dos o ninguno.
+   */
+  readonly heroImageAlt: LocalizedText | null;
 }
 
 export interface RulesDocumentRecord {

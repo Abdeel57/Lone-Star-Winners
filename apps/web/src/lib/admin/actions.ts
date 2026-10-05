@@ -495,6 +495,33 @@ function localizedFrom(
   return { ok: true, value: { "es-US": es, "en-US": en } };
 }
 
+/**
+ * Texto OPCIONAL en los dos idiomas (DEC-065): los dos, o ninguno.
+ *
+ * Los dos vacios significan "sin texto" y viajan como `null`, que la API
+ * entiende como borrar. Uno solo es un error en el campo que falta: un lema o
+ * una descripcion de la foto en un idioma y no en el otro dejaria a la mitad
+ * del publico sin el (principio 4).
+ */
+function optionalLocalizedFrom(
+  formData: FormData,
+  prefix: string,
+):
+  | {
+      readonly ok: true;
+      readonly value: { readonly "es-US": string; readonly "en-US": string } | null;
+    }
+  | { readonly ok: false; readonly result: ActionResult } {
+  const es = textFrom(formData, `${prefix}_es`);
+  const en = textFrom(formData, `${prefix}_en`);
+
+  if (es === null && en === null) return { ok: true, value: null };
+  if (es === null) return { ok: false, result: invalid("FIELD_REQUIRED", `${prefix}_es`) };
+  if (en === null) return { ok: false, result: invalid("FIELD_REQUIRED", `${prefix}_en`) };
+
+  return { ok: true, value: { "es-US": es, "en-US": en } };
+}
+
 /** Alta de un producto. Redirige a su ficha, que es donde se publica. */
 export async function createProductAction(
   _previous: ActionResult,
@@ -970,6 +997,18 @@ export async function updatePromotionAction(
   const publicName = localizedFrom(formData, "public_name");
   if (!publicName.ok) return publicName.result;
 
+  // DEC-065: lema bajo el titular del hero y descripcion de la foto del premio.
+  const tagline = optionalLocalizedFrom(formData, "tagline");
+  if (!tagline.ok) return tagline.result;
+
+  const heroAlt = optionalLocalizedFrom(formData, "hero_image_alt");
+  if (!heroAlt.ok) return heroAlt.result;
+
+  // Antes de subir nada: un fichero que no es imagen o que pesa demasiado se
+  // rechaza sin gastar una peticion.
+  const heroCheck = checkImage(formData, "hero_image");
+  if (heroCheck !== null) return heroCheck;
+
   const session = await mutableSession();
 
   const current = await fetchAdminPromotion(promotionId, locale, session);
@@ -983,6 +1022,11 @@ export async function updatePromotionAction(
   const endsAt = windowFieldFrom(formData, "ends_at", timeZone);
   if (!endsAt.ok) return endsAt.result;
 
+  // La misma subida que las fotos de producto (DEC-056): ruta nueva si se
+  // eligio fichero, `null` si se marco quitarla, sin tocar si no.
+  const heroImage = await imageFrom(formData, "hero_image", locale, session);
+  if (!heroImage.ok) return heroImage.result;
+
   const result = await updateAdminPromotion(
     promotionId,
     {
@@ -990,6 +1034,9 @@ export async function updatePromotionAction(
       public_name: publicName.value,
       starts_at: startsAt.value,
       ends_at: endsAt.value,
+      tagline: tagline.value,
+      hero_image_alt: heroAlt.value,
+      ...(heroImage.value === undefined ? {} : { hero_image_url: heroImage.value }),
     },
     locale,
     session,

@@ -17,6 +17,7 @@ import {
   createFakeRepositories,
   FIXTURE_DRAFT_PRODUCT,
   FIXTURE_PRODUCT,
+  FIXTURE_PROMOTION,
   type FakeOptions,
 } from "./support/in-memory-repositories.js";
 
@@ -122,6 +123,55 @@ describe("GET /api/v1/promotions/active", () => {
     }>();
 
     expect(body.prize_value).toBeNull();
+    await app.close();
+  });
+});
+
+describe("GET /api/v1/promotions/{slug}: foto del premio (DEC-065)", () => {
+  it("sin foto, `media` es null y el hero pinta la marca de agua", async () => {
+    const app = await createApp(buildDependencies());
+    const body = (
+      await app.inject({ method: "GET", url: "/api/v1/promotions/fixture-promotion" })
+    ).json<{ media: unknown }>();
+
+    expect(body.media).toBeNull();
+    await app.close();
+  });
+
+  it("con foto, publica `hero_url`, la descripcion en los dos idiomas y `square_url` null", async () => {
+    const alt = { "en-US": "Red pickup, front view", "es-US": "Camioneta roja, vista frontal" };
+    const app = await createApp(
+      buildDependencies({
+        activePromotion: {
+          ...FIXTURE_PROMOTION,
+          heroImageUrl: "/media/3f2b8c1e-5d4a-4b7e-9c2f-1a2b3c4d5e6f.jpg",
+          heroImageAlt: alt,
+        },
+      }),
+    );
+    const body = (
+      await app.inject({ method: "GET", url: "/api/v1/promotions/fixture-promotion" })
+    ).json<{ media: unknown }>();
+
+    expect(body.media).toEqual({
+      hero_url: "/media/3f2b8c1e-5d4a-4b7e-9c2f-1a2b3c4d5e6f.jpg",
+      square_url: null,
+      alt,
+    });
+    await app.close();
+  });
+
+  it("una foto sin descripcion se publica como decorativa (`alt: null`)", async () => {
+    const app = await createApp(
+      buildDependencies({
+        activePromotion: { ...FIXTURE_PROMOTION, heroImageUrl: "/media/x.png", heroImageAlt: null },
+      }),
+    );
+    const body = (
+      await app.inject({ method: "GET", url: "/api/v1/promotions/fixture-promotion" })
+    ).json<{ media: { alt: unknown } }>();
+
+    expect(body.media.alt).toBeNull();
     await app.close();
   });
 });
