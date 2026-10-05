@@ -110,6 +110,22 @@ const HERO_IMAGE_SIZES = "(min-width: 1024px) 56vw, 100vw";
 /** Encuadre de la foto del hero. El motivo, junto a la `<Image>` de abajo. */
 const HERO_IMAGE_POSITION = "object-[38%_35%]";
 
+/**
+ * Tamano del titular cromado segun su LONGITUD.
+ *
+ * El titulo lo escribe quien administra la promocion, y no es lo mismo
+ * "GANA SILVERADO 2025" (19 caracteres) que el nombre legal de la edicion,
+ * "Sorteo Lone Star Winners Chevrolet Silverado 1500 2025" (54). Al tamano
+ * del primero, el segundo ocupaba seis lineas y media pantalla de telefono
+ * antes de llegar al boton. Tres escalones fijos, y no un calculo continuo,
+ * para que el servidor y el cliente pinten siempre la misma clase.
+ */
+function headlineSize(text: string): string {
+  if (text.length > 40) return "text-[clamp(1.9rem,7.5vw,3.75rem)]";
+  if (text.length > 24) return "text-[clamp(2.25rem,9.5vw,4.75rem)]";
+  return "text-[clamp(2.75rem,12vw,6.25rem)]";
+}
+
 export function PromotionHero({
   promotion,
   detail,
@@ -570,9 +586,7 @@ export function PromotionHero({
                 la linea en telefono sin desbordar. */}
             <h1 id="promotion-title" className="mt-s5 flex flex-col gap-s1">
               {prizeName === null ? (
-                <span className="lsw-headline lsw-chrome text-[clamp(2.75rem,12vw,6.25rem)]">
-                  {title}
-                </span>
+                <span className={cn("lsw-headline lsw-chrome", headlineSize(title))}>{title}</span>
               ) : (
                 <>
                   {/* El verbo cae con el estado contenido (DEC-044): "GANA"
@@ -583,7 +597,7 @@ export function PromotionHero({
                       {t("hero.win")}
                     </span>
                   )}
-                  <span className="lsw-headline lsw-chrome text-[clamp(2.75rem,12vw,6.25rem)]">
+                  <span className={cn("lsw-headline lsw-chrome", headlineSize(prizeName))}>
                     {prizeName}
                   </span>
                   <span className="mt-s2 font-headline text-heading-sm font-bold italic uppercase text-text-muted">
