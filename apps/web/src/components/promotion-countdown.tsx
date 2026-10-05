@@ -30,6 +30,7 @@ export function PromotionCountdown({
   variant,
   size = "inline",
   period,
+  withClockNote = true,
 }: {
   readonly targetIso: string;
   readonly nowIso: string;
@@ -53,6 +54,12 @@ export function PromotionCountdown({
    * que quiere decir.
    */
   readonly period?: { readonly startIso: string; readonly endIso: string };
+  /**
+   * Si se pinta la nota "la cuenta atras es una comodidad". El hero de la
+   * portada la omite (DEC-069): alli el plazo va escrito justo debajo, con
+   * fecha, hora y zona, y la nota era una tercera linea para decir lo mismo.
+   */
+  readonly withClockNote?: boolean;
 }) {
   const t = useTranslations("countdown");
   const tA11y = useTranslations("a11y");
@@ -112,7 +119,7 @@ export function PromotionCountdown({
       {/* Se conserva palabra por palabra: la cuenta atras es una comodidad y el
           estado que manda es el que reporta el servidor. Que ahora sea
           espectacular no la convierte en fuente de verdad. */}
-      <p className="text-caption text-text-subtle">{t("clockNote")}</p>
+      {withClockNote ? <p className="text-caption text-text-subtle">{t("clockNote")}</p> : null}
     </div>
   );
 }

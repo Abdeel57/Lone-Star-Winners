@@ -13,7 +13,6 @@ import { PrizeBand } from "@/components/prize-band";
 import type { CardBonus } from "@/components/product-card";
 import { PromotionHero } from "@/components/promotion-hero";
 import { SectionHeading } from "@/components/section-heading";
-import { TrustBand } from "@/components/trust-band";
 import { WinnersShowcase, type PublishedWinner } from "@/components/winners-showcase";
 import type { Locale } from "@/i18n/locales";
 import { Link } from "@/i18n/navigation";
@@ -90,8 +89,12 @@ async function findUpcomingPromotion(
   return upcoming[0] ?? null;
 }
 
-/** Los tres pasos de "como funciona", en orden. */
-const STEPS = ["step1", "step2", "step3"] as const;
+/**
+ * Ancla de la banda de paquetes. El boton rojo del hero baja hasta ella
+ * (DEC-069): ahi ya se anade al carrito, y pasar por la tienda era una pagina
+ * de mas.
+ */
+const PACKAGES_ANCHOR = "packages";
 
 /**
  * Ganadores publicados.
@@ -135,6 +138,12 @@ const PUBLISHED_WINNERS: readonly PublishedWinner[] = [];
  *   hero a pantalla completa -> paquetes por niveles (DEC-065) -> avisos ->
  *   oferta y via gratuita -> como funciona -> mercancia destacada -> cierre
  *   de confianza
+ *
+ * DEC-069 la recorta: el hero lleva dentro el marcador y los avisos, y salen
+ * "como funciona" y el cierre de confianza. Queda
+ *
+ *   hero (con marcador) -> paquetes -> oferta y via gratuita (si hay) ->
+ *   cinta -> premio (si hay) -> mercancia destacada -> pie
  *
  * El orden no cambia respecto de la version anterior, y no es casual: lo
  * primero que se afirma despues del premio es que aqui se adquiere MERCANCIA, y
@@ -228,34 +237,6 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
       ? null
       : { period: offer.activeBonus, timeZone: promotion.legal_timezone };
 
-  /**
-   * Copy de un paso, resuelto con `switch` exhaustivo.
-   *
-   * Una clave construida en tiempo de ejecucion (`home.howItWorks.${key}.title`)
-   * no la comprueba el tipado de `src/global.d.ts`, y un paso sin traducir
-   * apareceria como la clave en crudo. Asi, anadir un paso obliga a escribirlo
-   * en los dos diccionarios.
-   */
-  const stepCopy = (key: (typeof STEPS)[number]): { title: string; body: string } => {
-    switch (key) {
-      case "step1":
-        return {
-          title: t("home.howItWorks.step1.title"),
-          body: t("home.howItWorks.step1.body"),
-        };
-      case "step2":
-        return {
-          title: t("home.howItWorks.step2.title"),
-          body: t("home.howItWorks.step2.body"),
-        };
-      case "step3":
-        return {
-          title: t("home.howItWorks.step3.title"),
-          body: t("home.howItWorks.step3.body"),
-        };
-    }
-  };
-
   return (
     <>
       {!promotionResult.ok ? (
@@ -300,6 +281,8 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
           nowIso={nowIso}
           amoeEnabled={amoeEnabled}
           multipliersEnabled={multipliersEnabled}
+          // Sin paquetes publicados no hay banda a la que bajar: a la tienda.
+          buyHref={packages.length > 0 ? `#${PACKAGES_ANCHOR}` : "/shop"}
         />
       )}
 
@@ -307,12 +290,21 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
           premio, como en la referencia del cliente: lo primero que se ve es que
           se sortea y lo segundo, los niveles. Sin paquetes publicados no se
           renderiza. */}
-      <EntryPackageBand packages={packages} locale={locale} bonus={packageBonus} />
+      <EntryPackageBand
+        packages={packages}
+        locale={locale}
+        bonus={packageBonus}
+        anchorId={PACKAGES_ANCHOR}
+      />
 
       {/* Oferta vigente y via gratuita. Las dos son informacion de la promocion
           y por eso comparten banda; con `amoe_enabled` apagado, la de la derecha
-          no se renderiza y la oferta ocupa el ancho. */}
-      {promotion === null || presentation === null ? null : (
+          no se renderiza y la oferta ocupa el ancho.
+
+          Sin oferta declarada y sin via gratuita no hay ningun panel que pintar,
+          y la banda no se abre: antes quedaba un hueco negro de 8rem entre los
+          paquetes y la cinta (DEC-069). */}
+      {promotion === null || presentation === null || (offer === null && !amoeEnabled) ? null : (
         <div className="lsw-container py-s16">
           {/* Sin encabezado de seccion propio: cada panel es ya una `<section>`
               con su titulo, y anadir un tercer titulo encima repetiria el mismo
@@ -355,48 +347,12 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
       {/* Banda del premio: el bloque DORADO. Solo aparece si la promocion
           declara premio; hoy el backend no tiene modelo de premio y el campo
           llega `null` en produccion, asi que la portada tiene que verse bien sin
-          ella (y se ve: el bloque siguiente es "como funciona"). */}
+          ella. */}
       {detail === null ? null : <PrizeBand promotion={detail} locale={locale} />}
 
-      {/* Como funciona. Fondo hundido y numeracion dorada: son tres afirmaciones
-          y la primera es la que importa -lo que se adquiere es mercancia-, asi
-          que se leen como pasos numerados y no como tres tarjetas iguales. */}
-      <section aria-labelledby="how-it-works" className="lsw-band-sunken py-s16 lg:py-s20">
-        <div className="lsw-container">
-          <SectionHeading
-            id="how-it-works"
-            eyebrow={t("home.howItWorks.eyebrow")}
-            title={t("home.howItWorks.title")}
-            size="lg"
-          />
-
-          <ol className="mt-s10 grid list-none gap-s8 sm:grid-cols-2 lg:grid-cols-3 lg:gap-s10">
-            {STEPS.map((key, index) => {
-              const copy = stepCopy(key);
-
-              return (
-                <li key={key} className="border-t border-border pt-s5">
-                  {/* La cifra es decorativa: la lista ya es un `<ol>`, asi que
-                      el orden lo anuncia el propio elemento. Repetirlo como
-                      texto haria que un lector de pantalla dijera "uno, uno". */}
-                  <p
-                    aria-hidden="true"
-                    // DEC-068: cifra de titular en oro metalico, como los
-                    // numeros grandes de las referencias.
-                    className="lsw-headline lsw-gold-sheen text-display-lg"
-                  >
-                    {String(index + 1).padStart(2, "0")}
-                  </p>
-
-                  <h3 className="lsw-headline mt-s4 text-heading-lg text-text">{copy.title}</h3>
-
-                  <p className="mt-s3 text-body-md text-text-muted">{copy.body}</p>
-                </li>
-              );
-            })}
-          </ol>
-        </div>
-      </section>
+      {/* Aqui iba "como funciona", tres pasos numerados. Se retira con
+          DEC-069 a peticion del cliente: la portada se recorta para que el
+          camino del premio a la compra sea corto. */}
 
       {/*
        * MERCANCIA DESTACADA, sobre BANDA CLARA (DEC-039).
@@ -496,10 +452,10 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
         locale={locale}
       />
 
-      {/* Cierre: lo ultimo que se lee antes del pie son las Reglas Oficiales.
-          Sobre atmosfera, para que el bloque cierre la pagina con el mismo
-          material con el que la abrio. */}
-      <TrustBand />
+      {/* Aqui cerraba la pagina la banda "Antes de participar". Se retira con
+          DEC-069: sus dos acciones -Reglas Oficiales y preguntas frecuentes-
+          siguen en el menu y en el pie, y el pie ya lleva su propio bloque de
+          Reglas Oficiales, que es lo ultimo que se lee antes de salir. */}
     </>
   );
 }

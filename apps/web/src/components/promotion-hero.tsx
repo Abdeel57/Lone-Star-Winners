@@ -1,10 +1,12 @@
-import { Alert, Badge, buttonVariants, cn } from "@lsw/ui";
+import { Badge, buttonVariants, cn } from "@lsw/ui";
 import Image from "next/image";
 import { useTranslations } from "next-intl";
+import type { ReactNode } from "react";
 
 import { formatEntryCount, formatZonedDateTime } from "@/i18n/formatters";
 import type { Locale } from "@/i18n/locales";
 import { Link } from "@/i18n/navigation";
+import { usePromotionNoticeText } from "@/i18n/promotion-labels";
 import { pickLocalized, type PromotionDetail, type PromotionSummary } from "@/lib/api";
 import { normalizeEntryOffer } from "@/lib/entry-offer";
 import { safeImageUrl } from "@/lib/media-url";
@@ -14,7 +16,6 @@ import { BonusAnnouncement } from "./bonus-announcement";
 import { HeroCarousel, type HeroSlide } from "./hero-carousel";
 import { RateList } from "./entry-rate-lines";
 import { PromotionCountdown } from "./promotion-countdown";
-import { PromotionStateNotice } from "./promotion-state-notice";
 import { PromotionStatusBadge } from "./promotion-status-badge";
 
 /**
@@ -92,15 +93,16 @@ import { PromotionStatusBadge } from "./promotion-status-badge";
  * duplicar el nodo para tener dos maquetaciones descargaria la fotografia dos
  * veces y dejaria dos elementos donde el arbol de accesibilidad espera uno.
  *
- * TRES BLOQUES, NO UNO
- * --------------------
- * Hero -> marcador -> avisos. El marcador sale del hero con DEC-042: el sitio
- * que ocupaba en escritorio -la columna derecha- es ahora la fotografia, y una
- * cuenta atras encima de una foto no se lee. El estado de la promocion, el
- * descargo de participaciones y la ausencia de reglas publicadas siguen en su
- * banda propia: son texto que hay que leer, y dentro de un hero de titulares
- * gigantes nadie los lee. Los tres siguen formando parte de este componente
- * -no de la pagina- porque acompanan a la promocion alla donde se muestre.
+ * UN SOLO BLOQUE (DEC-069)
+ * ------------------------
+ * Con DEC-042 el hero iba seguido de una banda de marcador -con la lista de
+ * fechas "Abre / Cierra"- y de otra de avisos. El cliente pidio recortar la
+ * portada para que el camino a la compra fuera corto, y las dos bandas eran una
+ * pantalla entera de telefono entre el premio y los paquetes. Ahora todo vive
+ * aqui, en la columna del texto: botones, marcador con el plazo escrito en una
+ * linea, el aviso de estado SOLO cuando una compra no cuenta, y la letra
+ * pequena. La cuenta atras va bajo los botones y no sobre la foto: una cuenta
+ * atras encima de una foto no se lee.
  */
 /** Tamanos de la foto del hero para `next/image`: media pantalla en escritorio. */
 const HERO_IMAGE_SIZES = "(min-width: 1024px) 56vw, 100vw";
@@ -115,6 +117,7 @@ export function PromotionHero({
   nowIso,
   amoeEnabled,
   multipliersEnabled,
+  buyHref = "/shop",
 }: {
   readonly promotion: PromotionSummary;
   /**
@@ -160,18 +163,52 @@ export function PromotionHero({
    * apaga, y en esa ventana lo correcto es callar.
    */
   readonly multipliersEnabled: boolean;
+  /**
+   * A donde lleva el boton rojo de compra (DEC-069). Por defecto, la tienda.
+   * La portada lo apunta a su propia banda de paquetes (`#packages`) para
+   * ahorrar una pagina: ahi ya se anade al carrito.
+   */
+  readonly buyHref?: string;
 }) {
   const t = useTranslations("home");
+  const noticeText = usePromotionNoticeText();
   const presentation = presentPromotion(promotion.status);
+  const stateNotice = noticeText(presentation.noticeKey);
 
-  const opensAt = formatZonedDateTime(promotion.starts_at, locale, {
-    timeZone: promotion.legal_timezone,
-    showTimeZoneName: true,
-  });
-  const closesAt = formatZonedDateTime(promotion.ends_at, locale, {
-    timeZone: promotion.legal_timezone,
-    showTimeZoneName: true,
-  });
+  /*
+   * El plazo que corresponde al estado -la apertura antes de abrir, el cierre
+   * mientras esta abierta-, formateado en la zona horaria legal (DEC-011). Es
+   * el mismo instante al que apunta la cuenta atras.
+   */
+  const deadlineIso =
+    presentation.countdownTarget === "starts_at"
+      ? promotion.starts_at
+      : presentation.countdownTarget === "ends_at"
+        ? promotion.ends_at
+        : null;
+  const deadlineText =
+    deadlineIso === null
+      ? null
+      : formatZonedDateTime(deadlineIso, locale, {
+          timeZone: promotion.legal_timezone,
+          showTimeZoneName: true,
+        });
+  const deadline =
+    deadlineIso === null || deadlineText === null
+      ? null
+      : {
+          iso: deadlineIso,
+          text: deadlineText,
+          kind: presentation.countdownTarget === "starts_at" ? "opens" : "closes",
+        };
+
+  /*
+   * El boton rojo solo baja a los paquetes mientras una compra suma
+   * participaciones. En cualquier otro estado lleva a la tienda, como antes:
+   * empujar hacia los paquetes de una promocion que no los cuenta seria la
+   * invitacion que la maquina de estados retira.
+   */
+  const buyLink = presentation.acceptsEntries ? buyHref : "/shop";
 
   /*
    * LA SENAL ES `rules_version_id`, Y ES LA UNICA FIABLE HOY.
@@ -345,10 +382,13 @@ export function PromotionHero({
               // tapado por el titular; ahora se ve entero, como en la
               // referencia, y el titular entra solo sobre el pie fundido.
               "relative aspect-square max-h-[80svh] w-full sm:aspect-[4/3]",
-              // En escritorio: capa pegada al borde derecho, a sangre. `h-auto`
-              // devuelve el mando a `inset-y-0`, que es lo que la estira a la
-              // altura entera de la seccion.
-              "lg:pointer-events-none lg:absolute lg:inset-y-0 lg:right-0 lg:aspect-auto lg:h-auto lg:max-h-none lg:w-[60%]",
+              // En escritorio: capa pegada al borde derecho, a sangre, con el
+              // alto de la PRIMERA PANTALLA y no el de la seccion. DEC-069 metio
+              // el marcador en el hero y la seccion crecio por debajo de la
+              // ventana: estirada a esa altura, `cover` recortaba la camioneta
+              // por los lados. El pie de la foto se funde con el degradado de
+              // abajo y el marcador queda sobre el fondo de la seccion.
+              "lg:pointer-events-none lg:absolute lg:right-0 lg:top-0 lg:aspect-auto lg:h-[calc(100svh-5rem)] lg:max-h-[52rem] lg:w-[60%]",
               // DEC-068: el borde izquierdo se DESVANECE en vez de fundirse a
               // negro liso. El fondo de la seccion lleva textura, y un fundido
               // a color plano dejaba una costura vertical donde empieza la foto.
@@ -457,7 +497,7 @@ export function PromotionHero({
           </div>
         )}
 
-        <div className="lsw-container relative flex flex-col justify-center pb-s12 lg:min-h-[calc(100svh-5rem)] lg:py-s24">
+        <div className="lsw-container relative flex flex-col justify-center pb-s12 lg:min-h-[calc(100svh-5rem)] lg:py-s16">
           <div
             className={cn(
               "flex flex-col",
@@ -634,33 +674,7 @@ export function PromotionHero({
                     como bloque de alerta: era lo que mas pesaba en la pantalla
                     y no es un error, es un estado. Sigue siendo texto visible y
                     va antes de la accion. */}
-                <p
-                  role="note"
-                  className="flex max-w-narrow items-start gap-s2 rounded-md border border-brand/30 bg-brand/[0.07] px-s3 py-s2 text-body-sm text-text-muted"
-                >
-                  <svg
-                    viewBox="0 0 20 20"
-                    aria-hidden="true"
-                    focusable="false"
-                    className="mt-[2px] h-4 w-4 shrink-0 text-brand"
-                  >
-                    <circle
-                      cx="10"
-                      cy="10"
-                      r="8.25"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="1.5"
-                    />
-                    <path
-                      d="M10 9v5M10 6.2v.1"
-                      stroke="currentColor"
-                      strokeWidth="1.8"
-                      strokeLinecap="round"
-                    />
-                  </svg>
-                  {t("rulesNotPublished")}
-                </p>
+                <HeroNote>{t("rulesNotPublished")}</HeroNote>
 
                 <Link
                   href="/shop"
@@ -674,8 +688,8 @@ export function PromotionHero({
               </div>
             ) : (
               <div className="mt-s8 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
-                <Link
-                  href={presentation.showsShopCta ? "/shop" : `/promotions/${promotion.slug}`}
+                <HeroLink
+                  href={presentation.showsShopCta ? buyLink : `/promotions/${promotion.slug}`}
                   // Ancho completo en telefono -es la unica accion de la
                   // pantalla, y la referencia la pinta de lado a lado- y ancho
                   // natural en cuanto caben dos botones en la misma linea. No se
@@ -690,7 +704,7 @@ export function PromotionHero({
                   )}
                 >
                   {presentation.showsShopCta ? t("hero.shopNow") : t("viewPromotion")}
-                </Link>
+                </HeroLink>
 
                 {presentation.showsShopCta ? (
                   <Link
@@ -707,6 +721,70 @@ export function PromotionHero({
             )}
 
             {/*
+             * EL MARCADOR, DENTRO DEL HERO Y BAJO LOS BOTONES (DEC-069).
+             *
+             * Antes iba en una banda propia debajo del hero, junto a las fechas
+             * de apertura y cierre en una lista. En las referencias del cliente
+             * la cuenta atras acompana al boton, y la lista de fechas era una
+             * pantalla entera de telefono entre el premio y los paquetes. Sigue
+             * siendo parte de la invitacion: con el estado contenido no hay
+             * marcador (DEC-044).
+             */}
+            {countdownTarget === null ? null : (
+              <div className="mt-s8">
+                <PromotionCountdown
+                  targetIso={
+                    countdownTarget === "starts_at" ? promotion.starts_at : promotion.ends_at
+                  }
+                  nowIso={nowIso}
+                  locale={locale}
+                  timeZone={promotion.legal_timezone}
+                  variant={countdownTarget === "starts_at" ? "opens" : "closes"}
+                  size="scoreboard"
+                  // El periodo completo, para la barra de progreso bajo el
+                  // marcador. `PromotionCountdown` solo la dibuja cuando la
+                  // cuenta atras apunta al cierre.
+                  period={{ startIso: promotion.starts_at, endIso: promotion.ends_at }}
+                  withClockNote={false}
+                />
+              </div>
+            )}
+
+            {/* El plazo ESCRITO, en una linea: la misma informacion que el
+                marcador con fecha, hora y zona legal (DEC-011), para quien
+                quiere apuntarla. Se queda tambien en el estado contenido, sin
+                marcador: es fecha, no urgencia (DEC-044). */}
+            {deadline === null ? null : (
+              <p
+                className={cn(
+                  "text-body-sm font-medium text-text-muted",
+                  countdownTarget === null ? "mt-s5" : "mt-s3",
+                )}
+              >
+                <time dateTime={deadline.iso}>
+                  {deadline.kind === "opens"
+                    ? t("hero.opensOn", { date: deadline.text })
+                    : t("hero.closesOn", { date: deadline.text })}
+                </time>
+              </p>
+            )}
+
+            {/*
+             * EL ESTADO, SOLO CUANDO LAS COMPRAS NO CUENTAN (DEC-069).
+             *
+             * Abierta, el chip "Abierta" y el "CIERRA EN" ya lo dicen, y el
+             * recuadro de "esta promocion esta abierta" solo empujaba los
+             * paquetes hacia abajo. En cualquier otro estado -antes de abrir,
+             * cerrada, en sorteo, cancelada- una compra NO suma
+             * participaciones, y eso hay que decirlo donde se decide comprar.
+             */}
+            {presentation.acceptsEntries ? null : (
+              <HeroNote title={stateNotice.title} className="mt-s4">
+                {stateNotice.body}
+              </HeroNote>
+            )}
+
+            {/*
              * LA LINEA LEGAL, DEBAJO DEL BOTON.
              *
              * Es la pieza de la referencia que mas facil seria copiar mal. Ahi
@@ -717,9 +795,12 @@ export function PromotionHero({
              * documento- y el enlace sigue estando.
              *
              * Sin version de reglas publicada (DEC-012) no hay enlace, porque
-             * llevaria a un 404; el aviso de la banda de abajo lo explica.
+             * llevaria a un 404; la nota de mas arriba lo explica.
+             *
+             * DEC-069: debajo, en la misma letra pequena, el descargo de
+             * participaciones que antes ocupaba un recuadro propio.
              */}
-            <p className="mt-s4 max-w-narrow text-center text-caption italic text-text-subtle sm:text-left">
+            <p className="mt-s5 max-w-narrow text-center text-caption italic text-text-subtle sm:text-left">
               {amoeEnabled ? t("hero.legalAmoe") : t("hero.legalRules")}
               {/* El separador se pinta CON el enlace y no dentro de la frase.
                   Con la frase terminada en raya, una promocion sin reglas
@@ -736,6 +817,9 @@ export function PromotionHero({
                   </Link>
                 </>
               ) : null}
+            </p>
+            <p className="mt-s1 max-w-narrow text-center text-caption text-text-subtle sm:text-left">
+              {t("entriesDisclaimer")}
             </p>
 
             {/*
@@ -764,87 +848,77 @@ export function PromotionHero({
         </div>
       </section>
 
-      {/*
-       * BANDA DEL MARCADOR.
-       *
-       * Sale del hero con DEC-042 y pasa a banda propia a todo el ancho, que es
-       * donde la pone la referencia. El plazo escrito -con hora y zona legal-
-       * va al lado del marcador y no dentro de el: son la misma informacion a
-       * dos precisiones distintas, y quien viene a apuntarse la fecha necesita
-       * la escrita.
-       */}
-      {countdownTarget === null && opensAt === null && closesAt === null ? null : (
-        <div className="lsw-band-sunken">
-          <div className="lsw-container grid gap-s8 py-s10 lg:grid-cols-[minmax(0,1fr)_minmax(0,20rem)] lg:items-start lg:gap-s12">
-            {countdownTarget === null ? null : (
-              <PromotionCountdown
-                targetIso={
-                  countdownTarget === "starts_at" ? promotion.starts_at : promotion.ends_at
-                }
-                nowIso={nowIso}
-                locale={locale}
-                timeZone={promotion.legal_timezone}
-                variant={countdownTarget === "starts_at" ? "opens" : "closes"}
-                size="scoreboard"
-                // El periodo completo, para la barra de progreso bajo el
-                // marcador. `PromotionCountdown` solo la dibuja cuando la
-                // cuenta atras apunta al cierre.
-                period={{ startIso: promotion.starts_at, endIso: promotion.ends_at }}
-              />
-            )}
-
-            <div className="flex flex-col gap-s5">
-              <dl className="flex flex-col gap-s3 border-t border-border pt-s5">
-                {opensAt === null ? null : (
-                  <div className={META_ROW}>
-                    <dt className={META_LABEL}>{t("opensLabel")}</dt>
-                    <dd className={META_VALUE}>
-                      <time dateTime={promotion.starts_at}>{opensAt}</time>
-                    </dd>
-                  </div>
-                )}
-
-                {closesAt === null ? null : (
-                  <div className={META_ROW}>
-                    <dt className={META_LABEL}>{t("closesLabel")}</dt>
-                    <dd className={META_VALUE}>
-                      <time dateTime={promotion.ends_at}>{closesAt}</time>
-                    </dd>
-                  </div>
-                )}
-
-                {/* Aqui iba la cifra de participaciones EMITIDAS, y se retira
-                    con DEC-044: junto al tope publicaba el contador de
-                    restantes por implicacion. Solo quedan las fechas, que son
-                    plazo y no inventario. */}
-              </dl>
-
-              <p className="text-caption text-text-subtle">{t("timeZoneNote")}</p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Banda de avisos. Fondo distinto y ancho de lectura: es el texto que hay
-          que leer de verdad, y necesita el tratamiento contrario al del hero. */}
-      <div className="lsw-band">
-        <div className="lsw-container flex max-w-narrow flex-col gap-3 py-s8">
-          <PromotionStateNotice presentation={presentation} />
-
-          <Alert tone="info">{t("entriesDisclaimer")}</Alert>
-
-          {/* El aviso de "Reglas Oficiales sin publicar" ya NO se pinta aqui.
-              Con DEC-044 sube al hueco que deja la invitacion retirada, dentro
-              del hero, y repetirlo en esta banda lo diria dos veces en la misma
-              pantalla. Sigue habiendo exactamente un sitio donde se dice. */}
-        </div>
-      </div>
+      {/* DEC-069: aqui iban la banda del marcador -con la lista "Abre / Cierra"
+          y la nota de zona horaria- y la banda de avisos. El marcador y el
+          plazo escrito suben al hero; el estado se dice alli solo cuando una
+          compra no cuenta; el descargo de participaciones pasa a la letra
+          pequena. La cifra de participaciones EMITIDAS ya se habia retirado
+          con DEC-044 y sigue sin existir. */}
     </>
   );
 }
 
-const META_ROW = "flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1";
+/**
+ * Enlace del hero: a otra pagina por el `Link` localizado, o a una seccion de
+ * la MISMA pagina (`#packages`) con un `<a>` normal. El `Link` de next-intl
+ * antepone el idioma a la ruta y convertiria el ancla en una navegacion.
+ */
+function HeroLink({
+  href,
+  className,
+  children,
+}: {
+  readonly href: string;
+  readonly className: string;
+  readonly children: ReactNode;
+}) {
+  return href.startsWith("#") ? (
+    <a href={href} className={className}>
+      {children}
+    </a>
+  ) : (
+    <Link href={href} className={className}>
+      {children}
+    </Link>
+  );
+}
 
-const META_LABEL = "font-display text-overline uppercase tracking-wide text-text-subtle";
-
-const META_VALUE = "text-body-sm font-medium text-text";
+/**
+ * Nota del hero (DEC-068, DEC-069): un aviso de ESTADO, no de error. Texto
+ * visible, con un icono decorativo y un titulo opcional.
+ */
+function HeroNote({
+  title,
+  className,
+  children,
+}: {
+  readonly title?: string;
+  readonly className?: string;
+  readonly children: ReactNode;
+}) {
+  return (
+    <div
+      role="note"
+      className={cn(
+        "flex max-w-narrow items-start gap-s2 rounded-md border border-brand/30 bg-brand/[0.07] px-s3 py-s2 text-body-sm text-text-muted",
+        className,
+      )}
+    >
+      <svg
+        viewBox="0 0 20 20"
+        aria-hidden="true"
+        focusable="false"
+        className="mt-[2px] h-4 w-4 shrink-0 text-brand"
+      >
+        <circle cx="10" cy="10" r="8.25" fill="none" stroke="currentColor" strokeWidth="1.5" />
+        <path d="M10 9v5M10 6.2v.1" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      </svg>
+      <p>
+        {title === undefined ? null : (
+          <strong className="block font-semibold text-text">{title}</strong>
+        )}
+        {children}
+      </p>
+    </div>
+  );
+}

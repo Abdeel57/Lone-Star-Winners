@@ -150,6 +150,7 @@ export function EntryPackageBand({
   locale,
   bonus,
   labelledBy = "entry-packages",
+  anchorId,
   className,
 }: {
   readonly packages: readonly ProductSummary[];
@@ -160,6 +161,11 @@ export function EntryPackageBand({
    */
   readonly bonus?: CardBonus | null;
   readonly labelledBy?: string;
+  /**
+   * `id` de la seccion, para enlazarla con un ancla (`#packages`). El boton rojo
+   * del hero de la portada baja hasta aqui (DEC-069).
+   */
+  readonly anchorId?: string;
   readonly className?: string;
 }) {
   const t = useTranslations("entryPackages");
@@ -168,8 +174,11 @@ export function EntryPackageBand({
 
   return (
     <section
+      {...(anchorId === undefined ? {} : { id: anchorId })}
       aria-labelledby={labelledBy}
-      className={cn("lsw-band-light py-s12 lg:py-s16", className)}
+      // `scroll-mt`: la cabecera es fija, y sin margen el salto dejaria el
+      // titular de la banda debajo de ella.
+      className={cn("lsw-band-light scroll-mt-16 py-s12 lg:scroll-mt-20 lg:py-s16", className)}
     >
       <div className="lsw-container">
         <header className="mx-auto max-w-narrow text-center">

@@ -325,7 +325,9 @@
       "browseShop": "Ver la tienda",
       "legalAmoe": "No se requiere compra — nulo donde esté prohibido",
       "legalRules": "Sujeto a las Reglas Oficiales",
-      "capNote": "+ máximo {entries} participaciones por persona"
+      "capNote": "+ máximo {entries} participaciones por persona",
+      "opensOn": "Abre el {date}",
+      "closesOn": "Cierra el {date}"
     },
     "featured": {
       "title": "Mercancía destacada",
@@ -334,45 +336,11 @@
       "viewAllShort": "Ver todo",
       "eyebrow": "Desde la tienda"
     },
-    "howItWorks": {
-      "step1": {
-        "body": "Cada página de producto indica si forma parte de la promoción vigente.",
-        "title": "Explora la mercancía elegible"
-      },
-      "step2": {
-        "body": "Lo que compras es mercancía. Las participaciones son promocionales y siguen las Reglas Oficiales.",
-        "title": "Haz tu pedido"
-      },
-      "step3": {
-        "body": "Tu cuenta muestra de dónde viene cada participación y en qué estado está.",
-        "title": "Sigue tus participaciones"
-      },
-      "title": "Cómo funciona",
-      "eyebrow": "Tres pasos"
-    },
     "opensLabel": "Abre",
     "prizeValueLabel": "Valor declarado del premio",
     "rulesNotPublished": "Las Reglas Oficiales de esta promoción todavía no se han publicado.",
     "shopCta": "Ver la mercancía elegible",
     "timeZoneNote": "Los horarios se muestran en la zona horaria oficial de la promoción.",
-    "trust": {
-      "body": "Las Reglas Oficiales son el documento que rige cada promoción: quién puede participar, cómo se otorgan las participaciones y cómo se selecciona al ganador. Léelas antes de hacer un pedido.",
-      "faqLink": "Leer las preguntas frecuentes",
-      "title": "Antes de participar",
-      "eyebrow": "Cómo está construido este sitio",
-      "pillar1": {
-        "title": "Un documento que gobierna",
-        "body": "Cada promoción se rige por sus propias Reglas Oficiales. Mientras una promoción no tenga una versión publicada, este sitio lo dice en vez de rellenar el hueco."
-      },
-      "pillar2": {
-        "title": "Diseñado para que cada participación conserve su procedencia",
-        "body": "El registro de participaciones está diseñado para que se pueda reconstruir de dónde salió una participación, cuándo se registró y en qué estado está, y para que ninguna se borre en silencio: un reembolso o una reversión se registra como movimiento propio, nunca como una edición."
-      },
-      "pillar3": {
-        "title": "Preparado para un administrador independiente",
-        "body": "La plataforma está construida para entregar el listado de participaciones de una promoción a un administrador independiente. Cuando una promoción declara que su sorteo lo realiza uno, su página lo dice e informa de cada paso del proceso."
-      }
-    },
     "viewOfficialRules": "Ver las Reglas Oficiales",
     "viewPromotion": "Ver el detalle de la promoción",
     "prizeBand": {

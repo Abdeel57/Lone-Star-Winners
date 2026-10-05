@@ -3391,3 +3391,52 @@ Affected areas: `packages/design-system` (`tokens.css`, `tailwind-preset.mjs`),
 
 Proposed by: sesión del usuario (2026-10-04)
 Agreed by: pendiente — frontend-ux
+
+## DEC-069
+
+Status: Proposed
+
+Date: 2026-10-05
+
+Decision:
+**Portada recortada para que el camino del premio a la compra sea corto.** El
+cliente pidió quitar lo innecesario, cambiar la lista "Abre / Cierra" por un
+contador como el de las referencias, y quitar los recuadros de aviso. El
+usuario eligió cada punto:
+
+1. **El marcador sube al hero, bajo los botones.** Debajo va el plazo escrito
+   en una línea ("Cierra el …", con hora y zona legal, DEC-011). Desaparecen la
+   lista "Abre / Cierra", la nota de zona horaria y, solo en el hero, la nota
+   "la cuenta atrás es una comodidad". El detalle de promoción no cambia. Sin
+   Reglas publicadas sigue sin haber marcador (DEC-044); el plazo escrito se
+   queda.
+2. **El aviso de estado solo aparece cuando una compra NO cuenta**: todos los
+   estados salvo ACTIVE. Va dentro del hero, como nota compacta. Abierta, lo
+   dicen el chip y el "CIERRA EN". El descargo "las participaciones se otorgan
+   conforme a las Reglas Oficiales" pasa a la letra pequeña bajo la línea
+   legal.
+3. **"COMPRAR AHORA" baja a la banda de paquetes** (`#packages`) en la portada,
+   donde ya se añade al carrito. Solo cuando la promoción acepta
+   participaciones y hay paquetes publicados; si no, va a la tienda, como
+   antes. El verbo no cambia (DEC-042).
+4. **Salen "Cómo funciona" y "Antes de participar"** (`trust-band.tsx` y sus
+   textos). Las Reglas y las preguntas frecuentes siguen en el menú y en el
+   pie. La banda de oferta deja de abrirse vacía cuando no hay oferta ni vía
+   gratuita.
+
+Los avisos de "Reglas no publicadas" y "todavía no ha abierto" NO se quitan a
+mano: desaparecen cuando se activan las Reglas y la promoción, que es lo que
+el cliente va a hacer.
+
+Alternatives:
+A — Ocultar los avisos sin activar las Reglas (descartada: son lo que impide
+invitar a comprar sin documento, DEC-044). B — Contador "ABRE EN" sin Reglas
+publicadas (no se planteó: la fecha de apertura ya pasó y la promoción espera
+solo a las Reglas).
+
+Affected areas: `apps/web` (`promotion-hero.tsx`, `promotion-countdown.tsx`,
+`entry-package-band.tsx`, portada, `trust-band.tsx` eliminado, mensajes
+`home.hero.opensOn/closesOn`, sin `home.howItWorks` ni `home.trust`, tests).
+
+Proposed by: sesión del usuario (2026-10-05)
+Agreed by: pendiente — frontend-ux

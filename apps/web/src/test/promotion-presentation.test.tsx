@@ -133,8 +133,11 @@ const NOTICE_TITLES = [
 ] as const;
 
 describe("PromotionHero en los nueve estados", () => {
-  it("cada estado muestra su propio aviso, en los dos idiomas", () => {
-    for (const expected of NOTICE_TITLES) {
+  it("todo estado en el que una compra no cuenta muestra su aviso, en los dos idiomas", () => {
+    // DEC-069: ABIERTA ya no lleva recuadro -lo dicen el chip y el "CIERRA
+    // EN"-. Los otros ocho si, porque en ellos una compra no suma
+    // participaciones y eso hay que decirlo donde se decide comprar.
+    for (const expected of NOTICE_TITLES.filter((entry) => entry.status !== "ACTIVE")) {
       const promotion = promotionsByStatus.find((item) => item.status === expected.status);
       expect(promotion, `falta fixture para ${expected.status}`).toBeDefined();
       if (promotion === undefined) continue;
@@ -160,6 +163,51 @@ describe("PromotionHero en los nueve estados", () => {
         view.unmount();
       }
     }
+  });
+
+  it("abierta, sin recuadro de estado y con el boton rojo bajando a los paquetes", () => {
+    const promotion = promotionInStatus("ACTIVE");
+    renderIn(
+      "es",
+      <PromotionHero
+        promotion={promotion}
+        detail={null}
+        locale="es"
+        nowIso={NOW}
+        amoeEnabled={false}
+        multipliersEnabled={false}
+        buyHref="#packages"
+      />,
+    );
+
+    expect(screen.queryByText(esMessages.promotionState.active.title)).toBeNull();
+    expect(screen.getByRole("link", { name: esMessages.home.hero.shopNow })).toHaveAttribute(
+      "href",
+      "#packages",
+    );
+    // El descargo de participaciones sigue, ahora en la letra pequena.
+    expect(screen.getByText(esMessages.home.entriesDisclaimer)).toBeInTheDocument();
+  });
+
+  it("antes de abrir, el boton no baja a los paquetes aunque se le pida", () => {
+    // Una compra antes de la apertura no suma participaciones: empujar hacia
+    // los paquetes seria la invitacion que la maquina de estados retira.
+    const promotion = promotionInStatus("SCHEDULED");
+    renderIn(
+      "es",
+      <PromotionHero
+        promotion={promotion}
+        detail={null}
+        locale="es"
+        nowIso={NOW}
+        amoeEnabled={false}
+        multipliersEnabled={false}
+        buyHref="#packages"
+      />,
+    );
+
+    expect(document.querySelector('a[href="#packages"]')).toBeNull();
+    expect(screen.getByText(esMessages.promotionState.scheduled.title)).toBeInTheDocument();
   });
 
   it("los nueve avisos son textos distintos entre si", () => {

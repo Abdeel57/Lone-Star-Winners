@@ -325,7 +325,9 @@
       "browseShop": "View the shop",
       "legalAmoe": "No purchase necessary — void where prohibited",
       "legalRules": "Subject to the Official Rules",
-      "capNote": "+ up to {entries} entries per person"
+      "capNote": "+ up to {entries} entries per person",
+      "opensOn": "Opens {date}",
+      "closesOn": "Closes {date}"
     },
     "featured": {
       "title": "Featured merchandise",
@@ -334,45 +336,11 @@
       "viewAllShort": "View all",
       "eyebrow": "From the shop"
     },
-    "howItWorks": {
-      "step1": {
-        "body": "Every product page shows whether it is part of the current promotion.",
-        "title": "Browse eligible merchandise"
-      },
-      "step2": {
-        "body": "You are buying merchandise. Any entries are promotional and follow the Official Rules.",
-        "title": "Place your order"
-      },
-      "step3": {
-        "body": "Your account shows where each entry came from and its current status.",
-        "title": "Follow your entries"
-      },
-      "title": "How it works",
-      "eyebrow": "Three steps"
-    },
     "opensLabel": "Opens",
     "prizeValueLabel": "Stated prize value",
     "rulesNotPublished": "The Official Rules for this promotion have not been published yet.",
     "shopCta": "Shop eligible merchandise",
     "timeZoneNote": "Times are shown in the official time zone of the promotion.",
-    "trust": {
-      "body": "The Official Rules are the document that governs each promotion: who may take part, how entries are awarded, and how a winner is selected. Read them before you order.",
-      "faqLink": "Read the frequently asked questions",
-      "title": "Before you take part",
-      "eyebrow": "How this site is built",
-      "pillar1": {
-        "title": "One governing document",
-        "body": "Each promotion is governed by its own Official Rules. Until a promotion has a published version, this site says so instead of filling the gap."
-      },
-      "pillar2": {
-        "title": "Designed to keep the origin of every entry",
-        "body": "The entry ledger is designed so that where an entry came from, when it was recorded and what its status is can be reconstructed, and so that no entry is removed in silence: a refund or a reversal is recorded as a movement of its own, never as an edit."
-      },
-      "pillar3": {
-        "title": "Ready for an independent administrator",
-        "body": "The platform is built to hand the entry list of a promotion to an independent administrator. When a promotion states that its drawing is conducted by one, its promotion page says so and reports each step of the process."
-      }
-    },
     "viewOfficialRules": "View Official Rules",
     "viewPromotion": "See promotion details",
     "prizeBand": {
