@@ -125,7 +125,7 @@ export default async function PromotionDetailPage({
             <PromotionStatusBadge status={promotion.status} size="sm" />
           </div>
 
-          <h1 className="lsw-display mt-s4 max-w-4xl text-display-md text-text sm:text-display-lg">
+          <h1 className="lsw-headline lsw-chrome mt-s4 max-w-4xl text-display-md sm:text-display-xl">
             {pickLocalized(promotion.title, locale)}
           </h1>
 

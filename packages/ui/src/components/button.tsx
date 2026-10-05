@@ -12,23 +12,52 @@ import { VisuallyHidden } from "./visually-hidden";
  * uno: cambia la semantica y rompe la navegacion por teclado. Cuando un enlace
  * tiene que parecer un boton, se le aplican estas clases y sigue siendo `<a>`.
  */
+/**
+ * Destello que cruza el boton al pasar el raton (DEC-068). Solo en las dos
+ * acciones con relleno de color -compra y marca-, que es donde lo ponen las
+ * referencias. Es un pseudo-elemento: no entra en el arbol de accesibilidad, y
+ * con movimiento reducido no existe.
+ */
+const SHINE = cn(
+  "before:pointer-events-none before:absolute before:inset-y-0 before:left-0 before:w-1/3",
+  "before:-translate-x-[150%] before:-skew-x-12",
+  "before:bg-gradient-to-r before:from-white/0 before:via-white/35 before:to-white/0",
+  "before:transition-transform before:duration-700 before:ease-standard",
+  "hover:before:translate-x-[420%] motion-reduce:before:hidden",
+);
+
 export const buttonVariants = cva(
   cn(
-    "inline-flex select-none items-center justify-center gap-2 whitespace-nowrap",
+    "relative isolate inline-flex select-none items-center justify-center gap-2 overflow-hidden whitespace-nowrap",
     // DEC-038: los botones son tipografia de marca en caja alta. La caja alta
     // NO altera el DOM: `text-transform` es presentacion, asi que el nombre
     // accesible que anuncia un lector de pantalla sigue siendo el texto
     // traducido tal cual llego del diccionario.
-    "rounded-md font-display font-semibold uppercase tracking-display",
-    "transition-colors duration-fast ease-standard",
+    // DEC-068: en la letra de titular -Saira gruesa en italica-, la de las
+    // referencias de carreras que eligio el cliente.
+    "rounded-md font-headline font-extrabold italic uppercase tracking-[0.03em]",
+    "transition-[background-color,border-color,color,box-shadow,transform] duration-fast ease-standard",
+    "active:translate-y-px",
     FOCUS_VISIBLE_CLASSES,
     "disabled:pointer-events-none disabled:opacity-50",
   ),
   {
     variants: {
       variant: {
-        /** Accion principal de la pantalla. Como maximo una por vista. */
-        primary: "bg-brand text-on-brand hover:bg-brand-hover active:bg-brand-active",
+        /**
+         * Accion principal de la pantalla. Como maximo una por vista.
+         *
+         * DEC-068: oro METALICO. El degradado es una capa translucida encima
+         * del relleno solido (`bg-brand`), no un relleno nuevo: el color base
+         * sigue siendo el token y el contraste medido con `on-brand` no cambia
+         * en el centro del boton, que es donde va el texto.
+         */
+        primary: cn(
+          "bg-brand text-on-brand hover:bg-brand-hover active:bg-brand-active",
+          "bg-gradient-to-b from-white/25 via-white/0 to-black/25",
+          "shadow-[0_10px_28px_-12px_rgb(201_162_39/0.8)] hover:shadow-[0_14px_34px_-10px_rgb(227_197_102/0.85)]",
+          SHINE,
+        ),
         /**
          * Accion secundaria: contorno dorado sobre el fondo de la pagina.
          *
@@ -76,10 +105,23 @@ export const buttonVariants = cva(
          * `cn`, y ahi dos clases `ring-offset-*` a la vez las resolveria el
          * orden de emision del CSS, que no es un contrato.)
          */
-        accent: "bg-accent text-on-accent hover:bg-accent-hover active:bg-accent-active",
-        /** Accion terciaria: superficie elevada, sin oro. */
-        subtle:
-          "border border-border bg-surface-raised text-text hover:border-border-strong hover:bg-surface",
+        accent: cn(
+          "bg-accent text-on-accent hover:bg-accent-hover active:bg-accent-active",
+          // DEC-068: volumen y resplandor rojo, como el "ENTER NOW" de la
+          // referencia. La capa es casi transparente en el centro (donde va el
+          // texto), asi que los contrastes medidos arriba siguen valiendo.
+          "bg-gradient-to-b from-white/[0.08] via-white/0 to-black/20",
+          "shadow-[0_12px_30px_-12px_rgb(207_26_34/0.95)] hover:shadow-[0_16px_38px_-10px_rgb(229_34_42/0.95)]",
+          SHINE,
+        ),
+        /**
+         * Accion terciaria: superficie elevada, sin oro. DEC-068: el gris de
+         * metal del "VIEW DETAILS" de la referencia.
+         */
+        subtle: cn(
+          "border border-white/10 bg-surface-raised text-text hover:border-white/25 hover:bg-surface",
+          "bg-gradient-to-b from-white/[0.07] to-black/20 shadow-[inset_0_1px_0_rgb(255_255_255/0.06)]",
+        ),
         /** Accion de bajo peso; solo texto. */
         ghost: "bg-transparent text-text-muted hover:bg-surface-raised hover:text-text",
         /** Accion destructiva. Nunca es la accion por defecto de un formulario. */

@@ -13,7 +13,7 @@ import { SiteHeader } from "@/components/site-header";
 import { localeTag } from "@/i18n/locales";
 import { routing } from "@/i18n/routing";
 
-import { bodyFont, displayFont } from "../fonts";
+import { bodyFont, displayFont, headlineFont } from "../fonts";
 
 /**
  * Layout raiz.
@@ -98,7 +98,7 @@ export default async function LocaleLayout({
      */
     <html
       lang={localeTag(locale)}
-      className={`${bodyFont.variable} ${displayFont.variable}`}
+      className={`${bodyFont.variable} ${displayFont.variable} ${headlineFont.variable}`}
       suppressHydrationWarning
     >
       <body className="flex min-h-svh flex-col bg-bg text-text">

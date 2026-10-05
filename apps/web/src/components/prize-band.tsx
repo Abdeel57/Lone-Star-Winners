@@ -72,7 +72,7 @@ export function PrizeBand({
 
             <h2
               id="prize-band"
-              className="lsw-display mt-s3 text-display-md text-text-inverse sm:text-display-lg"
+              className="lsw-headline mt-s3 text-display-md text-text-inverse sm:text-display-lg"
             >
               {pickLocalized(prize.name, locale)}
             </h2>
@@ -103,7 +103,7 @@ export function PrizeBand({
           {value === null ? null : (
             <div className="border-t border-text-inverse/25 pt-s6 lg:justify-self-end lg:border-l lg:border-t-0 lg:pl-s10 lg:pt-0">
               <p className="lsw-eyebrow text-text-inverse/70">{tPromotion("prizeValueLabel")}</p>
-              <p className="lsw-display mt-s2 text-display-lg tabular-nums text-text-inverse sm:text-display-xl">
+              <p className="lsw-headline mt-s2 text-display-lg tabular-nums text-text-inverse sm:text-display-xl">
                 {value}
               </p>
               <p className="mt-s5 max-w-narrow text-body-sm text-text-inverse/80">

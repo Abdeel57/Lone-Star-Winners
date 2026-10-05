@@ -87,7 +87,9 @@ export default async function CartPage({
 
   return (
     <div className="lsw-container py-s10 pb-s16">
-      <h1 className="lsw-display text-display-md text-text">{t("cart.title")}</h1>
+      <h1 className="lsw-headline text-display-md text-text sm:text-display-lg">
+        {t("cart.title")}
+      </h1>
       <div aria-hidden="true" className="lsw-gold-rule mt-s4 max-w-[7rem]" />
 
       {/* CUANTA MERCANCIA HAY Y CUANDO CAMBIO, JUNTO AL TITULO.

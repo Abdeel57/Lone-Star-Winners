@@ -77,7 +77,11 @@ function MarqueeTrack({ phrases }: { readonly phrases: readonly string[] }) {
     <ul className="flex shrink-0 items-center">
       {items.map((item) => (
         <li key={item.key} className="flex shrink-0 items-center whitespace-nowrap">
-          <span className="lsw-display text-overline text-text-muted">{item.phrase}</span>
+          {/* DEC-068: la cinta en la italica gruesa de titular, mas grande y en
+              blanco: en las referencias es un rotulo, no una nota al pie. */}
+          <span className="font-headline text-body-lg font-extrabold uppercase italic tracking-[0.06em] text-text">
+            {item.phrase}
+          </span>
           {/* Rombo separador: el detalle de la referencia que convierte una
               lista de frases en una cinta. */}
           <span className="px-s5 text-caption leading-none text-brand">◆</span>

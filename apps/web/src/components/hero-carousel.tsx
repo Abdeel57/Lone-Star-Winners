@@ -3,7 +3,7 @@
 import { cn } from "@lsw/ui";
 import Image from "next/image";
 import { useTranslations } from "next-intl";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 
 /** Una foto del carrusel, ya filtrada (`safeImageUrl`) y con su `alt` resuelto. */
 export interface HeroSlide {
@@ -73,15 +73,18 @@ export function HeroCarousel({
 
   const rotating = count > 1 && !paused && !focused && !reducedMotion;
 
+  // Un temporizador POR FOTO, no un intervalo fijo (DEC-068): al saltar a otra
+  // foto el plazo vuelve a empezar, y asi la barra de progreso -que tambien
+  // arranca de cero con cada foto- llega al final justo cuando cambia.
   useEffect(() => {
     if (!rotating) return undefined;
-    const timer = window.setInterval(() => {
+    const timer = window.setTimeout(() => {
       setIndex((current) => (current + 1) % count);
     }, INTERVAL_MS);
     return () => {
-      window.clearInterval(timer);
+      window.clearTimeout(timer);
     };
-  }, [rotating, count]);
+  }, [rotating, count, index]);
 
   const goTo = (next: number) => {
     setIndex(((next % count) + count) % count);
@@ -135,16 +138,19 @@ export function HeroCarousel({
         })}
       </div>
 
-      {/* Controles ARRIBA a la derecha en los dos tamanos: en telefono abajo
-          cae el titular, y en escritorio el hero es mas alto que la ventana y
-          abajo quedarian fuera de la primera pantalla. `pointer-events-auto`
-          porque en escritorio la capa de la foto no recibe el raton (ver el
-          hero). */}
+      {/* Controles: pausa y una BARRA POR FOTO que se llena mientras esa foto
+          esta en pantalla (DEC-068, el indicador de la referencia).
+
+          En telefono van centrados sobre el pie de la foto, justo por encima
+          de donde entra el titular. En escritorio, arriba a la derecha: ahi el
+          hero es mas alto que la ventana y abajo quedarian fuera de la primera
+          pantalla. `pointer-events-auto` porque en escritorio la capa de la
+          foto no recibe el raton (ver el hero). */}
       <div
         className={cn(
-          "pointer-events-auto absolute right-s3 top-s3 z-20 flex items-center gap-s2",
-          "rounded-pill bg-bg/65 px-s2 py-s1 backdrop-blur-sm",
-          "lg:right-s8 lg:top-s8",
+          "pointer-events-auto absolute bottom-s16 left-1/2 z-20 flex -translate-x-1/2 items-center gap-s1",
+          "rounded-pill bg-bg/55 px-s2 backdrop-blur-sm",
+          "lg:bottom-auto lg:left-auto lg:right-s8 lg:top-s8 lg:translate-x-0",
         )}
         onFocus={() => {
           setFocused(true);
@@ -164,26 +170,43 @@ export function HeroCarousel({
           {paused ? <PlayIcon /> : <PauseIcon />}
         </button>
 
-        {slides.map((slide, slideIndex) => (
-          <button
-            key={`dot-${slide.src}-${String(slideIndex)}`}
-            type="button"
-            onClick={() => {
-              goTo(slideIndex);
-            }}
-            aria-label={t("goTo", { current: slideIndex + 1, total: count })}
-            aria-current={slideIndex === index ? "true" : undefined}
-            className="flex h-8 w-6 items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
-          >
-            <span
-              aria-hidden="true"
-              className={cn(
-                "block h-2 rounded-pill transition-all duration-base ease-standard",
-                slideIndex === index ? "w-5 bg-brand" : "w-2 bg-text/60",
-              )}
-            />
-          </button>
-        ))}
+        {slides.map((slide, slideIndex) => {
+          const active = slideIndex === index;
+          return (
+            <button
+              key={`bar-${slide.src}-${String(slideIndex)}`}
+              type="button"
+              onClick={() => {
+                goTo(slideIndex);
+              }}
+              aria-label={t("goTo", { current: slideIndex + 1, total: count })}
+              aria-current={active ? "true" : undefined}
+              className="group flex h-8 w-10 items-center justify-center sm:w-14 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
+            >
+              <span
+                aria-hidden="true"
+                className="block h-1 w-full overflow-hidden rounded-pill bg-text/30 transition-colors duration-fast group-hover:bg-text/50"
+              >
+                {active ? (
+                  <span
+                    // Clave con el estado de rotacion: al pausar la barra se
+                    // queda llena, y al reanudar vuelve a correr desde cero,
+                    // igual que el temporizador.
+                    key={`${String(index)}-${String(rotating)}`}
+                    className={cn("block h-full w-full bg-accent", rotating && "lsw-progress-fill")}
+                    style={
+                      rotating
+                        ? ({
+                            "--lsw-progress-duration": `${String(INTERVAL_MS)}ms`,
+                          } as CSSProperties)
+                        : undefined
+                    }
+                  />
+                ) : null}
+              </span>
+            </button>
+          );
+        })}
       </div>
     </div>
   );

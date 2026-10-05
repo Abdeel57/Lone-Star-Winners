@@ -1,4 +1,4 @@
-import { cn } from "@lsw/ui";
+import { buttonVariants, cn } from "@lsw/ui";
 import { useTranslations } from "next-intl";
 
 import { formatEntryCount, formatMoney } from "@/i18n/formatters";
@@ -176,7 +176,7 @@ export function EntryPackageBand({
           <p className="lsw-eyebrow text-light-gold">{t("eyebrow")}</p>
           <h2
             id={labelledBy}
-            className="lsw-display mt-s2 text-display-md italic leading-none text-light-text"
+            className="lsw-headline mt-s2 text-display-md text-light-text sm:text-display-lg"
           >
             {t("title")}
           </h2>
@@ -418,7 +418,7 @@ function PackagePass({
           {onlyVariant === undefined ? (
             <Link
               href={`/products/${product.slug}`}
-              className="lsw-display flex w-full items-center justify-center rounded-md bg-accent px-s4 py-s3 italic text-on-accent hover:bg-accent-hover"
+              className={buttonVariants({ variant: "accent", size: "lg", fullWidth: true })}
             >
               {t("viewLabel", { name: title })}
             </Link>

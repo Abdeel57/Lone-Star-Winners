@@ -61,14 +61,17 @@ export function PromotionProgress({
       // El equivalente hablado es una frase completa, no un numero suelto: un
       // "47" sin contexto no dice de que.
       aria-valuetext={t("value", { percent: formatPercent(fraction, locale) })}
-      // El carril lleva contorno rojo tenue y no dorado: un filete de marca
-      // alrededor de un relleno rojo pone dos colores en dos pixeles de alto.
-      className="h-2 w-full max-w-lg overflow-hidden rounded-sm border border-accent/40 bg-surface-sunken"
+      // DEC-068: carril redondo y grueso, como en la referencia. El contorno
+      // sigue siendo rojo tenue y no dorado: un filete de marca alrededor de un
+      // relleno rojo pone dos colores en el mismo borde.
+      className="h-4 w-full overflow-hidden rounded-pill border border-accent/35 bg-surface-sunken shadow-[inset_0_1px_3px_rgb(0_0_0/0.6)]"
     >
-      {/* El relleno es decoracion: el valor lo declara el contenedor. */}
+      {/* El relleno es decoracion: el valor lo declara el contenedor. Las rayas
+          avanzan (salvo con movimiento reducido); la LONGITUD no cambia mas
+          que con el tiempo real transcurrido. */}
       <div
         aria-hidden="true"
-        className="lsw-stripes h-full"
+        className="lsw-stripes lsw-stripes-moving h-full rounded-pill shadow-[0_0_18px_rgb(229_34_42/0.55)]"
         style={{ width: `${String(percentOfHundred)}%` }}
       />
     </div>

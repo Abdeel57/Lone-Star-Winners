@@ -10,7 +10,7 @@ import type { ReactNode } from "react";
 import { isLocale, localeTag } from "@/i18n/locales";
 import { loadMessages } from "@/i18n/messages";
 
-import { bodyFont, displayFont } from "../../fonts";
+import { bodyFont, displayFont, headlineFont } from "../../fonts";
 
 /**
  * Layout raiz del PANEL (DEC-048).
@@ -100,7 +100,7 @@ export default async function AdminRootLayout({
   return (
     <html
       lang={localeTag(locale)}
-      className={`${bodyFont.variable} ${displayFont.variable}`}
+      className={`${bodyFont.variable} ${displayFont.variable} ${headlineFont.variable}`}
       suppressHydrationWarning
     >
       <body className="flex min-h-svh flex-col bg-bg text-text">

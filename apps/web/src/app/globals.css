@@ -624,6 +624,91 @@
     );
   }
 
+  /* -------------------------------------------------------------------------
+   * Titular de impacto (DEC-068)
+   *
+   * Saira negra en italica y caja alta: la letra de las referencias de carreras
+   * que eligio el cliente. Interlineado cerrado porque son titulares de dos o
+   * tres lineas que se leen como un bloque.
+   * ---------------------------------------------------------------------- */
+  .lsw-headline {
+    font-family: var(--lsw-font-headline);
+    font-weight: 900;
+    font-style: italic;
+    text-transform: uppercase;
+    letter-spacing: -0.005em;
+    line-height: 0.92;
+  }
+
+  /* Cromo: relleno metalico de los titulares (DEC-068). El `color` de respaldo
+     se declara antes y sin condicion, como en `.lsw-gold-sheen`. El tono mas
+     oscuro del degradado (#9ea3aa) mide 8,1:1 sobre la pagina. La sombra lo
+     despega de una fotografia clara que asome por debajo del degradado. */
+  .lsw-chrome {
+    color: rgb(var(--lsw-color-text));
+  }
+
+  @supports (background-clip: text) or (-webkit-background-clip: text) {
+    .lsw-chrome {
+      background-image: linear-gradient(
+        180deg,
+        #ffffff 0%,
+        #f2f2f2 40%,
+        #9ea3aa 54%,
+        #e6e8eb 66%,
+        #ffffff 100%
+      );
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      filter: drop-shadow(0 2px 0 rgb(0 0 0 / 0.6)) drop-shadow(0 10px 22px rgb(0 0 0 / 0.5));
+    }
+  }
+
+  /* Barra que se llena mientras una foto del carrusel esta en pantalla
+     (DEC-068). La duracion la pone el componente, que es quien sabe cada
+     cuanto cambia. */
+  .lsw-progress-fill {
+    transform-origin: left center;
+    animation: lsw-progress-fill var(--lsw-progress-duration, 6s) linear forwards;
+  }
+
+  @keyframes lsw-progress-fill {
+    from {
+      transform: scaleX(0);
+    }
+    to {
+      transform: scaleX(1);
+    }
+  }
+
+  /* Rayas que avanzan en la barra del marcador (DEC-068). Es decoracion: la
+     longitud de la barra sigue siendo el tramo real transcurrido. */
+  .lsw-stripes-moving {
+    background-size: 2.5rem 2.5rem;
+    animation: lsw-stripes-move 1.2s linear infinite;
+  }
+
+  @keyframes lsw-stripes-move {
+    from {
+      background-position: 0 0;
+    }
+    to {
+      background-position: 2.5rem 0;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .lsw-progress-fill {
+      animation: none;
+      transform: scaleX(1);
+    }
+
+    .lsw-stripes-moving {
+      animation: none;
+    }
+  }
+
   /* Impresion de las Reglas Oficiales: el documento sale en negro sobre blanco.
      Un documento legal se archiva en papel, y gastar el toner de media oficina
      en un fondo negro no es una decision de diseno, es un descuido. */

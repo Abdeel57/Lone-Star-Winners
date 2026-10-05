@@ -65,7 +65,6 @@ export function PackageQuickAdd({
         fullWidth
         loading={pending}
         disabled={soldOut}
-        className="lsw-display italic tracking-wide"
       >
         {soldOut ? t("soldOut") : tProduct("addToCart")}
       </Button>

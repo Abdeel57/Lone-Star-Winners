@@ -86,7 +86,8 @@ export function SectionHeading({
         level={level}
         {...(id === undefined ? {} : { id })}
         className={cn(
-          "lsw-display",
+          // DEC-068: titular de impacto, como los de las referencias.
+          "lsw-headline",
           light ? "text-light-text" : "text-text",
           size === "lg"
             ? "text-display-md sm:text-display-lg"

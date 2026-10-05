@@ -86,6 +86,10 @@
   --lsw-font-display:
     var(--font-lsw-display), "Oswald", "Haettenschweiler", "Arial Narrow",
     "Helvetica Neue Condensed", "Impact", var(--lsw-font-sans);
+  /* Titular de impacto (DEC-068): ancha, gruesa y en italica, la letra de las
+     referencias de carreras. Solo para textos cortos: titulares, botones,
+     cifras. Sin la fuente cargada cae en la display, que tambien es de marca. */
+  --lsw-font-headline: var(--font-lsw-headline), "Saira", var(--lsw-font-display);
   --lsw-font-mono:
     ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
 

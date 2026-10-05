@@ -340,12 +340,19 @@ export function PromotionHero({
               // La ALTURA vive aqui y no en la imagen porque `next/image` con
               // `fill` se posiciona en absoluto: si el hueco no la declarara,
               // el contenedor mediria cero y la fotografia no se veria.
-              // 46svh deja el hueco casi cuadrado.
-              "relative h-[46svh] min-h-[15rem] w-full",
+              // DEC-068: un CUADRADO a todo el ancho (y 4:3 en tableta). La
+              // franja de 46svh de antes dejaba el vehiculo pequeno y medio
+              // tapado por el titular; ahora se ve entero, como en la
+              // referencia, y el titular entra solo sobre el pie fundido.
+              "relative aspect-square max-h-[80svh] w-full sm:aspect-[4/3]",
               // En escritorio: capa pegada al borde derecho, a sangre. `h-auto`
               // devuelve el mando a `inset-y-0`, que es lo que la estira a la
               // altura entera de la seccion.
-              "lg:pointer-events-none lg:absolute lg:inset-y-0 lg:right-0 lg:h-auto lg:w-[56%]",
+              "lg:pointer-events-none lg:absolute lg:inset-y-0 lg:right-0 lg:aspect-auto lg:h-auto lg:max-h-none lg:w-[60%]",
+              // DEC-068: el borde izquierdo se DESVANECE en vez de fundirse a
+              // negro liso. El fondo de la seccion lleva textura, y un fundido
+              // a color plano dejaba una costura vertical donde empieza la foto.
+              "lg:[-webkit-mask-image:linear-gradient(to_right,transparent,#000_24%)] lg:[mask-image:linear-gradient(to_right,transparent,#000_24%)]",
             )}
           >
             {/*
@@ -424,12 +431,17 @@ export function PromotionHero({
 
                 En escritorio ademas TAPA la camioneta negra que asoma por la
                 izquierda del encuadre, que en las ventanas mas anchas vuelve a
-                entrar en cuadro. */}
+                entrar en cuadro.
+
+                DEC-068: el fundido se ACORTA. Antes cubria el 70% de la foto en
+                telefono y el vehiculo quedaba en sombra; ahora solo funde el
+                pie (donde entra el titular, que ademas lleva su propia sombra)
+                y en escritorio el borde izquierdo. */}
             <div
               aria-hidden="true"
               className={cn(
-                "absolute inset-0 bg-gradient-to-t from-bg via-bg/80 via-40% to-bg/0 to-70%",
-                "lg:bg-gradient-to-r lg:via-bg/70 lg:via-30% lg:to-60%",
+                "absolute inset-0 bg-gradient-to-t from-bg via-bg/60 via-15% to-bg/0 to-40%",
+                "lg:bg-gradient-to-r lg:via-bg/75 lg:via-[18%] lg:to-[38%]",
               )}
             />
 
@@ -440,7 +452,7 @@ export function PromotionHero({
                 tambien lo que sostiene el titular. */}
             <div
               aria-hidden="true"
-              className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-bg to-bg/0"
+              className="absolute inset-x-0 bottom-0 h-1/4 bg-gradient-to-t from-bg to-bg/0"
             />
           </div>
         )}
@@ -452,7 +464,9 @@ export function PromotionHero({
               // El bloque sube sobre la mitad inferior de la fotografia, que ya
               // esta fundida en negro por el degradado. En escritorio no hay
               // nada que solapar: la imagen esta al lado, no encima.
-              primarySlide === null ? "pt-s16" : "-mt-[13svh] pt-0 lg:mt-0",
+              // DEC-068: solapa solo el pie fundido de la foto (3rem), no un
+              // tercio de ella como antes.
+              primarySlide === null ? "pt-s16" : "-mt-s12 pt-0 lg:mt-0",
               "lg:max-w-[52%]",
             )}
           >
@@ -510,9 +524,13 @@ export function PromotionHero({
              * dos primeras desaparecen y el titulo ocupa el tamano grande: el
              * hero no se queda con un hueco ni inventa un premio.
              */}
+            {/* DEC-068: titular de impacto en CROMO -Saira negra en italica con
+                relleno metalico y sombra-, el tratamiento de las referencias.
+                El tamano se ajusta al ancho para que dos o tres palabras llenen
+                la linea en telefono sin desbordar. */}
             <h1 id="promotion-title" className="mt-s5 flex flex-col gap-s1">
               {prizeName === null ? (
-                <span className="lsw-display text-display-lg text-text sm:text-display-xl">
+                <span className="lsw-headline lsw-chrome text-[clamp(2.75rem,12vw,6.25rem)]">
                   {title}
                 </span>
               ) : (
@@ -521,14 +539,14 @@ export function PromotionHero({
                       encabezando un premio es la invitacion misma. El premio y
                       el titulo se quedan, que es lo que DEC-044 deja ver. */}
                   {!showsPromotionalHero ? null : (
-                    <span className="lsw-display lsw-accent-sheen text-display-md">
+                    <span className="lsw-headline lsw-accent-sheen text-[clamp(1.75rem,7vw,3rem)]">
                       {t("hero.win")}
                     </span>
                   )}
-                  <span className="lsw-display text-display-lg text-text sm:text-display-xl">
+                  <span className="lsw-headline lsw-chrome text-[clamp(2.75rem,12vw,6.25rem)]">
                     {prizeName}
                   </span>
-                  <span className="mt-s2 font-display text-heading-sm font-semibold text-text-muted">
+                  <span className="mt-s2 font-headline text-heading-sm font-bold italic uppercase text-text-muted">
                     {title}
                   </span>
                 </>
@@ -566,7 +584,9 @@ export function PromotionHero({
               />
             )}
 
-            <p className="mt-s5 max-w-narrow text-body-lg text-text-muted">
+            {/* El lema, en la italica gruesa de la referencia ("+ A $40,000
+                CHECK"). Es texto del panel; aqui solo se le da voz. */}
+            <p className="mt-s4 max-w-narrow font-headline text-body-lg font-bold italic leading-snug text-text sm:text-heading-md">
               {pickLocalized(promotion.summary, locale)}
             </p>
 
@@ -609,15 +629,43 @@ export function PromotionHero({
                * No dice "comprar" ni nombra la promocion: al otro lado hay
                * mercancia, y mercancia se puede ensenar sin ninguna promesa.
                */
-              <div className="mt-s8 flex flex-col items-start gap-s5">
-                <Alert tone="warning" className="w-full max-w-narrow">
+              <div className="mt-s6 flex flex-col items-stretch gap-s4 sm:items-start">
+                {/* DEC-068: el mismo aviso, en el mismo sitio, como nota y no
+                    como bloque de alerta: era lo que mas pesaba en la pantalla
+                    y no es un error, es un estado. Sigue siendo texto visible y
+                    va antes de la accion. */}
+                <p
+                  role="note"
+                  className="flex max-w-narrow items-start gap-s2 rounded-md border border-brand/30 bg-brand/[0.07] px-s3 py-s2 text-body-sm text-text-muted"
+                >
+                  <svg
+                    viewBox="0 0 20 20"
+                    aria-hidden="true"
+                    focusable="false"
+                    className="mt-[2px] h-4 w-4 shrink-0 text-brand"
+                  >
+                    <circle
+                      cx="10"
+                      cy="10"
+                      r="8.25"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.5"
+                    />
+                    <path
+                      d="M10 9v5M10 6.2v.1"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                      strokeLinecap="round"
+                    />
+                  </svg>
                   {t("rulesNotPublished")}
-                </Alert>
+                </p>
 
                 <Link
                   href="/shop"
                   className={cn(
-                    buttonVariants({ variant: "subtle", size: "lg" }),
+                    buttonVariants({ variant: "subtle", size: "xl" }),
                     "w-full sm:w-auto",
                   )}
                 >
@@ -671,7 +719,7 @@ export function PromotionHero({
              * Sin version de reglas publicada (DEC-012) no hay enlace, porque
              * llevaria a un 404; el aviso de la banda de abajo lo explica.
              */}
-            <p className="mt-s5 max-w-narrow text-caption italic text-text-subtle">
+            <p className="mt-s4 max-w-narrow text-center text-caption italic text-text-subtle sm:text-left">
               {amoeEnabled ? t("hero.legalAmoe") : t("hero.legalRules")}
               {/* El separador se pinta CON el enlace y no dentro de la frase.
                   Con la frase terminada en raya, una promocion sin reglas

@@ -3340,3 +3340,54 @@ Affected areas: `packages/database` (0034, `schema/identity.ts`), `apps/api`
 
 Proposed by: sesión del usuario (2026-10-04), lanzamiento de la primera edición
 Agreed by: pendiente — backend-sweepstakes, frontend-ux, security-integration
+
+## DEC-068
+
+Status: Proposed
+
+Date: 2026-10-04
+
+Decision:
+**Rediseño visual con el estilo de las referencias de carreras del cliente**
+(Speed Society, LGND). El usuario pidió copiar "letras, botones, animaciones" y
+que el vehículo se vea. Solo cambia la presentación; nada de lo que se afirma:
+
+1. **Letra de titular nueva: Saira** (900/800/700, normal e itálica, por
+   `next/font`, variable `--font-lsw-headline`, token `--lsw-font-headline`,
+   clase Tailwind `font-headline`). `.lsw-headline` = itálica negra en caja
+   alta. La usan los titulares de sección, el hero, los botones, el marcador y
+   las cifras. Oswald sigue en navegación, antetítulos y el panel.
+2. **Hero:** la foto del premio pasa a un cuadrado a todo el ancho en teléfono
+   (4:3 en tableta, 60 % del ancho en escritorio) y el degradado solo funde el
+   pie: antes tapaba el 70 % del vehículo. Titular en cromo (`.lsw-chrome`,
+   relleno metálico con respaldo de color sólido). El aviso de Reglas sin
+   publicar (DEC-044) pasa de alerta a nota, con el mismo texto y en el mismo
+   sitio; la acción neutra sigue siendo `subtle`.
+3. **Botones:** Saira itálica, volumen con degradado translúcido sobre el color
+   del token (los contrastes medidos en DEC-042 no cambian en el centro, donde
+   va el texto), resplandor y un destello al pasar el ratón. Sin destello con
+   `prefers-reduced-motion`. Los verbos no cambian: el rojo sigue diciendo
+   "comprar" y nunca "ENTER NOW".
+4. **Marcador sin cajas:** cifras enormes en itálica con la unidad debajo; la
+   barra de progreso lleva rayas en movimiento (decoración: su longitud sigue
+   siendo el tramo real transcurrido).
+5. **Carrusel (DEC-066):** los puntos pasan a una barra por foto que se llena
+   mientras esa foto está en pantalla. El temporizador es por foto, para que la
+   barra y el cambio coincidan. Pausa, nombres accesibles y movimiento reducido
+   igual que antes.
+
+Alternatives:
+A — Copiar la tipografía exacta de las referencias (descartada: son fuentes con
+licencia de terceros). B — Cambiar `.lsw-display` en todo el sitio (descartada:
+también la usan navegación, formularios y el panel, donde la itálica de
+titular estorba).
+
+Affected areas: `packages/design-system` (`tokens.css`, `tailwind-preset.mjs`),
+`packages/ui` (`button.tsx`, `countdown.tsx`), `apps/web` (`fonts.ts`, los dos
+`layout.tsx`, `globals.css`, `promotion-hero.tsx`, `hero-carousel.tsx`,
+`promotion-countdown.tsx`, `promotion-progress.tsx`, `section-heading.tsx`,
+`entry-package-band.tsx`, `package-quick-add.tsx`, `prize-band.tsx`,
+`marquee-band.tsx`, portada, detalle de promoción y de producto, carrito).
+
+Proposed by: sesión del usuario (2026-10-04)
+Agreed by: pendiente — frontend-ux

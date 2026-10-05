@@ -381,12 +381,14 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
                       texto haria que un lector de pantalla dijera "uno, uno". */}
                   <p
                     aria-hidden="true"
-                    className="lsw-display text-display-md leading-none text-brand/45"
+                    // DEC-068: cifra de titular en oro metalico, como los
+                    // numeros grandes de las referencias.
+                    className="lsw-headline lsw-gold-sheen text-display-lg"
                   >
                     {String(index + 1).padStart(2, "0")}
                   </p>
 
-                  <h3 className="lsw-display mt-s4 text-heading-md text-text">{copy.title}</h3>
+                  <h3 className="lsw-headline mt-s4 text-heading-lg text-text">{copy.title}</h3>
 
                   <p className="mt-s3 text-body-md text-text-muted">{copy.body}</p>
                 </li>

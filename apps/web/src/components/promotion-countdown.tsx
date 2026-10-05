@@ -74,7 +74,8 @@ export function PromotionCountdown({
       <p
         className={
           scoreboard
-            ? "font-display text-overline uppercase tracking-wide text-brand"
+            ? // DEC-068: el "ENDS IN JUST:" de la referencia, en rojo de titular.
+              "lsw-headline text-heading-lg text-accent-text sm:text-display-md"
             : "text-label font-medium text-text-muted"
         }
       >

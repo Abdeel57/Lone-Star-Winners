@@ -228,6 +228,8 @@ const preset = {
       fontFamily: {
         sans: raw("--lsw-font-sans"),
         display: raw("--lsw-font-display"),
+        // DEC-068: titulares de impacto, botones y cifras del marcador.
+        headline: raw("--lsw-font-headline"),
         mono: raw("--lsw-font-mono"),
       },
 

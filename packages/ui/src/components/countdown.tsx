@@ -207,7 +207,9 @@ function CountdownSeparator() {
   return (
     <li
       aria-hidden="true"
-      className="flex shrink-0 items-start pt-s3 font-display text-heading-lg font-bold leading-none text-brand/70 sm:pt-s4 sm:text-display-md"
+      // DEC-068: sin cajas, los dos puntos acompanan a la cifra a su altura y
+      // en tono apagado; la referencia apenas los marca.
+      className="flex shrink-0 items-start pt-[0.35em] font-headline text-heading-lg font-extrabold italic leading-none text-text-subtle sm:text-display-md"
     >
       :
     </li>
@@ -227,33 +229,19 @@ function CountdownUnit({
     return (
       <li
         className={cn(
-          "relative flex min-w-0 flex-1 basis-0 flex-col items-center overflow-hidden",
-          // Caja de marcador: superficie elevada, filete claro y sombra que la
-          // separa del fondo. Sobre negro la sombra sola no eleva nada, asi que
-          // el borde es la mitad que hace el trabajo (ver los tokens de
-          // elevacion en `@lsw/design-system`).
-          "rounded-lg border border-border-strong bg-surface-raised px-1 py-s3 shadow-lg sm:py-s4",
+          // DEC-068: sin cajas. La referencia pinta cifras enormes en italica
+          // blanca con la unidad debajo, sobre el negro de la banda; las cajas
+          // de marcador las hacian pequenas sin anadir nada.
+          "relative flex min-w-0 flex-1 basis-0 flex-col items-center",
         )}
       >
-        {/* Filete dorado superior: es lo que convierte cuatro cajas grises en
-            un marcador. Se compone con utilidades del preset y no con una clase
-            de la aplicacion: este paquete no puede depender de CSS que viva en
-            `apps/web`, o la primitiva se veria distinta segun quien la monte. */}
-        <span
-          aria-hidden="true"
-          className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-brand/60 to-transparent"
-        />
-
-        {/* Ranura horizontal a media altura: es el detalle que hace que la caja
-            se lea como un digito de reloj de aletas y no como una tarjeta. Va
-            al 55% y no al 50% para que caiga bajo la cifra y no la parta. */}
-        <span aria-hidden="true" className="absolute inset-x-0 top-[55%] h-px bg-overlay/70" />
-
-        {/* `tabular-nums` evita que la caja cambie de ancho cada segundo. */}
-        <span className="font-display text-display-md font-bold tabular-nums text-text sm:text-display-lg">
+        {/* `tabular-nums` evita que la cifra cambie de ancho cada segundo. */}
+        <span className="font-headline text-[clamp(2.6rem,11vw,4.75rem)] font-black italic leading-none tabular-nums text-text [text-shadow:0_4px_18px_rgb(0_0_0/0.6)]">
           {String(value).padStart(2, "0")}
         </span>
-        <span className="mt-1 text-overline uppercase tracking-wide text-brand">{label}</span>
+        <span className="mt-s2 text-overline font-semibold uppercase tracking-[0.2em] text-text-muted">
+          {label}
+        </span>
       </li>
     );
   }

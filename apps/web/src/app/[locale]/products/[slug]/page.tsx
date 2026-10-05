@@ -112,7 +112,7 @@ export default async function ProductDetailPage({
               <ProductCategoryLine category={product.category} locale={locale} />
             )}
 
-            <h1 className="lsw-display mt-s3 text-display-md text-text sm:text-display-lg">
+            <h1 className="lsw-headline mt-s3 text-display-md text-text sm:text-display-lg">
               {pickLocalized(product.name, locale)}
             </h1>
 

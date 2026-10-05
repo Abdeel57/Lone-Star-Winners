@@ -29,7 +29,7 @@
  * modo que ningun componente nombra nunca una tipografia concreta.
  */
 
-import { Inter, Oswald } from "next/font/google";
+import { Inter, Oswald, Saira } from "next/font/google";
 
 /** Cuerpo, interfaz y formularios. */
 export const bodyFont = Inter({
@@ -38,10 +38,27 @@ export const bodyFont = Inter({
   variable: "--font-lsw-sans",
 });
 
-/** Titulares, antetitulos, cifras del marcador y bloque de marca. */
+/** Antetitulos, navegacion, etiquetas y bloque de marca. */
 export const displayFont = Oswald({
   subsets: ["latin"],
   weight: ["400", "500", "700"],
   display: "swap",
   variable: "--font-lsw-display",
+});
+
+/**
+ * Titulares de impacto, botones y cifras (DEC-068).
+ *
+ * Saira en itálica y peso alto: es la letra "de carreras" de las referencias
+ * que eligio el cliente (titulares inclinados, gruesos y anchos). Solo se usa
+ * donde el texto es corto -titular del hero, titulos de seccion, botones,
+ * marcador-; la navegacion y las etiquetas siguen en Oswald, que cabe en menos
+ * ancho. Dos estilos y tres pesos: los que se pintan de verdad.
+ */
+export const headlineFont = Saira({
+  subsets: ["latin"],
+  weight: ["700", "800", "900"],
+  style: ["normal", "italic"],
+  display: "swap",
+  variable: "--font-lsw-headline",
 });
