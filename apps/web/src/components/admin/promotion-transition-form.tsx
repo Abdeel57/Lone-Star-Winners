@@ -8,7 +8,7 @@ import { FormError, LocaleField, useFieldError } from "@/components/auth-form-sh
 import type { Locale } from "@/i18n/locales";
 import { IDLE, type ActionResult } from "@/lib/action-result";
 
-export type PromotionTransition = "schedule" | "activate" | "close";
+export type PromotionTransition = "schedule" | "unschedule" | "activate" | "close";
 
 /**
  * Cambio de estado de una promocion: programar, activar o cerrar.
@@ -56,7 +56,7 @@ export function PromotionTransitionForm({
    * conocer otros.
    */
   readonly blockedReason?: string;
-  /** Motivos ofrecidos, ya traducidos. Vacio para `schedule`. */
+  /** Motivos ofrecidos, ya traducidos. Vacio para `schedule` y `unschedule`. */
   readonly reasons: readonly { readonly value: string; readonly label: string }[];
 }) {
   const t = useTranslations("admin.promotions");
@@ -64,29 +64,40 @@ export function PromotionTransitionForm({
   const fieldError = useFieldError(state);
   const [confirmed, setConfirmed] = useState(false);
 
-  const requiresReason = transition !== "schedule";
+  // Programar y retirar (DEC-070) son reversibles y anteriores a la apertura.
+  const requiresReason = transition === "activate" || transition === "close";
   const blocked = blockedReason !== undefined;
 
-  const cta =
-    transition === "schedule"
-      ? t("scheduleCta")
-      : transition === "activate"
-        ? t("activateCta")
-        : t("closeCta");
-
-  const body =
-    transition === "schedule"
-      ? t("scheduleBody")
-      : transition === "activate"
-        ? t("activateBody")
-        : t("closeBody");
-
-  const confirmLabel =
-    transition === "schedule"
-      ? t("confirmSchedule")
-      : transition === "activate"
-        ? t("confirmActivate")
-        : t("confirmClose");
+  // `switch` exhaustivo: una transicion nueva obliga a escribir sus textos.
+  const copyFor = (): {
+    readonly cta: string;
+    readonly body: string;
+    readonly confirmLabel: string;
+  } => {
+    switch (transition) {
+      case "schedule":
+        return {
+          cta: t("scheduleCta"),
+          body: t("scheduleBody"),
+          confirmLabel: t("confirmSchedule"),
+        };
+      case "unschedule":
+        return {
+          cta: t("unscheduleCta"),
+          body: t("unscheduleBody"),
+          confirmLabel: t("confirmUnschedule"),
+        };
+      case "activate":
+        return {
+          cta: t("activateCta"),
+          body: t("activateBody"),
+          confirmLabel: t("confirmActivate"),
+        };
+      case "close":
+        return { cta: t("closeCta"), body: t("closeBody"), confirmLabel: t("confirmClose") };
+    }
+  };
+  const { cta, body, confirmLabel } = copyFor();
 
   return (
     <form action={formAction} className="flex flex-col gap-s4">
@@ -140,7 +151,9 @@ export function PromotionTransitionForm({
 
       <Button
         type="submit"
-        variant={transition === "close" ? "danger" : "primary"}
+        variant={
+          transition === "close" ? "danger" : transition === "unschedule" ? "secondary" : "primary"
+        }
         size="lg"
         loading={pending}
         // Se escribe en positivo y a mano (HO-027): "hay impedimento" o "no ha

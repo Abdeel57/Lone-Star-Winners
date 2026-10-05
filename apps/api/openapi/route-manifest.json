@@ -633,6 +633,15 @@
       "summary": "Programar una promocion: DRAFT -> SCHEDULED."
     },
     {
+      "method": "POST",
+      "path": "/api/v1/admin/promotions/:promotion_id/unschedule",
+      "operation_id": "unscheduleAdminPromotion",
+      "authorization": "promotion.update",
+      "requires_step_up": false,
+      "tags": ["admin"],
+      "summary": "Retirar una promocion programada: SCHEDULED -> DRAFT."
+    },
+    {
       "method": "GET",
       "path": "/api/v1/admin/settings/change-requests",
       "operation_id": "listSettingChangeRequests",

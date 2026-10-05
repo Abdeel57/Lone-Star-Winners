@@ -23,6 +23,7 @@ import {
   closePromotionAction,
   createBonusPeriodAction,
   schedulePromotionAction,
+  unschedulePromotionAction,
   updatePromotionAction,
 } from "@/lib/admin/actions";
 import { can } from "@/lib/admin/capabilities";
@@ -357,6 +358,29 @@ async function TransitionBlock({
   const t = await getTranslations({ locale, namespace: "admin.promotions" });
   const label = await reasonLabeller(locale);
 
+  /*
+   * RETIRAR DE LA TIENDA (DEC-070), debajo de la accion principal.
+   *
+   * Solo para una promocion PROGRAMADA: es el reverso de programar, con su
+   * misma capacidad y sin motivo. Existe porque una edicion programada por
+   * error -o sustituida por otra- se quedaba publica sin forma de quitarla.
+   */
+  const unschedule =
+    promotion.status === "SCHEDULED" && canUpdate ? (
+      <div className="mt-s6 border-t border-border pt-s5">
+        <h3 className="text-label font-semibold text-text">{t("unscheduleHeading")}</h3>
+        <div className="mt-s3">
+          <PromotionTransitionForm
+            locale={locale}
+            action={unschedulePromotionAction}
+            promotionId={promotion.id}
+            transition="unschedule"
+            reasons={[]}
+          />
+        </div>
+      </div>
+    ) : null;
+
   const plan = transitionFor(promotion.status);
   if (plan === null) {
     return <p className="text-body-sm text-text-muted">{t("noTransition")}</p>;
@@ -371,7 +395,10 @@ async function TransitionBlock({
 
   if (!allowed) {
     return (
-      <Alert tone="info">{t("transitionNoCapability", { capability: plan.capability })}</Alert>
+      <>
+        <Alert tone="info">{t("transitionNoCapability", { capability: plan.capability })}</Alert>
+        {unschedule}
+      </>
     );
   }
 
@@ -393,14 +420,17 @@ async function TransitionBlock({
         : [];
 
   return (
-    <PromotionTransitionForm
-      locale={locale}
-      action={plan.action}
-      promotionId={promotion.id}
-      transition={plan.transition}
-      {...(blockedReason === undefined ? {} : { blockedReason })}
-      reasons={reasons.map((value) => ({ value, label: label(value) }))}
-    />
+    <>
+      <PromotionTransitionForm
+        locale={locale}
+        action={plan.action}
+        promotionId={promotion.id}
+        transition={plan.transition}
+        {...(blockedReason === undefined ? {} : { blockedReason })}
+        reasons={reasons.map((value) => ({ value, label: label(value) }))}
+      />
+      {unschedule}
+    </>
   );
 }
 

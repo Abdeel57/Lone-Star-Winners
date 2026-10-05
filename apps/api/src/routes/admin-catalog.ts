@@ -24,6 +24,8 @@
  *   POST  /admin/promotions .................. `promotion.create`
  *   GET   /admin/promotions/:promotion_id .............. `promotion.read`
  *   PATCH /admin/promotions/:promotion_id .............. `promotion.update`
+ *   POST  /admin/promotions/:promotion_id/schedule ..... `promotion.update`
+ *   POST  /admin/promotions/:promotion_id/unschedule ... `promotion.update`
  *   POST  /admin/promotions/:promotion_id/activate ..... `promotion.activate`  motivo + step-up
  *   POST  /admin/promotions/:promotion_id/close ........ `promotion.close`     motivo + step-up
  *
@@ -1181,6 +1183,40 @@ export function buildAdminCatalogRoutes(dependencies: AppDependencies): RouteDef
 
         try {
           const updated = await repo().setPromotionStatus(params.promotion_id, "SCHEDULED");
+          if (updated === null) throw ApiErrors.notFound();
+          return presentPromotion(updated);
+        } catch (error) {
+          if (error instanceof ApiError) throw error;
+          return translateDatabaseError(error);
+        }
+      },
+    },
+
+    {
+      method: "POST",
+      url: "/api/v1/admin/promotions/:promotion_id/unschedule",
+      operationId: "unscheduleAdminPromotion",
+      summary: "Retirar una promocion programada: SCHEDULED -> DRAFT.",
+      description:
+        "El reverso de schedule (DEC-070). La promocion deja de ser publica -DRAFT no esta en los estados que lista la tienda- y se puede volver a programar. La transicion existe en promotion_status_transitions; desde cualquier otro estado el motor responde 409 LIFECYCLE_REFUSED con su mensaje. Misma capacidad que schedule y sin motivo: antes de abrir no hay participaciones que proteger.",
+      tags: ["admin"],
+      authorization: { kind: "PERMISSION", permission: "promotion.update" },
+      schema: {
+        params: promotionParamsSchema,
+        response: {
+          200: promotionSchema,
+          401: errorEnvelopeSchema,
+          403: errorEnvelopeSchema,
+          404: errorEnvelopeSchema,
+          409: errorEnvelopeSchema,
+        },
+      },
+      handler: async (request) => {
+        await requireStaff(dependencies, request);
+        const params = request.params as z.infer<typeof promotionParamsSchema>;
+
+        try {
+          const updated = await repo().setPromotionStatus(params.promotion_id, "DRAFT");
           if (updated === null) throw ApiErrors.notFound();
           return presentPromotion(updated);
         } catch (error) {

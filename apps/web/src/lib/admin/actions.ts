@@ -41,6 +41,7 @@ import {
   fetchAdminPromotion,
   publishAdminProduct,
   scheduleAdminPromotion,
+  unscheduleAdminPromotion,
   updateAdminProduct,
   updateAdminPromotion,
 } from "@/lib/api";
@@ -1134,6 +1135,31 @@ export async function schedulePromotionAction(
 
   const session = await mutableSession();
   const result = await scheduleAdminPromotion(promotionId, locale, session);
+
+  if (!result.ok) return fromFailure(result.error);
+
+  revalidatePath("/admin", "layout");
+  return SUCCEEDED;
+}
+
+/**
+ * SCHEDULED -> DRAFT (DEC-070): retira de la tienda una promocion que todavia
+ * no ha abierto. Sin motivo, como programar; con confirmacion.
+ */
+export async function unschedulePromotionAction(
+  _previous: ActionResult,
+  formData: FormData,
+): Promise<ActionResult> {
+  const locale = localeFrom(formData);
+  if (locale === null) return invalid("VALIDATION_FAILED");
+
+  const promotionId = textFrom(formData, "promotion_id");
+  if (promotionId === null) return invalid("VALIDATION_FAILED");
+
+  if (!checkboxFrom(formData, "confirmed")) return invalid("CONFIRMATION_REQUIRED", "confirmed");
+
+  const session = await mutableSession();
+  const result = await unscheduleAdminPromotion(promotionId, locale, session);
 
   if (!result.ok) return fromFailure(result.error);
 

@@ -10,6 +10,7 @@ import {
   adminPromotionClosePath,
   adminPromotionPath,
   adminPromotionSchedulePath,
+  adminPromotionUnschedulePath,
   adminRulesActivatePath,
   adminRulesVersionPath,
   adminRulesVersionsPath,
@@ -446,6 +447,11 @@ export const mockRoutes: readonly MockRoute[] = [
       method: "POST",
       path: adminPromotionSchedulePath(promotion.id),
       body: { ...promotion, status: "SCHEDULED" },
+    },
+    {
+      method: "POST",
+      path: adminPromotionUnschedulePath(promotion.id),
+      body: { ...promotion, status: "DRAFT" },
     },
     {
       method: "POST",

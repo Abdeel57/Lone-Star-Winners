@@ -289,6 +289,27 @@ describe("PromotionTransitionForm", () => {
     expect(screen.queryByLabelText(/^Motivo/u)).toBeNull();
     expect(screen.getByRole("button", { name: "Programar" })).toBeInTheDocument();
   });
+
+  it("retirar de la tienda no pide motivo pero si confirmacion (DEC-070)", async () => {
+    const capture = capturing();
+    renderIn(
+      "es",
+      <PromotionTransitionForm
+        locale="es"
+        action={capture.action}
+        promotionId="prm_1"
+        transition="unschedule"
+        reasons={[]}
+      />,
+    );
+
+    expect(screen.queryByLabelText(/^Motivo/u)).toBeNull();
+    const button = screen.getByRole("button", { name: "Retirar de la tienda" });
+    // Sin marcar la casilla, el boton no se puede pulsar.
+    expect(button).toBeDisabled();
+    await userEvent.click(screen.getByRole("checkbox"));
+    expect(button).toBeEnabled();
+  });
 });
 
 describe("los dos idiomas", () => {

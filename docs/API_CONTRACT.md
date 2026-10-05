@@ -3033,6 +3033,18 @@ participaciones.
 
 200 · 401 · 403 · 404 · 409.
 
+### POST /api/v1/admin/promotions/:promotion_id/unschedule
+
+    Authorization: promotion.update
+
+Sin cuerpo. El reverso de `schedule` (DEC-070): `SCHEDULED → DRAFT`. La
+promoción deja de ser pública -`DRAFT` no está entre los estados que lista la
+tienda- y se puede volver a programar. Desde cualquier otro estado, **409
+`LIFECYCLE_REFUSED`** con el mensaje del motor. Misma capacidad que `schedule` y
+sin motivo: antes de abrir no hay participaciones que proteger.
+
+200 · 401 · 403 · 404 · 409.
+
 ### POST /api/v1/admin/promotions/:promotion_id/activate
 
     Authorization: promotion.activate   (motivo obligatorio + step-up)

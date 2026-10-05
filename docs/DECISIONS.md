@@ -3440,3 +3440,39 @@ Affected areas: `apps/web` (`promotion-hero.tsx`, `promotion-countdown.tsx`,
 
 Proposed by: sesión del usuario (2026-10-05)
 Agreed by: pendiente — frontend-ux
+
+## DEC-070
+
+Status: Proposed
+
+Date: 2026-10-05
+
+Decision:
+**Una promoción programada se puede retirar de la tienda: `SCHEDULED → DRAFT`.**
+Antes del lanzamiento había dos ediciones programadas: `invierno-2026`, de
+prueba, sin Reglas y con fechas que no coinciden con el documento, y
+`silverado-1500-2025`, la oficial. La API solo tenía rutas para programar,
+activar y cerrar, así que la de prueba no se podía quitar y seguía siendo
+pública. El usuario decidió dejar solo la oficial.
+
+1. **`POST /admin/promotions/:id/unschedule`**, con `promotion.update` y sin
+   motivo, igual que `schedule`, del que es el reverso. La transición ya existía
+   en `promotion_status_transitions`; el motor sigue decidiendo. Desde
+   cualquier otro estado responde 409 `LIFECYCLE_REFUSED`.
+2. **A borrador y no a cancelada.** `CANCELLED` está entre los estados
+   públicos, así que la tienda la seguiría listando como "Cancelada". `DRAFT`
+   no es público. Nada se borra: `lsw_app` no tiene DELETE sobre `promotions`.
+3. **En el panel**, en la tarjeta "Estado" de una promoción programada, debajo
+   de "Activar": "Retirar de la tienda", con casilla de confirmación.
+
+Alternatives:
+A — Cancelarla (descartada: seguiría siendo pública). B — Borrarla (descartada:
+las promociones son registro y la base no lo permite).
+
+Affected areas: `apps/api` (`routes/admin-catalog.ts`, `openapi/`, tests),
+`apps/web` (`promotion-transition-form.tsx`, ficha de promoción del panel,
+`actions.ts`, `resources.ts`, mocks, mensajes `admin.promotions.unschedule*`,
+tests), `docs/API_CONTRACT.md`.
+
+Proposed by: sesión del usuario (2026-10-05)
+Agreed by: pendiente — backend-sweepstakes

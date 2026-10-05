@@ -636,6 +636,46 @@ describe("POST /admin/promotions/:promotion_id/schedule", () => {
   });
 });
 
+describe("POST /admin/promotions/:promotion_id/unschedule", () => {
+  it("devuelve una promocion programada a borrador, sin motivo", async () => {
+    const calls: unknown[] = [];
+    shared.repository = {
+      setPromotionStatus: (_id: string, status: string) => {
+        calls.push(status);
+        return Promise.resolve(promotionFixture({ status: "DRAFT" }));
+      },
+    };
+
+    const app = await appAllowingPermissions();
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/v1/admin/promotions/${PROMOTION_ID}/unschedule`,
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json<{ status: string }>().status).toBe("DRAFT");
+    expect(calls).toStrictEqual(["DRAFT"]);
+  });
+
+  it("desde un estado sin esa transicion, el 409 lleva el mensaje del motor", async () => {
+    shared.repository = {
+      setPromotionStatus: () =>
+        Promise.reject(pgError("23514", "Transicion de promocion no permitida: ACTIVE -> DRAFT.")),
+    };
+
+    const app = await appAllowingPermissions();
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/v1/admin/promotions/${PROMOTION_ID}/unschedule`,
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(
+      response.json<{ error: { details: { engine: string } } }>().error.details.engine,
+    ).toContain("ACTIVE -> DRAFT");
+  });
+});
+
 describe("POST /admin/promotions/:promotion_id/activate", () => {
   it("un cerrojo del motor se traduce a 409 con SU mensaje", async () => {
     // El caso mas importante del archivo. Quien intenta activar y no puede

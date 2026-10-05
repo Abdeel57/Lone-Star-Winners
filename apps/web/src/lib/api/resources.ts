@@ -1566,6 +1566,10 @@ export function adminPromotionSchedulePath(promotionId: string): string {
   return `${adminPromotionPath(promotionId)}/schedule`;
 }
 
+export function adminPromotionUnschedulePath(promotionId: string): string {
+  return `${adminPromotionPath(promotionId)}/unschedule`;
+}
+
 export function adminPromotionActivatePath(promotionId: string): string {
   return `${adminPromotionPath(promotionId)}/activate`;
 }
@@ -1694,6 +1698,18 @@ export function scheduleAdminPromotion(
   session: SessionContext,
 ): Promise<ApiResult<AdminPromotionRow>> {
   return apiRequest<AdminPromotionRow>("POST", adminPromotionSchedulePath(promotionId), {
+    locale,
+    ...sessionOptions(session),
+  });
+}
+
+/** SCHEDULED -> DRAFT (DEC-070): la retira de la tienda. Sin motivo, como programar. */
+export function unscheduleAdminPromotion(
+  promotionId: string,
+  locale: Locale,
+  session: SessionContext,
+): Promise<ApiResult<AdminPromotionRow>> {
+  return apiRequest<AdminPromotionRow>("POST", adminPromotionUnschedulePath(promotionId), {
     locale,
     ...sessionOptions(session),
   });
