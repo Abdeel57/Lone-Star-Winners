@@ -28,7 +28,7 @@ import {
   loginStaff,
   waitForNextTotpWindow,
 } from "../lib/actions.mjs";
-import { PARTICIPANT_EMAIL, PRODUCT_SLUG, readFixture } from "../lib/fixture.mjs";
+import { API_BASE_URL, PARTICIPANT_EMAIL, readFixture } from "../lib/fixture.mjs";
 
 let fixture;
 
@@ -45,15 +45,44 @@ test.describe.serial("pago en efectivo en un punto de venta", () => {
   }) => {
     await loginParticipant(page, PARTICIPANT_EMAIL);
 
-    await page.goto(`/es/products/${PRODUCT_SLUG}`);
-    await page.getByRole("button", { name: "Añadir al carrito" }).click();
-    await expect(page.getByText("Añadido a tu carrito.")).toBeVisible();
+    /*
+     * EL CARRITO SE PREPARA POR LA API, NO POR LA FICHA DE PRODUCTO.
+     *
+     * Persiste entre specs (el 09 deja un paquete y una camiseta), asi que se
+     * vacia para que el pedido sea UNA camiseta de $25. Y se llena por la API
+     * porque lo que se prueba aqui es el efectivo, no el boton de anadir: ese
+     * lo cubre `04-cart-checkout`. En CI, un clic en "Anadir al carrito" justo
+     * despues de `goto`, antes de hidratar, se perdia sin dejar rastro; por la
+     * API, un rechazo sale con su codigo en el mensaje del fallo.
+     */
+    const current = await page.request.get(`${API_BASE_URL}/cart`);
+    if (current.ok()) {
+      for (const line of (await current.json()).lines ?? []) {
+        await page.request.delete(`${API_BASE_URL}/cart/items/${line.id}`);
+      }
+    }
+    const added = await page.request.post(`${API_BASE_URL}/cart/items`, {
+      data: { variant_id: fixture.product.variantId, quantity: 1 },
+    });
+    expect(added.status(), await added.text()).toBe(200);
 
     await page.goto("/es/checkout");
 
     // Las dos formas de pagar estan a la vista; se elige la de efectivo.
     await expect(page.getByText("Tarjeta", { exact: true })).toBeVisible();
-    await page.getByText("Efectivo en punto de venta", { exact: true }).click();
+
+    /*
+     * El boton cambia de texto con el estado de React. Un clic antes de
+     * hidratar marca el radio nativo pero puede no llegar al estado, y volver
+     * a pulsar la misma opcion ya no dispara `change`: por eso se alterna con
+     * tarjeta hasta que el boton de efectivo aparece.
+     */
+    const cashButton = page.getByRole("button", { name: "Hacer el pedido y pagar en efectivo" });
+    await expect(async () => {
+      await page.getByText("Tarjeta", { exact: true }).click();
+      await page.getByText("Efectivo en punto de venta", { exact: true }).click();
+      await expect(cashButton).toBeVisible({ timeout: 2_000 });
+    }).toPass({ timeout: 30_000 });
 
     await page.locator('input[name="full_name"]').fill("Participante E2E");
     await page.locator('input[name="line1"]').fill("1 Fixture Street");
@@ -62,7 +91,7 @@ test.describe.serial("pago en efectivo en un punto de venta", () => {
     await page.locator('input[name="postal_code"]').fill("73301");
     await page.locator('input[name="country"]').fill("US");
 
-    await page.getByRole("button", { name: "Hacer el pedido y pagar en efectivo" }).click();
+    await cashButton.click();
 
     await page.waitForURL(/\/es\/orders\/[^/]+\/confirmation/, { timeout: 30_000 });
     await expectNoApiErrorState(page);
