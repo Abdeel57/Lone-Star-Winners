@@ -185,8 +185,9 @@ describe("PromotionHero en los nueve estados", () => {
       "href",
       "#packages",
     );
-    // El descargo de participaciones sigue, ahora en la letra pequena.
-    expect(screen.getByText(esMessages.home.entriesDisclaimer)).toBeInTheDocument();
+    // La linea legal sigue; el descargo que la repetia se retiro (DEC-077).
+    expect(screen.getByText(esMessages.home.hero.legalRules, { exact: false })).toBeInTheDocument();
+    expect(screen.queryByText(esMessages.home.entriesDisclaimer)).toBeNull();
   });
 
   it("antes de abrir, el boton no baja a los paquetes aunque se le pida", () => {
@@ -715,7 +716,8 @@ describe("PromotionHero sin Reglas Oficiales publicadas (DEC-044)", () => {
     );
 
     expect(screen.getByText(esMessages.home.hero.win)).toBeInTheDocument();
-    expect(screen.getByText(esMessages.home.eyebrow)).toBeInTheDocument();
+    // El chip de estado; el antetitulo que lo repetia se retiro (DEC-077).
+    expect(screen.getByText(esMessages.promotionStatus.ACTIVE)).toBeInTheDocument();
     expect(screen.getByText(esMessages.countdown.closesIn)).toBeInTheDocument();
     expect(screen.getByText(/10,000/)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: esMessages.home.hero.shopNow })).toHaveAttribute(

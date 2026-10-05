@@ -3749,3 +3749,48 @@ Affected areas: `apps/web` (`coming-soon-band.tsx`, `scroll-reveal.tsx`,
 
 Proposed by: sesión del usuario (2026-10-05)
 Agreed by: pendiente — frontend-ux
+
+## DEC-077
+
+Status: Proposed
+
+Date: 2026-10-05
+
+Decision:
+**Menos texto en la portada: fuera las repeticiones.** El usuario pidió una
+página menos densa. En teléfono pasa de 690 a 476 palabras y unos 560 px menos
+de alto.
+
+1. **"Conforme a las Reglas Oficiales" se dice UNA vez cerca de la compra**: la
+   línea legal del hero con su enlace. Salen las copias:
+   - el descargo bajo esa línea;
+   - la coletilla de la entradilla de paquetes y la de la cinta;
+   - la segunda frase de la nota de la oferta (que queda en "Cifras
+     informativas: mandan las Reglas Oficiales");
+   - la línea "Cada promoción se rige por sus propias Reglas Oficiales" del pie,
+     que repetía el bloque de Reglas de justo encima, ahora en una frase.
+
+   AMOE y "No se requiere compra" no cambian (DEC-042).
+
+2. **Hero:**
+   - sale el antetítulo "Promoción vigente", que repetía el chip "Abierta";
+   - salen las tasas, que la banda dorada dice debajo;
+   - el plazo va en formato corto ("8 nov 2026, 11:59 p.m. CST",
+     `formatZonedDeadline`), misma zona legal (DEC-011).
+3. **Paquetes:**
+   - sale el chip "30 participaciones", que repetía la cifra del talón;
+   - nombre y precio en una línea ("Paquete Bronce · $15.00"), con el nombre
+     completo para lectores de pantalla;
+   - entradilla "Elige tu nivel." y sin antetítulo.
+4. **Mercancía destacada:** solo titular y "Ver todo".
+5. **La insignia "Sin promoción" ya no sale cuando la API no publica
+   `entry_eligibility`.** El campo AUSENTE no es `null`: decía "ahora mismo no
+   hay ninguna promoción abierta" con la promoción abierta. Con `null` (dato del
+   contrato) se sigue pintando.
+
+Affected areas: `apps/web` (`promotion-hero.tsx`, `entry-package-band.tsx`,
+`product-card.tsx`, `site-footer.tsx`, portada, `i18n/formatters.ts`, mensajes
+`entryOffer`, `entryPackages`, `marquee`, `footer`, `home.comingSoon`, tests).
+
+Proposed by: sesión del usuario (2026-10-05)
+Agreed by: pendiente — frontend-ux

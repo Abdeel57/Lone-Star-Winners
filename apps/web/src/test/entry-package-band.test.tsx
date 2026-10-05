@@ -71,8 +71,10 @@ describe("EntryPackageBand", () => {
     renderIn("es", <EntryPackageBand packages={PACKAGES} locale="es" bonus={BONUS} />);
 
     expect(screen.getAllByRole("listitem")).toHaveLength(4);
-    // `entries_now` con el 5X vigente: 100 para el paquete de $10.
-    expect(within(pass(0)).getByText("100 participaciones")).toBeInTheDocument();
+    // `entries_now` con el 5X vigente: 100 para el paquete de $10, en el talon
+    // del pase. El chip que la repetia debajo se retiro (DEC-077).
+    expect(within(pass(0)).getByText("100")).toBeInTheDocument();
+    expect(within(pass(0)).queryByText("100 participaciones")).toBeNull();
     expect(within(pass(0)).getByText("Bonus 5X")).toBeInTheDocument();
   });
 

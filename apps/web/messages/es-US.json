@@ -244,8 +244,8 @@
     "fallback": "Límite aplicado"
   },
   "entryOffer": {
-    "governedNote": "Las cantidades de participaciones las calculan nuestros sistemas y se rigen por las Reglas Oficiales. Las cifras que se muestran aquí son informativas.",
-    "heading": "Participaciones en esta promoción",
+    "governedNote": "Cifras informativas: mandan las Reglas Oficiales.",
+    "heading": "Participaciones",
     "rulesPending": "La oferta de participaciones de esta promoción la fijan sus Reglas Oficiales, que todavía no se han publicado.",
     "rateMerchandise": "{entries} {count, plural, one {participación por cada} other {participaciones por cada}} {amount} de mercancía elegible.",
     "ratePackage": "{entries} {count, plural, one {participación por cada} other {participaciones por cada}} {amount} de un paquete de participaciones.",
@@ -304,10 +304,9 @@
   },
   "footer": {
     "copyright": "© {year} Lone Star Winners",
-    "legalNote": "Cada promoción se rige por sus propias Reglas Oficiales.",
     "mockDataNotice": "Compilación de desarrollo. Los datos de esta página vienen de una API simulada y no son reales.",
     "help": "Ayuda",
-    "rulesBlockBody": "Cada promoción de este sitio se rige por sus propias Reglas Oficiales. Ese documento indica quién puede participar, cómo se otorgan las participaciones y cómo se selecciona a un ganador.",
+    "rulesBlockBody": "Quién puede participar, cómo se otorgan las participaciones y cómo se elige al ganador.",
     "rulesBlockCta": "Leer las Reglas Oficiales",
     "country": "Estados Unidos"
   },
@@ -354,12 +353,12 @@
     "comingSoon": {
       "eyebrow": "Próximamente",
       "title": "LSW Cap",
-      "lead": "La gorra oficial de Lone Star Winners llega en siete colores. Muy pronto en la tienda.",
+      "lead": "Siete colores. Muy pronto en la tienda.",
       "backdrop": "Coming soon",
       "badge": "Pronto",
-      "hint": "Desliza para ver los siete colores",
+      "hint": "Desliza para ver más",
       "imageAlt": "Gorra LSW Cap en color {color}",
-      "note": "Precio y fecha de lanzamiento por anunciar.",
+      "note": "Precio y fecha por anunciar.",
       "cta": "Ver la tienda",
       "colors": {
         "black": "Negro",
@@ -621,7 +620,7 @@
   },
   "marquee": {
     "item1": "Mercancía elegible",
-    "item2": "Participaciones promocionales conforme a las Reglas Oficiales",
+    "item2": "Participaciones promocionales",
     "item3": "Lone Star Winners"
   },
   "promotionProgress": {
@@ -638,7 +637,7 @@
   "entryPackages": {
     "eyebrow": "Lone Star Winners",
     "title": "Paquetes de participaciones",
-    "lead": "Elige tu nivel. Cada paquete indica las participaciones que incluye, que se otorgan conforme a las Reglas Oficiales de la promoción vigente.",
+    "lead": "Elige tu nivel.",
     "recommended": "Recomendado",
     "entriesChip": "{entries} participaciones",
     "entriesLabel": "Participaciones",
@@ -650,7 +649,7 @@
     "signIn": "Inicia sesión para añadirlo",
     "soldOut": "Agotado",
     "viewLabel": "Ver los detalles de {name}",
-    "scrollHint": "Desliza para ver todos los niveles"
+    "scrollHint": "Desliza para ver más"
   },
   "auth": {
     "register": {

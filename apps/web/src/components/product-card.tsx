@@ -478,7 +478,17 @@ function PackageBonusLine({
 function EligibilityBadge({ product }: { readonly product: ProductSummary }) {
   const t = useTranslations("shop");
 
-  const eligibility = product.entry_eligibility ?? null;
+  const eligibility = product.entry_eligibility;
+
+  /*
+   * CAMPO AUSENTE: no se dice nada (DEC-077).
+   *
+   * `null` es un dato -"no hay promocion que evaluar"- y se pinta como tal.
+   * Pero si la API no publica el campo, no se sabe nada, y la insignia de
+   * "Sin promocion" afirmaba que no habia ninguna abierta cuando si la habia.
+   * Callar es lo unico cierto.
+   */
+  if (eligibility === undefined) return null;
 
   if (eligibility === null) {
     return (

@@ -377,11 +377,11 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
             /* El "ver todo" a la derecha del titular no se compone aqui: es una
                prop de `SectionHeading`, para que todas las secciones con accion
                lo alineen igual (a la base del titular, no a su centro). */
+            // DEC-077: solo el titular y "Ver todo"; el antetitulo y la
+            // entradilla repetian lo que el titular ya dice.
             <SectionHeading
               id="featured"
-              eyebrow={t("home.featured.eyebrow")}
               title={t("home.featured.title")}
-              lead={t("home.featured.body")}
               size="lg"
               tone="light"
               action={

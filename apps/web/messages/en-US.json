@@ -244,8 +244,8 @@
     "fallback": "Limit applied"
   },
   "entryOffer": {
-    "governedNote": "Entry amounts are calculated by our systems and governed by the Official Rules. The figures shown here are informational.",
-    "heading": "Entries in this promotion",
+    "governedNote": "Figures are informational; the Official Rules govern.",
+    "heading": "Entries",
     "rulesPending": "The entry offer for this promotion is set by its Official Rules, which have not been published yet.",
     "rateMerchandise": "{entries} {count, plural, one {entry for every} other {entries for every}} {amount} of eligible merchandise.",
     "ratePackage": "{entries} {count, plural, one {entry for every} other {entries for every}} {amount} of an entry package.",
@@ -304,10 +304,9 @@
   },
   "footer": {
     "copyright": "© {year} Lone Star Winners",
-    "legalNote": "Each promotion is governed by its own Official Rules.",
     "mockDataNotice": "Development build. The data on this page comes from a simulated API and is not real.",
     "help": "Help",
-    "rulesBlockBody": "Every promotion on this site is governed by its own Official Rules. That document states who may take part, how entries are awarded and how a winner is selected.",
+    "rulesBlockBody": "Who may take part, how entries are awarded and how the winner is chosen.",
     "rulesBlockCta": "Read the Official Rules",
     "country": "United States"
   },
@@ -354,12 +353,12 @@
     "comingSoon": {
       "eyebrow": "Coming soon",
       "title": "LSW Cap",
-      "lead": "The official Lone Star Winners cap is coming in seven colors. Soon in the shop.",
+      "lead": "Seven colors. Coming soon to the shop.",
       "backdrop": "Coming soon",
       "badge": "Soon",
-      "hint": "Swipe to see all seven colors",
+      "hint": "Swipe to see more",
       "imageAlt": "LSW Cap in {color}",
-      "note": "Price and release date to be announced.",
+      "note": "Price and date to be announced.",
       "cta": "View the shop",
       "colors": {
         "black": "Black",
@@ -621,7 +620,7 @@
   },
   "marquee": {
     "item1": "Eligible merchandise",
-    "item2": "Promotional entries under the Official Rules",
+    "item2": "Promotional entries",
     "item3": "Lone Star Winners"
   },
   "promotionProgress": {
@@ -638,7 +637,7 @@
   "entryPackages": {
     "eyebrow": "Lone Star Winners",
     "title": "Entry packages",
-    "lead": "Choose your level. Each package states the entries it includes, awarded under the Official Rules of the current promotion.",
+    "lead": "Choose your level.",
     "recommended": "Recommended",
     "entriesChip": "{entries} entries",
     "entriesLabel": "Entries",
@@ -650,7 +649,7 @@
     "signIn": "Sign in to add it",
     "soldOut": "Sold out",
     "viewLabel": "View the {name} details",
-    "scrollHint": "Swipe to see every level"
+    "scrollHint": "Swipe to see more"
   },
   "auth": {
     "register": {

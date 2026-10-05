@@ -182,11 +182,11 @@ export function EntryPackageBand({
       className={cn("lsw-band-light scroll-mt-16 py-s12 lg:scroll-mt-20 lg:py-s16", className)}
     >
       <div className="lsw-container">
+        {/* DEC-077: sin antetitulo y con una entradilla de tres palabras. */}
         <header data-reveal className="mx-auto max-w-narrow text-center">
-          <p className="lsw-eyebrow text-light-gold">{t("eyebrow")}</p>
           <h2
             id={labelledBy}
-            className="lsw-headline mt-s2 text-display-md text-light-text sm:text-display-lg"
+            className="lsw-headline text-display-md text-light-text sm:text-display-lg"
           >
             {t("title")}
           </h2>
@@ -410,41 +410,35 @@ function PackagePass({
         />
       </div>
 
-      {/* Bajo el pase, como la referencia: cifra y bonus, nombre, precio, boton. */}
+      {/* Bajo el pase: nombre y precio en UNA linea, y el boton (DEC-077). La
+          cifra ya esta en el talon del pase; el chip que la repetia se retira y
+          solo queda el del bonus, que es informacion nueva. */}
       <div className="mt-s4 flex flex-1 flex-col">
-        {entriesShown === null && multiplier === null ? null : (
-          <div className="flex flex-wrap gap-s2">
-            {entriesShown === null ? null : (
-              <span
-                className={cn(
-                  "lsw-display rounded-sm px-s2 py-[3px] text-caption italic text-white",
-                  tier.chip,
-                )}
-              >
-                {t("entriesChip", { entries: formatEntryCount(entriesShown, locale) })}
-              </span>
-            )}
-            {multiplier === null ? null : (
-              <span className="lsw-display rounded-sm bg-accent px-s2 py-[3px] text-caption italic text-on-accent">
-                {t("bonusChip", { multiplier })}
-              </span>
-            )}
-          </div>
+        {multiplier === null ? null : (
+          <span className="lsw-display self-start rounded-sm bg-accent px-s2 py-[3px] text-caption italic text-on-accent">
+            {t("bonusChip", { multiplier })}
+          </span>
         )}
 
-        <h3 className="mt-s2 text-heading-sm font-bold text-light-text">
-          <Link
-            href={`/products/${product.slug}`}
-            className="hover:text-light-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-light-gold"
-          >
-            {name}
-            <span className="sr-only">{t("viewLabel", { name })}</span>
-          </Link>
-        </h3>
+        <div className="mt-s2 flex items-baseline justify-between gap-s3">
+          <h3 className="min-w-0 text-heading-sm font-bold text-light-text">
+            <Link
+              href={`/products/${product.slug}`}
+              className="hover:text-light-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-light-gold"
+            >
+              {/* A la vista, solo el nivel -la cifra esta en el pase-; al oido,
+                  el nombre completo. */}
+              <span aria-hidden="true">{title}</span>
+              <span className="sr-only">{t("viewLabel", { name })}</span>
+            </Link>
+          </h3>
 
-        {price === null ? null : (
-          <p className="mt-s1 text-body-md tabular-nums text-light-text-muted">{price}</p>
-        )}
+          {price === null ? null : (
+            <p className="shrink-0 font-headline text-heading-sm font-extrabold italic tabular-nums text-light-text">
+              {price}
+            </p>
+          )}
+        </div>
 
         <div className="mt-auto pt-s3">
           {onlyVariant === undefined ? (

@@ -186,6 +186,33 @@ export function formatZonedDateTime(
 }
 
 /**
+ * Un plazo en una linea corta: "8 nov 2026, 11:59 p.m. CST" (DEC-077).
+ *
+ * Mismo instante y misma zona legal que `formatZonedDateTime` (DEC-011), sin
+ * segundos ni mes largo: es la linea bajo el marcador del hero, y el formato
+ * largo ocupaba dos lineas en telefono para decir lo mismo. Se piden los campos
+ * uno a uno porque `timeZoneName` no se puede combinar con `dateStyle`.
+ */
+export function formatZonedDeadline(
+  isoInstant: string,
+  locale: Locale,
+  timeZone: string,
+): string | null {
+  const date = toDate(isoInstant);
+  if (date === null) return null;
+
+  return new Intl.DateTimeFormat(localeTag(locale), {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZoneName: "short",
+    timeZone,
+  }).format(date);
+}
+
+/**
  * Convierte un valor del contrato en una fecha, o `null`.
  *
  * NO se hace `new Date(value)` a secas. `new Date(null)` devuelve la epoca -1

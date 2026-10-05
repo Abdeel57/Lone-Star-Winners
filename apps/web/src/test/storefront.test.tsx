@@ -139,6 +139,18 @@ describe("ProductCard", () => {
     expect(screen.queryByText(enMessages.shop.notEligibleBadge)).not.toBeInTheDocument();
   });
 
+  it("si la API no publica la elegibilidad, la tarjeta no afirma nada (DEC-077)", () => {
+    // `null` es un dato ("no hay promocion"); el campo AUSENTE no lo es. La
+    // insignia "Sin promocion" decia que no habia ninguna abierta cuando si la
+    // habia.
+    const { entry_eligibility: _omitted, ...withoutField } = summaryOf(eligibleProduct);
+    renderIn("es", <ProductCard product={withoutField} locale="es" />);
+
+    expect(screen.queryByText(esMessages.shop.eligibilityUnknown)).toBeNull();
+    expect(screen.queryByText(esMessages.shop.eligibleBadge)).toBeNull();
+    expect(screen.queryByText(esMessages.shop.notEligibleBadge)).toBeNull();
+  });
+
   it("un articulo agotado lo dice, en los dos idiomas", () => {
     for (const locale of ["en", "es"] as const) {
       const view = renderIn(

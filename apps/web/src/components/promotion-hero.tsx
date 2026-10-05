@@ -1,9 +1,9 @@
-import { Badge, buttonVariants, cn } from "@lsw/ui";
+import { buttonVariants, cn } from "@lsw/ui";
 import Image from "next/image";
 import { useTranslations } from "next-intl";
 import type { CSSProperties, ReactNode } from "react";
 
-import { formatEntryCount, formatZonedDateTime } from "@/i18n/formatters";
+import { formatEntryCount, formatZonedDeadline } from "@/i18n/formatters";
 import type { Locale } from "@/i18n/locales";
 import { Link } from "@/i18n/navigation";
 import { usePromotionNoticeText } from "@/i18n/promotion-labels";
@@ -14,7 +14,6 @@ import { presentPromotion } from "@/lib/promotion-state";
 
 import { BonusAnnouncement } from "./bonus-announcement";
 import { HeroCarousel, type HeroSlide } from "./hero-carousel";
-import { RateList } from "./entry-rate-lines";
 import { PromotionCountdown } from "./promotion-countdown";
 import { PromotionStatusBadge } from "./promotion-status-badge";
 
@@ -211,13 +210,11 @@ export function PromotionHero({
       : presentation.countdownTarget === "ends_at"
         ? promotion.ends_at
         : null;
+  // DEC-077: formato corto -"8 nov 2026, 11:59 p.m. CST"-, sin segundos.
   const deadlineText =
     deadlineIso === null
       ? null
-      : formatZonedDateTime(deadlineIso, locale, {
-          timeZone: promotion.legal_timezone,
-          showTimeZoneName: true,
-        });
+      : formatZonedDeadline(deadlineIso, locale, promotion.legal_timezone);
   const deadline =
     deadlineIso === null || deadlineText === null
       ? null
@@ -573,12 +570,8 @@ export function PromotionHero({
                   shape="square"
                 />
 
-                {/* Antetitulo en ROJO (DEC-042). Es copy de producto -no dice
-                    nada de la promocion que el chip de al lado no diga- y por
-                    eso puede llevar el color de atencion sin afirmar nada. */}
-                <Badge tone="accent" emphasis="subtle" shape="square" size="sm">
-                  {t("eyebrow")}
-                </Badge>
+                {/* Aqui iba el antetitulo "Promocion vigente" (DEC-042). Se
+                    retira con DEC-077: repetia el chip de al lado. */}
               </div>
             )}
 
@@ -662,26 +655,9 @@ export function PromotionHero({
               </p>
             )}
 
-            {/* Las TASAS, en el hero y no solo en el panel de oferta. Es lo
-                primero que alguien quiere saber al llegar -que da cada dolar-
-                y, con dos tipos de producto, decirlo solo en el panel de mas
-                abajo dejaba la portada sin la mitad de la respuesta.
-
-                Cae igual con el estado contenido, y por el mismo motivo que el
-                tope: son las cifras mas concretas que la promocion declara.
-
-                DEC-071: solo desde tableta. En telefono el panel de oferta va
-                justo debajo de los paquetes con las mismas dos cifras en
-                grande, y aqui eran tres lineas entre el titular y el boton. */}
-            {!showsPromotionalHero || offer === null || offer.rates.length === 0 ? null : (
-              <div className="hidden sm:block">
-                <RateList
-                  rates={offer.rates}
-                  locale={locale}
-                  className="mt-s4 max-w-narrow text-text-muted"
-                />
-              </div>
-            )}
+            {/* Aqui iban las TASAS. DEC-071 las dejo solo en escritorio y
+                DEC-077 las retira: la banda dorada de la portada, justo debajo
+                de los paquetes, dice las mismas dos cifras en grande. */}
 
             {/* El lema, en la italica gruesa de la referencia ("+ A $40,000
                 CHECK"). Es texto del panel; aqui solo se le da voz. */}
@@ -866,8 +842,8 @@ export function PromotionHero({
              * Sin version de reglas publicada (DEC-012) no hay enlace, porque
              * llevaria a un 404; la nota de mas arriba lo explica.
              *
-             * DEC-069: debajo, en la misma letra pequena, el descargo de
-             * participaciones que antes ocupaba un recuadro propio.
+             * DEC-069 puso debajo el descargo de participaciones; DEC-077 lo
+             * retira: decia lo mismo que "Sujeto a las Reglas Oficiales".
              */}
             <p className="mt-s5 max-w-narrow text-center text-caption italic text-text-subtle sm:text-left">
               {amoeEnabled ? t("hero.legalAmoe") : t("hero.legalRules")}
@@ -886,9 +862,6 @@ export function PromotionHero({
                   </Link>
                 </>
               ) : null}
-            </p>
-            <p className="mt-s1 max-w-narrow text-center text-caption text-text-subtle sm:text-left">
-              {t("entriesDisclaimer")}
             </p>
 
             {/*

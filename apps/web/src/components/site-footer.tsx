@@ -157,8 +157,9 @@ export async function SiteFooter({ showMockNotice }: { readonly showMockNotice: 
             </div>
 
             <div className="flex flex-col gap-s2 text-body-sm text-text-muted">
-              <p>{t("footer.legalNote")}</p>
-
+              {/* Aqui iba "Cada promocion se rige por sus propias Reglas
+                  Oficiales": el bloque de Reglas de justo encima ya lo dice
+                  (DEC-077). */}
               <address className="not-italic">
                 {BUSINESS_CONTACT.legalName} · {BUSINESS_CONTACT.street},{" "}
                 {BUSINESS_CONTACT.cityStateZip}
