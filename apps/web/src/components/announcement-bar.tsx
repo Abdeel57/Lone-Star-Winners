@@ -251,7 +251,7 @@ export function AnnouncementBand({
       className={cn(
         // ROJA (DEC-042). Es la franja de la referencia, y el unico sitio del
         // sitio donde el rojo hace de fondo a todo lo ancho. El texto va en
-        // `on-accent` -blanco puro- y mide 5,49:1 sobre el relleno.
+        // `on-accent` -blanco puro- y mide 4,99:1 sobre el relleno (DEC-074).
         //
         // El patron topografico va en su tinta NEGRA: el dorado, calibrado para
         // superficies casi negras, sobre este rojo no se ve.

@@ -77,7 +77,7 @@ describe("Button variante accent", () => {
     const className = buttonVariants({ variant: "accent" });
 
     expect(className).toContain("bg-accent");
-    // `text-on-accent` es blanco PURO y mide 5,49:1 sobre #cf1a22. Un
+    // `text-on-accent` es blanco PURO y mide 4,99:1 sobre #e10012. Un
     // `text-text` (blanco calido) o un `text-inverse` (casi negro) aqui serian
     // el mismo boton con otro contraste, y uno de los dos falla AA.
     expect(className).toContain("text-on-accent");

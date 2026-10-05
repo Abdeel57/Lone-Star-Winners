@@ -71,7 +71,7 @@ export function PromotionProgress({
           que con el tiempo real transcurrido. */}
       <div
         aria-hidden="true"
-        className="lsw-stripes lsw-stripes-moving h-full rounded-pill shadow-[0_0_18px_rgb(229_34_42/0.55)]"
+        className="lsw-stripes lsw-stripes-moving h-full rounded-pill shadow-[0_0_18px_rgb(234_8_22/0.55)]"
         style={{ width: `${String(percentOfHundred)}%` }}
       />
     </div>

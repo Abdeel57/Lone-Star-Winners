@@ -174,13 +174,12 @@
    * fragmento destacado del titular del hero, que la referencia pinta en rojo
    * degradado con luz. Y por el mismo motivo, el `color` de respaldo se declara
    * ANTES y sin condicion: si el navegador no soporta `background-clip: text`,
-   * el texto queda en rojo plano y legible (6,10:1 sobre la pagina), nunca
+   * el texto queda en rojo plano y legible (5,60:1 sobre la pagina), nunca
    * transparente.
    *
-   * Los tres escalones del degradado son los tres rojos claros del sistema, y
-   * el mas oscuro de ellos -`accent-hover`, #e5222a- mide 4,38:1 sobre la
-   * pagina: por encima del 3:1 que WCAG pide a un texto de este tamano y por
-   * encima incluso del minimo de texto normal.
+   * Los escalones del degradado son los rojos claros del sistema, y el mas
+   * oscuro de ellos -`accent-hover`, #ea0816 desde DEC-074- mide 4,33:1 sobre
+   * la pagina: por encima del 3:1 que WCAG pide a un texto de este tamano.
    * ---------------------------------------------------------------------- */
   .lsw-accent-sheen {
     color: rgb(var(--lsw-color-accent-text));
@@ -622,6 +621,56 @@
       rgb(var(--lsw-color-light-surface)) 0%,
       rgb(var(--lsw-color-light-surface-sunken)) 72%
     );
+  }
+
+  /* -------------------------------------------------------------------------
+   * Fundido de la foto del hero con el fondo (DEC-074)
+   *
+   * La foto se DESVANECE (mascara) en vez de fundirse a negro liso. El fondo
+   * del hero (`.lsw-atmosphere`) lleva textura, luz dorada y un negro un punto
+   * mas claro arriba: un degradado a `bg` plano terminaba en una linea recta
+   * donde acababa la foto. Con la mascara, el borde de la foto es transparente
+   * y lo que hay detras es el propio fondo, sea cual sea.
+   *
+   * La curva va por escalones, no en linea recta: un fundido lineal se lee
+   * como una banda gris. En telefono funde el ultimo 40% (el titular entra
+   * sobre esa parte); en escritorio, ademas, el borde izquierdo de DEC-068. Las
+   * dos mascaras se INTERSECAN: cada pixel se queda con la mas transparente.
+   *
+   * Los degradados oscuros de encima siguen dentro de la foto y se desvanecen
+   * con ella: el contraste del titular medido en DEC-042 no empeora, porque lo
+   * que asoma por debajo es el negro del fondo, no la foto.
+   * ---------------------------------------------------------------------- */
+  .lsw-hero-photo-fade {
+    -webkit-mask-image: linear-gradient(
+      to bottom,
+      #000 60%,
+      rgb(0 0 0 / 0.82) 70%,
+      rgb(0 0 0 / 0.5) 80%,
+      rgb(0 0 0 / 0.2) 90%,
+      transparent 100%
+    );
+    mask-image: linear-gradient(
+      to bottom,
+      #000 60%,
+      rgb(0 0 0 / 0.82) 70%,
+      rgb(0 0 0 / 0.5) 80%,
+      rgb(0 0 0 / 0.2) 90%,
+      transparent 100%
+    );
+  }
+
+  @media (min-width: 1024px) {
+    .lsw-hero-photo-fade {
+      -webkit-mask-image:
+        linear-gradient(to right, transparent, #000 24%),
+        linear-gradient(to bottom, #000 72%, rgb(0 0 0 / 0.55) 86%, transparent 100%);
+      -webkit-mask-composite: source-in;
+      mask-image:
+        linear-gradient(to right, transparent, #000 24%),
+        linear-gradient(to bottom, #000 72%, rgb(0 0 0 / 0.55) 86%, transparent 100%);
+      mask-composite: intersect;
+    }
   }
 
   /* -------------------------------------------------------------------------

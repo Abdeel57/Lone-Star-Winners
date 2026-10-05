@@ -93,8 +93,8 @@ const badgeVariants = cva(
         surface: "dark",
         class: "border-brand/50 bg-brand/12 text-brand",
       },
-      // DEC-042: `accent` es rojo. El TEXTO va en `accent-text` (#ff4d47,
-      // 6,10:1 sobre la pagina) y no en `accent` (#cf1a22, 3,64:1): el relleno
+      // DEC-042: `accent` es rojo. El TEXTO va en `accent-text` (#ff3838,
+      // 5,60:1 sobre la pagina) y no en `accent` (#e10012, 4,01:1): el relleno
       // y la tinta son dos escalones distintos del mismo color por la misma
       // razon por la que lo son en el oro.
       {
@@ -204,9 +204,9 @@ const badgeVariants = cva(
       },
       // DEC-042. El par rojo de la banda clara, medido igual que los otros:
       //   accent subtle  texto #bf1620 sobre lavado    5,9:1
-      //   accent solid   texto #ffffff sobre #cf1a22   5,5:1
+      //   accent solid   texto #ffffff sobre #e10012   5,0:1
       // La tinta es `light-accent` y no `accent-text`: ese ultimo esta
-      // calibrado sobre negro y aqui daria 2,5:1. Es la misma sustitucion que
+      // calibrado sobre negro y aqui daria 3,4:1. Es la misma sustitucion que
       // hace `light-gold` con el oro de marca.
       {
         tone: "accent",
@@ -223,7 +223,7 @@ const badgeVariants = cva(
         surface: "light",
         class: "border-light-gold bg-brand text-on-brand",
       },
-      // El relleno rojo es el MISMO sobre las dos bandas (#cf1a22 recorta
+      // El relleno rojo es el MISMO sobre las dos bandas (#e10012 recorta
       // igual sobre blanco que sobre negro) y por eso aqui no cambia; lo que
       // cambia es el contorno, que pasa al rojo de tinta para que el chip no
       // quede flotando sobre una fotografia de estudio claro.

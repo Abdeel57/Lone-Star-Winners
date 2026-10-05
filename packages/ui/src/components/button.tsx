@@ -34,8 +34,9 @@ export const buttonVariants = cva(
     // accesible que anuncia un lector de pantalla sigue siendo el texto
     // traducido tal cual llego del diccionario.
     // DEC-068: en la letra de titular -Saira gruesa en italica-, la de las
-    // referencias de carreras que eligio el cliente.
-    "rounded-md font-headline font-extrabold italic uppercase tracking-[0.03em]",
+    // referencias de carreras que eligio el cliente. DEC-074: en su peso
+    // maximo (900), el mismo del titular del hero, y un punto mas apretada.
+    "rounded-md font-headline font-black italic uppercase tracking-[0.02em]",
     "transition-[background-color,border-color,color,box-shadow,transform] duration-fast ease-standard",
     "active:translate-y-px",
     FOCUS_VISIBLE_CLASSES,
@@ -83,12 +84,12 @@ export const buttonVariants = cva(
          *
          * CONTRASTES MEDIDOS
          * ------------------
-         * Relleno #cf1a22 con `on-accent` (blanco puro) encima: 5,49:1, por
-         * encima del 4,5:1 de AA. En hover aclara a #e5222a y sigue en 4,57:1
-         * -ese es el techo, y el motivo de que el rojo no sea el de la
-         * referencia (#e8232a da 4,46:1)-. El pulsado oscurece a #b3121a
-         * (6,96:1), al reves que `primary`, porque por arriba ya no queda
-         * margen sin romper el texto.
+         * Relleno #e10012 (rojo puro, DEC-074) con `on-accent` (blanco puro)
+         * encima: 4,99:1, por encima del 4,5:1 de AA. En hover aclara a #ea0816
+         * y sigue en 4,62:1 -ese es el techo, y el motivo de que el rojo no sea
+         * el de la referencia (#e8232a da 4,46:1)-. El pulsado oscurece a
+         * #c0000c (6,47:1), al reves que `primary`, porque por arriba ya no
+         * queda margen sin romper el texto.
          *
          * EL ANILLO DE FOCO ES EL DEL SISTEMA, Y NO SE REASIGNA.
          * `ink` e `inkGhost` tuvieron que cambiarlo porque su relleno es blanco
@@ -110,8 +111,11 @@ export const buttonVariants = cva(
           // DEC-068: volumen y resplandor rojo, como el "ENTER NOW" de la
           // referencia. La capa es casi transparente en el centro (donde va el
           // texto), asi que los contrastes medidos arriba siguen valiendo.
-          "bg-gradient-to-b from-white/[0.08] via-white/0 to-black/20",
-          "shadow-[0_12px_30px_-12px_rgb(207_26_34/0.95)] hover:shadow-[0_16px_38px_-10px_rgb(229_34_42/0.95)]",
+          // DEC-074: la sombra del pie baja a la mitad -oscurecia el rojo y lo
+          // hacia ver apagado- y el resplandor crece.
+          "bg-gradient-to-b from-white/[0.1] via-white/0 to-black/10",
+          "shadow-[0_10px_34px_-10px_rgb(225_0_18/0.9)] hover:shadow-[0_14px_42px_-8px_rgb(234_8_22/0.95)]",
+          "[text-shadow:0_1px_1px_rgb(0_0_0/0.25)]",
           SHINE,
         ),
         /**
@@ -174,14 +178,21 @@ export const buttonVariants = cva(
         sm: "h-control-sm px-3 text-body-sm",
         /** Por defecto. 44px de alto: area tactil comoda en movil. */
         md: "h-control-md px-5 text-body-sm",
-        lg: "h-control-lg px-6 text-body-md",
+        /**
+         * DEC-074: 17px y no 16. El techo lo pone el texto mas largo que lleva
+         * este tamano en un telefono de 360px ("Ver el detalle de la
+         * promocion"): a 17px le quedan 15px de aire por lado; a 18px, 6. Por
+         * eso tambien el relleno lateral baja en telefono.
+         */
+        lg: "h-control-lg px-5 text-heading-sm sm:px-6",
         /**
          * Llamada principal del hero. Existe con DEC-038: la referencia visual
          * pide un CTA que no se pueda pasar por alto, y agrandar `lg` con
          * clases sueltas en la portada habria dejado el tamano fuera del
-         * sistema.
+         * sistema. DEC-074: 22px (antes 18); "Comprar ahora" ocupa ahi la
+         * mitad del boton en un telefono de 360px.
          */
-        xl: "h-control-xl px-8 text-body-lg",
+        xl: "h-control-xl px-8 text-[1.375rem]",
       },
       fullWidth: {
         true: "w-full",

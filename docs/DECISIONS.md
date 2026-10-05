@@ -3596,6 +3596,54 @@ Affected areas: `apps/web` (`brand-lockup.tsx`, `site-header.tsx`,
 Proposed by: sesión del usuario (2026-10-05)
 Agreed by: pendiente — frontend-ux
 
+## DEC-074
+
+Status: Proposed
+
+Date: 2026-10-05
+
+Decision:
+**Foto del hero fundida con el fondo, rojo puro y botones más grandes.** El
+usuario quería que la foto no se viera "cortada", un rojo "más chillón" (el de
+antes se veía opaco) y letras más grandes o una tipografía mejor en los
+botones.
+
+1. **`.lsw-hero-photo-fade`.** La foto se desvanece con una máscara en lugar de
+   fundirse a negro liso.
+   - El fondo del hero lleva textura y luz, y el negro liso dejaba una línea
+     recta donde acababa la foto.
+   - En teléfono funde el último 40 %; en escritorio, además del borde
+     izquierdo de DEC-068, también el pie (las dos máscaras se intersecan).
+2. **Rojo puro.** `accent` pasa de #cf1a22 a #e10012 (saturación del 100 % frente
+   al 78 %), sin verde y casi sin azul.
+   - Escalones: `accent-hover` #ea0816, `accent-active` #c0000c y
+     `accent-text` #ff3838.
+   - Siguen pasando todas las medidas de `accent-tokens.test.ts`: blanco
+     encima 4,99:1, 4,62:1 y 6,47:1.
+   - El botón rojo pierde la mitad de la sombra del pie, que lo oscurecía, y
+     gana resplandor.
+3. **Botones.** Saira en su peso máximo (900, el del titular), con el tracking
+   a 0,02em.
+   - `xl`: 22 px (antes 18).
+   - `lg`: 17 px (antes 16), con 20 px de relleno lateral en teléfono. Es el
+     techo medido: "Ver el detalle de la promoción" cabe en 360 px con 16 px de
+     aire por lado.
+   - El secundario del hero pasa a 24 px de relleno desde tableta, para que los
+     dos botones sigan en una fila a 1366 px.
+
+Alternatives:
+A — Otra tipografía para los botones (descartada por ahora: Saira es la de las
+referencias de carreras que eligió el cliente en DEC-068; más gruesa y más
+grande ya cambia mucho). B — El rojo de la referencia, #e8232a (descartado: da
+4,46:1 con blanco, por debajo de AA).
+
+Affected areas: `packages/design-system` (`tokens.css`), `packages/ui`
+(`button.tsx`, comentarios de `badge.tsx` y tests), `apps/web` (`globals.css`,
+`promotion-hero.tsx`, `promotion-progress.tsx`, `announcement-bar.tsx`).
+
+Proposed by: sesión del usuario (2026-10-05)
+Agreed by: pendiente — frontend-ux
+
 ## DEC-075
 
 Status: Proposed

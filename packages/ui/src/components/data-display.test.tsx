@@ -110,7 +110,7 @@ describe("Badge", () => {
    * Existe en las dos bandas, y la propiedad que hay que vigilar es la misma
    * que en el oro: que el RELLENO y la TINTA sean escalones distintos y que
    * cada superficie use el suyo. Un rojo legible como texto sobre negro
-   * (#ff4d47) da 2,5:1 sobre la banda clara, y el rojo de tinta de la banda
+   * (#ff3838) da 3,4:1 sobre la banda clara, y el rojo de tinta de la banda
    * clara (#bf1620) da 2,9:1 sobre la pagina negra: intercambiarlos produce un
    * fallo de contraste que se ve perfectamente bien en la pantalla del que lo
    * escribio, porque estara mirando la otra banda.
@@ -120,7 +120,7 @@ describe("Badge", () => {
 
     const className = container.firstElementChild?.className ?? "";
     expect(className).toContain("text-accent-text");
-    // `text-accent` seria el relleno (#cf1a22, 3,64:1 sobre la pagina): por
+    // `text-accent` seria el relleno (#e10012, 4,01:1 sobre la pagina): por
     // debajo del minimo AA para texto.
     expect(className).not.toMatch(/(^|\s)text-accent(\s|$)/);
   });
@@ -152,7 +152,7 @@ describe("Badge", () => {
   });
 
   it("el rojo solido claro conserva el relleno y cambia el contorno", () => {
-    // El relleno #cf1a22 recorta igual sobre blanco que sobre negro; lo que no
+    // El relleno #e10012 recorta igual sobre blanco que sobre negro; lo que no
     // recorta sobre una fotografia de estudio claro es un contorno del mismo
     // rojo, y por eso el borde pasa al rojo de tinta.
     const { container } = render(

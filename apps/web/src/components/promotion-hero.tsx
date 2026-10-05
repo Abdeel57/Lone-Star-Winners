@@ -421,7 +421,9 @@ export function PromotionHero({
               // DEC-068: el borde izquierdo se DESVANECE en vez de fundirse a
               // negro liso. El fondo de la seccion lleva textura, y un fundido
               // a color plano dejaba una costura vertical donde empieza la foto.
-              "lg:[-webkit-mask-image:linear-gradient(to_right,transparent,#000_24%)] lg:[mask-image:linear-gradient(to_right,transparent,#000_24%)]",
+              // DEC-074: el pie tambien, en telefono y en escritorio; ver
+              // `.lsw-hero-photo-fade`.
+              "lsw-hero-photo-fade",
             )}
           >
             {/*
@@ -773,10 +775,12 @@ export function PromotionHero({
                   <Link
                     href={`/promotions/${promotion.slug}`}
                     // DEC-071: mas bajo en telefono -es la accion secundaria-,
-                    // con el tamano del rojo desde tableta.
+                    // con el tamano del rojo desde tableta. DEC-074: relleno
+                    // lateral 24px y no 32: con el rojo a 22px, los dos botones
+                    // siguen cabiendo en una fila en una pantalla de 1366.
                     className={cn(
                       buttonVariants({ variant: "subtle", size: "lg" }),
-                      "w-full sm:h-control-xl sm:w-auto sm:px-8 sm:text-body-lg",
+                      "w-full sm:h-control-xl sm:w-auto sm:px-6 sm:text-body-lg",
                     )}
                   >
                     {t("viewPromotion")}
