@@ -1775,6 +1775,7 @@ que compara el test de contrato contra `apps/api/openapi/route-manifest.json`.
 | ------ | ----------------------------------------------------------------------------------- | --------------------------- |
 | POST   | /api/v1/checkout/session                                                            | `PARTICIPANT_SELF`          |
 | GET    | /api/v1/checkout/sessions/:order_draft_id                                           | `PARTICIPANT_SELF`          |
+| POST   | /api/v1/checkout/cash-order                                                         | `PARTICIPANT_SELF`          |
 | GET    | /api/v1/account/orders                                                              | `order.self.read`           |
 | GET    | /api/v1/account/orders/:order_id                                                    | `order.self.read`           |
 | POST   | /api/v1/webhooks/payments/:provider                                                 | `PUBLIC`                    |
@@ -1817,6 +1818,9 @@ que compara el test de contrato contra `apps/api/openapi/route-manifest.json`.
 | GET    | /api/v1/admin/dashboard                                                             | `dashboard.read`            |
 | GET    | /api/v1/admin/orders                                                                | `order.read`                |
 | GET    | /api/v1/admin/orders/:order_id                                                      | `order.read`                |
+| GET    | /api/v1/admin/orders/:order_id/cash-payment                                         | `order.read`                |
+| POST   | /api/v1/admin/orders/:order_id/cash-payment/confirm                                 | `order.cash.confirm`        |
+| POST   | /api/v1/admin/orders/:order_id/cash-payment/entries                                 | `order.cash.confirm`        |
 | GET    | /api/v1/admin/participants                                                          | `participant.list`          |
 | GET    | /api/v1/admin/participants/:participant_id                                          | `participant.read`          |
 | GET    | /api/v1/admin/participants/:participant_id/pii                                      | `pii.view.full`             |
@@ -1910,6 +1914,55 @@ recibido -o no- el webhook firmado. Un `?outcome=paid` lo escribe cualquiera.
 que enseñar en el historial.
 
 Errors: 404 ORDER_NOT_FOUND
+
+Authorization: PARTICIPANT_SELF
+
+Owner: backend
+
+Status: IMPLEMENTED
+```
+
+```text
+Method: POST
+Endpoint: /api/v1/checkout/cash-order
+
+Purpose:
+DEC-078. Pedido para pagar EN EFECTIVO en un punto de venta físico. Es la otra
+opción del checkout, junto a la sesión con tarjeta.
+
+Authentication: sesión de participante
+
+Request:
+{
+  "shipping_address": {
+    "full_name": "...", "line1": "...", "line2": null,
+    "city": "...", "region": "...", "postal_code": "...", "country": "US"
+  }
+}
+
+Sin `return_url`: no hay pasarela a la que ir y de la que volver.
+
+Response: 201 (pedido creado) | 200 (ese carrito ya tenía pedido en efectivo)
+`OrderSummary`, con `status: "PENDING_PAYMENT"`, `payment_method: "CASH"`,
+`entry_state: "PENDING_QUALIFICATION"` y `entries_granted: null`.
+
+El carrito se congela con la MISMA función que la sesión con tarjeta -SKU,
+nombre, precio, tipo de producto y elegibilidad bajo la versión de reglas
+vigente- y el pedido sale de la misma secuencia de números (`LSW-00001234`). El
+carrito queda cerrado: lo que había dentro ya es un pedido.
+
+NO GENERA PARTICIPACIONES. No hay cobro hasta que una persona con
+`order.cash.confirm` lo confirma en el panel (§11.7, cobro en efectivo). Un
+pedido pendiente no aparece en el universo del export.
+
+Idempotente por carrito: el índice único parcial
+`orders_one_cash_order_per_cart` hace que dos envíos simultáneos del mismo
+checkout produzcan UN pedido. Un envío posterior, con el carrito ya cerrado,
+responde 409 CART_EMPTY.
+
+Errors:
+409 CART_EMPTY
+422 VALIDATION_FAILED
 
 Authorization: PARTICIPANT_SELF
 
@@ -2681,6 +2734,19 @@ Pedidos de cualquier participante, más recientes primero. Filtro opcional
 la creación: con `created_at`, dos pedidos del mismo milisegundo se solaparían
 entre páginas.
 
+DEC-078 añade tres filtros opcionales, combinables con el cursor:
+
+- `q` (1–120 caracteres): busca por **número de orden** -completo, una parte o
+  dictado como `LSW-1234`- o por **cliente**: correo de la cuenta, nombre de la
+  cuenta o nombre de la dirección del pedido. Subcadena, sin distinguir
+  mayúsculas. Lo que se busca NO vuelve en la respuesta: el correo sigue
+  enmascarado.
+- `payment_method`: `CARD` o `CASH`.
+- `awaiting_payment=true`: solo los que siguen esperando el cobro. Con
+  `payment_method=CASH` es la cola de la caja.
+
+Cada fila lleva además `payment_method` (`CARD` | `CASH`).
+
 **El correo del comprador viaja siempre enmascarado** (`a***@dominio`).
 `order.read` es "ver pedidos", no una capacidad de PII. La fila no publica
 líneas ni dirección de envío: repartir PII a granel para pintar una tabla que no
@@ -2698,7 +2764,8 @@ en el esquema, así que no puede salir.
       "placed_at": "2026-09-10T10:00:00.000Z",
       "total": { "amount_minor": "5000", "currency": "USD" },
       "participant_email": "a***@example.test",
-      "participant_id": "…"
+      "participant_id": "…",
+      "payment_method": "CARD"
     }
   ],
   "next_cursor": null
@@ -2722,6 +2789,99 @@ No lleva correo: el pedido trae `participant_id`, y esa pregunta tiene su propia
 capacidad en la ficha del participante.
 
 401 · 403 · 404.
+
+### Cobro en efectivo en un punto de venta físico (DEC-078)
+
+`OrderSummary` y `OrderDetail` -en el portal y en el panel- llevan
+`payment_method`: `CARD` (pasarela) o `CASH` (efectivo en caja). El recorrido de
+un pedido `CASH` es **Pendiente de pago en efectivo → Pagado → Participaciones
+generadas**:
+
+1. El participante crea el pedido (`POST /api/v1/checkout/cash-order`, §11.1).
+   Queda `PENDING_PAYMENT` y sin participaciones.
+2. Quien recibe el dinero lo confirma. En UNA transacción: cerrojo
+   `SELECT … FOR UPDATE` sobre el pedido, una fila en
+   `cash_payment_confirmations` (quién, cuándo, motivo, número de orden e
+   importe), el pedido a PAID y un `AuditEvent` `order.cash_payment.confirmed`.
+3. En OTRA transacción, el pedido se califica y se otorga con el MISMO código que
+   el webhook de la tarjeta: mismo estado cualificante de la versión de reglas,
+   misma elegibilidad (DEC-067), mismo periodo, mismo `AwardService`, mismo
+   `source_ref = order:<id>`, mismos números visibles. El instante del pago es el
+   de la confirmación. El desenlace queda en `cash_payment_entry_outcomes`.
+
+Si el paso 3 falla, el cobro **sigue confirmado**: la respuesta dice
+`entries_error_code`, el pedido queda pagado con `entries.status: "PENDING"` y
+`can_generate_entries: true`, y la generación se reintenta sin registrar otro
+cobro. El export al administrador externo cuenta estas participaciones como
+`PURCHASE`, igual que las de tarjeta; un pedido pendiente no aparece.
+
+#### Forma `CashPayment`
+
+```json
+{
+  "order_id": "…",
+  "order_number": "LSW-00001234",
+  "stage": "PENDING_CASH_PAYMENT | PAID | ENTRIES_GENERATED | CANCELLED",
+  "amount": { "amount_minor": "5000", "currency": "USD" },
+  "customer_email": "c***@example.test",
+  "confirmation": null,
+  "entries": {
+    "status": "AWAITING_PAYMENT | PENDING | GENERATED | HELD | NO_ENTRIES | NOT_APPLICABLE",
+    "not_applicable_reason": "NO_PROMOTION | NOT_ELIGIBLE | OUTSIDE_PROMOTION_WINDOW | null",
+    "entries_granted": null,
+    "resolved_at": null
+  },
+  "can_confirm": true,
+  "can_generate_entries": false,
+  "confirmation_created": null,
+  "entries_error_code": null
+}
+```
+
+`confirmation`, cuando existe: `{ confirmed_at, confirmed_by_admin_user_id,
+confirmed_by_name, reason_code, notes }`. `entries_granted` es la cifra del
+LEDGER, nunca una columna de estas tablas. `can_confirm` y `can_generate_entries`
+los calcula el backend; las acciones lo vuelven a comprobar con el pedido
+bloqueado. `confirmation_created` y `entries_error_code` solo tienen valor en las
+respuestas de las dos acciones.
+
+### GET /api/v1/admin/orders/:order_id/cash-payment
+
+    Authorization: order.read
+
+El estado del cobro en efectivo de un pedido, con la forma `CashPayment`.
+
+401 · 403 · 404 ORDER_NOT_FOUND · 409 ORDER_NOT_CASH_PAYMENT (se paga con
+tarjeta).
+
+### POST /api/v1/admin/orders/:order_id/cash-payment/confirm
+
+    Authorization: order.cash.confirm
+
+Cuerpo: `{ "reason_code": "CASH_RECEIVED_AT_STORE", "notes": "Recibo 0001" }`.
+`reason_code` lo exige la capacidad (motivo obligatorio, sin step-up: es trabajo
+de mostrador); `notes` es opcional (≤ 2000).
+
+Confirma el cobro y genera las participaciones (pasos 2 y 3). **Idempotente**: un
+doble clic, un reintento de red o dos personas confirmando a la vez registran UN
+cobro; las que llegan tarde responden 200 con `confirmation_created: false`. Si
+el cobro ya constaba y el paso 3 había fallado, esta llamada lo reintenta.
+
+200 `CashPayment` · 401 · 403 (sin la capacidad o sin motivo) · 404 ·
+409 ORDER_NOT_CASH_PAYMENT · 409 CASH_PAYMENT_NOT_PENDING (`details.status`: el
+pedido está cancelado) · 422.
+
+### POST /api/v1/admin/orders/:order_id/cash-payment/entries
+
+    Authorization: order.cash.confirm
+
+Cuerpo: `{ "reason_code": "RETRY_ENTRY_GENERATION" }`.
+
+Reintenta SOLO el paso 3 de un cobro ya confirmado. **No registra otro cobro.**
+Si el paso ya terminó, responde el estado actual sin hacer nada.
+
+200 `CashPayment` · 401 · 403 · 404 · 409 ORDER_NOT_CASH_PAYMENT ·
+409 CASH_PAYMENT_NOT_CONFIRMED (nadie lo ha cobrado) · 422.
 
 ### GET /api/v1/admin/participants
 

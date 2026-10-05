@@ -6,13 +6,15 @@ import { getTranslations, setRequestLocale } from "next-intl/server";
 import { AdminChrome } from "@/components/admin/admin-chrome";
 import { openAdminScreen } from "@/components/admin/admin-screen";
 import { AdminSectionError } from "@/components/admin/admin-section-error";
+import { CashPaymentPanel } from "@/components/admin/cash-payment-panel";
 import { EntryCalculationTrace } from "@/components/entry-calculation-trace";
 import { OrderAddress } from "@/components/order-address";
 import { OrderLineList } from "@/components/order-line-list";
 import { adminHref } from "@/i18n/admin-routing";
 import { formatMoney, formatZonedDateTime } from "@/i18n/formatters";
 import { isLocale } from "@/i18n/locales";
-import { fetchAdminOrder } from "@/lib/api";
+import { can } from "@/lib/admin/capabilities";
+import { fetchAdminOrder, fetchAdminOrderCashPayment } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
 
@@ -56,6 +58,14 @@ export default async function AdminOrderDetailPage({
   if (!screen.ok) return screen.node;
 
   const result = await fetchAdminOrder(id, locale, screen.session);
+
+  /*
+   * DEC-078: el cobro en efectivo se pide APARTE y solo para pedidos en
+   * efectivo. La ficha del pedido es la misma forma que ve el participante, y
+   * quien confirmo un cobro en caja es un dato del panel, no suyo.
+   */
+  const isCash = result.ok && result.data.payment_method === "CASH";
+  const cash = isCash ? await fetchAdminOrderCashPayment(id, locale, screen.session) : null;
 
   return (
     <AdminChrome
@@ -104,8 +114,27 @@ export default async function AdminOrderDetailPage({
                   {formatMoney(result.data.total, locale) ?? ""}
                 </dd>
               </div>
+
+              <div>
+                <dt className="text-caption uppercase tracking-wide text-text-subtle">
+                  {t("columnPayment")}
+                </dt>
+                <dd className="text-body-sm text-text">
+                  {isCash ? t("paymentCash") : t("paymentCard")}
+                </dd>
+              </div>
             </dl>
           </Card>
+
+          {cash === null ? null : cash.ok ? (
+            <CashPaymentPanel
+              cash={cash.data}
+              locale={locale}
+              actorCanConfirm={can(screen.actor, "order.cash.confirm")}
+            />
+          ) : (
+            <AdminSectionError failure={cash.error} headingLevel="h2" />
+          )}
 
           <section aria-labelledby="order-lines">
             <h2 id="order-lines" className="lsw-display text-heading-lg text-text">
@@ -141,6 +170,7 @@ export default async function AdminOrderDetailPage({
                 calculation={result.data.entry_calculation}
                 locale={locale}
                 timeZone="UTC"
+                currency={result.data.total.currency}
               />
             </div>
           </section>

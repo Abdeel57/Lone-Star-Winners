@@ -35,6 +35,7 @@ import {
 import { DrizzleAmoeSubmissionRepository } from "./amoe-repository.js";
 import { DrizzleAwardHoldRepository } from "./award-hold-repository.js";
 import { DrizzleCalculationSnapshotRepository } from "./calculation-snapshot-repository.js";
+import { DrizzleCashPaymentRepository } from "./cash-payment-repository.js";
 import {
   DrizzleAuthorizationRepository,
   DrizzleDrawAuthorizationWriter,
@@ -62,6 +63,9 @@ export * from "./award-hold-repository.js";
 export * from "./amoe-repository.js";
 export * from "./adjustment-repository.js";
 export * from "./order-repository.js";
+// DEC-078: cobro en efectivo. Entra en `createSweepstakesRepositories` porque
+// escribe dentro de la MISMA transaccion que mueve el pedido y que otorga.
+export * from "./cash-payment-repository.js";
 export * from "./payment-event-repository.js";
 export * from "./snapshot-repository.js";
 export * from "./export-reconciliation-repository.js";
@@ -91,6 +95,7 @@ export interface SweepstakesRepositories {
   readonly adjustments: DrizzleAdjustmentRepository;
   readonly disqualifications: DrizzleDisqualificationRepository;
   readonly orders: DrizzleOrderRepository;
+  readonly cashPayments: DrizzleCashPaymentRepository;
   readonly paymentEvents: DrizzlePaymentEventRepository;
   readonly exportSnapshots: DrizzleSnapshotRepository;
   readonly exportReconciliation: DrizzleExportReconciliationRepository;
@@ -127,6 +132,7 @@ export function createSweepstakesRepositories(
     adjustments: new DrizzleAdjustmentRepository(db),
     disqualifications: new DrizzleDisqualificationRepository(db),
     orders: new DrizzleOrderRepository(db),
+    cashPayments: new DrizzleCashPaymentRepository(db),
     paymentEvents: new DrizzlePaymentEventRepository(db),
     exportSnapshots: new DrizzleSnapshotRepository(db, {
       ...(options.contentDigestCalculator === undefined

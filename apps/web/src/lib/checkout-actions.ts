@@ -15,8 +15,8 @@ import { headers } from "next/headers";
 // eslint-disable-next-line no-restricted-imports -- redireccion a un dominio externo; ver arriba
 import { redirect as externalRedirect } from "next/navigation";
 
-import { getPathname } from "@/i18n/navigation";
-import { createCheckoutSession, type PostalAddress } from "@/lib/api";
+import { getPathname, redirect } from "@/i18n/navigation";
+import { createCashOrder, createCheckoutSession, type PostalAddress } from "@/lib/api";
 
 import { fromFailure, invalid, type ActionResult } from "./action-result";
 import { countryCodeFrom } from "./country-code";
@@ -136,6 +136,17 @@ function isHttpUrl(value: string): boolean {
   }
 }
 
+/**
+ * Forma de pago elegida (DEC-078).
+ *
+ * Solo dos valores, comparados contra la lista: un valor manipulado en el
+ * navegador no abre una tercera via, cae en la tarjeta, que es la que siempre
+ * existio. El backend ademas revalida todo -el efectivo tiene su propia ruta-.
+ */
+function paymentMethodFrom(formData: FormData): "CARD" | "CASH" {
+  return textFrom(formData, "payment_method") === "CASH" ? "CASH" : "CARD";
+}
+
 export async function startCheckoutAction(
   _previous: ActionResult,
   formData: FormData,
@@ -148,6 +159,26 @@ export async function startCheckoutAction(
   if ("unknownCountry" in address) return invalid("COUNTRY_INVALID", "country");
 
   const session = await mutableSession();
+
+  /*
+   * EFECTIVO EN UN PUNTO DE VENTA FISICO (DEC-078).
+   *
+   * No hay pasarela: el backend congela el carrito en un pedido PENDIENTE de
+   * pago y lo devuelve con su numero de orden. Aqui no se decide nada mas: ni
+   * cuanto se paga ni cuantas participaciones habra -no habra ninguna hasta que
+   * la tienda confirme el cobro en caja-.
+   *
+   * Se lleva a la confirmacion del pedido con el `redirect` CON idioma
+   * (DEC-021): es una ruta de este sitio, al contrario que la del proveedor de
+   * pago de abajo.
+   */
+  if (paymentMethodFrom(formData) === "CASH") {
+    const order = await createCashOrder({ shipping_address: address }, locale, session);
+    if (!order.ok) return fromFailure(order.error);
+
+    redirect({ href: `/orders/${encodeURIComponent(order.data.id)}/confirmation`, locale });
+  }
+
   const result = await createCheckoutSession(
     { shipping_address: address, return_url: await returnUrlFor(locale) },
     locale,

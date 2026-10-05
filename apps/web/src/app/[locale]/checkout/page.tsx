@@ -150,14 +150,11 @@ export default async function CheckoutPage({ params }: { params: Promise<{ local
             </div>
           </section>
         ) : (
-          <section aria-labelledby="checkout-address">
-            <h2 id="checkout-address" className="lsw-display text-heading-lg text-text">
-              {t("addressHeading")}
-            </h2>
-
-            <div className="mt-s5">
-              <CheckoutForm locale={locale} />
-            </div>
+          // DEC-078: el formulario abre con la forma de pago -tarjeta o efectivo
+          // en un punto de venta- y sigue con la direccion; los dos titulos
+          // viven dentro de el, en el orden en que se rellenan.
+          <section aria-label={t("title")}>
+            <CheckoutForm locale={locale} />
           </section>
         )}
 

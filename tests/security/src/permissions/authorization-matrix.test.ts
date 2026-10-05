@@ -90,7 +90,13 @@ describe("coherencia del catalogo", () => {
     // amoe.review.* es trabajo de cola, de alto volumen y con motivo
     //   obligatorio. Exigir MFA en cada resolucion acabaria en sesiones de
     //   step-up permanentes, que es peor control que el actual.
+    // order.cash.confirm (DEC-078) es trabajo de mostrador: una confirmacion
+    //   por cliente que paga en caja, con motivo obligatorio. Mismo argumento
+    //   que la cola AMOE; lo que no se relaja es la traza -quien, cuando y por
+    //   que, en una fila inmutable y en audit_events- ni la unicidad del cobro,
+    //   que impone la base de datos.
     expect(weak).toStrictEqual([
+      "order.cash.confirm",
       "entry.reversal.create",
       "amoe.review.approve",
       "amoe.review.reject",

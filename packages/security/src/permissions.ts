@@ -56,6 +56,8 @@ export const ROLE_CAPABILITIES: Readonly<Record<RoleId, readonly CapabilityId[]>
     "pii.view.masked",
     "order.read",
     "order.refund.initiate",
+    // DEC-078: quien opera la tienda es quien cobra en el mostrador.
+    "order.cash.confirm",
     "entry.ledger.read",
     "entry.adjust.create",
     "amoe.review.read",
@@ -91,6 +93,11 @@ export const ROLE_CAPABILITIES: Readonly<Record<RoleId, readonly CapabilityId[]>
     "pii.view.masked",
     "pii.view.full",
     "order.read",
+    // DEC-078: en un equipo pequeno el cobro en caja puede recibirlo
+    // cualquiera de los dos roles que operan la promocion, igual que la
+    // transcripcion AMOE. Lo que importa -quien confirmo cada cobro- queda en
+    // una fila inmutable por pedido.
+    "order.cash.confirm",
     "payment.webhook.read",
     "entry.ledger.read",
     "entry.adjust.approve",
@@ -271,6 +278,9 @@ export const CAPABILITY_READ_COVERAGE: readonly ReadCoverageRule[] = Object.free
   { write: "amoe.self.submit", read: "entry.self.read" },
   { write: "pii.export", read: "pii.view.full" },
   { write: "order.refund.initiate", read: "order.read" },
+  // Quien confirma un cobro en efectivo tiene que poder abrir el pedido y
+  // revisar sus datos antes: es lo que pide el propio flujo de caja.
+  { write: "order.cash.confirm", read: "order.read" },
   { write: "payment.webhook.replay", read: "payment.webhook.read" },
   { write: "entry.adjust.create", read: "entry.ledger.read" },
   { write: "entry.adjust.approve", read: "entry.ledger.read" },

@@ -13,7 +13,8 @@
     "start": "node --enable-source-maps dist/server.js",
     "lint": "eslint src test",
     "typecheck": "tsc -p tsconfig.json",
-    "test": "vitest run",
+    "test": "vitest run --project unit",
+    "test:integration": "vitest run --project integration",
     "contract:emit": "tsc -p tsconfig.build.json && node dist/scripts/emit-contract.js",
     "contract:check": "pnpm run contract:emit && git diff --exit-code HEAD -- openapi"
   },

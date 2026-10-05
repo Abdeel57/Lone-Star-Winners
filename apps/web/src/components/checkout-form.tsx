@@ -2,13 +2,15 @@
 
 import { Button, FormField, Input } from "@lsw/ui";
 import { useTranslations } from "next-intl";
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 
 import type { Locale } from "@/i18n/locales";
 import { IDLE } from "@/lib/action-result";
+import type { PaymentMethod } from "@/lib/api";
 import { startCheckoutAction } from "@/lib/checkout-actions";
 
 import { FormError, useFieldError } from "./auth-form-shell";
+import { PaymentMethodChoice } from "./payment-method-choice";
 
 /**
  * Formulario de checkout.
@@ -36,17 +38,35 @@ import { FormError, useFieldError } from "./auth-form-shell";
  * EL CARRITO NO VIAJA EN ESTE FORMULARIO. Lo que se cobra sale del carrito de
  * servidor (DEC-023); si el cliente aportara las lineas, aportaria tambien los
  * precios.
+ *
+ * DOS FORMAS DE PAGAR (DEC-078)
+ * -----------------------------
+ * Tarjeta -la pasarela de siempre- o efectivo en un punto de venta fisico. Las
+ * dos piden la misma direccion: identifica al cliente y dice a donde va la
+ * mercancia. Lo unico que cambia en pantalla es el boton y la nota de debajo,
+ * porque es lo que cambia para quien compra: con efectivo no se cobra nada
+ * ahora y las participaciones llegan cuando la tienda confirma el pago.
  */
 export function CheckoutForm({ locale }: { readonly locale: Locale }) {
   const t = useTranslations("checkout");
   const [state, formAction, pending] = useActionState(startCheckoutAction, IDLE);
   const fieldError = useFieldError(state);
+  const [method, setMethod] = useState<PaymentMethod>("CARD");
 
   return (
     <form action={formAction} className="flex flex-col gap-s5">
       <input type="hidden" name="locale" value={locale} />
 
       <FormError result={state} />
+
+      {/*
+       * LA FORMA DE PAGO VA PRIMERO: es lo que se decide nada mas llegar del
+       * carrito, y en un telefono, con seis campos de direccion delante, las
+       * dos opciones quedarian fuera de la pantalla.
+       */}
+      <PaymentMethodChoice value={method} onChange={setMethod} />
+
+      <h2 className="lsw-display mt-s3 text-heading-md text-text">{t("addressHeading")}</h2>
 
       <FormField label={t("fields.fullName")} required error={fieldError("full_name")}>
         <Input name="full_name" type="text" autoComplete="shipping name" />
@@ -94,11 +114,18 @@ export function CheckoutForm({ locale }: { readonly locale: Locale }) {
         </FormField>
       </div>
 
+      {/*
+       * `loading` deshabilita el boton mientras la peticion esta en vuelo: el
+       * doble clic no llega a salir. No es el control -el backend admite un solo
+       * pedido en efectivo por carrito-, es lo que evita que alguien lo pruebe.
+       */}
       <Button type="submit" variant="accent" size="lg" fullWidth loading={pending}>
-        {t("payCta")}
+        {method === "CASH" ? t("payment.cashCta") : t("payCta")}
       </Button>
 
-      <p className="text-caption text-text-subtle">{t("providerNote")}</p>
+      <p className="text-caption text-text-subtle">
+        {method === "CASH" ? t("payment.cashNote") : t("providerNote")}
+      </p>
     </form>
   );
 }

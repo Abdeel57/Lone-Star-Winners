@@ -1209,6 +1209,13 @@
                           "order_number": {
                             "type": "string"
                           },
+                          "payment_method": {
+                            "enum": [
+                              "CARD",
+                              "CASH"
+                            ],
+                            "type": "string"
+                          },
                           "placed_at": {
                             "type": "string"
                           },
@@ -1264,7 +1271,8 @@
                           "item_count",
                           "promotion_id",
                           "entry_state",
-                          "entries_granted"
+                          "entries_granted",
+                          "payment_method"
                         ],
                         "type": "object"
                       },
@@ -1546,6 +1554,13 @@
                     "order_number": {
                       "type": "string"
                     },
+                    "payment_method": {
+                      "enum": [
+                        "CARD",
+                        "CASH"
+                      ],
+                      "type": "string"
+                    },
                     "placed_at": {
                       "type": "string"
                     },
@@ -1720,6 +1735,7 @@
                     "promotion_id",
                     "entry_state",
                     "entries_granted",
+                    "payment_method",
                     "items",
                     "subtotal",
                     "shipping_total",
@@ -8591,9 +8607,21 @@
     },
     "/api/v1/admin/orders": {
       "get": {
-        "description": "Paginado por cursor opaco. El correo del comprador viaja enmascarado: `order.read` no es una capacidad de PII.",
+        "description": "Paginado por cursor opaco. El correo del comprador viaja enmascarado: `order.read` no es una capacidad de PII. DEC-078: `q` busca por numero de orden o por cliente (correo o nombre), `payment_method=CASH` deja la cola de caja y `awaiting_payment=true` solo los que esperan el cobro.",
         "operationId": "listAdminOrders",
         "parameters": [
+          {
+            "in": "query",
+            "name": "awaiting_payment",
+            "required": false,
+            "schema": {
+              "enum": [
+                "true",
+                "false"
+              ],
+              "type": "string"
+            }
+          },
           {
             "in": "query",
             "name": "cursor",
@@ -8617,11 +8645,33 @@
           },
           {
             "in": "query",
+            "name": "payment_method",
+            "required": false,
+            "schema": {
+              "enum": [
+                "CARD",
+                "CASH"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
             "name": "promotion_id",
             "required": false,
             "schema": {
               "format": "uuid",
               "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "maxLength": 120,
+              "minLength": 1,
               "type": "string"
             }
           }
@@ -8661,6 +8711,13 @@
                           "participant_id": {
                             "format": "uuid",
                             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                            "type": "string"
+                          },
+                          "payment_method": {
+                            "enum": [
+                              "CARD",
+                              "CASH"
+                            ],
                             "type": "string"
                           },
                           "placed_at": {
@@ -8705,7 +8762,8 @@
                           "placed_at",
                           "total",
                           "participant_email",
-                          "participant_id"
+                          "participant_id",
+                          "payment_method"
                         ],
                         "type": "object"
                       },
@@ -9065,6 +9123,13 @@
                     "order_number": {
                       "type": "string"
                     },
+                    "payment_method": {
+                      "enum": [
+                        "CARD",
+                        "CASH"
+                      ],
+                      "type": "string"
+                    },
                     "placed_at": {
                       "type": "string"
                     },
@@ -9239,6 +9304,7 @@
                     "promotion_id",
                     "entry_state",
                     "entries_granted",
+                    "payment_method",
                     "items",
                     "subtotal",
                     "shipping_total",
@@ -9382,6 +9448,1300 @@
         "x-lsw-authorization": {
           "kind": "PERMISSION",
           "permission": "order.read",
+          "requires_step_up": false
+        }
+      }
+    },
+    "/api/v1/admin/orders/{order_id}/cash-payment": {
+      "get": {
+        "description": "DEC-078. Pendiente de pago en efectivo -> pagado -> participaciones generadas, con quien confirmo el cobro, cuando y con que motivo. `can_confirm` y `can_generate_entries` los calcula el backend; las acciones lo vuelven a comprobar con el pedido bloqueado. 409 `ORDER_NOT_CASH_PAYMENT` si el pedido se paga con tarjeta.",
+        "operationId": "getAdminOrderCashPayment",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "order_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "amount": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "amount_minor": {
+                          "type": "string"
+                        },
+                        "currency": {
+                          "maxLength": 3,
+                          "minLength": 3,
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "amount_minor",
+                        "currency"
+                      ],
+                      "type": "object"
+                    },
+                    "can_confirm": {
+                      "type": "boolean"
+                    },
+                    "can_generate_entries": {
+                      "type": "boolean"
+                    },
+                    "confirmation": {
+                      "anyOf": [
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "confirmed_at": {
+                              "type": "string"
+                            },
+                            "confirmed_by_admin_user_id": {
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                              "type": "string"
+                            },
+                            "confirmed_by_name": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "notes": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "reason_code": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "confirmed_at",
+                            "confirmed_by_admin_user_id",
+                            "confirmed_by_name",
+                            "reason_code",
+                            "notes"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "confirmation_created": {
+                      "anyOf": [
+                        {
+                          "type": "boolean"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "customer_email": {
+                      "type": "string"
+                    },
+                    "entries": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "entries_granted": {
+                          "anyOf": [
+                            {
+                              "maximum": 9007199254740991,
+                              "minimum": -9007199254740991,
+                              "type": "integer"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "not_applicable_reason": {
+                          "anyOf": [
+                            {
+                              "enum": [
+                                "NO_PROMOTION",
+                                "NOT_ELIGIBLE",
+                                "OUTSIDE_PROMOTION_WINDOW"
+                              ],
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "resolved_at": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "status": {
+                          "enum": [
+                            "AWAITING_PAYMENT",
+                            "PENDING",
+                            "GENERATED",
+                            "HELD",
+                            "NO_ENTRIES",
+                            "NOT_APPLICABLE"
+                          ],
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "status",
+                        "not_applicable_reason",
+                        "entries_granted",
+                        "resolved_at"
+                      ],
+                      "type": "object"
+                    },
+                    "entries_error_code": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "order_id": {
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                      "type": "string"
+                    },
+                    "order_number": {
+                      "type": "string"
+                    },
+                    "stage": {
+                      "enum": [
+                        "PENDING_CASH_PAYMENT",
+                        "PAID",
+                        "ENTRIES_GENERATED",
+                        "CANCELLED"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "order_id",
+                    "order_number",
+                    "stage",
+                    "amount",
+                    "customer_email",
+                    "confirmation",
+                    "entries",
+                    "can_confirm",
+                    "can_generate_entries",
+                    "confirmation_created",
+                    "entries_error_code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 200."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "additionalProperties": {},
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "request_id"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 401."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "additionalProperties": {},
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "request_id"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 403."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "additionalProperties": {},
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "request_id"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 404."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "additionalProperties": {},
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "request_id"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 409."
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Estado del cobro en efectivo de un pedido.",
+        "tags": [
+          "admin"
+        ],
+        "x-lsw-authorization": {
+          "kind": "PERMISSION",
+          "permission": "order.read",
+          "requires_step_up": false
+        }
+      }
+    },
+    "/api/v1/admin/orders/{order_id}/cash-payment/confirm": {
+      "post": {
+        "description": "DEC-078. Registra UNA confirmacion por pedido -quien, cuando, motivo- y mueve el pedido a PAID en la misma transaccion; despues, en otra, califica y otorga con el mismo codigo que el webhook de la tarjeta. Idempotente: un doble clic, un reintento o dos confirmaciones simultaneas registran un solo cobro (`confirmation_created: false` en las que llegan tarde). Si la generacion de participaciones falla, el cobro queda confirmado, `entries_error_code` dice por que y `can_generate_entries` permite reintentarlo.",
+        "operationId": "confirmAdminOrderCashPayment",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "order_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "notes": {
+                    "anyOf": [
+                      {
+                        "maxLength": 2000,
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "reason_code": {
+                    "pattern": "^[a-zA-Z][a-zA-Z0-9_.]{2,63}$",
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "amount": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "amount_minor": {
+                          "type": "string"
+                        },
+                        "currency": {
+                          "maxLength": 3,
+                          "minLength": 3,
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "amount_minor",
+                        "currency"
+                      ],
+                      "type": "object"
+                    },
+                    "can_confirm": {
+                      "type": "boolean"
+                    },
+                    "can_generate_entries": {
+                      "type": "boolean"
+                    },
+                    "confirmation": {
+                      "anyOf": [
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "confirmed_at": {
+                              "type": "string"
+                            },
+                            "confirmed_by_admin_user_id": {
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                              "type": "string"
+                            },
+                            "confirmed_by_name": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "notes": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "reason_code": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "confirmed_at",
+                            "confirmed_by_admin_user_id",
+                            "confirmed_by_name",
+                            "reason_code",
+                            "notes"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "confirmation_created": {
+                      "anyOf": [
+                        {
+                          "type": "boolean"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "customer_email": {
+                      "type": "string"
+                    },
+                    "entries": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "entries_granted": {
+                          "anyOf": [
+                            {
+                              "maximum": 9007199254740991,
+                              "minimum": -9007199254740991,
+                              "type": "integer"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "not_applicable_reason": {
+                          "anyOf": [
+                            {
+                              "enum": [
+                                "NO_PROMOTION",
+                                "NOT_ELIGIBLE",
+                                "OUTSIDE_PROMOTION_WINDOW"
+                              ],
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "resolved_at": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "status": {
+                          "enum": [
+                            "AWAITING_PAYMENT",
+                            "PENDING",
+                            "GENERATED",
+                            "HELD",
+                            "NO_ENTRIES",
+                            "NOT_APPLICABLE"
+                          ],
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "status",
+                        "not_applicable_reason",
+                        "entries_granted",
+                        "resolved_at"
+                      ],
+                      "type": "object"
+                    },
+                    "entries_error_code": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "order_id": {
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                      "type": "string"
+                    },
+                    "order_number": {
+                      "type": "string"
+                    },
+                    "stage": {
+                      "enum": [
+                        "PENDING_CASH_PAYMENT",
+                        "PAID",
+                        "ENTRIES_GENERATED",
+                        "CANCELLED"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "order_id",
+                    "order_number",
+                    "stage",
+                    "amount",
+                    "customer_email",
+                    "confirmation",
+                    "entries",
+                    "can_confirm",
+                    "can_generate_entries",
+                    "confirmation_created",
+                    "entries_error_code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 200."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "additionalProperties": {},
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "request_id"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 401."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "additionalProperties": {},
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "request_id"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 403."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "additionalProperties": {},
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "request_id"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 404."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "additionalProperties": {},
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "request_id"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 409."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "additionalProperties": {},
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "request_id"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 422."
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Confirmar que se recibio el pago en efectivo y generar las participaciones.",
+        "tags": [
+          "admin"
+        ],
+        "x-lsw-authorization": {
+          "kind": "PERMISSION",
+          "permission": "order.cash.confirm",
+          "requires_step_up": false
+        }
+      }
+    },
+    "/api/v1/admin/orders/{order_id}/cash-payment/entries": {
+      "post": {
+        "description": "DEC-078. NO registra otro cobro: exige que el pedido ya este cobrado (409 `CASH_PAYMENT_NOT_CONFIRMED` si no) y repite solo el paso de participaciones, que es idempotente por pedido. Si ese paso ya termino, responde el estado actual sin hacer nada.",
+        "operationId": "generateAdminOrderCashEntries",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "order_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "reason_code": {
+                    "pattern": "^[a-zA-Z][a-zA-Z0-9_.]{2,63}$",
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "amount": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "amount_minor": {
+                          "type": "string"
+                        },
+                        "currency": {
+                          "maxLength": 3,
+                          "minLength": 3,
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "amount_minor",
+                        "currency"
+                      ],
+                      "type": "object"
+                    },
+                    "can_confirm": {
+                      "type": "boolean"
+                    },
+                    "can_generate_entries": {
+                      "type": "boolean"
+                    },
+                    "confirmation": {
+                      "anyOf": [
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "confirmed_at": {
+                              "type": "string"
+                            },
+                            "confirmed_by_admin_user_id": {
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                              "type": "string"
+                            },
+                            "confirmed_by_name": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "notes": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "reason_code": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "confirmed_at",
+                            "confirmed_by_admin_user_id",
+                            "confirmed_by_name",
+                            "reason_code",
+                            "notes"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "confirmation_created": {
+                      "anyOf": [
+                        {
+                          "type": "boolean"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "customer_email": {
+                      "type": "string"
+                    },
+                    "entries": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "entries_granted": {
+                          "anyOf": [
+                            {
+                              "maximum": 9007199254740991,
+                              "minimum": -9007199254740991,
+                              "type": "integer"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "not_applicable_reason": {
+                          "anyOf": [
+                            {
+                              "enum": [
+                                "NO_PROMOTION",
+                                "NOT_ELIGIBLE",
+                                "OUTSIDE_PROMOTION_WINDOW"
+                              ],
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "resolved_at": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "status": {
+                          "enum": [
+                            "AWAITING_PAYMENT",
+                            "PENDING",
+                            "GENERATED",
+                            "HELD",
+                            "NO_ENTRIES",
+                            "NOT_APPLICABLE"
+                          ],
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "status",
+                        "not_applicable_reason",
+                        "entries_granted",
+                        "resolved_at"
+                      ],
+                      "type": "object"
+                    },
+                    "entries_error_code": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "order_id": {
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                      "type": "string"
+                    },
+                    "order_number": {
+                      "type": "string"
+                    },
+                    "stage": {
+                      "enum": [
+                        "PENDING_CASH_PAYMENT",
+                        "PAID",
+                        "ENTRIES_GENERATED",
+                        "CANCELLED"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "order_id",
+                    "order_number",
+                    "stage",
+                    "amount",
+                    "customer_email",
+                    "confirmation",
+                    "entries",
+                    "can_confirm",
+                    "can_generate_entries",
+                    "confirmation_created",
+                    "entries_error_code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 200."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "additionalProperties": {},
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "request_id"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 401."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "additionalProperties": {},
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "request_id"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 403."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "additionalProperties": {},
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "request_id"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 404."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "additionalProperties": {},
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "request_id"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 409."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "additionalProperties": {},
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "request_id"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 422."
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Reintentar la generacion de participaciones de un cobro en efectivo ya confirmado.",
+        "tags": [
+          "admin"
+        ],
+        "x-lsw-authorization": {
+          "kind": "PERMISSION",
+          "permission": "order.cash.confirm",
           "requires_step_up": false
         }
       }
@@ -30022,6 +31382,437 @@
         "summary": "Cambiar la cantidad de una linea.",
         "tags": [
           "cart"
+        ],
+        "x-lsw-authorization": {
+          "kind": "PARTICIPANT_SELF",
+          "requires_step_up": false
+        }
+      }
+    },
+    "/api/v1/checkout/cash-order": {
+      "post": {
+        "description": "DEC-078. Congela el carrito de servidor exactamente igual que la sesion con tarjeta y deja el pedido PENDING_PAYMENT con `payment_method = CASH`. NO genera participaciones: no hay cobro hasta que una persona con `order.cash.confirm` lo confirma en el panel. Idempotente por carrito: repetir el envio devuelve 200 con el mismo pedido en vez de crear otro.",
+        "operationId": "createCashOrder",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "shipping_address": {
+                    "properties": {
+                      "city": {
+                        "maxLength": 120,
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "country": {
+                        "maxLength": 2,
+                        "minLength": 2,
+                        "type": "string"
+                      },
+                      "full_name": {
+                        "maxLength": 200,
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "line1": {
+                        "maxLength": 200,
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "line2": {
+                        "anyOf": [
+                          {
+                            "maxLength": 200,
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "postal_code": {
+                        "maxLength": 20,
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "region": {
+                        "maxLength": 120,
+                        "minLength": 1,
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "full_name",
+                      "line1",
+                      "city",
+                      "region",
+                      "postal_code",
+                      "country"
+                    ],
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "shipping_address"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "entries_granted": {
+                      "anyOf": [
+                        {
+                          "maximum": 9007199254740991,
+                          "minimum": -9007199254740991,
+                          "type": "integer"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "entry_state": {
+                      "enum": [
+                        "NOT_APPLICABLE",
+                        "PENDING_QUALIFICATION",
+                        "GRANTED",
+                        "PARTIALLY_REVERSED",
+                        "REVERSED"
+                      ],
+                      "type": "string"
+                    },
+                    "id": {
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                      "type": "string"
+                    },
+                    "item_count": {
+                      "maximum": 9007199254740991,
+                      "minimum": -9007199254740991,
+                      "type": "integer"
+                    },
+                    "order_number": {
+                      "type": "string"
+                    },
+                    "payment_method": {
+                      "enum": [
+                        "CARD",
+                        "CASH"
+                      ],
+                      "type": "string"
+                    },
+                    "placed_at": {
+                      "type": "string"
+                    },
+                    "promotion_id": {
+                      "anyOf": [
+                        {
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "status": {
+                      "enum": [
+                        "PENDING_PAYMENT",
+                        "PAID",
+                        "FULFILLED",
+                        "CANCELLED",
+                        "REFUNDED",
+                        "PARTIALLY_REFUNDED",
+                        "CHARGEBACK"
+                      ],
+                      "type": "string"
+                    },
+                    "total": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "amount_minor": {
+                          "type": "string"
+                        },
+                        "currency": {
+                          "maxLength": 3,
+                          "minLength": 3,
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "amount_minor",
+                        "currency"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "order_number",
+                    "status",
+                    "placed_at",
+                    "total",
+                    "item_count",
+                    "promotion_id",
+                    "entry_state",
+                    "entries_granted",
+                    "payment_method"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 200."
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "entries_granted": {
+                      "anyOf": [
+                        {
+                          "maximum": 9007199254740991,
+                          "minimum": -9007199254740991,
+                          "type": "integer"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "entry_state": {
+                      "enum": [
+                        "NOT_APPLICABLE",
+                        "PENDING_QUALIFICATION",
+                        "GRANTED",
+                        "PARTIALLY_REVERSED",
+                        "REVERSED"
+                      ],
+                      "type": "string"
+                    },
+                    "id": {
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                      "type": "string"
+                    },
+                    "item_count": {
+                      "maximum": 9007199254740991,
+                      "minimum": -9007199254740991,
+                      "type": "integer"
+                    },
+                    "order_number": {
+                      "type": "string"
+                    },
+                    "payment_method": {
+                      "enum": [
+                        "CARD",
+                        "CASH"
+                      ],
+                      "type": "string"
+                    },
+                    "placed_at": {
+                      "type": "string"
+                    },
+                    "promotion_id": {
+                      "anyOf": [
+                        {
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "status": {
+                      "enum": [
+                        "PENDING_PAYMENT",
+                        "PAID",
+                        "FULFILLED",
+                        "CANCELLED",
+                        "REFUNDED",
+                        "PARTIALLY_REFUNDED",
+                        "CHARGEBACK"
+                      ],
+                      "type": "string"
+                    },
+                    "total": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "amount_minor": {
+                          "type": "string"
+                        },
+                        "currency": {
+                          "maxLength": 3,
+                          "minLength": 3,
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "amount_minor",
+                        "currency"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "order_number",
+                    "status",
+                    "placed_at",
+                    "total",
+                    "item_count",
+                    "promotion_id",
+                    "entry_state",
+                    "entries_granted",
+                    "payment_method"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 201."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "additionalProperties": {},
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "request_id"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 401."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "additionalProperties": {},
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "request_id"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 409."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "additionalProperties": {},
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "request_id"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 422."
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Pedido para pagar en efectivo en un punto de venta fisico.",
+        "tags": [
+          "commerce"
         ],
         "x-lsw-authorization": {
           "kind": "PARTICIPANT_SELF",

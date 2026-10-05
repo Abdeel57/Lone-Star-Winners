@@ -1501,7 +1501,23 @@ export interface OrderSummary {
    * delante de alguien que acaba de comprar.
    */
   readonly entries_granted: number | null;
+  /**
+   * DEC-078: como se paga. `CASH` = efectivo en un punto de venta fisico: con
+   * `status: "PENDING_PAYMENT"` el pedido espera a que la tienda confirme el
+   * cobro, y hasta entonces no hay participaciones.
+   *
+   * OPCIONAL a proposito, como `variant_name` en `OrderLine`: si la web se
+   * publica un instante antes que la API, el campo no llega, y un campo
+   * obligatorio ausente tumbaria la pantalla entera. Ausente se lee como
+   * `CARD`, que es lo unico que existia antes.
+   */
+  readonly payment_method?: PaymentMethod;
 }
+
+/** DEC-078: pasarela de pago (`CARD`) o efectivo en caja (`CASH`). */
+export type PaymentMethod = "CARD" | "CASH";
+
+export const PAYMENT_METHODS: readonly PaymentMethod[] = ["CARD", "CASH"];
 
 /**
  * [PROVISIONAL] Linea de un pedido.
@@ -1546,31 +1562,38 @@ export interface PostalAddress {
 }
 
 /**
- * [PROVISIONAL] Traza del calculo de participaciones que produjo un pedido.
+ * [CONTRATO] Traza del calculo de participaciones que produjo un pedido.
  *
- * El contrato la describe con estas palabras: `entry_calculation` con
- * `rules_version_id`, `engine_version` y el desglose que se persistio en el
- * `EntryCalculationSnapshot`. Es lo que permite responder por que esta compra
- * genero 37 entries y no 36 meses despues, cuando el catalogo y las reglas ya
- * han cambiado.
+ * El contrato (`orderDetailSchema`, seccion 11.2) la publica con CINCO campos:
+ * `rules_version_id`, `engine_version`, `evaluated_at`, `final_entries` y
+ * `trace`, la traza que el motor persistio en el `EntryCalculationSnapshot`,
+ * tal cual (`Record<string, unknown>`). Es lo que permite responder por que esta
+ * compra genero 37 entries y no 36 meses despues.
  *
- * Los campos son los mismos que los de `EntryQuote` porque describen lo mismo
- * -una evaluacion de las reglas- pero NO es el mismo objeto: una cotizacion es
- * orientativa y se recalcula, y un snapshot es historico e inmutable. Se
- * declara aparte para que nadie use uno donde va el otro.
+ * ESTE TIPO DECLARABA OTRA FORMA, y no existia (2026-10-05, DEC-078). Copiaba
+ * los campos de `EntryQuote` -`applied_multipliers`, `applied_caps`...- en el
+ * primer nivel; la API nunca los mando ahi, y la pantalla hacia `.length`
+ * sobre `undefined`: la ficha de CUALQUIER pedido con participaciones -de
+ * tarjeta o de efectivo- caia con un error de servidor. Lo destapo el e2e del
+ * pago en efectivo, el primero que llega a pintar un pedido otorgado contra la
+ * API real. El desglose se lee ahora de `trace`, con `readCalculationTrace`.
+ *
+ * NO es una cotizacion: una cotizacion es orientativa y se recalcula; esto es
+ * historico e inmutable.
  */
 export interface EntryCalculationSnapshot {
   readonly rules_version_id: string;
   readonly engine_version: number;
   /** Instante de la evaluacion persistida. ISO-8601 UTC. */
   readonly evaluated_at: string;
-  readonly eligible_subtotal: MoneyMinor;
-  readonly entries_before_caps: number;
   readonly final_entries: number;
-  readonly eligible_items: readonly EntryQuoteEligibleItem[];
-  readonly ineligible_items: readonly EntryQuoteIneligibleItem[];
-  readonly applied_multipliers: readonly EntryQuoteAppliedMultiplier[];
-  readonly applied_caps: readonly EntryQuoteAppliedCap[];
+  /**
+   * La traza del motor (`CalculationTrace` de `@lsw/sweepstakes`), sin tipar
+   * a proposito: es un documento historico y su forma depende de la version
+   * del motor con la que se calculo. Se lee con comprobaciones en tiempo de
+   * ejecucion, nunca con un cast.
+   */
+  readonly trace: Readonly<Record<string, unknown>>;
 }
 
 /** [PROVISIONAL] Detalle de un pedido. */
@@ -1990,6 +2013,8 @@ export type AdminCapability =
   | "pii.view.full"
   | "order.read"
   | "order.refund.initiate"
+  /** DEC-078: confirmar un cobro en efectivo y generar sus participaciones. */
+  | "order.cash.confirm"
   | "entry.ledger.read"
   | "entry.adjust.create"
   | "entry.adjust.approve"
@@ -2043,6 +2068,7 @@ export const ADMIN_CAPABILITIES: readonly AdminCapability[] = [
   "pii.view.full",
   "order.read",
   "order.refund.initiate",
+  "order.cash.confirm",
   "entry.ledger.read",
   "entry.adjust.create",
   "entry.adjust.approve",
@@ -2267,9 +2293,58 @@ export interface AdminOrderRow {
    */
   readonly participant_email: string;
   readonly participant_id: string;
+  /** DEC-078. Opcional por el mismo motivo que en `OrderSummary`. */
+  readonly payment_method?: PaymentMethod;
 }
 
 export type AdminOrderPage = CursorPage<AdminOrderRow>;
+
+/**
+ * [CONTRATO] Cobro en efectivo de un pedido, visto desde el panel (DEC-078).
+ *
+ * `stage` es el recorrido que pide el negocio -pendiente de pago en efectivo,
+ * pagado, participaciones generadas- y `entries` el detalle de la ultima etapa.
+ *
+ * `can_confirm` y `can_generate_entries` los calcula el BACKEND con el estado
+ * real. La pantalla los usa para ofrecer o no los botones; quien protege es la
+ * ruta, que lo vuelve a comprobar todo con el pedido bloqueado.
+ */
+export type CashPaymentStage = "PENDING_CASH_PAYMENT" | "PAID" | "ENTRIES_GENERATED" | "CANCELLED";
+
+export type CashEntriesStatus =
+  "AWAITING_PAYMENT" | "PENDING" | "GENERATED" | "HELD" | "NO_ENTRIES" | "NOT_APPLICABLE";
+
+export type CashNotApplicableReason = "NO_PROMOTION" | "NOT_ELIGIBLE" | "OUTSIDE_PROMOTION_WINDOW";
+
+export interface AdminCashPayment {
+  readonly order_id: string;
+  readonly order_number: string;
+  readonly stage: CashPaymentStage;
+  /** Lo que hay que cobrar -o lo que se cobro-, CALCULADO POR EL BACKEND. */
+  readonly amount: MoneyMinor;
+  /** SIEMPRE enmascarado; cadena vacia = cuenta anonimizada. */
+  readonly customer_email: string;
+  readonly confirmation: {
+    readonly confirmed_at: string;
+    readonly confirmed_by_admin_user_id: string;
+    readonly confirmed_by_name: string | null;
+    readonly reason_code: string;
+    readonly notes: string | null;
+  } | null;
+  readonly entries: {
+    readonly status: CashEntriesStatus;
+    readonly not_applicable_reason: CashNotApplicableReason | null;
+    /** Cifra del LEDGER. `null` mientras no haya concesion. */
+    readonly entries_granted: number | null;
+    readonly resolved_at: string | null;
+  };
+  readonly can_confirm: boolean;
+  readonly can_generate_entries: boolean;
+  /** Solo en las respuestas de las acciones: `false` = el cobro ya constaba. */
+  readonly confirmation_created: boolean | null;
+  /** Solo en las respuestas de las acciones: el fallo del paso de participaciones. */
+  readonly entries_error_code: string | null;
+}
 
 /**
  * [CONTRATO] Fila del listado de participantes en el panel (seccion 11.7).

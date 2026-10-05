@@ -7,6 +7,7 @@ import type {
   AdjustmentPreviewRequest,
   AdminAdjustment,
   AdminAdjustmentPage,
+  AdminCashPayment,
   AdminAmoeSubmission,
   AdminAmoeSubmissionPage,
   AdminAuditEventPage,
@@ -33,7 +34,9 @@ import type {
   OfficialRulesResponse,
   OrderDetail,
   OrderPage,
+  OrderSummary,
   ParticipantProfile,
+  PaymentMethod,
   PostalAddress,
   ProductCategoryListResponse,
   ProductDetail,
@@ -178,6 +181,8 @@ export const API_PATHS = {
   checkoutSession: "/checkout/session",
   /** Estado de una sesion de pago. */
   checkoutSessions: "/checkout/sessions",
+  /** DEC-078: pedido para pagar en efectivo en un punto de venta fisico. */
+  checkoutCashOrder: "/checkout/cash-order",
 
   /*
    * --- AMOE (seccion 7).
@@ -398,6 +403,11 @@ export function adminPromotionPath(promotionId: string): string {
 /** Ruta del detalle de un pedido en el panel. */
 export function adminOrderPath(orderId: string): string {
   return `${API_PATHS.adminOrders}/${encodeURIComponent(orderId)}`;
+}
+
+/** DEC-078: cobro en efectivo de un pedido. */
+export function adminOrderCashPaymentPath(orderId: string): string {
+  return `${adminOrderPath(orderId)}/cash-payment`;
 }
 
 /** Ruta de aprobacion de un envio AMOE. */
@@ -1087,6 +1097,29 @@ export function createCheckoutSession(
 }
 
 /**
+ * DEC-078: pedido para pagar EN EFECTIVO en un punto de venta fisico.
+ *
+ * Mismo principio que la sesion con tarjeta: el cuerpo lleva la direccion y
+ * nada mas. Lo que se compra y cuanto cuesta sale del carrito de servidor. La
+ * respuesta es el pedido ya creado, PENDIENTE de pago y sin participaciones:
+ * las genera el backend cuando la tienda confirma el cobro en caja.
+ *
+ * 201 = pedido nuevo; 200 = ese carrito ya tenia pedido en efectivo (un doble
+ * envio), y se devuelve el mismo.
+ */
+export function createCashOrder(
+  input: { readonly shipping_address: PostalAddress },
+  locale: Locale,
+  session: SessionContext,
+): Promise<ApiResult<OrderSummary>> {
+  return apiRequest<OrderSummary>("POST", API_PATHS.checkoutCashOrder, {
+    locale,
+    body: input,
+    ...sessionOptions(session),
+  });
+}
+
+/**
  * Estado de una sesion de pago.
  *
  * Lo pide la pagina de retorno. Es la unica fuente de verdad sobre si se ha
@@ -1259,13 +1292,33 @@ export function fetchAdminProducts(
   });
 }
 
-/** Pedidos del panel. */
+/**
+ * Pedidos del panel.
+ *
+ * DEC-078: `q` busca por numero de orden o por cliente (correo o nombre), y
+ * `payment_method` + `awaiting_payment` dan la cola de la caja. El backend
+ * busca; esta funcion solo compone la consulta. El correo sigue llegando
+ * enmascarado aunque se haya buscado por el.
+ */
 export function fetchAdminOrders(
-  query: AdminPageQuery,
+  query: AdminPageQuery & {
+    readonly q?: string;
+    readonly payment_method?: PaymentMethod;
+    readonly awaiting_payment?: boolean;
+  },
   locale: Locale,
   session: SessionContext,
 ): Promise<ApiResult<AdminOrderPage>> {
-  return apiGet<AdminOrderPage>(`${API_PATHS.adminOrders}${adminSearch(query)}`, {
+  const search = queryString({
+    cursor: query.cursor,
+    limit: query.limit,
+    promotion_id: query.promotion_id,
+    q: query.q,
+    payment_method: query.payment_method,
+    awaiting_payment: query.awaiting_payment === true ? "true" : undefined,
+  });
+
+  return apiGet<AdminOrderPage>(`${API_PATHS.adminOrders}${search}`, {
     locale,
     ...sessionOptions(session),
   });
@@ -1548,6 +1601,53 @@ export function fetchAdminOrder(
   session: SessionContext,
 ): Promise<ApiResult<OrderDetail>> {
   return apiGet<OrderDetail>(adminOrderPath(orderId), { locale, ...sessionOptions(session) });
+}
+
+/** DEC-078: estado del cobro en efectivo de un pedido. */
+export function fetchAdminOrderCashPayment(
+  orderId: string,
+  locale: Locale,
+  session: SessionContext,
+): Promise<ApiResult<AdminCashPayment>> {
+  return apiGet<AdminCashPayment>(adminOrderCashPaymentPath(orderId), {
+    locale,
+    ...sessionOptions(session),
+  });
+}
+
+/**
+ * DEC-078: confirmar que se recibio el pago en efectivo.
+ *
+ * El backend registra UN cobro por pedido -un doble clic o un reintento
+ * responden `confirmation_created: false`- y genera las participaciones con las
+ * mismas reglas que una compra con tarjeta. Si esa generacion falla, el cobro
+ * queda confirmado y la respuesta lo dice con `entries_error_code`.
+ */
+export function confirmAdminOrderCashPayment(
+  orderId: string,
+  input: { readonly reason_code: string; readonly notes?: string },
+  locale: Locale,
+  session: SessionContext,
+): Promise<ApiResult<AdminCashPayment>> {
+  return apiRequest<AdminCashPayment>("POST", `${adminOrderCashPaymentPath(orderId)}/confirm`, {
+    locale,
+    body: input,
+    ...sessionOptions(session),
+  });
+}
+
+/** DEC-078: reintentar SOLO la generacion de participaciones. No registra otro cobro. */
+export function generateAdminOrderCashEntries(
+  orderId: string,
+  input: { readonly reason_code: string },
+  locale: Locale,
+  session: SessionContext,
+): Promise<ApiResult<AdminCashPayment>> {
+  return apiRequest<AdminCashPayment>("POST", `${adminOrderCashPaymentPath(orderId)}/entries`, {
+    locale,
+    body: input,
+    ...sessionOptions(session),
+  });
 }
 
 // ---------------------------------------------------------------------------

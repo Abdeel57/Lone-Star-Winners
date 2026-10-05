@@ -125,6 +125,31 @@ export interface AdminOrderListOptions {
   readonly limit: number;
   /** `order_number` de la ultima fila devuelta, ya decodificado del cursor. */
   readonly after: string | null;
+  /**
+   * DEC-078: texto que busca quien atiende la caja. Casa con el NUMERO DE
+   * ORDEN, con el correo de la cuenta y con el nombre -el de la cuenta o el de
+   * la direccion del pedido-. Subcadena y sin distinguir mayusculas. `null` o
+   * ausente: sin filtro.
+   *
+   * Lo que se busca NO sale en la respuesta: la fila sigue publicando el
+   * correo enmascarado. Quien teclea el correo de un cliente ya lo conoce.
+   */
+  readonly search?: string | null;
+  /** DEC-078: `CASH` = pedidos en efectivo; `CARD` = el resto. */
+  readonly paymentMethod?: "CARD" | "CASH" | null;
+  /** DEC-078: solo los que siguen esperando el cobro (`PENDING_PAYMENT`). */
+  readonly awaitingPayment?: boolean;
+}
+
+/**
+ * Escapa los comodines de `LIKE`.
+ *
+ * Un `%` o un `_` tecleados en el buscador son texto, no comodines: sin esto,
+ * buscar `_` devolveria todos los pedidos y buscar `100%` no encontraria nada
+ * con un tanto por ciento.
+ */
+function likePattern(text: string): string {
+  return `%${text.replace(/[\\%_]/gu, (match) => `\\${match}`)}%`;
 }
 
 export interface AdminParticipantListOptions {
@@ -278,6 +303,34 @@ export class DrizzleAdminReadRepository {
     }
     if (options.after !== null) {
       filters.push(sql`${orders.orderNumber} < ${options.after}`);
+    }
+
+    const search = (options.search ?? "").trim();
+    if (search !== "") {
+      const pattern = likePattern(search);
+      // "LSW-1234" o "lsw1234" tal como lo dicta alguien en caja: el numero
+      // guardado lleva ocho cifras con ceros (`LSW-00001234`) y una subcadena
+      // no lo encontraria.
+      const dictated = /^(?:lsw-?)?0*(\d{1,8})$/iu.exec(search);
+      const exactNumber = dictated === null ? null : `LSW-${(dictated[1] ?? "").padStart(8, "0")}`;
+
+      filters.push(sql`(
+        ${orders.orderNumber} ILIKE ${pattern}
+        OR ${orders.orderNumber} = ${exactNumber}
+        OR ${identities.email} ILIKE ${pattern}
+        OR ${participants.displayName} ILIKE ${pattern}
+        OR ${orders.shippingAddress} ->> 'full_name' ILIKE ${pattern}
+      )`);
+    }
+
+    if (options.paymentMethod === "CASH") {
+      filters.push(eq(orders.provider, "cash"));
+    } else if (options.paymentMethod === "CARD") {
+      filters.push(sql`(${orders.provider} IS NULL OR ${orders.provider} <> 'cash')`);
+    }
+
+    if (options.awaitingPayment === true) {
+      filters.push(eq(orders.status, "PENDING_PAYMENT"));
     }
 
     const rows = await this.db

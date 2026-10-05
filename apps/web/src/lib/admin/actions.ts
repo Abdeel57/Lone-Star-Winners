@@ -13,11 +13,13 @@ import {
   approveAdjustment,
   approveAdminSettingChangeRequest,
   approveAmoeSubmission,
+  confirmAdminOrderCashPayment,
   createAdjustment,
   createAdminBonusPeriod,
   createAdminProductVariant,
   createAdminRulesVersion,
   createAdminSettingChangeRequest,
+  generateAdminOrderCashEntries,
   login,
   logout,
   PRODUCT_KINDS,
@@ -304,6 +306,84 @@ export async function approveAmoeAction(
 
   revalidatePath("/admin", "layout");
   return SUCCEEDED;
+}
+
+/**
+ * Confirmacion de un cobro en efectivo (DEC-078).
+ *
+ * Aqui no se decide nada: el backend comprueba la capacidad, bloquea el pedido,
+ * registra UN cobro por pedido y genera las participaciones. Un doble envio
+ * responde 200 sin registrar otro cobro.
+ *
+ * SI LAS PARTICIPACIONES FALLAN, EL COBRO YA ESTA CONFIRMADO. La respuesta es
+ * 200 con `entries_error_code`, y se devuelve como fallo del formulario con su
+ * propio codigo para que quien cobra lo vea en el acto: el texto dice que el
+ * pago consta y que hay que reintentar las participaciones, que es lo que la
+ * pantalla ofrece en cuanto se recarga.
+ */
+export async function confirmCashPaymentAction(
+  _previous: ActionResult,
+  formData: FormData,
+): Promise<ActionResult> {
+  const locale = localeFrom(formData);
+  if (locale === null) return invalid("VALIDATION_FAILED");
+
+  const orderId = textFrom(formData, "order_id");
+  if (orderId === null) return invalid("VALIDATION_FAILED");
+
+  const reason = reasonFrom(formData);
+  if (isActionResult(reason)) return reason;
+
+  const session = await mutableSession();
+  const result = await confirmAdminOrderCashPayment(
+    orderId,
+    reason.note === null
+      ? { reason_code: reason.reason_key }
+      : { reason_code: reason.reason_key, notes: reason.note },
+    locale,
+    session,
+  );
+
+  if (!result.ok) return fromFailure(result.error);
+
+  revalidatePath("/admin", "layout");
+  return result.data.entries_error_code === null
+    ? SUCCEEDED
+    : invalid("CASH_ENTRIES_GENERATION_FAILED");
+}
+
+/**
+ * Reintento de la generacion de participaciones de un cobro YA confirmado
+ * (DEC-078). No registra otro cobro: el backend lo exige cobrado y solo repite
+ * el paso de participaciones, que es idempotente por pedido.
+ */
+export async function generateCashEntriesAction(
+  _previous: ActionResult,
+  formData: FormData,
+): Promise<ActionResult> {
+  const locale = localeFrom(formData);
+  if (locale === null) return invalid("VALIDATION_FAILED");
+
+  const orderId = textFrom(formData, "order_id");
+  if (orderId === null) return invalid("VALIDATION_FAILED");
+
+  const reason = reasonFrom(formData);
+  if (isActionResult(reason)) return reason;
+
+  const session = await mutableSession();
+  const result = await generateAdminOrderCashEntries(
+    orderId,
+    { reason_code: reason.reason_key },
+    locale,
+    session,
+  );
+
+  if (!result.ok) return fromFailure(result.error);
+
+  revalidatePath("/admin", "layout");
+  return result.data.entries_error_code === null
+    ? SUCCEEDED
+    : invalid("CASH_ENTRIES_GENERATION_FAILED");
 }
 
 /** Rechazo de un envio AMOE. */

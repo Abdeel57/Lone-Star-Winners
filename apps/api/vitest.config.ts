@@ -1,10 +1,41 @@
 import { defineConfig } from "vitest/config";
 
+/**
+ * Dos suites, como en `packages/database`.
+ *
+ *   unit ......... sin base de datos: los handlers con sus puertos sustituidos.
+ *                  Corre en cada commit (`pnpm test`).
+ *
+ *   integration .. la aplicacion REAL contra PostgreSQL real (DEC-018): rutas,
+ *                  sesiones, ledger y export de punta a punta. Necesita
+ *                  `TEST_DATABASE_URL` o Docker (`pnpm test:integration`).
+ *
+ * Separadas porque `test/**` incluiria tambien `test/integration/*.int.test.ts`,
+ * y una prueba de integracion sin base de datos no prueba nada: falla.
+ */
 export default defineConfig({
   test: {
-    include: ["test/**/*.test.ts"],
-    environment: "node",
-    restoreMocks: true,
+    projects: [
+      {
+        test: {
+          name: "unit",
+          include: ["test/*.test.ts"],
+          environment: "node",
+          restoreMocks: true,
+        },
+      },
+      {
+        test: {
+          name: "integration",
+          include: ["test/integration/*.int.test.ts"],
+          environment: "node",
+          restoreMocks: true,
+          // Migrar una base nueva y montar la aplicacion no es rapido.
+          testTimeout: 180_000,
+          hookTimeout: 180_000,
+        },
+      },
+    ],
     coverage: {
       provider: "v8",
       reporter: ["text", "lcov"],

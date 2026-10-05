@@ -282,6 +282,33 @@
       "summary": "Ficha de un pedido, con su traza de calculo de participaciones."
     },
     {
+      "method": "GET",
+      "path": "/api/v1/admin/orders/:order_id/cash-payment",
+      "operation_id": "getAdminOrderCashPayment",
+      "authorization": "order.read",
+      "requires_step_up": false,
+      "tags": ["admin"],
+      "summary": "Estado del cobro en efectivo de un pedido."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/orders/:order_id/cash-payment/confirm",
+      "operation_id": "confirmAdminOrderCashPayment",
+      "authorization": "order.cash.confirm",
+      "requires_step_up": false,
+      "tags": ["admin"],
+      "summary": "Confirmar que se recibio el pago en efectivo y generar las participaciones."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/orders/:order_id/cash-payment/entries",
+      "operation_id": "generateAdminOrderCashEntries",
+      "authorization": "order.cash.confirm",
+      "requires_step_up": false,
+      "tags": ["admin"],
+      "summary": "Reintentar la generacion de participaciones de un cobro en efectivo ya confirmado."
+    },
+    {
       "method": "POST",
       "path": "/api/v1/admin/orders/:order_id/refund",
       "operation_id": "initiateOrderRefund",
@@ -820,6 +847,15 @@
       "requires_step_up": false,
       "tags": ["cart"],
       "summary": "Cambiar la cantidad de una linea."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/checkout/cash-order",
+      "operation_id": "createCashOrder",
+      "authorization": "PARTICIPANT_SELF",
+      "requires_step_up": false,
+      "tags": ["commerce"],
+      "summary": "Pedido para pagar en efectivo en un punto de venta fisico."
     },
     {
       "method": "POST",

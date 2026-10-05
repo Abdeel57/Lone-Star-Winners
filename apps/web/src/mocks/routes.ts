@@ -1,6 +1,7 @@
 import {
   adminBonusPeriodsPath,
   adminFeatureFlagPath,
+  adminOrderCashPaymentPath,
   adminOrderPath,
   adminProductPath,
   adminProductPublishPath,
@@ -25,6 +26,7 @@ import {
 
 import {
   activeSession,
+  cashPendingOrder,
   entrySummary,
   entryTransactionPage,
   manyBatchesPage,
@@ -59,6 +61,8 @@ import {
   adminRulesVersionPage,
   adminRulesVersions,
   adminSettingChangeRequests,
+  confirmedCashPayment,
+  pendingCashPayment,
 } from "./fixtures/admin";
 import {
   amoeDisabledConfig,
@@ -229,6 +233,8 @@ export const mockRoutes: readonly MockRoute[] = [
 
   // Checkout
   { method: "POST", path: API_PATHS.checkoutSession, body: hostedRedirectSession },
+  // DEC-078: pedido para pagar en efectivo en un punto de venta.
+  { method: "POST", path: API_PATHS.checkoutCashOrder, body: cashPendingOrder },
   /*
    * Dos entradas para el estado de la sesion de pago: la del borrador conocido
    * -que responde COMPLETED, que es lo que la pagina de retorno necesita para
@@ -470,6 +476,22 @@ export const mockRoutes: readonly MockRoute[] = [
     path: adminOrderPath(order.id),
     body: order,
   })),
+  /*
+   * DEC-078: el cobro en efectivo del pedido en efectivo de los fixtures. La
+   * lectura responde PENDIENTE; las dos acciones responden el cobro ya
+   * confirmado, sin acumular estado (como el carrito: aqui no se cobra nada).
+   */
+  { method: "GET", path: adminOrderCashPaymentPath(cashPendingOrder.id), body: pendingCashPayment },
+  {
+    method: "POST",
+    path: `${adminOrderCashPaymentPath(cashPendingOrder.id)}/confirm`,
+    body: confirmedCashPayment,
+  },
+  {
+    method: "POST",
+    path: `${adminOrderCashPaymentPath(cashPendingOrder.id)}/entries`,
+    body: confirmedCashPayment,
+  },
   { method: "GET", path: API_PATHS.adminParticipants, body: adminParticipantPage },
   { method: "GET", path: API_PATHS.adminAmoeSubmissions, body: adminAmoeSubmissionPage },
   {

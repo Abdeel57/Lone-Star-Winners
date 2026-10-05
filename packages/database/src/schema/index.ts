@@ -26,3 +26,5 @@ export * from "./settings.js";
 export * from "./media.js";
 // DEC-058: enlaces de verificacion de correo y de restablecimiento. Al final.
 export * from "./email-tokens.js";
+// DEC-078: cobro en efectivo en un punto de venta fisico. Al final.
+export * from "./cash-payments.js";

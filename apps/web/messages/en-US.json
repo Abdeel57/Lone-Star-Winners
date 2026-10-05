@@ -124,6 +124,10 @@
     "CHECKOUT_MODE_UNSUPPORTED": "This site does not present that way of paying yet. Nothing has been charged.",
     "PAYMENT_PROVIDER_UNAVAILABLE": "We could not reach the payment provider. Nothing has been charged.",
     "PAYMENT_PROVIDER_NOT_CONFIGURED": "Payment is not available in this store yet, so this order cannot be completed. Nothing has been charged and your cart is unchanged.",
+    "ORDER_NOT_CASH_PAYMENT": "This order is paid by card, so there is no cash payment to confirm.",
+    "CASH_PAYMENT_NOT_PENDING": "This order is no longer waiting for a cash payment.",
+    "CASH_PAYMENT_NOT_CONFIRMED": "Nobody has confirmed the cash payment for this order yet, so there are no entries to generate.",
+    "CASH_ENTRIES_GENERATION_FAILED": "The cash payment is confirmed and recorded, but the entries could not be generated. No second payment was recorded: retry generating the entries from this order.",
     "NOT_FOUND": "That is not available.",
     "ORDER_NOT_FOUND": "We could not find that order in your account.",
     "CART_EMPTY": "There is nothing in your cart.",
@@ -835,7 +839,9 @@
       "itemCount": "{count} items",
       "entriesLabel": "Entries from this order",
       "view": "See this order",
-      "browse": "Browse eligible merchandise"
+      "browse": "Browse eligible merchandise",
+      "paymentCash": "Cash payment",
+      "cashPendingBody": "Pay in cash at a store location and give your order number, {number}. Your order stays pending until the store confirms your payment, and your entries are generated at that moment."
     },
     "order": {
       "back": "Back to my orders",
@@ -970,7 +976,20 @@
       "viewOrders": "See my orders"
     },
     "unsupportedTitle": "This payment method is not available here yet",
-    "unsupportedBody": "Our payment provider offered a way to pay that this site does not present yet. Nothing has been charged."
+    "unsupportedBody": "Our payment provider offered a way to pay that this site does not present yet. Nothing has been charged.",
+    "payment": {
+      "heading": "How do you want to pay?",
+      "card": {
+        "title": "Card",
+        "body": "Pay now on our payment provider's secure page. Your entries are generated once the payment is confirmed."
+      },
+      "cash": {
+        "title": "Cash at a store location",
+        "body": "We reserve your order and you pay in cash at a store location. Nothing is charged now, and your entries are generated when the store confirms your payment."
+      },
+      "cashCta": "Place order and pay in cash",
+      "cashNote": "Nothing is charged now. You will get an order number to give at the store location when you pay."
+    }
   },
   "orderConfirmation": {
     "title": "Thank you for your order",
@@ -980,7 +999,14 @@
     "viewOrder": "See the full order",
     "viewEntries": "See my entries",
     "continueShopping": "Keep browsing merchandise",
-    "rulesNote": "Refunds, chargebacks and disqualification can change the entries associated with an order, as described in the Official Rules."
+    "rulesNote": "Refunds, chargebacks and disqualification can change the entries associated with an order, as described in the Official Rules.",
+    "cash": {
+      "pendingTitle": "Pay in cash at a store location",
+      "paidTitle": "Cash payment confirmed",
+      "orderNumberLabel": "Your order number",
+      "pendingBody": "Give this order number at a store location and pay {total} in cash. Nothing has been charged yet: your order is pending payment, and your entries are generated when the store confirms it.",
+      "paidBody": "The store confirmed your cash payment. Your entries are generated with the same rules as a card purchase."
+    }
   },
   "admin": {
     "meta": {
@@ -1271,7 +1297,81 @@
       "linesHeading": "Items",
       "traceHeading": "How the entries were calculated",
       "refundHeading": "Refund",
-      "refundPending": "A refund moves money and reverses entries. The screen for it arrives with the backend route, with its full confirmation and its reason."
+      "refundPending": "A refund moves money and reverses entries. The screen for it arrives with the backend route, with its full confirmation and its reason.",
+      "searchLabel": "Find an order",
+      "searchPlaceholder": "Order number, email or customer name",
+      "searchSubmit": "Search",
+      "searchClear": "Clear search",
+      "searchEmptyTitle": "No order matches that search",
+      "searchEmptyBody": "Check the order number (for example LSW-00001234 or just 1234), the email or the customer's name.",
+      "viewsLabel": "Which orders to show",
+      "views": {
+        "all": "All orders",
+        "cash-pending": "Cash awaiting payment",
+        "cash": "All cash orders"
+      },
+      "columnPayment": "Payment",
+      "paymentCash": "Cash",
+      "paymentCard": "Card"
+    },
+    "cashPayment": {
+      "title": "Cash payment at a store location",
+      "stagesLabel": "Where this order is",
+      "stages": {
+        "PENDING_CASH_PAYMENT": "Pending cash payment",
+        "PAID": "Paid",
+        "ENTRIES_GENERATED": "Entries generated",
+        "CANCELLED": "Cancelled"
+      },
+      "cancelledBody": "This order was cancelled. There is no payment to confirm.",
+      "orderNumber": "Order number",
+      "amount": "Amount to collect",
+      "customer": "Customer account",
+      "anonymized": "Anonymized account",
+      "confirmationHeading": "Payment received",
+      "confirmedBy": "Confirmed by",
+      "confirmedAt": "Date and time (UTC)",
+      "reason": "Reason",
+      "notes": "Notes",
+      "confirmHeading": "Confirm the cash payment",
+      "confirmIntro": "Check the order number and the customer's details first. Confirming records who received the money and when, marks the order as paid and generates its entries with the same rules as a card purchase.",
+      "confirmSubmit": "Confirm cash payment",
+      "confirmCheckbox": "I received {total} in cash for order {number}.",
+      "noCapability": "Your account cannot confirm cash payments (order.cash.confirm). Ask whoever manages roles.",
+      "retryHeading": "Retry generating the entries",
+      "retryIntro": "The payment is already confirmed and recorded. This only repeats the entries step: it does not record another payment and it cannot create entries twice.",
+      "retrySubmit": "Retry generating the entries",
+      "retryCheckbox": "I understand this does not record another payment.",
+      "impactPayment": "Payment",
+      "impactConfirm": "Confirm",
+      "impactAmount": "Amount",
+      "impactCash": "in cash",
+      "impactEntries": "Entries",
+      "impactSameRules": "Same rules as a card purchase",
+      "impactRetry": "Retry",
+      "impactEntriesAfter": "Calculated by the system",
+      "entriesHeading": "Entries",
+      "entries": {
+        "AWAITING_PAYMENT": "Not generated: payment pending",
+        "PENDING": "Pending generation",
+        "GENERATED": "Generated",
+        "HELD": "Held",
+        "NO_ENTRIES": "No entries",
+        "NOT_APPLICABLE": "Not applicable"
+      },
+      "entriesBody": {
+        "AWAITING_PAYMENT": "A pending cash order generates no valid entries. They are generated when the payment is confirmed.",
+        "PENDING": "The payment is confirmed, but the entries were not generated yet or the attempt failed. Retry below: it does not record another payment.",
+        "GENERATED": "Generated with the same rules, data and entry numbers as a card purchase. They are included in the export to the sweepstakes administrator.",
+        "HELD": "The order qualified, and its entries are held until the participant verifies their email, the same as with a card purchase.",
+        "NO_ENTRIES": "The order qualified, but the calculation gave zero entries (for example, because of the per-person limit).",
+        "NOT_APPLICABLE": "Under the Official Rules, this order does not generate entries."
+      },
+      "notApplicable": {
+        "NO_PROMOTION": "The order is not associated with any promotion, so it generates no entries.",
+        "NOT_ELIGIBLE": "The participant does not meet the eligibility requirements of the Official Rules, so this order generates no entries. The merchandise is sold all the same.",
+        "OUTSIDE_PROMOTION_WINDOW": "The payment was received outside the promotion period, so it generates no entries."
+      }
     },
     "participants": {
       "title": "Participants",
@@ -1516,7 +1616,9 @@
       "CORRECTION_OF_PUBLISHED_VERSION": "Correcting a published version",
       "PROMOTIONAL_CAMPAIGN": "Planned promotional campaign",
       "OPERATIONAL_ROLLOUT": "Planned rollout",
-      "INCIDENT_MITIGATION": "Mitigating an incident"
+      "INCIDENT_MITIGATION": "Mitigating an incident",
+      "CASH_RECEIVED_AT_STORE": "Cash received at a store location",
+      "RETRY_ENTRY_GENERATION": "Retrying the entries step"
     },
     "warnings": {
       "ENTRY_CAP_REACHED": "The entry cap for this promotion has been reached.",

@@ -92,6 +92,12 @@ export const orderSummarySchema = z.object({
    * delante de alguien que acaba de comprar.
    */
   entries_granted: z.number().int().nullable(),
+  /**
+   * DEC-078: `CARD` (pasarela de pago) o `CASH` (efectivo en un punto de venta
+   * fisico). Con `CASH` y `status = PENDING_PAYMENT`, el pedido espera a que
+   * alguien de la tienda confirme el cobro en caja.
+   */
+  payment_method: z.enum(["CARD", "CASH"]),
 });
 
 export const postalAddressSchema = z.object({
@@ -152,6 +158,68 @@ export const checkoutSessionStateSchema = z.object({
 });
 
 export const webhookAckSchema = z.object({ received: z.literal(true) });
+
+/**
+ * DEC-078: cobro en efectivo de un pedido, visto desde el panel.
+ *
+ * `stage` es el recorrido que pide el negocio -pendiente de pago en efectivo,
+ * pagado, participaciones generadas- y `entries` el detalle de la ultima etapa.
+ * Son dos campos porque "pagado" tiene varios desenlaces que quien atiende la
+ * caja tiene que distinguir: pendiente de reintentar, retenido por correo sin
+ * verificar, o sin participaciones por las Official Rules.
+ *
+ * `can_confirm` y `can_generate_entries` los decide el BACKEND con el estado
+ * real. El panel los usa para ensenar o no los botones; quien protege es la
+ * ruta, que vuelve a comprobarlo todo con el pedido bloqueado.
+ */
+export const cashPaymentSchema = z.object({
+  order_id: z.uuid(),
+  order_number: z.string(),
+  stage: z.enum(["PENDING_CASH_PAYMENT", "PAID", "ENTRIES_GENERATED", "CANCELLED"]),
+  /** Lo que hay que cobrar -o lo que se cobro-: el total del pedido. */
+  amount: moneySchema,
+  /** SIEMPRE enmascarado: `order.read` no es una capacidad de PII. */
+  customer_email: z.string(),
+  confirmation: z
+    .object({
+      confirmed_at: z.string(),
+      confirmed_by_admin_user_id: z.uuid(),
+      /** Nombre de la cuenta de personal. `null` si no se pudo leer. */
+      confirmed_by_name: z.string().nullable(),
+      reason_code: z.string(),
+      notes: z.string().nullable(),
+    })
+    .nullable(),
+  entries: z.object({
+    status: z.enum([
+      "AWAITING_PAYMENT",
+      "PENDING",
+      "GENERATED",
+      "HELD",
+      "NO_ENTRIES",
+      "NOT_APPLICABLE",
+    ]),
+    not_applicable_reason: z
+      .enum(["NO_PROMOTION", "NOT_ELIGIBLE", "OUTSIDE_PROMOTION_WINDOW"])
+      .nullable(),
+    /** Cifra del LEDGER, no de esta tabla. `null` mientras no haya concesion. */
+    entries_granted: z.number().int().nullable(),
+    resolved_at: z.string().nullable(),
+  }),
+  can_confirm: z.boolean(),
+  can_generate_entries: z.boolean(),
+  /**
+   * Solo en las respuestas de las acciones. `true`: esta peticion registro el
+   * cobro; `false`: ya constaba y no se registro otro. `null` en la lectura.
+   */
+  confirmation_created: z.boolean().nullable(),
+  /**
+   * Solo en las respuestas de las acciones: el codigo del fallo del paso de
+   * participaciones en esta peticion. El cobro sigue confirmado y el paso se
+   * puede reintentar.
+   */
+  entries_error_code: z.string().nullable(),
+});
 
 // ---------------------------------------------------------------------------
 // Portal del participante

@@ -183,6 +183,13 @@
       "when": 1787616034000,
       "tag": "0034_participant_eligibility",
       "breakpoints": false
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1787616035000,
+      "tag": "0035_cash_payments",
+      "breakpoints": false
     }
   ]
 }

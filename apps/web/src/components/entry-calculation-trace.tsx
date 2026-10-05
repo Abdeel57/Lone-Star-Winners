@@ -5,6 +5,7 @@ import { formatEntryCount, formatMoney, formatZonedDateTime } from "@/i18n/forma
 import type { Locale } from "@/i18n/locales";
 import { useCapKindLabel, useIneligibilityReason } from "@/i18n/storefront-labels";
 import type { EntryCalculationSnapshot } from "@/lib/api";
+import { readCalculationTrace } from "@/lib/entry-calculation";
 
 /**
  * Traza del calculo de participaciones de un pedido.
@@ -30,16 +31,24 @@ import type { EntryCalculationSnapshot } from "@/lib/api";
  * se suman los multiplicadores. Si el backend mandara dos cifras incoherentes,
  * la pantalla las ensenaria las dos -que es como se detecta el defecto- en vez
  * de taparlo con una resta hecha aqui.
+ *
+ * EL DESGLOSE SALE DE `trace` (DEC-078). El contrato publica la traza del motor
+ * sin tipar; `readCalculationTrace` la lee y descarta lo que no tiene forma.
+ * Antes se leia de campos de primer nivel que la API nunca mando, y la ficha de
+ * cualquier pedido con participaciones caia con un error de servidor.
  */
 export function EntryCalculationTrace({
   calculation,
   locale,
   timeZone,
+  currency,
 }: {
   readonly calculation: EntryCalculationSnapshot | null;
   readonly locale: Locale;
   /** Zona legal declarada por la promocion (DEC-011). */
   readonly timeZone: string;
+  /** Moneda del pedido: la traza guarda importes en unidad menor, sin moneda. */
+  readonly currency: string;
 }) {
   const t = useTranslations("account.order");
   const capKind = useCapKindLabel();
@@ -49,9 +58,12 @@ export function EntryCalculationTrace({
     return <Alert tone="info">{t("noCalculation")}</Alert>;
   }
 
+  const view = readCalculationTrace(calculation, currency);
   const evaluatedAt = formatZonedDateTime(calculation.evaluated_at, locale, { timeZone });
-  const eligibleSubtotal = formatMoney(calculation.eligible_subtotal, locale);
-  const cappedDown = calculation.final_entries !== calculation.entries_before_caps;
+  const eligibleSubtotal =
+    view.eligibleSubtotal === null ? null : formatMoney(view.eligibleSubtotal, locale);
+  const cappedDown =
+    view.entriesBeforeCaps !== null && calculation.final_entries !== view.entriesBeforeCaps;
 
   return (
     <Card elevation="raised" padding="lg">
@@ -71,10 +83,10 @@ export function EntryCalculationTrace({
         {/* La cifra antes de los topes solo aparece cuando DIFIERE de la final:
             ensenar dos numeros iguales uno debajo del otro sugiere que ha pasado
             algo cuando no ha pasado nada. */}
-        {cappedDown ? (
+        {cappedDown && view.entriesBeforeCaps !== null ? (
           <p className="text-body-sm text-text-muted">
             {t("calculationBeforeCaps", {
-              entries: formatEntryCount(calculation.entries_before_caps, locale),
+              entries: formatEntryCount(view.entriesBeforeCaps, locale),
             })}
           </p>
         ) : null}
@@ -86,12 +98,12 @@ export function EntryCalculationTrace({
         </p>
       </dl>
 
-      {calculation.applied_multipliers.length === 0 ? null : (
+      {view.multipliers.length === 0 ? null : (
         <section className="mt-s5">
           <h4 className="text-label font-medium text-text">{t("calculationMultipliers")}</h4>
 
           <ul className="mt-s2 flex list-none flex-wrap gap-2">
-            {calculation.applied_multipliers.map((multiplier) => (
+            {view.multipliers.map((multiplier) => (
               <li
                 key={multiplier.id}
                 className="rounded-md border border-border px-2.5 py-1 text-caption tabular-nums text-text-muted"
@@ -106,12 +118,12 @@ export function EntryCalculationTrace({
         </section>
       )}
 
-      {calculation.applied_caps.length === 0 ? null : (
+      {view.caps.length === 0 ? null : (
         <section className="mt-s5">
           <h4 className="text-label font-medium text-text">{t("calculationCaps")}</h4>
 
           <ul className="mt-s2 flex list-none flex-col gap-s2">
-            {calculation.applied_caps.map((cap) => (
+            {view.caps.map((cap) => (
               <li key={`${cap.kind}-${cap.limit}`} className="text-body-sm text-text-muted">
                 {t("calculationCapRow", {
                   kind: capKind(cap.kind),
@@ -125,12 +137,12 @@ export function EntryCalculationTrace({
         </section>
       )}
 
-      {calculation.ineligible_items.length === 0 ? null : (
+      {view.ineligible.length === 0 ? null : (
         <section className="mt-s5">
           <h4 className="text-label font-medium text-text">{t("calculationIneligible")}</h4>
 
           <ul className="mt-s2 flex list-none flex-col gap-s2">
-            {calculation.ineligible_items.map((item) => (
+            {view.ineligible.map((item) => (
               <li key={item.line_id} className="text-body-sm text-text-muted">
                 <span className="font-mono text-caption text-text-subtle">{item.sku}</span>{" "}
                 {ineligibilityReason(item.reason_key)}

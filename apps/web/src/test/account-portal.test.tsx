@@ -41,6 +41,7 @@ import { OrderCard } from "@/components/order-card";
 import { OrderLineList } from "@/components/order-line-list";
 import { ProfileForm } from "@/components/profile-form";
 import { formatEntryCount } from "@/i18n/formatters";
+import { readCalculationTrace } from "@/lib/entry-calculation";
 import { LOCALES, type Locale } from "@/i18n/locales";
 import {
   chargebackOrder,
@@ -287,7 +288,12 @@ describe("traza del calculo de un pedido", () => {
 
     const { container } = renderIn(
       locale,
-      <EntryCalculationTrace calculation={calculation} locale={locale} timeZone={TIME_ZONE} />,
+      <EntryCalculationTrace
+        calculation={calculation}
+        locale={locale}
+        timeZone={TIME_ZONE}
+        currency="USD"
+      />,
     );
 
     // Sin la procedencia no se puede explicar la cifra meses despues (DEC-012).
@@ -298,11 +304,18 @@ describe("traza del calculo de un pedido", () => {
   it("explica por que la cifra bajo, en vez de ensenar un numero menor sin motivo", () => {
     const calculation = grantedOrder.entry_calculation;
     if (calculation === null || calculation === undefined) return;
-    expect(calculation.final_entries).not.toBe(calculation.entries_before_caps);
+    const entriesBeforeCaps = readCalculationTrace(calculation, "USD").entriesBeforeCaps;
+    expect(entriesBeforeCaps).not.toBeNull();
+    expect(calculation.final_entries).not.toBe(entriesBeforeCaps);
 
     renderIn(
       "en",
-      <EntryCalculationTrace calculation={calculation} locale="en" timeZone={TIME_ZONE} />,
+      <EntryCalculationTrace
+        calculation={calculation}
+        locale="en"
+        timeZone={TIME_ZONE}
+        currency="USD"
+      />,
     );
 
     expect(screen.getByText(enMessages.account.order.calculationCaps)).toBeInTheDocument();
@@ -313,7 +326,7 @@ describe("traza del calculo de un pedido", () => {
       screen.getByText(
         enMessages.account.order.calculationBeforeCaps.replace(
           "{entries}",
-          formatEntryCount(calculation.entries_before_caps, "en"),
+          formatEntryCount(entriesBeforeCaps ?? 0, "en"),
         ),
       ),
     ).toBeInTheDocument();
@@ -325,7 +338,12 @@ describe("traza del calculo de un pedido", () => {
 
     const { container } = renderIn(
       "en",
-      <EntryCalculationTrace calculation={calculation} locale="en" timeZone={TIME_ZONE} />,
+      <EntryCalculationTrace
+        calculation={calculation}
+        locale="en"
+        timeZone={TIME_ZONE}
+        currency="USD"
+      />,
     );
 
     // DEC-010: `3/2` no se puede pintar como "1.5x" sin redondear una cifra que
@@ -335,8 +353,39 @@ describe("traza del calculo de un pedido", () => {
   });
 
   it("sin traza registrada lo dice, en vez de dejar la seccion vacia", () => {
-    renderIn("es", <EntryCalculationTrace calculation={null} locale="es" timeZone={TIME_ZONE} />);
+    renderIn(
+      "es",
+      <EntryCalculationTrace calculation={null} locale="es" timeZone={TIME_ZONE} currency="USD" />,
+    );
     expect(screen.getByText(esMessages.account.order.noCalculation)).toBeInTheDocument();
+  });
+
+  it("con la forma MINIMA del contrato -una traza sin desglose- pinta la cifra y no cae", () => {
+    /*
+     * REGRESION (DEC-078). La API publica `entry_calculation` con cinco campos y
+     * la traza del motor dentro de `trace`. La pantalla leia `applied_multipliers`
+     * del primer nivel, que no existe, y hacia `.length` sobre `undefined`: la
+     * ficha de cualquier pedido otorgado -tarjeta o efectivo- caia con un error
+     * de servidor. Una traza vacia o rara se tiene que poder pintar igual.
+     */
+    const { container } = renderIn(
+      "en",
+      <EntryCalculationTrace
+        calculation={{
+          rules_version_id: "prv_minimal",
+          engine_version: 2,
+          evaluated_at: "2026-10-05T16:00:00.000Z",
+          final_entries: 50,
+          trace: { applied_caps: "no es una lista", ineligible_items: [{ sku: 1 }] },
+        }}
+        locale="en"
+        timeZone={TIME_ZONE}
+        currency="USD"
+      />,
+    );
+
+    expect(container.textContent).toContain("prv_minimal");
+    expect(screen.queryByText(enMessages.account.order.calculationCaps)).not.toBeInTheDocument();
   });
 
   it("un pedido devuelto conserva su traza original", () => {

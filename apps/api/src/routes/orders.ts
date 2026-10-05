@@ -47,12 +47,11 @@ import {
   eligibleRefundAmount,
   isCommerceError,
   paymentTransitionIsValid,
-  resolveQualifyingPaymentState,
   applyPaymentState,
   type Order,
   type ProviderEvent,
 } from "@lsw/commerce";
-import { isSweepstakesError, minorAmountSchema, type QualifiedOrder } from "@lsw/sweepstakes";
+import { isSweepstakesError, minorAmountSchema } from "@lsw/sweepstakes";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 
@@ -69,14 +68,23 @@ import {
   orderSummarySchema,
   webhookAckSchema,
 } from "../http/schemas-b5.js";
+import { freezeOpenCart } from "../services/cart-freeze.js";
+import { createCashCheckout } from "../services/cash-payments.js";
 import { domainServicesFor } from "../services/domain-registry.js";
 import { toCommerceOrder } from "../services/domain-services.js";
-import { evaluateEligibility, readEligibilityRules } from "../services/eligibility.js";
 import {
   entryStateForOrder,
   presentOrderDetail,
   presentOrderSummary,
 } from "../services/order-presenter.js";
+import { createPurchaseQualifier } from "../services/purchase-qualification.js";
+
+/**
+ * Se reexporta desde aqui porque es donde nacio y donde lo importan sus
+ * pruebas; la implementacion vive ahora en `services/purchase-qualification.ts`,
+ * compartida con el cobro en efectivo (DEC-078).
+ */
+export { paidOutsidePromotion } from "../services/purchase-qualification.js";
 
 /** Camino de la ruta del webhook. Lo necesita el parser de cuerpo crudo. */
 export const PAYMENT_WEBHOOK_URL = "/api/v1/webhooks/payments/:provider";
@@ -84,33 +92,29 @@ export const PAYMENT_WEBHOOK_URL = "/api/v1/webhooks/payments/:provider";
 const UUID_SHAPE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
 
 /**
- * Un pedido fuera de promocion, con el cobro confirmado.
+ * Direccion de envio del checkout. La comparten la tarjeta y el efectivo
+ * (DEC-078): en los dos casos es lo que identifica al cliente y a donde va la
+ * mercancia.
  *
- * Pasa por la maquina de estados como cualquier otro -PENDING_PAYMENT ->
- * CONFIRMED, pago -> PAID- pero SIN `qualifiedAt`: calificar es hacerlo contra
- * una promocion, y la CHECK `orders_qualified_requires_promotion` rechazaria
- * un pedido calificado sin ella.
+ * SIN ninguna regla de jurisdiccion. La elegibilidad territorial la fijan las
+ * Official Rules y sigue en `docs/LEGAL_PENDING.md`; aqui solo se recoge lo
+ * que hace falta para entregar mercancia.
  */
-export function paidOutsidePromotion(order: Order, at: Date): Order {
-  const change = applyPaymentState(order, "PAID", at, "PAID");
-  return { ...change.order, qualifiedAt: order.qualifiedAt };
-}
+const shippingAddressBodySchema = z.object({
+  full_name: z.string().min(1).max(200),
+  line1: z.string().min(1).max(200),
+  line2: z.string().max(200).nullable().optional(),
+  city: z.string().min(1).max(120),
+  region: z.string().min(1).max(120),
+  postal_code: z.string().min(1).max(20),
+  country: z.string().min(2).max(2),
+});
+
+/** DEC-078: el pedido en efectivo no tiene pasarela, asi que no hay URL de vuelta. */
+const cashOrderBodySchema = z.object({ shipping_address: shippingAddressBodySchema });
 
 const checkoutBodySchema = z.object({
-  /**
-   * SIN ninguna regla de jurisdiccion. La elegibilidad territorial la fijan las
-   * Official Rules y sigue en `docs/LEGAL_PENDING.md`; aqui solo se recoge lo
-   * que hace falta para entregar mercancia.
-   */
-  shipping_address: z.object({
-    full_name: z.string().min(1).max(200),
-    line1: z.string().min(1).max(200),
-    line2: z.string().max(200).nullable().optional(),
-    city: z.string().min(1).max(120),
-    region: z.string().min(1).max(120),
-    postal_code: z.string().min(1).max(20),
-    country: z.string().min(2).max(2),
-  }),
+  shipping_address: shippingAddressBodySchema,
   return_url: z.url().max(2048),
 });
 
@@ -182,6 +186,10 @@ export function buildOrdersRoutes(dependencies: AppDependencies): RouteDefinitio
   const { repositories, paymentProvider } = dependencies;
   const domain = domainServicesFor(dependencies);
   const orders = domain.repositories.orders;
+  // DEC-078: la MISMA calificacion y el mismo award que usa el cobro en
+  // efectivo. Ver la cabecera de `services/purchase-qualification.ts`.
+  const qualifier = createPurchaseQualifier(dependencies, domain);
+  const cashCheckout = createCashCheckout(dependencies, domain);
 
   /**
    * Procesa un evento ya verificado y normalizado.
@@ -300,6 +308,11 @@ export function buildOrdersRoutes(dependencies: AppDependencies): RouteDefinitio
    * otorgar, el reintento encuentra la concesion hecha (`ALREADY_AWARDED`, es
    * idempotente por `order:<id>`) y solo confirma. En ningun caso queda un
    * pedido cobrado sin participaciones ni participaciones duplicadas.
+   *
+   * La calificacion y el award viven en `services/purchase-qualification.ts`
+   * desde DEC-078, compartidos con el cobro en efectivo. Aqui queda lo que es
+   * propio del webhook: descartar el duplicado tardio y anotar el proveedor y
+   * el identificador del pago.
    */
   async function applyQualifyingPayment(order: Order, event: ProviderEvent): Promise<boolean> {
     // Un "pagado" que llega cuando el pedido ya paso de PAID -reembolsado- es un
@@ -313,115 +326,10 @@ export function buildOrdersRoutes(dependencies: AppDependencies): RouteDefinitio
       return false;
     }
 
-    if (order.promotionId === null) {
-      // Compra fuera de promocion: se registra el pago y no hay nada que otorgar.
-      // Se persiste el pedido YA TRANSICIONADO: guardar el de entrada dejaba el
-      // pedido en PENDING_PAYMENT aunque el cobro se hubiera confirmado.
-      await persistPaymentState(paidOutsidePromotion(order, event.occurredAt), event, "PAID");
-      return true;
-    }
-
-    const context = await domain.repositories.promotions.getContext(order.promotionId);
-    if (context === null) {
-      throw ApiErrors.calculationConfigInvalid();
-    }
-
-    // Sin default: si la version de reglas no declara el estado cualificante,
-    // esto lanza y el evento queda FAILED y visible. Es preferible a otorgar en
-    // el momento equivocado.
-    const qualifyingState = resolveQualifyingPaymentState(context.rulesConfig);
-
-    return await domain.repositories.unitOfWork.withTransaction(async () => {
-      const change = applyPaymentState(order, "PAID", event.occurredAt, qualifyingState);
-
-      const qualifiedAt = change.order.qualifiedAt;
-      if (!change.justQualified || qualifiedAt === null) {
-        await persistPaymentState(change.order, event, "PAID");
-        return true;
-      }
-
-      // DEC-067: la compra de quien no es "Entrant" segun las Official Rules
-      // no es una participacion (seccion 1). Se registra el cobro SIN calificar,
-      // igual que una compra fuera del periodo: la mercancia se vende igual.
-      if (!(await participantIsEligible(order.participantId, context, qualifiedAt))) {
-        await persistPaymentState(paidOutsidePromotion(order, event.occurredAt), event, "PAID");
-        return true;
-      }
-
-      const qualified: QualifiedOrder = {
-        orderId: order.id,
-        promotionId: context.promotionId,
-        participantId: order.participantId,
-        currency: order.currency,
-        qualifiedAt,
-        items: order.items.map((item) => ({
-          lineId: item.lineId,
-          sku: item.sku,
-          // DEC-052: el tipo CONGELADO en la linea del pedido, no el que tenga
-          // hoy `products.kind`. Es lo que decide con que tasa se calcula.
-          productKind: item.productKind,
-          quantity: item.quantity,
-          unitAmountMinor: item.unitAmountMinor,
-        })),
-      };
-
-      try {
-        await domain.award.awardForQualifiedOrder(qualified);
-      } catch (error) {
-        if (!outsidePromotionWindow(error)) throw error;
-        // Pago fuera del periodo de la promocion -antes de `starts_at`, despues
-        // de `ends_at`, o con la promocion ya en exportacion-. No es un fallo:
-        // las Official Rules no dan participaciones fuera del periodo. Se
-        // registra el cobro SIN calificar, igual que una compra sin promocion;
-        // reintentarlo no cambiaria nada y dejaria el pedido sin confirmar.
-        await persistPaymentState(paidOutsidePromotion(order, event.occurredAt), event, "PAID");
-        return true;
-      }
-
-      await persistPaymentState(change.order, event, "PAID");
-      return true;
-    });
-  }
-
-  /**
-   * DEC-067: el participante cumple la seccion 1 de las Official Rules en el
-   * instante en que su pedido califica.
-   *
-   * Con `age_gate_enabled` y `state_eligibility_enforcement_enabled` apagados
-   * -por defecto- no se consulta nada y todo el mundo es elegible, como antes.
-   * Encendidos, la edad y los estados excluidos salen de la version de reglas
-   * de la promocion; si falta el dato, `evaluateEligibility` lanza y el evento
-   * queda FAILED y visible en vez de otorgar sin comprobar.
-   */
-  async function participantIsEligible(
-    participantId: string,
-    context: { readonly rulesConfig: unknown; readonly legalTimeZone: string },
-    at: Date,
-  ): Promise<boolean> {
-    const { featureFlags } = await repositories.config.read();
-    const switches = {
-      ageGate: featureFlags.age_gate_enabled,
-      stateEnforcement: featureFlags.state_eligibility_enforcement_enabled,
-    };
-    if (!switches.ageGate && !switches.stateEnforcement) return true;
-
-    const declaration =
-      await dependencies.identity.identities.findEligibilityDeclaration(participantId);
-    return evaluateEligibility({
-      declaration,
-      rules: readEligibilityRules(context.rulesConfig),
-      switches,
-      at,
-      timeZone: context.legalTimeZone,
-    }).eligible;
-  }
-
-  /** El award rechazo el pedido por el periodo o el estado de la promocion, no por un fallo. */
-  function outsidePromotionWindow(error: unknown): boolean {
-    return (
-      isSweepstakesError(error, "PROMOTION_WINDOW_CLOSED") ||
-      isSweepstakesError(error, "PROMOTION_NOT_ACCEPTING_ENTRIES")
+    await qualifier.qualifyPaidOrder(order, event.occurredAt, (paid) =>
+      persistPaymentState(paid, event, "PAID"),
     );
+    return true;
   }
 
   async function applyNonQualifyingPayment(order: Order, event: ProviderEvent): Promise<boolean> {
@@ -628,49 +536,18 @@ export function buildOrdersRoutes(dependencies: AppDependencies): RouteDefinitio
         const principal = await requirePrincipal(request);
         const body = request.body as z.infer<typeof checkoutBodySchema>;
 
-        const cart = await repositories.carts.findOpen(cartOwnerOf(principal));
-        if (cart === null || cart.lines.length === 0) {
-          throw new ApiError({ statusCode: 409, code: "CART_EMPTY" });
-        }
-        if (cart.currency === null) {
-          throw new ApiError({ statusCode: 409, code: "CART_EMPTY" });
-        }
-
-        const promotion = await repositories.promotions.findActive();
-
-        // La elegibilidad se congela AQUI, bajo la version de reglas vigente al
-        // comprar. No se recalcula al devolver: si se recalculara, un cambio de
-        // la lista de mercancia elegible alteraria el prorrateo de una
-        // devolucion de una compra anterior.
-        const eligibleSkus = await resolveEligibleSkus(promotion?.rulesVersionId ?? null);
-
-        let subtotal = 0n;
-        const items = cart.lines.map((line) => {
-          subtotal += line.unitAmountMinor * BigInt(line.quantity);
-          return {
-            productId: line.productId,
-            productVariantId: line.productVariantId,
-            sku: line.sku,
-            productSlug: line.productSlug,
-            nameSnapshot: { "en-US": line.name["en-US"], "es-US": line.name["es-US"] },
-            // DEC-052: el tipo se congela AQUI, junto al resto de la foto. A
-            // partir de este instante, reetiquetar el producto en el catalogo
-            // no cambia lo que significo esta compra.
-            productKind: line.productKind,
-            quantity: line.quantity,
-            unitAmountMinor: line.unitAmountMinor,
-            currency: line.currency,
-            sweepstakesEligibleSnapshot: eligibleSkus === null || eligibleSkus.has(line.sku),
-          };
-        });
+        // La foto del carrito -precios, SKU, tipo y elegibilidad congelados- la
+        // hace `freezeOpenCart`, la MISMA que usa el pedido en efectivo.
+        const cart = await freezeOpenCart(repositories, cartOwnerOf(principal));
+        const subtotal = cart.subtotalMinor;
 
         const orderId = domain.ids.next();
         const draft = await orders.createDraft({
           id: orderId,
           participantId: principal.participantId,
-          promotionId: promotion?.id ?? null,
-          rulesVersionId: promotion?.rulesVersionId ?? null,
-          cartId: cart.id,
+          promotionId: cart.promotionId,
+          rulesVersionId: cart.rulesVersionId,
+          cartId: cart.cartId,
           currency: cart.currency,
           subtotalMinor: subtotal,
           // Envio e impuestos todavia no estan determinados. `null` y no cero:
@@ -679,7 +556,7 @@ export function buildOrdersRoutes(dependencies: AppDependencies): RouteDefinitio
           taxTotalMinor: null,
           totalMinor: subtotal,
           shippingAddress: { ...body.shipping_address, line2: body.shipping_address.line2 ?? null },
-          items: items.map((item) => ({ ...item, productId: item.productId })),
+          items: cart.items,
           createdAt: domain.clock.now(),
         });
 
@@ -811,6 +688,54 @@ export function buildOrdersRoutes(dependencies: AppDependencies): RouteDefinitio
               : { client_token: session.clientToken },
           order_draft_id: draft.id,
         };
+      },
+    },
+
+    {
+      method: "POST",
+      url: "/api/v1/checkout/cash-order",
+      operationId: "createCashOrder",
+      summary: "Pedido para pagar en efectivo en un punto de venta fisico.",
+      description:
+        "DEC-078. Congela el carrito de servidor exactamente igual que la sesion con tarjeta y deja el pedido PENDING_PAYMENT con `payment_method = CASH`. NO genera participaciones: no hay cobro hasta que una persona con `order.cash.confirm` lo confirma en el panel. Idempotente por carrito: repetir el envio devuelve 200 con el mismo pedido en vez de crear otro.",
+      tags: ["commerce"],
+      authorization: { kind: "PARTICIPANT", selfOnly: true },
+      schema: {
+        body: cashOrderBodySchema,
+        response: {
+          200: orderSummarySchema,
+          201: orderSummarySchema,
+          401: errorEnvelopeSchema,
+          409: errorEnvelopeSchema,
+          422: errorEnvelopeSchema,
+        },
+      },
+      handler: async (request, reply) => {
+        const principal = await requirePrincipal(request);
+        const body = request.body as z.infer<typeof cashOrderBodySchema>;
+
+        const outcome = await cashCheckout.placeOrder(
+          principal.participantId,
+          cartOwnerOf(principal),
+          { ...body.shipping_address, line2: body.shipping_address.line2 ?? null },
+        );
+
+        // Con el pedido ya escrito, el carrito se cierra: lo que hay dentro ya
+        // es un pedido, y un segundo "pagar" -en efectivo o con tarjeta- lo
+        // cobraria otra vez. Fuera de la transaccion y sin propagar errores,
+        // igual que en el webhook: cerrar un carrito no puede deshacer un
+        // pedido ya creado.
+        try {
+          await repositories.carts.convertForPaidOrder(outcome.order.id);
+        } catch (error) {
+          request.log.warn(
+            { event: "cash_order.cart_not_converted", order_id: outcome.order.id, err: error },
+            "el pedido en efectivo quedo creado pero su carrito sigue abierto",
+          );
+        }
+
+        void reply.code(outcome.created ? 201 : 200);
+        return presentOrderSummary(outcome.order, await entryStateForOrder(domain, outcome.order));
       },
     },
 
@@ -1064,32 +989,4 @@ export function buildOrdersRoutes(dependencies: AppDependencies): RouteDefinitio
       },
     },
   ];
-
-  /**
-   * SKUs elegibles segun la version de reglas.
-   *
-   * `null` significa que la configuracion no declara lista de elegibilidad, y
-   * entonces NO se decide aqui: se congela `true` y la elegibilidad efectiva la
-   * resuelve el motor de calculo con `product_eligibility`. Inventar aqui un
-   * criterio seria una segunda fuente de verdad sobre que mercancia participa.
-   */
-  async function resolveEligibleSkus(rulesVersionId: string | null): Promise<Set<string> | null> {
-    if (rulesVersionId === null) {
-      return null;
-    }
-    const version = await repositories.promotions.findRulesVersion(rulesVersionId);
-    const config = version?.config;
-    if (typeof config !== "object" || config === null) {
-      return null;
-    }
-    const eligibility = (config as { product_eligibility?: unknown }).product_eligibility;
-    if (typeof eligibility !== "object" || eligibility === null) {
-      return null;
-    }
-    const skus = (eligibility as { eligible_skus?: unknown }).eligible_skus;
-    if (!Array.isArray(skus)) {
-      return null;
-    }
-    return new Set(skus.filter((sku): sku is string => typeof sku === "string"));
-  }
 }

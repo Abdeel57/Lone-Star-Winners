@@ -3794,3 +3794,83 @@ Affected areas: `apps/web` (`promotion-hero.tsx`, `entry-package-band.tsx`,
 
 Proposed by: sesión del usuario (2026-10-05)
 Agreed by: pendiente — frontend-ux
+
+## DEC-078
+
+Status: Proposed
+
+Date: 2026-10-05
+
+Decision:
+**Pago en efectivo en un punto de venta físico, junto a la tarjeta.** El
+recorrido es Pendiente de pago en efectivo → Pagado → Participaciones generadas.
+
+1. **Checkout con dos opciones visibles.** Tras elegir producto y cantidad, el
+   checkout muestra "Tarjeta" (la pasarela de siempre, sin cambios) y "Efectivo
+   en punto de venta". Con efectivo, `POST /api/v1/checkout/cash-order` congela
+   el carrito con la MISMA función que la tarjeta (`freezeOpenCart`: precio,
+   SKU, tipo, elegibilidad), crea el pedido con `provider = 'cash'`, lo deja
+   `PENDING_PAYMENT` y cierra el carrito. Número de orden de la misma secuencia.
+   **Ninguna participación** hasta que se cobre.
+2. **Confirmación en el panel** con la capacidad nueva `order.cash.confirm`
+   (CRITICAL, motivo obligatorio, sin step-up por ser trabajo de mostrador —
+   mismo argumento que `amoe.review.*`—; la tienen PROMOTION_MANAGER y
+   COMPLIANCE_OFFICER). El panel busca por número de orden (también dictado:
+   `1234`, `LSW-1234`) o por cliente (correo, nombre de la cuenta o de la
+   dirección), con la cola "Efectivo pendiente de pago".
+3. **Dos transacciones, a propósito.** La confirmación (cerrojo `FOR UPDATE`
+   sobre el pedido, fila inmutable en `cash_payment_confirmations` con quién,
+   cuándo, motivo, número de orden e importe, pedido a PAID y `AuditEvent`) va
+   en una; la calificación y el award, en otra. Si las participaciones fallan, el
+   cobro queda confirmado y se reintenta (`POST …/cash-payment/entries`) sin
+   registrar otro cobro. El desenlace queda en `cash_payment_entry_outcomes`:
+   sin esa fila, un pedido en efectivo pagado y sin calificar es "pendiente de
+   reintentar", no "no aplica".
+4. **Mismas reglas que la tarjeta, y el mismo código.** La calificación y el
+   award se sacan del webhook a `services/purchase-qualification.ts` y los usan
+   los dos: estado cualificante de la versión de reglas, elegibilidad
+   (DEC-067), periodo, `QualifiedOrder`, `AwardService`, `source_ref =
+order:<id>`, snapshot y números visibles. El instante del pago es el de la
+   confirmación. En el ledger, el actor de una concesión en efectivo es la
+   persona que confirmó (en la tarjeta, SYSTEM).
+5. **Sin duplicados.** Un pedido en efectivo por carrito (índice único parcial
+   `orders_one_cash_order_per_cart`), una confirmación y un desenlace por pedido
+   (`UNIQUE (order_id)`), el cerrojo de fila para confirmaciones simultáneas y la
+   idempotencia del ledger por `order:<id>`.
+6. **Export:** sin cambios de formato. Las participaciones de efectivo son
+   `PURCHASE` como las de tarjeta y salen en el mismo universo; un pedido
+   pendiente no aparece.
+7. **`payment_method` (`CARD` | `CASH`)** en `OrderSummary`/`OrderDetail` y en la
+   fila del listado del panel. Se deriva de `orders.provider`.
+8. **Arreglo encontrado por el camino (afecta también a la tarjeta).** La web
+   leía `entry_calculation` con una forma que la API nunca publicó
+   (`applied_multipliers`, `applied_caps`… en el primer nivel) y hacía
+   `.length` sobre `undefined`: la ficha de CUALQUIER pedido con participaciones
+   -portal y panel- caía con un error de servidor. El contrato publica la traza
+   del motor dentro de `trace`; ahora se lee de ahí (`readCalculationTrace`),
+   con comprobaciones en tiempo de ejecución. Lo destapó la e2e del efectivo, la
+   primera que pinta un pedido otorgado contra la API real.
+
+Migración `0035_cash_payments` (journal idx 26): la capacidad, el índice parcial
+y las dos tablas, de solo inserción (GRANT SELECT/INSERT y `lsw_reject_mutation`).
+Se estrena en el preDeploy de Railway.
+
+Alternatives:
+A — Calificar y otorgar en la misma transacción que la confirmación (descartada:
+un fallo del cálculo desharía también el cobro, con el dinero ya en la caja).
+B — Una sola tabla con columnas de desenlace mutables (descartada: un hecho es una
+fila, como reembolsos y disputas). C — Un feature flag para el efectivo
+(descartada por ahora: el catálogo exige que los flags nuevos arranquen
+apagados, y el usuario pidió el flujo activo; queda la capacidad como control de
+quién confirma).
+
+Affected areas: `packages/security` (capacidad y matriz),
+`packages/database` (0035, esquema, `DrizzleCashPaymentRepository`,
+`createCashDraft`, `lockForUpdate`, búsqueda del listado), `apps/api`
+(`purchase-qualification.ts`, `cart-freeze.ts`, `cash-payments.ts`, rutas de
+checkout y panel, `order-presenter.ts`, contrato), `apps/web` (checkout,
+confirmación, portal, panel de pedidos, mensajes), `docs/API_CONTRACT.md`, CI
+(integración de `@lsw/api`), e2e `12-cash-payment`.
+
+Proposed by: sesión del usuario (2026-10-05)
+Agreed by: pendiente — backend-sweepstakes, security-integration, frontend-ux

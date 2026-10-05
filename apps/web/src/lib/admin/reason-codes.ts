@@ -135,3 +135,16 @@ export const FLAG_UPDATE_REASONS = [
   "INCIDENT_MITIGATION",
   "OTHER",
 ] as const;
+
+/**
+ * Motivos para CONFIRMAR un cobro en efectivo (DEC-078).
+ *
+ * Confirmarlo es lo que convierte el pedido en pagado y genera sus
+ * participaciones, asi que el motivo queda en la fila del cobro y en la
+ * auditoria. OPERATIVOS: dicen como se recibio el dinero, nada sobre quien
+ * puede participar.
+ */
+export const CASH_CONFIRM_REASONS = ["CASH_RECEIVED_AT_STORE", "OTHER"] as const;
+
+/** Motivos para reintentar la generacion de participaciones de un cobro ya confirmado. */
+export const CASH_RETRY_REASONS = ["RETRY_ENTRY_GENERATION", "OTHER"] as const;

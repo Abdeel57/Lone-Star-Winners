@@ -260,6 +260,36 @@ export const CAPABILITIES = Object.freeze({
     "Iniciar un reembolso. Genera la reversal correspondiente en el ledger.",
     { requiresStepUp: true, requiresReason: true },
   ),
+  /**
+   * Cobro en efectivo en un punto de venta fisico (DEC-078).
+   *
+   * POR QUE ES CRITICA
+   *   Confirmar el cobro es lo que convierte un pedido pendiente en un pedido
+   *   pagado, y a partir de ahi el sistema otorga sus participaciones con las
+   *   mismas reglas que una compra con tarjeta. En la tarjeta ese hecho lo
+   *   firma el proveedor de pago (webhook verificado); aqui lo afirma una
+   *   persona. Influye en el universo del sorteo, que es la definicion de
+   *   `CRITICAL`.
+   *
+   * MOTIVO OBLIGATORIO Y SIN STEP-UP, A PROPOSITO
+   *   Es trabajo de mostrador y de volumen: cada cliente que paga en caja es una
+   *   confirmacion. Exigir MFA reciente en cada una acaba en una ventana de
+   *   step-up permanentemente abierta, que es peor control que el actual -el
+   *   mismo argumento ya escrito para `amoe.review.approve`-. Lo que si queda
+   *   siempre: quien confirmo, cuando y con que motivo, en una fila inmutable
+   *   (`cash_payment_confirmations`) y en `audit_events`.
+   *
+   * NO PERMITE COBRAR DOS VECES: la unicidad por pedido la impone la base de
+   * datos, no esta capacidad. Reintentar la generacion de participaciones usa
+   * la misma capacidad y no registra otro cobro.
+   */
+  "order.cash.confirm": define(
+    "order.cash.confirm",
+    "order",
+    "CRITICAL",
+    "Confirmar que se recibio en efectivo el pago de un pedido pendiente y generar sus participaciones con las mismas reglas que una compra con tarjeta.",
+    { requiresReason: true },
+  ),
   "payment.webhook.read": define(
     "payment.webhook.read",
     "payment",

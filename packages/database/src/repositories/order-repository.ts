@@ -41,7 +41,7 @@ import {
   orderRefunds,
   orders,
 } from "../schema/orders.js";
-import { currentExecutor, type DbExecutor } from "./executor.js";
+import { currentExecutor, isInTransaction, type DbExecutor } from "./executor.js";
 
 // ---------------------------------------------------------------------------
 // Tipos, estructuralmente identicos a los de `@lsw/commerce`
@@ -156,6 +156,15 @@ export interface CreateOrderInput {
   readonly shippingAddress: JsonObject | null;
   readonly items: readonly CreateOrderItemInput[];
   readonly createdAt: Date;
+  /**
+   * DEC-078: el medio de cobro, cuando se conoce AL CREAR.
+   *
+   * Un pedido con tarjeta nace sin proveedor y lo recibe al abrir la sesion de
+   * pago. Uno en efectivo nace ya con `cash`: no hay sesion que abrir, y el
+   * indice unico parcial `orders_one_cash_order_per_cart` solo puede impedir el
+   * pedido duplicado si el valor esta en la fila desde el INSERT.
+   */
+  readonly provider?: string | null;
 }
 
 export interface ApplyPaymentStatePatch {
@@ -281,6 +290,30 @@ function toOrder(row: OrderRow, items: readonly ItemRow[]): OrderRecord {
   };
 }
 
+/** Fila de un pedido recien nacido. Todo pedido nace en DRAFT (`@lsw/commerce`). */
+function draftRow(input: CreateOrderInput): typeof orders.$inferInsert {
+  return {
+    id: input.id,
+    participantId: input.participantId,
+    promotionId: input.promotionId,
+    rulesVersionId: input.rulesVersionId,
+    cartId: input.cartId,
+    currency: input.currency,
+    status: "DRAFT",
+    paymentState: "REQUIRES_ACTION",
+    fulfillmentState: "UNFULFILLED",
+    chargebackState: "NONE",
+    subtotalMinor: input.subtotalMinor,
+    shippingTotalMinor: input.shippingTotalMinor,
+    taxTotalMinor: input.taxTotalMinor,
+    totalMinor: input.totalMinor,
+    refundedAmountMinor: 0n,
+    shippingAddress: input.shippingAddress,
+    provider: input.provider ?? null,
+    createdAt: input.createdAt,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Repositorio
 // ---------------------------------------------------------------------------
@@ -304,50 +337,72 @@ export class DrizzleOrderRepository {
    * proveedor liquide. Entre las dos cosas puede pasar un dia.
    */
   public async createDraft(input: CreateOrderInput): Promise<OrderRecord> {
-    await this.db.insert(orders).values({
-      id: input.id,
-      participantId: input.participantId,
-      promotionId: input.promotionId,
-      rulesVersionId: input.rulesVersionId,
-      cartId: input.cartId,
-      currency: input.currency,
-      status: "DRAFT",
-      paymentState: "REQUIRES_ACTION",
-      fulfillmentState: "UNFULFILLED",
-      chargebackState: "NONE",
-      subtotalMinor: input.subtotalMinor,
-      shippingTotalMinor: input.shippingTotalMinor,
-      taxTotalMinor: input.taxTotalMinor,
-      totalMinor: input.totalMinor,
-      refundedAmountMinor: 0n,
-      shippingAddress: input.shippingAddress,
-      createdAt: input.createdAt,
-    });
+    await this.db.insert(orders).values(draftRow(input));
+    await this.insertItems(input);
+    return await this.readCreated(input.id);
+  }
 
-    if (input.items.length > 0) {
-      await this.db.insert(orderItems).values(
-        input.items.map((item) => ({
-          orderId: input.id,
-          productId: item.productId,
-          productVariantId: item.productVariantId,
-          sku: item.sku,
-          productSlug: item.productSlug,
-          nameSnapshot: item.nameSnapshot,
-          productKind: item.productKind,
-          quantity: item.quantity,
-          unitAmountMinor: item.unitAmountMinor,
-          currency: item.currency,
-          sweepstakesEligibleSnapshot: item.sweepstakesEligibleSnapshot,
-          refundedQuantity: 0,
-          refundedAmountMinor: 0n,
-          createdAt: input.createdAt,
-        })),
-      );
+  /**
+   * DEC-078: crea el pedido en efectivo de un carrito, o devuelve `null` si ese
+   * carrito ya tiene uno.
+   *
+   * `ON CONFLICT DO NOTHING` contra el indice unico parcial
+   * `orders_one_cash_order_per_cart`, y no un `SELECT` previo: dos envios
+   * simultaneos del mismo checkout pasan los dos la lectura, y quien decide es
+   * el indice. Con `null`, quien llama lee el pedido ganador con
+   * `findCashOrderForCart`.
+   *
+   * Nace en DRAFT, como cualquier pedido: la maquina de estados de
+   * `@lsw/commerce` decide el paso a PENDING_PAYMENT, no este adaptador. Se
+   * llama dentro de una transaccion para que pedido y lineas sean un solo
+   * hecho.
+   */
+  public async createCashDraft(
+    input: Omit<CreateOrderInput, "provider">,
+  ): Promise<OrderRecord | null> {
+    const inserted = await this.db
+      .insert(orders)
+      .values(draftRow({ ...input, provider: "cash" }))
+      .onConflictDoNothing()
+      .returning({ id: orders.id });
+
+    if (inserted.length === 0) {
+      return null;
     }
 
-    const created = await this.findById(input.id);
+    await this.insertItems(input);
+    return await this.readCreated(input.id);
+  }
+
+  private async insertItems(input: Omit<CreateOrderInput, "provider">): Promise<void> {
+    if (input.items.length === 0) {
+      return;
+    }
+
+    await this.db.insert(orderItems).values(
+      input.items.map((item) => ({
+        orderId: input.id,
+        productId: item.productId,
+        productVariantId: item.productVariantId,
+        sku: item.sku,
+        productSlug: item.productSlug,
+        nameSnapshot: item.nameSnapshot,
+        productKind: item.productKind,
+        quantity: item.quantity,
+        unitAmountMinor: item.unitAmountMinor,
+        currency: item.currency,
+        sweepstakesEligibleSnapshot: item.sweepstakesEligibleSnapshot,
+        refundedQuantity: 0,
+        refundedAmountMinor: 0n,
+        createdAt: input.createdAt,
+      })),
+    );
+  }
+
+  private async readCreated(orderId: string): Promise<OrderRecord> {
+    const created = await this.findById(orderId);
     if (created === null) {
-      throw new Error(`El pedido ${input.id} no se pudo leer despues de crearlo.`);
+      throw new Error(`El pedido ${orderId} no se pudo leer despues de crearlo.`);
     }
     return created;
   }
@@ -434,6 +489,53 @@ export class DrizzleOrderRepository {
         items.filter((item) => item.orderId === row.id),
       ),
     );
+  }
+
+  /**
+   * DEC-078: el pedido en efectivo que ya salio de este carrito, o `null`.
+   *
+   * Es la otra mitad del indice unico parcial `orders_one_cash_order_per_cart`:
+   * cuando el segundo envio del mismo checkout choca contra el, la API lee aqui
+   * el pedido que gano y lo devuelve en vez de fallar.
+   */
+  public async findCashOrderForCart(cartId: string): Promise<OrderRecord | null> {
+    const rows = await this.db
+      .select({ id: orders.id })
+      .from(orders)
+      .where(and(eq(orders.cartId, cartId), eq(orders.provider, "cash")))
+      .limit(1);
+
+    const row = rows[0];
+    return row === undefined ? null : await this.findById(row.id);
+  }
+
+  /**
+   * Bloquea la fila del pedido hasta el final de la transaccion viva.
+   *
+   * `SELECT ... FOR UPDATE`: dos confirmaciones del mismo cobro en efectivo
+   * -doble clic, reintento de red, dos personas a la vez- se ponen en fila, y
+   * la segunda lee el pedido YA cobrado en vez del que vio antes de esperar.
+   * Devuelve `false` si el pedido no existe.
+   *
+   * Exige transaccion por el mismo motivo que `lockParticipant`: fuera de ella
+   * el cerrojo se suelta en el acto y no serializa nada, y es preferible fallar
+   * a creer que hay un control.
+   */
+  public async lockForUpdate(orderId: string): Promise<boolean> {
+    if (!isInTransaction()) {
+      throw new Error(
+        "lockForUpdate exige una transaccion viva: fuera de ella el cerrojo de fila se " +
+          "libera al instante y no serializa las confirmaciones concurrentes.",
+      );
+    }
+
+    const rows = await this.db
+      .select({ id: orders.id })
+      .from(orders)
+      .where(eq(orders.id, orderId))
+      .for("update");
+
+    return rows.length > 0;
   }
 
   public async findByProviderPayment(

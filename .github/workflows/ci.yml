@@ -303,7 +303,12 @@ jobs:
           # `dist` inexistente de @lsw/security y @lsw/sweepstakes.
           # `TEST_DATABASE_URL` esta en la lista `env` de la tarea en
           # turbo.json, asi que el modo estricto de Turborepo 2 la deja pasar.
-          if ! pnpm exec turbo run test:integration --filter=@lsw/database; then
+          #
+          # DEC-078: tambien @lsw/api, con la aplicacion real de punta a punta
+          # (tarjeta y efectivo). `--concurrency=1` porque cada fichero asigna
+          # contrasenas efimeras a los roles de DEC-003, que son del CLUSTER:
+          # dos paquetes a la vez se cambiarian las contrasenas el uno al otro.
+          if ! pnpm exec turbo run test:integration --filter=@lsw/database --filter=@lsw/api --concurrency=1; then
             echo "::error title=Integracion::Los tests contra PostgreSQL real han fallado. NO se relajan: si un GRANT o un trigger no se comporta como dice la migracion, la migracion esta mal."
             exit 1
           fi

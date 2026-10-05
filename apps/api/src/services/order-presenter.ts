@@ -133,7 +133,19 @@ export async function entryStateForOrder(
     // promocion y se registro sin calificar (`applyQualifyingPayment` en
     // `routes/orders.ts`). No hay nada pendiente, y decir "pendiente de
     // confirmacion de pago" de un pedido pagado seria falso.
+    //
+    // SALVO EN EFECTIVO (DEC-078): ahi el cobro y la calificacion son dos
+    // pasos, y entre los dos el pedido esta pagado y sin calificar porque las
+    // participaciones TODAVIA no se han generado -o fallaron y hay que
+    // reintentarlo-. Lo distingue la fila de desenlace: sin ella, siguen
+    // pendientes.
     if (order.paidAt !== null && order.qualifiedAt === null) {
+      if (order.provider === "cash") {
+        const outcome = await domain.repositories.cashPayments.findOutcome(order.id);
+        if (outcome === null) {
+          return { state: "PENDING_QUALIFICATION", entriesGranted: null };
+        }
+      }
       return { state: "NOT_APPLICABLE", entriesGranted: null };
     }
     return { state: "PENDING_QUALIFICATION", entriesGranted: null };
@@ -152,6 +164,18 @@ export async function entryStateForOrder(
   return { state: "PARTIALLY_REVERSED", entriesGranted: remaining };
 }
 
+/**
+ * DEC-078: como se paga el pedido. Se deriva del proveedor guardado y no hay
+ * columna aparte: `cash` lo pone el checkout en efectivo al crear el pedido, y
+ * cualquier otro valor -o ninguno, si la sesion de pago no llego a abrirse- es
+ * la pasarela de tarjeta.
+ */
+export function paymentMethodOf(
+  order: Pick<OrderRecord, "provider">,
+): OrderSummary["payment_method"] {
+  return order.provider === "cash" ? "CASH" : "CARD";
+}
+
 export function presentOrderSummary(order: OrderRecord, facts: OrderEntryFacts): OrderSummary {
   return {
     id: order.id,
@@ -163,6 +187,7 @@ export function presentOrderSummary(order: OrderRecord, facts: OrderEntryFacts):
     promotion_id: order.promotionId,
     entry_state: facts.state,
     entries_granted: facts.entriesGranted,
+    payment_method: paymentMethodOf(order),
   };
 }
 

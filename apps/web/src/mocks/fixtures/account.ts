@@ -434,37 +434,78 @@ const INELIGIBLE_LINE: OrderLine = {
 };
 
 /**
- * Traza del calculo persistida.
+ * Traza del calculo persistida, CON LA FORMA DEL CONTRATO (DEC-078).
  *
- * Es lo que permite responder, meses despues, por que esta compra genero esta
- * cifra y no otra: la version de reglas contra la que se evaluo, la version del
- * motor, y el desglose completo. Ninguna de estas cifras se calcula aqui.
+ * Cinco campos, y el desglose dentro de `trace` tal como lo escribe el motor:
+ * cifras de primer nivel en `snake_case` y filas en `camelCase`. Este fixture
+ * declaraba antes los campos de una cotizacion en el primer nivel, que la API
+ * nunca mando; con el, las pruebas pasaban y la ficha real de un pedido
+ * otorgado caia. Ninguna de estas cifras se calcula aqui.
  */
 const CALCULATION: EntryCalculationSnapshot = {
   rules_version_id: "prv_0000000000000001",
   engine_version: 1,
   evaluated_at: "2026-09-01T18:12:00.000Z",
-  eligible_subtotal: { amount_minor: "5000", currency: "USD" },
-  entries_before_caps: 500,
   final_entries: 250,
-  eligible_items: [
-    {
-      line_id: ELIGIBLE_LINE.line_id,
-      sku: ELIGIBLE_LINE.sku,
-      quantity: 2,
-      multiplier_ids: ["labor-day-2x"],
-    },
-  ],
-  ineligible_items: [
-    {
-      line_id: INELIGIBLE_LINE.line_id,
-      sku: INELIGIBLE_LINE.sku,
-      reason_key: "PRODUCT_NOT_ELIGIBLE",
-    },
-  ],
-  applied_multipliers: [{ id: "labor-day-2x", numerator: 2, denominator: 1 }],
-  applied_caps: [{ kind: "PER_ORDER", limit: 250, entries_before: 500, entries_after: 250 }],
+  trace: {
+    engine_version: 1,
+    rules_version_id: "prv_0000000000000001",
+    evaluated_at: "2026-09-01T18:12:00.000Z",
+    eligible_subtotal_minor: "5000",
+    entries_before_caps: 500,
+    final_entries: 250,
+    eligible_items: [
+      {
+        lineId: ELIGIBLE_LINE.line_id,
+        sku: ELIGIBLE_LINE.sku,
+        productKind: "MERCHANDISE",
+        quantity: 2,
+        lineSubtotalMinor: "5000",
+        multiplierIds: ["labor-day-2x"],
+      },
+    ],
+    ineligible_items: [
+      {
+        lineId: INELIGIBLE_LINE.line_id,
+        sku: INELIGIBLE_LINE.sku,
+        productKind: "MERCHANDISE",
+        reasonKey: "PRODUCT_NOT_ELIGIBLE",
+      },
+    ],
+    applied_multipliers: [
+      {
+        id: "labor-day-2x",
+        numerator: 2,
+        denominator: 1,
+        appliedToLineIds: [ELIGIBLE_LINE.line_id],
+      },
+    ],
+    applied_caps: [{ kind: "PER_ORDER", limit: 250, entriesBefore: 500, entriesAfter: 250 }],
+  },
 };
+
+/** Traza sin multiplicadores ni topes, para los pedidos devueltos. */
+function plainCalculation(
+  evaluatedAt: string,
+  subtotalMinor: string,
+  entries: number,
+): EntryCalculationSnapshot {
+  return {
+    ...CALCULATION,
+    evaluated_at: evaluatedAt,
+    final_entries: entries,
+    trace: {
+      ...CALCULATION.trace,
+      evaluated_at: evaluatedAt,
+      eligible_subtotal_minor: subtotalMinor,
+      entries_before_caps: entries,
+      final_entries: entries,
+      ineligible_items: [],
+      applied_multipliers: [],
+      applied_caps: [],
+    },
+  };
+}
 
 const GRANTED_SUMMARY: OrderSummary = {
   id: "ord_0000000000000001",
@@ -537,12 +578,32 @@ const NO_PROMOTION_SUMMARY: OrderSummary = {
   entries_granted: null,
 };
 
+/**
+ * DEC-078: pedido para pagar en EFECTIVO en un punto de venta, todavia sin
+ * cobrar. `PENDING_PAYMENT` + `CASH` es lo que la confirmacion y el portal
+ * tienen que saber decir: no se ha cobrado nada, el pedido espera el pago en
+ * caja y las participaciones no existen todavia.
+ */
+const CASH_PENDING_SUMMARY: OrderSummary = {
+  id: "ord_0000000000000006",
+  order_number: "LSW-10650",
+  status: "PENDING_PAYMENT",
+  placed_at: "2026-10-05T16:20:00.000Z",
+  total: { amount_minor: "5000", currency: "USD" },
+  item_count: 2,
+  promotion_id: activePromotion.id,
+  entry_state: "PENDING_QUALIFICATION",
+  entries_granted: null,
+  payment_method: "CASH",
+};
+
 export const orderSummaries: readonly OrderSummary[] = [
   PENDING_SUMMARY,
   GRANTED_SUMMARY,
   REFUNDED_SUMMARY,
   CHARGEBACK_SUMMARY,
   NO_PROMOTION_SUMMARY,
+  CASH_PENDING_SUMMARY,
 ];
 
 export const orderPage: OrderPage = { items: orderSummaries, next_cursor: null };
@@ -577,16 +638,7 @@ export const refundedOrder: OrderDetail = {
   shipping_total: { amount_minor: "0", currency: "USD" },
   tax_total: { amount_minor: "0", currency: "USD" },
   shipping_address: shippingAddress,
-  entry_calculation: {
-    ...CALCULATION,
-    evaluated_at: "2026-09-08T14:05:00.000Z",
-    eligible_subtotal: { amount_minor: "2500", currency: "USD" },
-    entries_before_caps: 250,
-    final_entries: 250,
-    applied_multipliers: [],
-    applied_caps: [],
-    ineligible_items: [],
-  },
+  entry_calculation: plainCalculation("2026-09-08T14:05:00.000Z", "2500", 250),
 };
 
 export const chargebackOrder: OrderDetail = {
@@ -598,16 +650,7 @@ export const chargebackOrder: OrderDetail = {
   shipping_total: { amount_minor: "0", currency: "USD" },
   tax_total: { amount_minor: "0", currency: "USD" },
   shipping_address: shippingAddress,
-  entry_calculation: {
-    ...CALCULATION,
-    evaluated_at: "2026-09-11T11:00:00.000Z",
-    eligible_subtotal: { amount_minor: "10000", currency: "USD" },
-    entries_before_caps: 500,
-    final_entries: 500,
-    applied_multipliers: [],
-    applied_caps: [],
-    ineligible_items: [],
-  },
+  entry_calculation: plainCalculation("2026-09-11T11:00:00.000Z", "10000", 500),
 };
 
 export const orderWithoutPromotion: OrderDetail = {
@@ -620,6 +663,17 @@ export const orderWithoutPromotion: OrderDetail = {
   entry_calculation: null,
 };
 
+/** DEC-078: pedido en efectivo pendiente de cobro en caja. */
+export const cashPendingOrder: OrderDetail = {
+  ...CASH_PENDING_SUMMARY,
+  items: [ELIGIBLE_LINE],
+  subtotal: { amount_minor: "5000", currency: "USD" },
+  shipping_total: null,
+  tax_total: null,
+  shipping_address: shippingAddress,
+  entry_calculation: null,
+};
+
 /** Los detalles que la API simulada publica, uno por cada resumen. */
 export const orderDetails: readonly OrderDetail[] = [
   pendingOrder,
@@ -627,4 +681,5 @@ export const orderDetails: readonly OrderDetail[] = [
   refundedOrder,
   chargebackOrder,
   orderWithoutPromotion,
+  cashPendingOrder,
 ];

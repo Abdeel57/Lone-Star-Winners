@@ -67,7 +67,14 @@ function loadMigrations(): MigrationFile[] {
 }
 
 /** Tablas cuyo append-only es una garantia estructural (DEC-007). */
-const APPEND_ONLY_TABLES = ["entry_transactions", "audit_events", "export_snapshots"];
+const APPEND_ONLY_TABLES = [
+  "entry_transactions",
+  "audit_events",
+  "export_snapshots",
+  // DEC-078: quien cobro en efectivo, y que paso con las participaciones.
+  "cash_payment_confirmations",
+  "cash_payment_entry_outcomes",
+];
 
 const migrations = loadMigrations();
 

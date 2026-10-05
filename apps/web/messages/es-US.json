@@ -124,6 +124,10 @@
     "CHECKOUT_MODE_UNSUPPORTED": "Este sitio todavía no presenta esa forma de pagar. No se ha cobrado nada.",
     "PAYMENT_PROVIDER_UNAVAILABLE": "No hemos podido comunicarnos con el proveedor de pago. No se ha cobrado nada.",
     "PAYMENT_PROVIDER_NOT_CONFIGURED": "El pago aún no está disponible en esta tienda, así que este pedido no puede completarse. No se ha cobrado nada y tu carrito no ha cambiado.",
+    "ORDER_NOT_CASH_PAYMENT": "Este pedido se paga con tarjeta, así que no hay ningún pago en efectivo que confirmar.",
+    "CASH_PAYMENT_NOT_PENDING": "Este pedido ya no está esperando un pago en efectivo.",
+    "CASH_PAYMENT_NOT_CONFIRMED": "Nadie ha confirmado todavía el pago en efectivo de este pedido, así que no hay participaciones que generar.",
+    "CASH_ENTRIES_GENERATION_FAILED": "El pago en efectivo quedó confirmado y registrado, pero las participaciones no se pudieron generar. No se registró un segundo cobro: reintenta la generación de participaciones desde este pedido.",
     "NOT_FOUND": "Eso no está disponible.",
     "ORDER_NOT_FOUND": "No hemos encontrado ese pedido en tu cuenta.",
     "CART_EMPTY": "No hay nada en tu carrito.",
@@ -835,7 +839,9 @@
       "itemCount": "{count} artículos",
       "entriesLabel": "Participaciones de este pedido",
       "view": "Ver este pedido",
-      "browse": "Ver la mercancía elegible"
+      "browse": "Ver la mercancía elegible",
+      "paymentCash": "Pago en efectivo",
+      "cashPendingBody": "Paga en efectivo en un punto de venta y da tu número de orden, {number}. Tu pedido queda pendiente hasta que la tienda confirme tu pago, y tus participaciones se generan en ese momento."
     },
     "order": {
       "back": "Volver a mis pedidos",
@@ -970,7 +976,20 @@
       "viewOrders": "Ver mis pedidos"
     },
     "unsupportedTitle": "Esta forma de pago todavía no está disponible aquí",
-    "unsupportedBody": "Nuestro proveedor de pago ofreció una forma de pagar que este sitio todavía no presenta. No se ha cobrado nada."
+    "unsupportedBody": "Nuestro proveedor de pago ofreció una forma de pagar que este sitio todavía no presenta. No se ha cobrado nada.",
+    "payment": {
+      "heading": "¿Cómo quieres pagar?",
+      "card": {
+        "title": "Tarjeta",
+        "body": "Pagas ahora en la página segura de nuestro proveedor de pago. Tus participaciones se generan en cuanto se confirma el pago."
+      },
+      "cash": {
+        "title": "Efectivo en punto de venta",
+        "body": "Reservamos tu pedido y lo pagas en efectivo en un punto de venta. No se cobra nada ahora, y tus participaciones se generan cuando la tienda confirme tu pago."
+      },
+      "cashCta": "Hacer el pedido y pagar en efectivo",
+      "cashNote": "No se cobra nada ahora. Recibirás un número de orden para darlo en el punto de venta cuando pagues."
+    }
   },
   "orderConfirmation": {
     "title": "Gracias por tu pedido",
@@ -980,7 +999,14 @@
     "viewOrder": "Ver el pedido completo",
     "viewEntries": "Ver mis participaciones",
     "continueShopping": "Seguir viendo mercancía",
-    "rulesNote": "Las devoluciones, los contracargos y la descalificación pueden cambiar las participaciones asociadas a un pedido, según se describe en las Reglas Oficiales."
+    "rulesNote": "Las devoluciones, los contracargos y la descalificación pueden cambiar las participaciones asociadas a un pedido, según se describe en las Reglas Oficiales.",
+    "cash": {
+      "pendingTitle": "Paga en efectivo en un punto de venta",
+      "paidTitle": "Pago en efectivo confirmado",
+      "orderNumberLabel": "Tu número de orden",
+      "pendingBody": "Da este número de orden en un punto de venta y paga {total} en efectivo. Todavía no se ha cobrado nada: tu pedido está pendiente de pago, y tus participaciones se generan cuando la tienda lo confirme.",
+      "paidBody": "La tienda confirmó tu pago en efectivo. Tus participaciones se generan con las mismas reglas que una compra con tarjeta."
+    }
   },
   "admin": {
     "meta": {
@@ -1271,7 +1297,81 @@
       "linesHeading": "Artículos",
       "traceHeading": "Cómo se calcularon las participaciones",
       "refundHeading": "Devolución",
-      "refundPending": "Una devolución mueve dinero y revierte participaciones. La pantalla llega con la ruta del backend, con su confirmación completa y su motivo."
+      "refundPending": "Una devolución mueve dinero y revierte participaciones. La pantalla llega con la ruta del backend, con su confirmación completa y su motivo.",
+      "searchLabel": "Buscar un pedido",
+      "searchPlaceholder": "Número de orden, correo o nombre del cliente",
+      "searchSubmit": "Buscar",
+      "searchClear": "Quitar la búsqueda",
+      "searchEmptyTitle": "Ningún pedido coincide con esa búsqueda",
+      "searchEmptyBody": "Revisa el número de orden (por ejemplo LSW-00001234 o solo 1234), el correo o el nombre del cliente.",
+      "viewsLabel": "Qué pedidos mostrar",
+      "views": {
+        "all": "Todos los pedidos",
+        "cash-pending": "Efectivo pendiente de pago",
+        "cash": "Todos los pedidos en efectivo"
+      },
+      "columnPayment": "Pago",
+      "paymentCash": "Efectivo",
+      "paymentCard": "Tarjeta"
+    },
+    "cashPayment": {
+      "title": "Pago en efectivo en punto de venta",
+      "stagesLabel": "En qué punto está este pedido",
+      "stages": {
+        "PENDING_CASH_PAYMENT": "Pendiente de pago en efectivo",
+        "PAID": "Pagado",
+        "ENTRIES_GENERATED": "Participaciones generadas",
+        "CANCELLED": "Cancelado"
+      },
+      "cancelledBody": "Este pedido se canceló. No hay ningún pago que confirmar.",
+      "orderNumber": "Número de orden",
+      "amount": "Importe a cobrar",
+      "customer": "Cuenta del cliente",
+      "anonymized": "Cuenta anonimizada",
+      "confirmationHeading": "Pago recibido",
+      "confirmedBy": "Confirmado por",
+      "confirmedAt": "Fecha y hora (UTC)",
+      "reason": "Motivo",
+      "notes": "Notas",
+      "confirmHeading": "Confirmar el pago en efectivo",
+      "confirmIntro": "Revisa antes el número de orden y los datos del cliente. Al confirmar queda registrado quién recibió el dinero y cuándo, el pedido pasa a pagado y se generan sus participaciones con las mismas reglas que una compra con tarjeta.",
+      "confirmSubmit": "Confirmar pago en efectivo",
+      "confirmCheckbox": "Recibí {total} en efectivo por el pedido {number}.",
+      "noCapability": "Tu cuenta no puede confirmar pagos en efectivo (order.cash.confirm). Pídeselo a quien administra los roles.",
+      "retryHeading": "Reintentar la generación de participaciones",
+      "retryIntro": "El pago ya está confirmado y registrado. Esto solo repite el paso de participaciones: no registra otro cobro y no puede crear participaciones dos veces.",
+      "retrySubmit": "Reintentar la generación de participaciones",
+      "retryCheckbox": "Entiendo que esto no registra otro cobro.",
+      "impactPayment": "Pago",
+      "impactConfirm": "Confirmar",
+      "impactAmount": "Importe",
+      "impactCash": "en efectivo",
+      "impactEntries": "Participaciones",
+      "impactSameRules": "Mismas reglas que con tarjeta",
+      "impactRetry": "Reintentar",
+      "impactEntriesAfter": "Las calcula el sistema",
+      "entriesHeading": "Participaciones",
+      "entries": {
+        "AWAITING_PAYMENT": "Sin generar: pago pendiente",
+        "PENDING": "Pendientes de generar",
+        "GENERATED": "Generadas",
+        "HELD": "Retenidas",
+        "NO_ENTRIES": "Sin participaciones",
+        "NOT_APPLICABLE": "No aplica"
+      },
+      "entriesBody": {
+        "AWAITING_PAYMENT": "Un pedido en efectivo pendiente no genera participaciones válidas. Se generan cuando se confirma el pago.",
+        "PENDING": "El pago está confirmado, pero las participaciones todavía no se generaron o el intento falló. Reinténtalo abajo: no registra otro cobro.",
+        "GENERATED": "Generadas con las mismas reglas, datos y números de participación que una compra con tarjeta. Entran en la exportación para el administrador del sorteo.",
+        "HELD": "El pedido calificó y sus participaciones quedan retenidas hasta que el participante verifique su correo, igual que con una compra con tarjeta.",
+        "NO_ENTRIES": "El pedido calificó, pero el cálculo dio cero participaciones (por ejemplo, por el tope por persona).",
+        "NOT_APPLICABLE": "Según las Reglas Oficiales, este pedido no genera participaciones."
+      },
+      "notApplicable": {
+        "NO_PROMOTION": "El pedido no está asociado a ninguna promoción, así que no genera participaciones.",
+        "NOT_ELIGIBLE": "El participante no cumple los requisitos de elegibilidad de las Reglas Oficiales, así que este pedido no genera participaciones. La mercancía se vende igual.",
+        "OUTSIDE_PROMOTION_WINDOW": "El pago se recibió fuera del periodo de la promoción, así que no genera participaciones."
+      }
     },
     "participants": {
       "title": "Participantes",
@@ -1516,7 +1616,9 @@
       "CORRECTION_OF_PUBLISHED_VERSION": "Corrección de una versión publicada",
       "PROMOTIONAL_CAMPAIGN": "Campaña promocional planificada",
       "OPERATIONAL_ROLLOUT": "Despliegue planificado",
-      "INCIDENT_MITIGATION": "Mitigación de una incidencia"
+      "INCIDENT_MITIGATION": "Mitigación de una incidencia",
+      "CASH_RECEIVED_AT_STORE": "Efectivo recibido en punto de venta",
+      "RETRY_ENTRY_GENERATION": "Reintento del paso de participaciones"
     },
     "warnings": {
       "ENTRY_CAP_REACHED": "Se ha alcanzado el tope de participaciones de esta promoción.",

@@ -550,3 +550,25 @@ siguen: `partial_refund_rounding_policy`, `entry_expiration`,
     anuncia "máximo 10,000 por persona" cuando el tope está en vigor; con el
     flag apagado no lo dice aunque la versión de reglas lo declare. Confirmar
     que el flag debe estar encendido desde el primer día de la promoción.
+
+## Pago en efectivo en un punto de venta físico (DEC-078, 2026-10-05)
+
+Construido a petición del usuario. El sistema trata la compra en efectivo
+EXACTAMENTE igual que la de tarjeta en todo lo que dicen las Reglas -misma
+fórmula, mismo redondeo, mismo tope, misma elegibilidad, mismo periodo-; lo que
+no puede decidir es si las Reglas la contemplan. Preguntas para el abogado:
+
+14. **¿Las Reglas Oficiales admiten compras en efectivo en un punto de venta?**
+    No se ha verificado si el texto vigente contempla compras pagadas fuera de
+    la pasarela en línea. Si la compra en caja debe mencionarse (o excluirse),
+    es un cambio de las Reglas, no del código: hoy la opción se ofrece en el
+    checkout.
+15. **Momento en que cuenta una compra en efectivo.** El sistema usa el instante
+    en que la tienda CONFIRMA el cobro en el panel, igual que en la tarjeta
+    cuenta el pago confirmado por el proveedor (pregunta "Order qualification
+    point"). Consecuencia: un pedido en efectivo creado dentro del periodo y
+    cobrado después de `ends_at` no da participaciones. Confirmar que es lo
+    correcto, o si cuenta el momento del pedido.
+16. **Comprobante del cobro.** Queda registrado quién confirmó, cuándo, el
+    motivo y una nota libre (número de recibo). Confirmar si el Administrador
+    del sorteo necesita además un comprobante físico o un formato concreto.

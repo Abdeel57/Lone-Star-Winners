@@ -115,6 +115,7 @@ export default async function AccountOrderPage({
               calculation={order.entry_calculation}
               locale={locale}
               timeZone={timeZone}
+              currency={order.total.currency}
             />
           </div>
         </section>
@@ -160,12 +161,27 @@ function OrderHeader({
   const statusLabel = useOrderStatusLabel();
   const placedAt = formatZonedDate(order.placed_at, locale, { timeZone });
 
+  const cashPending = order.payment_method === "CASH" && order.status === "PENDING_PAYMENT";
+
   return (
-    <div className="flex flex-wrap items-center gap-s3">
-      <Badge tone="neutral">{statusLabel(order.status)}</Badge>
-      {placedAt === null ? null : (
-        <span className="text-caption text-text-subtle">{t("placedOn", { date: placedAt })}</span>
-      )}
+    <div className="flex flex-col gap-s3">
+      <div className="flex flex-wrap items-center gap-s3">
+        <Badge tone="neutral">{statusLabel(order.status)}</Badge>
+        {order.payment_method === "CASH" ? <Badge tone="info">{t("paymentCash")}</Badge> : null}
+        {placedAt === null ? null : (
+          <span className="text-caption text-text-subtle">{t("placedOn", { date: placedAt })}</span>
+        )}
+      </div>
+
+      {/*
+       * DEC-078: mientras la tienda no confirme el cobro en caja, esto es lo
+       * unico que esta persona tiene que hacer, y se dice aqui arriba.
+       */}
+      {cashPending ? (
+        <Alert tone="warning">
+          <p>{t("cashPendingBody", { number: order.order_number })}</p>
+        </Alert>
+      ) : null}
     </div>
   );
 }

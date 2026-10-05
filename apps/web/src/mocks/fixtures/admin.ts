@@ -6,6 +6,7 @@ import type {
   AdminAmoeSubmissionPage,
   AdminAuditEvent,
   AdminAuditEventPage,
+  AdminCashPayment,
   AdminDashboard,
   AdminDrawAuthorization,
   AdminDrawAuthorizationPage,
@@ -98,6 +99,7 @@ export const promotionManagerSession: SessionState = {
     "pii.view.masked",
     "order.read",
     "order.refund.initiate",
+    "order.cash.confirm",
     "entry.ledger.read",
     "entry.adjust.create",
     "amoe.review.read",
@@ -851,9 +853,67 @@ export const adminOrders: readonly AdminOrderRow[] = [
     participant_email: ANONYMIZED_EMAIL,
     participant_id: "par_0000000000000002",
   },
+  // DEC-078: pedido en efectivo esperando el cobro en caja.
+  {
+    id: "ord_0000000000000006",
+    order_number: "LSW-10650",
+    status: "PENDING_PAYMENT",
+    entry_state: "PENDING_QUALIFICATION",
+    placed_at: "2026-10-05T16:20:00.000Z",
+    total: { amount_minor: "5000", currency: "USD" },
+    participant_email: MASKED_EMAIL,
+    participant_id: participant.id,
+    payment_method: "CASH",
+  },
 ];
 
 export const adminOrderPage: AdminOrderPage = { items: adminOrders, next_cursor: null };
+
+/**
+ * DEC-078: el cobro en efectivo del pedido de arriba, todavia PENDIENTE.
+ *
+ * `can_confirm` lo decide el backend; aqui es `true` porque el pedido sigue
+ * esperando el pago. Las participaciones no existen: `AWAITING_PAYMENT`.
+ */
+export const pendingCashPayment: AdminCashPayment = {
+  order_id: "ord_0000000000000006",
+  order_number: "LSW-10650",
+  stage: "PENDING_CASH_PAYMENT",
+  amount: { amount_minor: "5000", currency: "USD" },
+  customer_email: MASKED_EMAIL,
+  confirmation: null,
+  entries: {
+    status: "AWAITING_PAYMENT",
+    not_applicable_reason: null,
+    entries_granted: null,
+    resolved_at: null,
+  },
+  can_confirm: true,
+  can_generate_entries: false,
+  confirmation_created: null,
+  entries_error_code: null,
+};
+
+/** El mismo cobro, ya confirmado y con sus participaciones generadas. */
+export const confirmedCashPayment: AdminCashPayment = {
+  ...pendingCashPayment,
+  stage: "ENTRIES_GENERATED",
+  confirmation: {
+    confirmed_at: "2026-10-05T17:02:00.000Z",
+    confirmed_by_admin_user_id: "adm_0000000000000001",
+    confirmed_by_name: "Promotions team",
+    reason_code: "CASH_RECEIVED_AT_STORE",
+    notes: "Recibo 0001",
+  },
+  entries: {
+    status: "GENERATED",
+    not_applicable_reason: null,
+    entries_granted: 50,
+    resolved_at: "2026-10-05T17:02:00.000Z",
+  },
+  can_confirm: false,
+  confirmation_created: true,
+};
 
 /**
  * Participantes.

@@ -102,6 +102,7 @@ export default async function OrderConfirmationPage({
   return (
     <ConfirmationShell title={t("title")} intro={t("intro")}>
       <div className="flex flex-col gap-s6">
+        {order.payment_method === "CASH" ? <CashPaymentCard order={order} locale={locale} /> : null}
         <OrderSummaryCard order={order} locale={locale} timeZone={timeZone} />
         <EntryStatusCard order={order} locale={locale} />
 
@@ -176,6 +177,48 @@ function OrderSummaryCard({
           </span>
         </p>
       )}
+    </Card>
+  );
+}
+
+/**
+ * Pago en efectivo en un punto de venta fisico (DEC-078).
+ *
+ * VA PRIMERO, Y CON EL NUMERO DE ORDEN EN GRANDE, porque es lo que esta
+ * persona tiene que llevar a la caja. Mientras el pedido siga pendiente se dice
+ * sin rodeos: no se ha cobrado nada, el pedido espera el pago, y las
+ * participaciones no existen todavia.
+ *
+ * Lo que dice lo decide el BACKEND (`status`), no esta pantalla: el pedido pasa
+ * a pagado cuando alguien de la tienda confirma el cobro en el panel.
+ */
+function CashPaymentCard({
+  order,
+  locale,
+}: {
+  readonly order: OrderDetail;
+  readonly locale: Locale;
+}) {
+  const t = useTranslations("orderConfirmation.cash");
+  const total = formatMoney(order.total, locale) ?? "";
+  const pending = order.status === "PENDING_PAYMENT";
+
+  return (
+    <Card elevation="raised" padding="lg" className="border-brand/40">
+      <CardTitle as="h2" size="sm">
+        {pending ? t("pendingTitle") : t("paidTitle")}
+      </CardTitle>
+
+      <p className="mt-s4 text-caption uppercase tracking-wide text-text-subtle">
+        {t("orderNumberLabel")}
+      </p>
+      <p className="lsw-display text-display-sm tabular-nums text-text">{order.order_number}</p>
+
+      <div className="mt-s4">
+        <Alert tone={pending ? "warning" : "success"}>
+          <p>{pending ? t("pendingBody", { total }) : t("paidBody")}</p>
+        </Alert>
+      </div>
     </Card>
   );
 }

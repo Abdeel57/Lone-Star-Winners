@@ -77,9 +77,17 @@ export function OrderCard({
           )}
         </div>
 
-        <Badge tone="neutral" size="sm">
-          {statusLabel(order.status)}
-        </Badge>
+        <div className="flex flex-wrap items-center gap-2">
+          {/* DEC-078: un pedido en efectivo pendiente se paga en caja, no aqui. */}
+          {order.payment_method === "CASH" ? (
+            <Badge tone="info" size="sm">
+              {t("orders.paymentCash")}
+            </Badge>
+          ) : null}
+          <Badge tone="neutral" size="sm">
+            {statusLabel(order.status)}
+          </Badge>
+        </div>
       </div>
 
       <dl className="mt-s4 grid gap-s3 sm:grid-cols-2">

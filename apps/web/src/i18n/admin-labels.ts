@@ -233,6 +233,9 @@ const TRANSLATED_REASONS = [
   "PROMOTIONAL_CAMPAIGN",
   "OPERATIONAL_ROLLOUT",
   "INCIDENT_MITIGATION",
+  /* DEC-078: cobro en efectivo en un punto de venta fisico. */
+  "CASH_RECEIVED_AT_STORE",
+  "RETRY_ENTRY_GENERATION",
   "OTHER",
 ] as const;
 
@@ -289,6 +292,10 @@ export async function reasonLabeller(locale: Locale): Promise<(key: string) => s
         return t("OPERATIONAL_ROLLOUT");
       case "INCIDENT_MITIGATION":
         return t("INCIDENT_MITIGATION");
+      case "CASH_RECEIVED_AT_STORE":
+        return t("CASH_RECEIVED_AT_STORE");
+      case "RETRY_ENTRY_GENERATION":
+        return t("RETRY_ENTRY_GENERATION");
       case "OTHER":
         return t("OTHER");
     }

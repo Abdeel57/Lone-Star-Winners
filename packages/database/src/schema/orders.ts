@@ -107,6 +107,11 @@ export const orders = pgTable(
     index("orders_provider_payment_idx")
       .on(table.provider, table.providerPaymentId)
       .where(sql`provider_payment_id IS NOT NULL`),
+    // DEC-078 (0035): un solo pedido en efectivo por carrito. El segundo envio
+    // del mismo checkout choca aqui y la API devuelve el que ya existe.
+    uniqueIndex("orders_one_cash_order_per_cart")
+      .on(table.cartId)
+      .where(sql`provider = 'cash' AND cart_id IS NOT NULL`),
   ],
 );
 
