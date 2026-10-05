@@ -103,6 +103,7 @@ const TRANSLATED_CODES = [
   "SMS_NOT_CONFIGURED",
   "PHONE_INVALID",
   "PHONE_ALREADY_REGISTERED",
+  "ELIGIBILITY_ALREADY_DECLARED",
   "SMS_CODE_INVALID",
   "BOT_CHECK_FAILED",
   // Altas del panel (seccion 12) y validacion previa de sus formularios.
@@ -237,6 +238,8 @@ export function useApiErrorMessage(): (code: string | null) => string {
         return t("PHONE_INVALID");
       case "PHONE_ALREADY_REGISTERED":
         return t("PHONE_ALREADY_REGISTERED");
+      case "ELIGIBILITY_ALREADY_DECLARED":
+        return t("ELIGIBILITY_ALREADY_DECLARED");
       case "SMS_CODE_INVALID":
         return t("SMS_CODE_INVALID");
       case "BOT_CHECK_FAILED":

@@ -38,6 +38,12 @@ import type { FastifyRequest } from "fastify";
 import { z } from "zod";
 
 import type { AppDependencies } from "../app.js";
+import {
+  assertDeclaration,
+  consentsInputSchema,
+  dateOfBirthSchema,
+  residenceStateSchema,
+} from "../http/eligibility-input.js";
 import { ApiError, ApiErrors, errorEnvelopeSchema } from "../http/errors.js";
 import { buildPage, decodeCursor, paginationQuerySchema, pageSchema } from "../http/pagination.js";
 import type { ParticipantPrincipal } from "../http/principal-narrow.js";
@@ -55,6 +61,20 @@ import { domainServicesFor } from "../services/domain-registry.js";
 
 const promotionQuerySchema = z.object({ promotion_id: z.uuid() });
 const promotionPageQuerySchema = promotionQuerySchema.extend(paginationQuerySchema.shape);
+
+/** DEC-067: si la cuenta declaro, y cuando. Nunca lo declarado. */
+const eligibilityStatusSchema = z.object({
+  declared: z.boolean(),
+  declared_at: z.string().nullable(),
+});
+
+const eligibilityDeclarationBodySchema = z.object({
+  date_of_birth: dateOfBirthSchema,
+  residence_state: residenceStateSchema,
+  consents: consentsInputSchema,
+  /** Idioma en el que se mostraron los documentos. */
+  language: z.enum(["en-US", "es-US"]),
+});
 
 async function requireParticipant(request: FastifyRequest): Promise<ParticipantPrincipal> {
   const principal = await request.server.lswPrincipalResolver(request);
@@ -308,7 +328,7 @@ export function buildPortalRoutes(dependencies: AppDependencies): RouteDefinitio
       operationId: "getParticipantProfile",
       summary: "Perfil del participante autenticado.",
       description:
-        "SIN fecha de nacimiento, estado de residencia ni edad. No es un olvido: la elegibilidad la fijan las Official Rules y sigue en docs/LEGAL_PENDING.md. Pedir un dato personal que todavia no se sabe si hace falta es recoger datos por si acaso.",
+        "SIN fecha de nacimiento ni estado de residencia: lo declarado para la elegibilidad (DEC-067) no se devuelve en el perfil. Si la cuenta ya declaro lo dice `GET /me/eligibility`.",
       tags: ["portal"],
       authorization: { kind: "PERMISSION", permission: "participant.self.read" },
       schema: {
@@ -356,6 +376,74 @@ export function buildPortalRoutes(dependencies: AppDependencies): RouteDefinitio
           throw ApiErrors.unauthenticated();
         }
         return updated;
+      },
+    },
+
+    {
+      method: "GET",
+      url: "/api/v1/me/eligibility",
+      operationId: "getParticipantEligibility",
+      summary: "Si el participante ya declaro su fecha de nacimiento y su estado (DEC-067).",
+      description:
+        "Solo dice SI declaro y cuando, no lo declarado: la web lo necesita para pedir la declaracion antes de pagar, y no hace falta devolver la fecha de nacimiento para eso. Si es elegible no se responde aqui: depende de las reglas de cada promocion y se evalua al otorgar.",
+      tags: ["portal"],
+      authorization: { kind: "PERMISSION", permission: "participant.self.read" },
+      schema: {
+        response: {
+          200: eligibilityStatusSchema,
+          401: errorEnvelopeSchema,
+        },
+      },
+      handler: async (request) => {
+        const principal = await requireParticipant(request);
+        const declaration = await dependencies.identity.identities.findEligibilityDeclaration(
+          principal.participantId,
+        );
+        return {
+          declared: declaration !== null,
+          declared_at: declaration?.declaredAt.toISOString() ?? null,
+        };
+      },
+    },
+
+    {
+      method: "PUT",
+      url: "/api/v1/me/eligibility",
+      operationId: "declareParticipantEligibility",
+      summary: "Declarar fecha de nacimiento y estado en una cuenta anterior a DEC-067.",
+      description:
+        "Una sola vez: una declaracion existente no se reescribe (409 ELIGIBILITY_ALREADY_DECLARED), porque cambiar la fecha o el estado despues de comprar seria volverse elegible a posteriori. Exige los mismos consentimientos que el alta (`required_consents` de GET /config).",
+      tags: ["portal"],
+      authorization: { kind: "PERMISSION", permission: "participant.self.update" },
+      schema: {
+        body: eligibilityDeclarationBodySchema,
+        response: {
+          200: eligibilityStatusSchema,
+          401: errorEnvelopeSchema,
+          409: errorEnvelopeSchema,
+          422: errorEnvelopeSchema,
+        },
+      },
+      handler: async (request) => {
+        const principal = await requireParticipant(request);
+        const body = request.body as z.infer<typeof eligibilityDeclarationBodySchema>;
+        const now = new Date();
+        const consents = assertDeclaration(body, now);
+
+        const outcome = await dependencies.identity.identities.declareEligibility({
+          participantId: principal.participantId,
+          eligibility: {
+            dateOfBirth: body.date_of_birth,
+            residenceState: body.residence_state,
+            declaredAt: now,
+          },
+          consents,
+          locale: body.language,
+        });
+
+        if (outcome === "NOT_FOUND") throw ApiErrors.unauthenticated();
+        if (outcome === "ALREADY_DECLARED") throw ApiErrors.eligibilityAlreadyDeclared();
+        return { declared: true, declared_at: now.toISOString() };
       },
     },
   ];

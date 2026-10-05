@@ -258,6 +258,8 @@ export {
   fetchEntrySummary,
   fetchEntryTransactions,
   fetchMe,
+  fetchMyEligibility,
+  declareMyEligibility,
   fetchOfficialRules,
   fetchOrder,
   fetchOrders,
@@ -297,6 +299,7 @@ export {
   verifyEmail,
   verifyMfa,
   type AdminPageQuery,
+  type EligibilityStatus,
   type SessionContext,
 } from "./resources";
 export type { ApiFailure, ApiFailureKind, ApiResult } from "./result";

@@ -1,4 +1,5 @@
 import { isLocale, type Locale } from "@/i18n/locales";
+import type { ConsentAcceptance } from "@/lib/api";
 
 /**
  * Lectura de campos de formulario en una Server Action.
@@ -56,6 +57,44 @@ export function secretFrom(formData: FormData, field: string): string | null {
 /** Casilla marcada. */
 export function checkboxFrom(formData: FormData, field: string): boolean {
   return formData.get(field) !== null;
+}
+
+/**
+ * Recoge los consentimientos marcados (lo pinta `ConsentFieldset`).
+ *
+ * Los pares clave/version los pinta el formulario a partir de lo que publica
+ * `GET /config`, y viajan de vuelta EN EL FORMULARIO. No se reconstruyen aqui:
+ * quien llama no sabe -ni debe saber- que consentimientos existen. Si el backend
+ * deja de pedir uno, deja de pintarse y deja de llegar.
+ *
+ * La version viaja con la clave porque "acepto las reglas" sin decir QUE
+ * version se acepto es una afirmacion sin fecha.
+ */
+export function consentsFrom(formData: FormData): {
+  readonly accepted: readonly ConsentAcceptance[];
+  readonly missing: boolean;
+} {
+  const accepted: ConsentAcceptance[] = [];
+  let missing = false;
+
+  for (const raw of formData.getAll("consent")) {
+    if (typeof raw !== "string") continue;
+
+    const separator = raw.indexOf(":");
+    if (separator <= 0) continue;
+
+    const key = raw.slice(0, separator);
+    const version = raw.slice(separator + 1);
+    const required = formData.get(`consent_required:${key}`) === "true";
+
+    if (checkboxFrom(formData, `consent_accepted:${key}`)) {
+      accepted.push({ key, version });
+    } else if (required) {
+      missing = true;
+    }
+  }
+
+  return { accepted, missing };
 }
 
 /**

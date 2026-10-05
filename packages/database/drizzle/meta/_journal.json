@@ -176,6 +176,13 @@
       "when": 1787616033000,
       "tag": "0033_promotion_hero_gallery",
       "breakpoints": false
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1787616034000,
+      "tag": "0034_participant_eligibility",
+      "breakpoints": false
     }
   ]
 }

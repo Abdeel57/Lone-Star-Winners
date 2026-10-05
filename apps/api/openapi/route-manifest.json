@@ -877,6 +877,24 @@
     },
     {
       "method": "GET",
+      "path": "/api/v1/me/eligibility",
+      "operation_id": "getParticipantEligibility",
+      "authorization": "participant.self.read",
+      "requires_step_up": false,
+      "tags": ["portal"],
+      "summary": "Si el participante ya declaro su fecha de nacimiento y su estado (DEC-067)."
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/me/eligibility",
+      "operation_id": "declareParticipantEligibility",
+      "authorization": "participant.self.update",
+      "requires_step_up": false,
+      "tags": ["portal"],
+      "summary": "Declarar fecha de nacimiento y estado en una cuenta anterior a DEC-067."
+    },
+    {
+      "method": "GET",
       "path": "/api/v1/media/:file",
       "operation_id": "getMedia",
       "authorization": "PUBLIC",

@@ -213,7 +213,7 @@ export function useEntryReasonLabel(): (reasonKey: string) => string {
 }
 
 /** Textos de consentimiento con traduccion propia en los dos idiomas. */
-const TRANSLATED_CONSENT_KEYS = ["OFFICIAL_RULES"] as const;
+const TRANSLATED_CONSENT_KEYS = ["OFFICIAL_RULES", "TERMS", "PRIVACY"] as const;
 
 type TranslatedConsentKey = (typeof TRANSLATED_CONSENT_KEYS)[number];
 
@@ -242,6 +242,10 @@ export function useConsentText(): (textKey: string) => string {
       switch (textKey) {
         case "OFFICIAL_RULES":
           return t("OFFICIAL_RULES");
+        case "TERMS":
+          return t("TERMS");
+        case "PRIVACY":
+          return t("PRIVACY");
       }
     }
 

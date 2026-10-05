@@ -71,12 +71,37 @@ export interface CreateSessionInput {
   readonly userAgent: string | null;
 }
 
+/** DEC-067: version de un documento que el participante acepto. */
+export interface ConsentAcceptanceInput {
+  readonly key: string;
+  readonly version: string;
+}
+
+/** DEC-067: lo que se declara para evaluar la elegibilidad, y cuando. */
+export interface EligibilityDeclarationInput {
+  /** `YYYY-MM-DD`. */
+  readonly dateOfBirth: string;
+  /** Codigo USPS de dos letras. */
+  readonly residenceState: string;
+  readonly declaredAt: Date;
+}
+
+/** DEC-067: la declaracion guardada de un participante. */
+export interface EligibilityDeclarationRecord {
+  readonly dateOfBirth: string;
+  readonly residenceState: string;
+  readonly declaredAt: Date;
+}
+
 export interface RegisterParticipantInput {
   readonly email: string;
   /** Cadena PHC ya calculada. La contrasena en claro no llega nunca aqui. */
   readonly passwordHash: string;
   readonly displayName: string | null;
   readonly preferredLocale: "en-US" | "es-US";
+  /** DEC-067: se guardan en la misma transaccion que la cuenta. */
+  readonly eligibility: EligibilityDeclarationInput;
+  readonly consents: readonly ConsentAcceptanceInput[];
 }
 
 export interface RegisterParticipantWithPhoneInput {
@@ -87,6 +112,9 @@ export interface RegisterParticipantWithPhoneInput {
   readonly preferredLocale: "en-US" | "es-US";
   /** Instante de la verificacion: pasa a `phone_verified_at`. */
   readonly verifiedAt: Date;
+  /** DEC-067: se guardan en la misma transaccion que la cuenta. */
+  readonly eligibility: EligibilityDeclarationInput;
+  readonly consents: readonly ConsentAcceptanceInput[];
 }
 
 export interface IdentityRepository {
@@ -116,6 +144,24 @@ export interface IdentityRepository {
 
   /** DEC-060: la cuenta cuyo participante tiene ese celular VERIFICADO. */
   findByVerifiedPhone(phoneE164: string): Promise<IdentityRecord | null>;
+
+  /** DEC-067: la declaracion de elegibilidad del participante, o `null` si no la hizo. */
+  findEligibilityDeclaration(participantId: string): Promise<EligibilityDeclarationRecord | null>;
+
+  /**
+   * DEC-067: una cuenta anterior a la declaracion la hace por primera vez, con
+   * sus consentimientos, en UNA transaccion.
+   *
+   * No reescribe una declaracion existente (`ALREADY_DECLARED`): cambiar la
+   * fecha de nacimiento o el estado despues de comprar seria una forma de
+   * volverse elegible a posteriori. Las correcciones las hace una persona.
+   */
+  declareEligibility(input: {
+    readonly participantId: string;
+    readonly eligibility: EligibilityDeclarationInput;
+    readonly consents: readonly ConsentAcceptanceInput[];
+    readonly locale: "en-US" | "es-US";
+  }): Promise<"DECLARED" | "ALREADY_DECLARED" | "NOT_FOUND">;
 
   findByEmail(email: string): Promise<IdentityRecord | null>;
   findById(identityId: string): Promise<IdentityRecord | null>;

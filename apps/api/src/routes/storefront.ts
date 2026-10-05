@@ -28,6 +28,7 @@ import { MAXIMUM_PASSWORD_LENGTH, MINIMUM_PASSWORD_LENGTH } from "@lsw/security"
 import { z } from "zod";
 
 import type { AppDependencies } from "../app.js";
+import { REQUIRED_CONSENTS } from "../config/consents.js";
 import { ApiErrors, errorEnvelopeSchema } from "../http/errors.js";
 import { buildPage, decodeCursor, pageSchema, paginationQuerySchema } from "../http/pagination.js";
 import type { RouteDefinition } from "../http/route-registry.js";
@@ -227,6 +228,7 @@ export function buildStorefrontRoutes(dependencies: AppDependencies): RouteDefin
             minimum_length: MINIMUM_PASSWORD_LENGTH,
             maximum_length: MAXIMUM_PASSWORD_LENGTH,
           },
+          required_consents: REQUIRED_CONSENTS.map((consent) => ({ ...consent })),
         };
       },
     },

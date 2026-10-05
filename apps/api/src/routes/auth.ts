@@ -54,6 +54,12 @@ import type { FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 
 import type { AppDependencies } from "../app.js";
+import {
+  assertDeclaration,
+  consentsInputSchema,
+  dateOfBirthSchema,
+  residenceStateSchema,
+} from "../http/eligibility-input.js";
 import { ApiErrors, errorEnvelopeSchema } from "../http/errors.js";
 import type { RouteDefinition } from "../http/route-registry.js";
 import {
@@ -143,18 +149,18 @@ const registerBodySchema = z
     /** Etiqueta BCP-47 completa (DEC-029). Sin default: DEC-021 no admite uno. */
     language_preference: z.enum(["en-US", "es-US"]),
     /**
-     * VACIO O NADA, y no es un descuido.
-     *
-     * `GET /config` no publica `required_consents` y no existe tabla donde
-     * guardar una aceptacion: que consentimientos hay que recoger es decision del
-     * abogado del cliente y sigue pendiente. Aceptar aqui una lista y tirarla
-     * seria perder en silencio una aceptacion legal; rechazarla obliga a que el
-     * dia que se publiquen, la persistencia exista antes.
+     * DEC-067: los documentos aceptados, con la version que se mostro. Tienen
+     * que llegar TODOS los de `REQUIRED_CONSENTS` (`GET /config`); lo comprueba
+     * el handler, que es quien conoce la version vigente.
      */
-    consents: z
-      .array(z.object({ key: z.string().min(1).max(100), version: z.string().min(1).max(100) }))
-      .max(0)
-      .default([]),
+    consents: consentsInputSchema,
+    /**
+     * DEC-067: fecha de nacimiento y estado de residencia DECLARADOS. No se
+     * decide aqui si la persona es elegible: eso se evalua al otorgar, contra
+     * las reglas de cada promocion (`services/eligibility.ts`).
+     */
+    date_of_birth: dateOfBirthSchema,
+    residence_state: residenceStateSchema,
   })
   .refine(exactlyOneOf, { error: "email_xor_phone", path: ["email"] })
   .refine((body) => body.phone === undefined || body.sms_code !== undefined, {
@@ -497,6 +503,10 @@ export function buildAuthRoutes(dependencies: AppDependencies): RouteDefinition[
 
         assertPassword(body.password);
 
+        // DEC-067: antes del SMS y de Argon2, para no gastar un codigo ni un
+        // hash en un alta que va a rechazarse por un dato que falta.
+        const consents = assertDeclaration(body, now);
+
         // DEC-060: alta con celular. El codigo se comprueba ANTES de Argon2 y
         // de tocar la base de datos: sin un codigo valido para ese numero no
         // hay cuenta que crear, y un codigo inventado no cuesta un hash.
@@ -515,6 +525,12 @@ export function buildAuthRoutes(dependencies: AppDependencies): RouteDefinition[
         // milisegundos de Argon2 con una conexion del pool cogida.
         const passwordHash = await hashPassword(body.password);
 
+        const eligibility = {
+          dateOfBirth: body.date_of_birth,
+          residenceState: body.residence_state,
+          declaredAt: now,
+        };
+
         const created =
           verifiedPhone === null
             ? await identity.identities.registerParticipant({
@@ -523,6 +539,8 @@ export function buildAuthRoutes(dependencies: AppDependencies): RouteDefinition[
                 passwordHash,
                 displayName: body.display_name ?? null,
                 preferredLocale: body.language_preference,
+                eligibility,
+                consents,
               })
             : await identity.identities.registerParticipantWithPhone({
                 phoneE164: verifiedPhone,
@@ -530,6 +548,8 @@ export function buildAuthRoutes(dependencies: AppDependencies): RouteDefinition[
                 displayName: body.display_name ?? null,
                 preferredLocale: body.language_preference,
                 verifiedAt: now,
+                eligibility,
+                consents,
               });
 
         if (created === null) {

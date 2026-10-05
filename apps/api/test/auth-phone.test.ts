@@ -17,6 +17,7 @@ import { describe, expect, it, vi } from "vitest";
 import { hashPassword, verifyPassword } from "@lsw/security";
 
 import { createApp, type AppDependencies } from "../src/app.js";
+import { REQUIRED_CONSENTS } from "../src/config/consents.js";
 import { CONTRACT_GENERATION_CONFIG } from "../src/config/contract-config.js";
 import type { BotCheck } from "../src/services/bot-check.js";
 import type {
@@ -317,6 +318,10 @@ describe("POST /auth/register con celular", () => {
     sms_code: GOOD_CODE,
     password: FAKE_PASSWORD,
     language_preference: "es-US",
+    // DEC-067: los mismos datos que el alta con correo.
+    consents: REQUIRED_CONSENTS.map((consent) => ({ key: consent.key, version: consent.version })),
+    date_of_birth: "1990-05-05",
+    residence_state: "TX",
   };
 
   it("con el codigo correcto crea la cuenta sin correo y abre sesion", async () => {

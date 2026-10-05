@@ -153,6 +153,8 @@ export const API_PATHS = {
   authPasswordResetSms: "/auth/password/reset-sms",
   /** [CONTRATO] Formulario de `/privacychoices` (DEC-063). PUBLIC. */
   privacyRequests: "/privacy-requests",
+  /** [CONTRATO] Declaracion de elegibilidad del participante (DEC-067). */
+  meEligibility: "/me/eligibility",
   /** [PROVISIONAL] Perfil del participante. No esta en el contrato. */
   me: "/me",
 
@@ -678,9 +680,9 @@ export const ANONYMOUS_SESSION: SessionState = {
  * igual que el login, porque hace lo mismo -abrir una sesion- y dos formas
  * distintas para el mismo efecto solo garantizan que un dia diverjan.
  *
- * Rechazos propios: 409 `EMAIL_ALREADY_REGISTERED` y 422 `WEAK_PASSWORD`, este
- * con `details.minimum_length`. `consents` hoy solo se admite vacio: el backend
- * rechaza una lista con contenido mientras no exista donde guardarla.
+ * Rechazos propios: 409 `EMAIL_ALREADY_REGISTERED`, 422 `WEAK_PASSWORD` (con
+ * `details.minimum_length`) y 422 `CONSENT_REQUIRED` si falta aceptar alguno de
+ * los documentos de `required_consents` (DEC-067).
  */
 export function register(
   input: {
@@ -695,6 +697,9 @@ export function register(
     readonly display_name: string | null;
     readonly language_preference: string;
     readonly consents: readonly ConsentAcceptance[];
+    /** DEC-067: `YYYY-MM-DD` y codigo USPS. Se evaluan al otorgar, no aqui. */
+    readonly date_of_birth: string;
+    readonly residence_state: string;
   },
   locale: Locale,
   session: SessionContext,
@@ -778,6 +783,45 @@ export function submitPrivacyRequest(
     API_PATHS.privacyRequests,
     { locale, body: input },
   );
+}
+
+/** DEC-067: si la cuenta ya declaro fecha de nacimiento y estado. Nunca lo declarado. */
+export interface EligibilityStatus {
+  readonly declared: boolean;
+  readonly declared_at: string | null;
+}
+
+/** DEC-067: si el participante ya declaro su elegibilidad. Exige sesion. */
+export function fetchMyEligibility(
+  locale: Locale,
+  session: SessionContext,
+): Promise<ApiResult<EligibilityStatus>> {
+  return apiGet<EligibilityStatus>(API_PATHS.meEligibility, {
+    locale,
+    ...sessionOptions(session),
+  });
+}
+
+/**
+ * DEC-067: una cuenta anterior declara fecha de nacimiento y estado, con los
+ * mismos consentimientos que el alta. Una sola vez: 409
+ * `ELIGIBILITY_ALREADY_DECLARED` si ya lo hizo.
+ */
+export function declareMyEligibility(
+  input: {
+    readonly date_of_birth: string;
+    readonly residence_state: string;
+    readonly consents: readonly ConsentAcceptance[];
+    readonly language: "en-US" | "es-US";
+  },
+  locale: Locale,
+  session: SessionContext,
+): Promise<ApiResult<EligibilityStatus>> {
+  return apiRequest<EligibilityStatus>("PUT", API_PATHS.meEligibility, {
+    locale,
+    body: input,
+    ...sessionOptions(session),
+  });
 }
 
 /** Fijar la contrasena con el codigo SMS (DEC-060). */

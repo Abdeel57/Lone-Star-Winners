@@ -71,6 +71,7 @@ import {
 } from "../http/schemas-b5.js";
 import { domainServicesFor } from "../services/domain-registry.js";
 import { toCommerceOrder } from "../services/domain-services.js";
+import { evaluateEligibility, readEligibilityRules } from "../services/eligibility.js";
 import {
   entryStateForOrder,
   presentOrderDetail,
@@ -339,6 +340,14 @@ export function buildOrdersRoutes(dependencies: AppDependencies): RouteDefinitio
         return true;
       }
 
+      // DEC-067: la compra de quien no es "Entrant" segun las Official Rules
+      // no es una participacion (seccion 1). Se registra el cobro SIN calificar,
+      // igual que una compra fuera del periodo: la mercancia se vende igual.
+      if (!(await participantIsEligible(order.participantId, context, qualifiedAt))) {
+        await persistPaymentState(paidOutsidePromotion(order, event.occurredAt), event, "PAID");
+        return true;
+      }
+
       const qualified: QualifiedOrder = {
         orderId: order.id,
         promotionId: context.promotionId,
@@ -372,6 +381,39 @@ export function buildOrdersRoutes(dependencies: AppDependencies): RouteDefinitio
       await persistPaymentState(change.order, event, "PAID");
       return true;
     });
+  }
+
+  /**
+   * DEC-067: el participante cumple la seccion 1 de las Official Rules en el
+   * instante en que su pedido califica.
+   *
+   * Con `age_gate_enabled` y `state_eligibility_enforcement_enabled` apagados
+   * -por defecto- no se consulta nada y todo el mundo es elegible, como antes.
+   * Encendidos, la edad y los estados excluidos salen de la version de reglas
+   * de la promocion; si falta el dato, `evaluateEligibility` lanza y el evento
+   * queda FAILED y visible en vez de otorgar sin comprobar.
+   */
+  async function participantIsEligible(
+    participantId: string,
+    context: { readonly rulesConfig: unknown; readonly legalTimeZone: string },
+    at: Date,
+  ): Promise<boolean> {
+    const { featureFlags } = await repositories.config.read();
+    const switches = {
+      ageGate: featureFlags.age_gate_enabled,
+      stateEnforcement: featureFlags.state_eligibility_enforcement_enabled,
+    };
+    if (!switches.ageGate && !switches.stateEnforcement) return true;
+
+    const declaration =
+      await dependencies.identity.identities.findEligibilityDeclaration(participantId);
+    return evaluateEligibility({
+      declaration,
+      rules: readEligibilityRules(context.rulesConfig),
+      switches,
+      at,
+      timeZone: context.legalTimeZone,
+    }).eligible;
   }
 
   /** El award rechazo el pedido por el periodo o el estado de la promocion, no por un fallo. */

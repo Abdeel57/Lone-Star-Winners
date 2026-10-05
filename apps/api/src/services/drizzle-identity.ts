@@ -17,9 +17,11 @@ import type { SessionAudience } from "@lsw/security";
 import { and, count, eq, gt, gte, isNull, sql } from "drizzle-orm";
 
 import type {
+  ConsentAcceptanceInput,
   ConsumeEmailTokenResult,
   CreateSessionInput,
   CredentialRecord,
+  EligibilityDeclarationInput,
   IdentityRepositories,
   IdentityRecord,
   MfaFactorRecord,
@@ -32,10 +34,36 @@ const {
   identityEmailTokens,
   identityMfaFactors,
   participants,
+  participantConsents,
   sessions,
   adminUserRoles,
   adminUsers,
 } = schema;
+
+/** DEC-067: las columnas de la declaracion, para el INSERT o el UPDATE de `participants`. */
+function declarationColumns(eligibility: EligibilityDeclarationInput) {
+  return {
+    dateOfBirth: eligibility.dateOfBirth,
+    residenceState: eligibility.residenceState,
+    eligibilityDeclaredAt: eligibility.declaredAt,
+  };
+}
+
+/** DEC-067: filas de `participant_consents`. Una por documento aceptado. */
+function consentRows(
+  participantId: string,
+  consents: readonly ConsentAcceptanceInput[],
+  locale: "en-US" | "es-US",
+  acceptedAt: Date,
+) {
+  return consents.map((consent) => ({
+    participantId,
+    consentKey: consent.key,
+    documentVersion: consent.version,
+    locale,
+    acceptedAt,
+  }));
+}
 
 function toIdentity(row: {
   id: string;
@@ -160,11 +188,30 @@ export function createIdentityRepositories(db: Database): IdentityRepositories {
               .insert(identityCredentials)
               .values({ identityId: identity.id, passwordHash: input.passwordHash });
 
-            await tx.insert(participants).values({
-              identityId: identity.id,
-              displayName: input.displayName,
-              preferredLocale: input.preferredLocale,
-            });
+            const [participant] = await tx
+              .insert(participants)
+              .values({
+                identityId: identity.id,
+                displayName: input.displayName,
+                preferredLocale: input.preferredLocale,
+                ...declarationColumns(input.eligibility),
+              })
+              .returning({ id: participants.id });
+
+            if (participant === undefined) throw new Error("participant_insert_returned_no_row");
+
+            if (input.consents.length > 0) {
+              await tx
+                .insert(participantConsents)
+                .values(
+                  consentRows(
+                    participant.id,
+                    input.consents,
+                    input.preferredLocale,
+                    input.eligibility.declaredAt,
+                  ),
+                );
+            }
 
             return toIdentity(identity);
           });
@@ -196,13 +243,32 @@ export function createIdentityRepositories(db: Database): IdentityRepositories {
               .insert(identityCredentials)
               .values({ identityId: identity.id, passwordHash: input.passwordHash });
 
-            await tx.insert(participants).values({
-              identityId: identity.id,
-              displayName: input.displayName,
-              preferredLocale: input.preferredLocale,
-              // Tambien como dato de contacto: es el que ve el panel.
-              phoneE164: input.phoneE164,
-            });
+            const [participant] = await tx
+              .insert(participants)
+              .values({
+                identityId: identity.id,
+                displayName: input.displayName,
+                preferredLocale: input.preferredLocale,
+                // Tambien como dato de contacto: es el que ve el panel.
+                phoneE164: input.phoneE164,
+                ...declarationColumns(input.eligibility),
+              })
+              .returning({ id: participants.id });
+
+            if (participant === undefined) throw new Error("participant_insert_returned_no_row");
+
+            if (input.consents.length > 0) {
+              await tx
+                .insert(participantConsents)
+                .values(
+                  consentRows(
+                    participant.id,
+                    input.consents,
+                    input.preferredLocale,
+                    input.eligibility.declaredAt,
+                  ),
+                );
+            }
 
             return toIdentity(identity);
           });
@@ -210,6 +276,72 @@ export function createIdentityRepositories(db: Database): IdentityRepositories {
           if (violatedUniqueIndex(error) === PHONE_UNIQUE_INDEX) return null;
           throw error;
         }
+      },
+
+      async findEligibilityDeclaration(participantId) {
+        const [row] = await db
+          .select({
+            dateOfBirth: participants.dateOfBirth,
+            residenceState: participants.residenceState,
+            declaredAt: participants.eligibilityDeclaredAt,
+          })
+          .from(participants)
+          .where(eq(participants.id, participantId))
+          .limit(1);
+
+        if (row === undefined) return null;
+
+        // La CHECK `participants_eligibility_declaration_complete` garantiza que
+        // vienen las tres o ninguna; se comprueban las tres igual.
+        const { dateOfBirth, residenceState, declaredAt } = row;
+        if (dateOfBirth === null || residenceState === null || declaredAt === null) return null;
+        return { dateOfBirth, residenceState, declaredAt };
+      },
+
+      async declareEligibility(input) {
+        return await db.transaction(async (tx) => {
+          // Solo si no habia declarado: el `WHERE` lo decide en el motor, y dos
+          // envios simultaneos no pueden escribir los dos.
+          const updated = await tx
+            .update(participants)
+            .set({
+              ...declarationColumns(input.eligibility),
+              updatedAt: input.eligibility.declaredAt,
+            })
+            .where(
+              and(
+                eq(participants.id, input.participantId),
+                isNull(participants.eligibilityDeclaredAt),
+              ),
+            )
+            .returning({ id: participants.id });
+
+          if (updated.length === 0) {
+            const [exists] = await tx
+              .select({ id: participants.id })
+              .from(participants)
+              .where(eq(participants.id, input.participantId))
+              .limit(1);
+            return exists === undefined ? "NOT_FOUND" : "ALREADY_DECLARED";
+          }
+
+          if (input.consents.length > 0) {
+            await tx
+              .insert(participantConsents)
+              .values(
+                consentRows(
+                  input.participantId,
+                  input.consents,
+                  input.locale,
+                  input.eligibility.declaredAt,
+                ),
+              )
+              // Una version ya aceptada no es un error: la fila ya cuenta lo mismo.
+              .onConflictDoNothing();
+          }
+
+          return "DECLARED";
+        });
       },
 
       async findByVerifiedPhone(phoneE164: string): Promise<IdentityRecord | null> {

@@ -20,6 +20,7 @@ import { describe, expect, it, vi } from "vitest";
 import { hashSessionToken, looksLikeSessionToken, verifyPassword } from "@lsw/security";
 
 import { createApp, type AppDependencies } from "../src/app.js";
+import { REQUIRED_CONSENTS } from "../src/config/consents.js";
 import { CONTRACT_GENERATION_CONFIG } from "../src/config/contract-config.js";
 import { cookieNameFor } from "../src/http/session-cookie.js";
 import type { EmailMessage, EmailSender } from "../src/services/email.js";
@@ -41,12 +42,20 @@ const TAKEN_EMAIL = "ya.existe@example.invalid";
 /** Doce caracteres o mas: el suelo de `MINIMUM_PASSWORD_LENGTH`. */
 const FAKE_PASSWORD = "FAKE-registro-prueba-2026";
 
+/** DEC-067: los documentos de `GET /config`, con su version vigente. */
+const ACCEPTED_CONSENTS = REQUIRED_CONSENTS.map((consent) => ({
+  key: consent.key,
+  version: consent.version,
+}));
+
 const VALID_BODY = {
   email: "nueva.persona@example.invalid",
   password: FAKE_PASSWORD,
   display_name: "Persona Nueva",
   language_preference: "es-US",
-  consents: [],
+  consents: ACCEPTED_CONSENTS,
+  date_of_birth: "1990-05-05",
+  residence_state: "TX",
 } as const;
 
 /**
@@ -328,6 +337,12 @@ describe("cuerpo invalido: 422 antes de tocar el repositorio", () => {
     ["idioma ausente", { ...VALID_BODY, language_preference: undefined }],
     ["nombre de mas de 120 caracteres", { ...VALID_BODY, display_name: "n".repeat(121) }],
     ["contrasena ausente", { ...VALID_BODY, password: undefined }],
+    ["fecha de nacimiento ausente", { ...VALID_BODY, date_of_birth: undefined }],
+    ["fecha de nacimiento sin forma de fecha", { ...VALID_BODY, date_of_birth: "05/05/1990" }],
+    ["fecha de nacimiento en el futuro", { ...VALID_BODY, date_of_birth: "2999-01-01" }],
+    ["estado ausente", { ...VALID_BODY, residence_state: undefined }],
+    ["estado que no es de EE. UU.", { ...VALID_BODY, residence_state: "PR" }],
+    ["estado en minusculas", { ...VALID_BODY, residence_state: "tx" }],
   ];
 
   it.each(cases)("%s", async (_name, payload) => {
@@ -337,17 +352,61 @@ describe("cuerpo invalido: 422 antes de tocar el repositorio", () => {
     expect(errorCode(response)).toBe("VALIDATION_FAILED");
     expect(registrations).toHaveLength(0);
   });
+});
 
-  it("una lista de consentimientos NO vacia se rechaza en vez de tirarse", async () => {
-    // Hoy `GET /config` no publica consentimientos y no hay donde guardar una
-    // aceptacion. Responder 201 aqui seria perder en silencio un acto legal.
+describe("declaracion y consentimientos (DEC-067)", () => {
+  it("la fecha, el estado y los consentimientos llegan al repositorio en la misma alta", async () => {
+    const { response, registrations } = await register(VALID_BODY);
+
+    expect(response.statusCode).toBe(201);
+    expect(registrations[0]?.eligibility).toMatchObject({
+      dateOfBirth: "1990-05-05",
+      residenceState: "TX",
+    });
+    expect(registrations[0]?.eligibility.declaredAt).toBeInstanceOf(Date);
+    expect(registrations[0]?.consents).toEqual(ACCEPTED_CONSENTS);
+  });
+
+  it("si falta un documento es 422 CONSENT_REQUIRED, dice cual, y no crea nada", async () => {
     const { response, registrations } = await register({
       ...VALID_BODY,
-      consents: [{ key: "official_rules", version: "2026-01" }],
+      consents: ACCEPTED_CONSENTS.filter((consent) => consent.key !== "PRIVACY"),
     });
 
     expect(response.statusCode).toBe(422);
-    expect(errorCode(response)).toBe("VALIDATION_FAILED");
+    expect(errorCode(response)).toBe("CONSENT_REQUIRED");
+    expect(response.json()).toMatchObject({ error: { details: { missing: ["PRIVACY"] } } });
     expect(registrations).toHaveLength(0);
+  });
+
+  it("aceptar una version que ya no es la vigente no cuenta", async () => {
+    const { response, registrations } = await register({
+      ...VALID_BODY,
+      consents: ACCEPTED_CONSENTS.map((consent) =>
+        consent.key === "OFFICIAL_RULES" ? { ...consent, version: "2026-09-30" } : consent,
+      ),
+    });
+
+    expect(errorCode(response)).toBe("CONSENT_REQUIRED");
+    expect(registrations).toHaveLength(0);
+  });
+
+  it("una clave que no se pidio no se guarda", async () => {
+    const { response, registrations } = await register({
+      ...VALID_BODY,
+      consents: [...ACCEPTED_CONSENTS, { key: "MARKETING", version: "x" }],
+    });
+
+    expect(response.statusCode).toBe(201);
+    expect(registrations[0]?.consents).toEqual(ACCEPTED_CONSENTS);
+  });
+
+  it("un menor o alguien de un estado excluido SI puede darse de alta: comprar mercancia esta permitido", async () => {
+    // La elegibilidad se evalua al otorgar participaciones, no aqui.
+    const minor = await register({ ...VALID_BODY, date_of_birth: "2015-01-01" });
+    const florida = await register({ ...VALID_BODY, residence_state: "FL" });
+
+    expect(minor.response.statusCode).toBe(201);
+    expect(florida.response.statusCode).toBe(201);
   });
 });

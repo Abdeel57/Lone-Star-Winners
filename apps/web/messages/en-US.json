@@ -162,7 +162,8 @@
     "AMOE_ENTRY_CAP_REACHED": "This participant has no room left under the per-person entry limit.",
     "RULES_VERSION_NOT_ACTIVE": "This promotion has no active rules version.",
     "CONFIG_JSON_INVALID": "This JSON does not parse. Check the highlighted field.",
-    "MULTIPLIER_INVALID": "The multiplier has to be a whole number greater than zero."
+    "MULTIPLIER_INVALID": "The multiplier has to be a whole number greater than zero.",
+    "ELIGIBILITY_ALREADY_DECLARED": "You already confirmed your date of birth and state. If they are wrong, write to us at info@LoneStarWinners.com."
   },
   "availability": {
     "IN_STOCK": "In stock",
@@ -723,7 +724,11 @@
       "phone": "Mobile number",
       "phoneHint": "US numbers only, for example (512) 555-0100.",
       "smsCode": "Code from the text message",
-      "smsCodeHint": "It expires in 10 minutes and works only once."
+      "smsCodeHint": "It expires in 10 minutes and works only once.",
+      "dateOfBirth": "Date of birth",
+      "dateOfBirthHint": "Each promotion's Official Rules set the age to enter. We only use it to check that.",
+      "residenceState": "State where you live",
+      "residenceStatePlaceholder": "Choose your state"
     },
     "channel": {
       "legend": "Use",
@@ -742,7 +747,11 @@
       "heading": "Before you continue",
       "OFFICIAL_RULES": "I have read the Official Rules of the current promotion.",
       "fallback": "I accept this condition, which is described in the Official Rules.",
-      "versionLabel": "Version {version}"
+      "versionLabel": "Version {version}",
+      "TERMS": "I accept the Terms & Conditions.",
+      "PRIVACY": "I have read the Privacy Policy.",
+      "readDocuments": "You can read them here:",
+      "officialRulesLink": "Official Rules"
     },
     "unverified": {
       "title": "Your email is not verified yet",
@@ -1762,5 +1771,63 @@
       "cardsHintWithLimit": "How many cards came in the same envelope. The Official Rules allow {max}; more than that is flagged for review, not rejected here.",
       "submit": "Add to the review queue"
     }
+  },
+  "eligibility": {
+    "title": "Before you pay, confirm your details",
+    "body": "To check whether you can take part in the sweepstakes under the Official Rules, we need your date of birth and your state. We only ask once.",
+    "submit": "Save and continue"
+  },
+  "usStates": {
+    "AL": "Alabama",
+    "AK": "Alaska",
+    "AZ": "Arizona",
+    "AR": "Arkansas",
+    "CA": "California",
+    "CO": "Colorado",
+    "CT": "Connecticut",
+    "DE": "Delaware",
+    "DC": "District of Columbia",
+    "FL": "Florida",
+    "GA": "Georgia",
+    "HI": "Hawaii",
+    "ID": "Idaho",
+    "IL": "Illinois",
+    "IN": "Indiana",
+    "IA": "Iowa",
+    "KS": "Kansas",
+    "KY": "Kentucky",
+    "LA": "Louisiana",
+    "ME": "Maine",
+    "MD": "Maryland",
+    "MA": "Massachusetts",
+    "MI": "Michigan",
+    "MN": "Minnesota",
+    "MS": "Mississippi",
+    "MO": "Missouri",
+    "MT": "Montana",
+    "NE": "Nebraska",
+    "NV": "Nevada",
+    "NH": "New Hampshire",
+    "NJ": "New Jersey",
+    "NM": "New Mexico",
+    "NY": "New York",
+    "NC": "North Carolina",
+    "ND": "North Dakota",
+    "OH": "Ohio",
+    "OK": "Oklahoma",
+    "OR": "Oregon",
+    "PA": "Pennsylvania",
+    "RI": "Rhode Island",
+    "SC": "South Carolina",
+    "SD": "South Dakota",
+    "TN": "Tennessee",
+    "TX": "Texas",
+    "UT": "Utah",
+    "VT": "Vermont",
+    "VA": "Virginia",
+    "WA": "Washington",
+    "WV": "West Virginia",
+    "WI": "Wisconsin",
+    "WY": "Wyoming"
   }
 }

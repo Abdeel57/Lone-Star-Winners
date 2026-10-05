@@ -351,8 +351,17 @@ Response: 200
   },
   "amoe_mode": null,
   "supported_locales": ["en-US", "es-US"],
-  "password_policy": { "minimum_length": 12, "maximum_length": 1024 }
+  "password_policy": { "minimum_length": 12, "maximum_length": 1024 },
+  "required_consents": [
+    { "key": "OFFICIAL_RULES", "version": "2026-10-04", "text_key": "OFFICIAL_RULES", "required": true },
+    { "key": "TERMS", "version": "2026-09-30", "text_key": "TERMS", "required": true },
+    { "key": "PRIVACY", "version": "2026-09-30", "text_key": "PRIVACY", "required": true }
+  ]
 }
+
+`required_consents` (DEC-067) son los documentos que el alta exige aceptar, con
+la versión vigente (`apps/api/src/config/consents.ts`). La web pinta una casilla
+por cada uno; el alta y `PUT /me/eligibility` revalidan.
 
 `password_policy` publica la política de `packages/security`
 (`MINIMUM_PASSWORD_LENGTH`, `MAXIMUM_PASSWORD_LENGTH`) para que los
@@ -1476,7 +1485,13 @@ Cuerpo:
   "password": "una-frase-larga-de-ejemplo",
   "display_name": "Persona de Ejemplo",
   "language_preference": "es-US",
-  "consents": []
+  "consents": [
+    { "key": "OFFICIAL_RULES", "version": "2026-10-04" },
+    { "key": "TERMS", "version": "2026-09-30" },
+    { "key": "PRIVACY", "version": "2026-09-30" }
+  ],
+  "date_of_birth": "1990-05-05",
+  "residence_state": "TX"
 }
 ```
 
@@ -1487,17 +1502,24 @@ Cuerpo:
 - `display_name` — opcional (`null` o ausente); 1 a 120 caracteres.
 - `language_preference` — etiqueta completa, `en-US` o `es-US` (DEC-029).
   Obligatoria y sin valor por defecto (DEC-021).
-- `consents` — **hoy solo se admite vacío o ausente.** `GET /config` no publica
-  `required_consents` y no existe dónde persistir una aceptación; qué
-  consentimientos se recogen es decisión del abogado del cliente
-  (`docs/LEGAL_PENDING.md`). Una lista no vacía se rechaza con `422` en lugar de
-  aceptarse y perderse. Cuando se publiquen, esta entrada cambia **a la vez**
-  que llega su persistencia.
+- `consents` (DEC-067) — obligatorios TODOS los de `required_consents` de
+  `GET /config`, con su versión vigente: hoy `OFFICIAL_RULES` (2026-10-04),
+  `TERMS` y `PRIVACY` (2026-09-30). Se guardan en `participant_consents` (0034)
+  con el idioma y el instante; una clave que no se pidió se ignora. Falta uno, o
+  llega con otra versión: `422 CONSENT_REQUIRED` con `details.missing`.
+- `date_of_birth` (DEC-067) — `YYYY-MM-DD`, ni futura ni anterior a 1900.
+- `residence_state` (DEC-067) — código USPS de los 50 estados o `DC`.
+  Fecha y estado se **declaran**, no se juzgan aquí: un menor o un residente de
+  un estado excluido puede darse de alta y comprar mercancía. Si con ellos se
+  participa se evalúa **al otorgar**, contra la versión de reglas de la
+  promoción (`minimum_age`, `allowed_jurisdictions.excluded_states`,
+  `age_of_majority_by_state`) y solo con `age_gate_enabled` /
+  `state_eligibility_enforcement_enabled` encendidos.
 
 Respuestas: `201` `SessionState` (`state: "ACTIVE"`, `scope: "PARTICIPANT"`,
 `email_verified: false`) · `409` `EMAIL_ALREADY_REGISTERED` · `422`
 `WEAK_PASSWORD`, con `details: { reason, minimum_length, maximum_length }` ·
-`422` `VALIDATION_FAILED`.
+`422` `CONSENT_REQUIRED` · `422` `VALIDATION_FAILED`.
 
 **La cuenta nace `ACTIVE` con el correo SIN verificar.** El login exige
 `ACTIVE` y todavía no existe verificación de correo. Que un correo sin verificar
@@ -2117,10 +2139,58 @@ Purpose: perfil del participante autenticado.
 Response: 200 { id, email, display_name, email_verified, language_preference,
 created_at }
 
-SIN fecha de nacimiento, estado de residencia ni edad. No es un olvido: la
-elegibilidad la fijan las Official Rules y sigue en docs/LEGAL_PENDING.md.
+SIN fecha de nacimiento ni estado de residencia: lo declarado para la
+elegibilidad (DEC-067) no se devuelve en el perfil. Si la cuenta ya declaró lo
+dice GET /api/v1/me/eligibility.
 
 Authorization: participant.self.read
+
+Owner: backend
+
+Status: IMPLEMENTED
+```
+
+```text
+Method: GET
+Endpoint: /api/v1/me/eligibility
+
+Purpose: GET /api/v1/me/eligibility dice si el participante ya declaró fecha de
+nacimiento y estado (DEC-067).
+
+Response: 200 { "declared": boolean, "declared_at": "ISO-8601" | null }
+
+Solo dice SI declaró y cuándo, nunca lo declarado. Si es elegible no se responde
+aquí: depende de las reglas de cada promoción y se evalúa al otorgar.
+
+Authorization: participant.self.read
+
+Owner: backend
+
+Status: IMPLEMENTED
+```
+
+```text
+Method: PUT
+Endpoint: /api/v1/me/eligibility
+
+Purpose: con PUT /api/v1/me/eligibility, una cuenta anterior a DEC-067 declara
+fecha de nacimiento y estado.
+
+Request: { "date_of_birth": "YYYY-MM-DD", "residence_state": "TX",
+           "consents": [{ "key": "...", "version": "..." }],
+           "language": "en-US" | "es-US" }
+
+Una sola vez: una declaración existente no se reescribe, porque cambiar la fecha
+o el estado después de comprar sería volverse elegible a posteriori. Exige los
+mismos consentimientos que el alta. La web la pide en el checkout cuando la
+promoción comprueba edad o estado.
+
+Response: 200 { "declared": true, "declared_at": "ISO-8601" }
+
+Errors: 409 ELIGIBILITY_ALREADY_DECLARED, 422 CONSENT_REQUIRED,
+422 VALIDATION_FAILED
+
+Authorization: participant.self.update
 
 Owner: backend
 

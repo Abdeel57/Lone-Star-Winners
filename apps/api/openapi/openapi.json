@@ -26512,7 +26512,6 @@
               "schema": {
                 "properties": {
                   "consents": {
-                    "default": [],
                     "items": {
                       "properties": {
                         "key": {
@@ -26532,8 +26531,13 @@
                       ],
                       "type": "object"
                     },
-                    "maxItems": 0,
+                    "maxItems": 20,
                     "type": "array"
+                  },
+                  "date_of_birth": {
+                    "format": "date",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+                    "type": "string"
                   },
                   "display_name": {
                     "anyOf": [
@@ -26569,6 +26573,62 @@
                     "minLength": 7,
                     "type": "string"
                   },
+                  "residence_state": {
+                    "enum": [
+                      "AL",
+                      "AK",
+                      "AZ",
+                      "AR",
+                      "CA",
+                      "CO",
+                      "CT",
+                      "DE",
+                      "DC",
+                      "FL",
+                      "GA",
+                      "HI",
+                      "ID",
+                      "IL",
+                      "IN",
+                      "IA",
+                      "KS",
+                      "KY",
+                      "LA",
+                      "ME",
+                      "MD",
+                      "MA",
+                      "MI",
+                      "MN",
+                      "MS",
+                      "MO",
+                      "MT",
+                      "NE",
+                      "NV",
+                      "NH",
+                      "NJ",
+                      "NM",
+                      "NY",
+                      "NC",
+                      "ND",
+                      "OH",
+                      "OK",
+                      "OR",
+                      "PA",
+                      "RI",
+                      "SC",
+                      "SD",
+                      "TN",
+                      "TX",
+                      "UT",
+                      "VT",
+                      "VA",
+                      "WA",
+                      "WV",
+                      "WI",
+                      "WY"
+                    ],
+                    "type": "string"
+                  },
                   "sms_code": {
                     "pattern": "^\\d{4,10}$",
                     "type": "string"
@@ -26576,7 +26636,10 @@
                 },
                 "required": [
                   "password",
-                  "language_preference"
+                  "language_preference",
+                  "consents",
+                  "date_of_birth",
+                  "residence_state"
                 ],
                 "type": "object"
               }
@@ -30084,6 +30147,33 @@
                       ],
                       "type": "object"
                     },
+                    "required_consents": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "key": {
+                            "type": "string"
+                          },
+                          "required": {
+                            "type": "boolean"
+                          },
+                          "text_key": {
+                            "type": "string"
+                          },
+                          "version": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "key",
+                          "version",
+                          "text_key",
+                          "required"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
                     "supported_locales": {
                       "items": {
                         "enum": [
@@ -30099,7 +30189,8 @@
                     "feature_flags",
                     "amoe_mode",
                     "supported_locales",
-                    "password_policy"
+                    "password_policy",
+                    "required_consents"
                   ],
                   "type": "object"
                 }
@@ -30261,7 +30352,7 @@
     },
     "/api/v1/me": {
       "get": {
-        "description": "SIN fecha de nacimiento, estado de residencia ni edad. No es un olvido: la elegibilidad la fijan las Official Rules y sigue en docs/LEGAL_PENDING.md. Pedir un dato personal que todavia no se sabe si hace falta es recoger datos por si acaso.",
+        "description": "SIN fecha de nacimiento ni estado de residencia: lo declarado para la elegibilidad (DEC-067) no se devuelve en el perfil. Si la cuenta ya declaro lo dice `GET /me/eligibility`.",
         "operationId": "getParticipantProfile",
         "responses": {
           "200": {
@@ -30571,6 +30662,373 @@
           }
         ],
         "summary": "Cambiar nombre para mostrar e idioma preferido.",
+        "tags": [
+          "portal"
+        ],
+        "x-lsw-authorization": {
+          "kind": "PERMISSION",
+          "permission": "participant.self.update",
+          "requires_step_up": false
+        }
+      }
+    },
+    "/api/v1/me/eligibility": {
+      "get": {
+        "description": "Solo dice SI declaro y cuando, no lo declarado: la web lo necesita para pedir la declaracion antes de pagar, y no hace falta devolver la fecha de nacimiento para eso. Si es elegible no se responde aqui: depende de las reglas de cada promocion y se evalua al otorgar.",
+        "operationId": "getParticipantEligibility",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "declared": {
+                      "type": "boolean"
+                    },
+                    "declared_at": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "declared",
+                    "declared_at"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 200."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "additionalProperties": {},
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "request_id"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 401."
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Si el participante ya declaro su fecha de nacimiento y su estado (DEC-067).",
+        "tags": [
+          "portal"
+        ],
+        "x-lsw-authorization": {
+          "kind": "PERMISSION",
+          "permission": "participant.self.read",
+          "requires_step_up": false
+        }
+      },
+      "put": {
+        "description": "Una sola vez: una declaracion existente no se reescribe (409 ELIGIBILITY_ALREADY_DECLARED), porque cambiar la fecha o el estado despues de comprar seria volverse elegible a posteriori. Exige los mismos consentimientos que el alta (`required_consents` de GET /config).",
+        "operationId": "declareParticipantEligibility",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "consents": {
+                    "items": {
+                      "properties": {
+                        "key": {
+                          "maxLength": 100,
+                          "minLength": 1,
+                          "type": "string"
+                        },
+                        "version": {
+                          "maxLength": 100,
+                          "minLength": 1,
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "key",
+                        "version"
+                      ],
+                      "type": "object"
+                    },
+                    "maxItems": 20,
+                    "type": "array"
+                  },
+                  "date_of_birth": {
+                    "format": "date",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+                    "type": "string"
+                  },
+                  "language": {
+                    "enum": [
+                      "en-US",
+                      "es-US"
+                    ],
+                    "type": "string"
+                  },
+                  "residence_state": {
+                    "enum": [
+                      "AL",
+                      "AK",
+                      "AZ",
+                      "AR",
+                      "CA",
+                      "CO",
+                      "CT",
+                      "DE",
+                      "DC",
+                      "FL",
+                      "GA",
+                      "HI",
+                      "ID",
+                      "IL",
+                      "IN",
+                      "IA",
+                      "KS",
+                      "KY",
+                      "LA",
+                      "ME",
+                      "MD",
+                      "MA",
+                      "MI",
+                      "MN",
+                      "MS",
+                      "MO",
+                      "MT",
+                      "NE",
+                      "NV",
+                      "NH",
+                      "NJ",
+                      "NM",
+                      "NY",
+                      "NC",
+                      "ND",
+                      "OH",
+                      "OK",
+                      "OR",
+                      "PA",
+                      "RI",
+                      "SC",
+                      "SD",
+                      "TN",
+                      "TX",
+                      "UT",
+                      "VT",
+                      "VA",
+                      "WA",
+                      "WV",
+                      "WI",
+                      "WY"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "date_of_birth",
+                  "residence_state",
+                  "consents",
+                  "language"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "declared": {
+                      "type": "boolean"
+                    },
+                    "declared_at": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "declared",
+                    "declared_at"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 200."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "additionalProperties": {},
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "request_id"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 401."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "additionalProperties": {},
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "request_id"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 409."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "additionalProperties": {},
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "request_id"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 422."
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Declarar fecha de nacimiento y estado en una cuenta anterior a DEC-067.",
         "tags": [
           "portal"
         ],

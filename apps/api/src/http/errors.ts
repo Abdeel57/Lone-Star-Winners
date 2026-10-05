@@ -163,6 +163,14 @@ export const ApiErrors = {
   smsCodeInvalid: (): ApiError => new ApiError({ statusCode: 422, code: "SMS_CODE_INVALID" }),
   botCheckFailed: (): ApiError => new ApiError({ statusCode: 422, code: "BOT_CHECK_FAILED" }),
 
+  /** DEC-067: falta aceptar un documento, o se acepto una version que ya no es la vigente. */
+  consentRequired: (missing: readonly string[]): ApiError =>
+    new ApiError({ statusCode: 422, code: "CONSENT_REQUIRED", details: { missing } }),
+
+  /** DEC-067: la declaracion de elegibilidad ya existe y no se reescribe. */
+  eligibilityAlreadyDeclared: (): ApiError =>
+    new ApiError({ statusCode: 409, code: "ELIGIBILITY_ALREADY_DECLARED" }),
+
   notFound: (): ApiError => new ApiError({ statusCode: 404, code: "NOT_FOUND" }),
 
   validationFailed: (issues: readonly unknown[]): ApiError =>

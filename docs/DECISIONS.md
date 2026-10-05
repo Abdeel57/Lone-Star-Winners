@@ -3289,3 +3289,54 @@ acción de promoción del panel, mensajes, tests), `docs/API_CONTRACT.md`.
 
 Proposed by: sesión del usuario (2026-10-04)
 Agreed by: pendiente — frontend-ux, backend-sweepstakes
+
+## DEC-067
+
+Status: Proposed
+
+Date: 2026-10-05
+
+Decision:
+**Fecha de nacimiento y estado se declaran al darse de alta; la elegibilidad se
+evalúa al otorgar.** Las Official Rules de la primera edición (sección 1)
+definen al "Entrant" por edad mínima, mayoría de edad de su estado y estado de
+residencia no excluido, y dicen que la compra de quien no lo es "does not
+constitute an entry". Por eso:
+
+1. **El alta pide fecha de nacimiento, estado (50 + DC) y los documentos de
+   `required_consents`** (`GET /config`: Reglas 2026-10-04, Términos y
+   Privacidad 2026-09-30). Se guardan en `participants` y
+   `participant_consents` (0034, esta se añade y no se edita). NO se rechaza a
+   un menor ni a un residente de un estado excluido: comprar mercancía está
+   permitido.
+2. **El webhook evalúa al calificar el pedido** (`services/eligibility.ts`):
+   `minimum_age`, `allowed_jurisdictions.excluded_states` y
+   `age_of_majority_by_state` de la versión de reglas, con la edad contada en
+   el día legal de la promoción (DEC-011). Quien no es elegible -o no declaró-
+   queda pagado sin participaciones, como una compra fuera del periodo.
+3. **Solo con `age_gate_enabled` / `state_eligibility_enforcement_enabled`
+   encendidos** (DEC-032, control dual). Apagados, nada cambia. Encendidos y
+   sin el dato en las reglas, el evento falla y queda visible.
+4. **Las cuentas anteriores declaran una vez** (`PUT /me/eligibility`): el
+   checkout lo pide antes de cobrar si algún interruptor está encendido. No se
+   reescribe: cambiar fecha o estado después de comprar sería volverse
+   elegible a posteriori.
+
+Alternatives:
+A — Bloquear el alta a menores y estados excluidos (descartada: las Reglas no
+lo exigen y la tienda vende mercancía). B — Decidir la elegibilidad al
+registrarse y guardarla (descartada: la decisión depende de las reglas de cada
+promoción y del día en que se compra).
+
+Pendiente del abogado: la mayoría de edad por estado (AL y NE 19, MS 21) se
+deriva del texto de la sección 1; confirmarla.
+
+Affected areas: `packages/database` (0034, `schema/identity.ts`), `apps/api`
+(`config/consents.ts`, `services/eligibility.ts`, `http/eligibility-input.ts`,
+`routes/auth.ts`, `routes/portal.ts`, `routes/orders.ts`,
+`routes/storefront.ts`, identidad, tests), `apps/web` (alta, checkout,
+`eligibility-fields.tsx`, mensajes `usStates` y `eligibility`, tests),
+`docs/API_CONTRACT.md`.
+
+Proposed by: sesión del usuario (2026-10-04), lanzamiento de la primera edición
+Agreed by: pendiente — backend-sweepstakes, frontend-ux, security-integration

@@ -15,7 +15,6 @@ import {
   startPhoneVerification,
   verifyEmail,
   verifyMfa,
-  type ConsentAcceptance,
 } from "@/lib/api";
 
 import {
@@ -27,7 +26,7 @@ import {
 } from "./action-result";
 import {
   botCheckTokenFrom,
-  checkboxFrom,
+  consentsFrom,
   localeFrom,
   returnPathFrom,
   secretFrom,
@@ -65,45 +64,6 @@ import { mutableSession } from "./session-server";
  * que viaja desde el navegador a `apps/api` obliga a exponer la base de la API
  * al cliente. Aqui el navegador habla unicamente con el servidor de Next.
  */
-
-/**
- * Recoge los consentimientos marcados.
- *
- * Los pares clave/version los pinta el formulario a partir de lo que publica
- * `GET /config`, y viajan de vuelta EN EL FORMULARIO. No se reconstruyen aqui:
- * esta accion no sabe -ni debe saber- que consentimientos existen. Si el
- * backend deja de pedir uno, deja de pintarse y deja de llegar, sin tocar este
- * archivo.
- *
- * La version viaja con la clave porque "acepto las reglas" sin decir QUE
- * version se acepto es una afirmacion sin fecha.
- */
-function consentsFrom(formData: FormData): {
-  readonly accepted: readonly ConsentAcceptance[];
-  readonly missing: boolean;
-} {
-  const accepted: ConsentAcceptance[] = [];
-  let missing = false;
-
-  for (const raw of formData.getAll("consent")) {
-    if (typeof raw !== "string") continue;
-
-    const separator = raw.indexOf(":");
-    if (separator <= 0) continue;
-
-    const key = raw.slice(0, separator);
-    const version = raw.slice(separator + 1);
-    const required = formData.get(`consent_required:${key}`) === "true";
-
-    if (checkboxFrom(formData, `consent_accepted:${key}`)) {
-      accepted.push({ key, version });
-    } else if (required) {
-      missing = true;
-    }
-  }
-
-  return { accepted, missing };
-}
 
 /** Destino tras iniciar sesion: el que pedia la pagina, o el resumen de cuenta. */
 function destinationFrom(formData: FormData): string {
@@ -166,6 +126,13 @@ export async function registerAction(
     return invalid("PASSWORD_CONFIRMATION_MISMATCH", "password_confirmation");
   }
 
+  // DEC-067: se piden y se mandan; si con ellos se participa lo decide el backend.
+  const dateOfBirth = textFrom(formData, "date_of_birth");
+  if (dateOfBirth === null) return invalid("FIELD_REQUIRED", "date_of_birth");
+
+  const residenceState = textFrom(formData, "residence_state");
+  if (residenceState === null) return invalid("FIELD_REQUIRED", "residence_state");
+
   const consents = consentsFrom(formData);
   if (consents.missing) return invalid("CONSENT_REQUIRED", "consent");
 
@@ -182,6 +149,8 @@ export async function registerAction(
       // ha respondido eligiendo en que idioma leer la pagina.
       language_preference: localeTag(locale),
       consents: consents.accepted,
+      date_of_birth: dateOfBirth,
+      residence_state: residenceState,
     },
     locale,
     session,
@@ -204,6 +173,8 @@ function registerFieldFor(code: string | null): string | null {
   if (code === "WEAK_PASSWORD") return "password";
   if (code === "EMAIL_ALREADY_REGISTERED") return "email";
   if (code === "SMS_CODE_INVALID") return "sms_code";
+  // DEC-067: el backend revalida los documentos; su rechazo va junto a las casillas.
+  if (code === "CONSENT_REQUIRED") return "consent";
   return null;
 }
 

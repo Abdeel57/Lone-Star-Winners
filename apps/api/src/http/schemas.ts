@@ -432,4 +432,16 @@ export const publicConfigSchema = z.object({
     minimum_length: z.number().int().positive(),
     maximum_length: z.number().int().positive(),
   }),
+  /**
+   * DEC-067: documentos que el alta exige aceptar, con su version. La web pinta
+   * una casilla por cada uno y devuelve los marcados; el alta revalida.
+   */
+  required_consents: z.array(
+    z.object({
+      key: z.string(),
+      version: z.string(),
+      text_key: z.string(),
+      required: z.boolean(),
+    }),
+  ),
 });

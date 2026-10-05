@@ -6,11 +6,19 @@ import { getTranslations, setRequestLocale } from "next-intl/server";
 import { MfaRequired, SignInRequired } from "@/components/account-shell";
 import { ApiErrorState } from "@/components/api-error-state";
 import { CheckoutForm } from "@/components/checkout-form";
+import { EligibilityDeclarationForm } from "@/components/eligibility-declaration-form";
 import { EntryQuotePanel } from "@/components/entry-quote-panel";
 import { formatMoney } from "@/i18n/formatters";
 import { Link } from "@/i18n/navigation";
 import { routing } from "@/i18n/routing";
-import { fetchActivePromotion, fetchCart, pickLocalized } from "@/lib/api";
+import {
+  fetchActivePromotion,
+  fetchCart,
+  fetchMyEligibility,
+  fetchSiteConfig,
+  pickLocalized,
+} from "@/lib/api";
+import { isFeatureEnabled, toFeatureFlags } from "@/lib/flags";
 import { loadParticipant } from "@/lib/participant-server";
 
 /** Un checkout es de una sesion concreta: nunca se prerenderiza. */
@@ -42,6 +50,7 @@ export default async function CheckoutPage({ params }: { params: Promise<{ local
   setRequestLocale(locale);
 
   const t = await getTranslations("checkout");
+  const tEligibility = await getTranslations("eligibility");
   const { session, state } = await loadParticipant(locale);
 
   if (state.kind === "anonymous") {
@@ -100,6 +109,22 @@ export default async function CheckoutPage({ params }: { params: Promise<{ local
     );
   }
 
+  // DEC-067: si la promocion comprueba edad o estado y la cuenta no los ha
+  // declarado, se piden ANTES de cobrar. Si alguna de las dos lecturas falla no
+  // se bloquea el pago: el backend vuelve a comprobarlo al otorgar.
+  const [configResult, eligibilityResult] = await Promise.all([
+    fetchSiteConfig(locale),
+    fetchMyEligibility(locale, session),
+  ]);
+  const flags = configResult.ok ? toFeatureFlags(configResult.data) : null;
+  const checksEligibility =
+    flags !== null &&
+    (isFeatureEnabled(flags, "age_gate_enabled") ||
+      isFeatureEnabled(flags, "state_eligibility_enforcement_enabled"));
+  const needsDeclaration =
+    checksEligibility && eligibilityResult.ok && !eligibilityResult.data.declared;
+  const requiredConsents = configResult.ok ? (configResult.data.required_consents ?? []) : [];
+
   const timeZone =
     promotionResult.ok && promotionResult.data !== null
       ? promotionResult.data.legal_timezone
@@ -114,15 +139,27 @@ export default async function CheckoutPage({ params }: { params: Promise<{ local
   return (
     <CheckoutShell title={t("title")} intro={t("intro")}>
       <div className="grid gap-s6 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
-        <section aria-labelledby="checkout-address">
-          <h2 id="checkout-address" className="lsw-display text-heading-lg text-text">
-            {t("addressHeading")}
-          </h2>
+        {needsDeclaration ? (
+          <section aria-labelledby="checkout-eligibility">
+            <h2 id="checkout-eligibility" className="lsw-display text-heading-lg text-text">
+              {tEligibility("title")}
+            </h2>
 
-          <div className="mt-s5">
-            <CheckoutForm locale={locale} />
-          </div>
-        </section>
+            <div className="mt-s5">
+              <EligibilityDeclarationForm locale={locale} consents={requiredConsents} />
+            </div>
+          </section>
+        ) : (
+          <section aria-labelledby="checkout-address">
+            <h2 id="checkout-address" className="lsw-display text-heading-lg text-text">
+              {t("addressHeading")}
+            </h2>
+
+            <div className="mt-s5">
+              <CheckoutForm locale={locale} />
+            </div>
+          </section>
+        )}
 
         <aside className="flex flex-col gap-s4">
           <Card elevation="raised" padding="md">

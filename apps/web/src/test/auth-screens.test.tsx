@@ -132,21 +132,34 @@ describe("formulario de inicio de sesion", () => {
 });
 
 describe("formulario de alta", () => {
-  it.each(LOCALES)("no pregunta ningun dato legal en %s", (locale) => {
-    const { container } = renderIn(
-      locale,
-      <RegisterForm locale={locale} consents={[]} returnPath={null} />,
-    );
+  it.each(LOCALES)(
+    "pregunta fecha de nacimiento y estado (DEC-067), y ningun otro dato legal en %s",
+    (locale) => {
+      const { container } = renderIn(
+        locale,
+        <RegisterForm locale={locale} consents={[]} returnPath={null} />,
+      );
 
-    // La elegibilidad la fijan las Official Rules y sigue en TBD: ningun campo
-    // de este formulario puede preguntar por ella (CLAUDE.md #2).
-    for (const forbidden of ["birth_date", "date_of_birth", "age", "state", "region", "country"]) {
-      expect(
-        container.querySelector(`[name="${forbidden}"]`),
-        `el alta pregunta un dato legal no aprobado: ${forbidden}`,
-      ).toBeNull();
-    }
-  });
+      // Las Official Rules definen al "Entrant" por edad y estado: esos dos se
+      // preguntan. Lo demas no lo piden las Reglas y no se pregunta.
+      const dateOfBirth = container.querySelector('input[name="date_of_birth"]');
+      expect(dateOfBirth?.getAttribute("type")).toBe("date");
+      expect(dateOfBirth?.hasAttribute("required")).toBe(true);
+
+      const state = container.querySelector('select[name="residence_state"]');
+      // 50 estados + DC, mas la opcion vacia de "elige".
+      expect(state?.querySelectorAll("option")).toHaveLength(52);
+      expect(state?.querySelector('option[value="DC"]')).not.toBeNull();
+      expect(state?.querySelector('option[value="PR"]')).toBeNull();
+
+      for (const forbidden of ["birth_date", "age", "state", "region", "country"]) {
+        expect(
+          container.querySelector(`[name="${forbidden}"]`),
+          `el alta pregunta un dato que las Reglas no piden: ${forbidden}`,
+        ).toBeNull();
+      }
+    },
+  );
 
   it("sin consentimientos publicados no pinta ninguna casilla", () => {
     const { container } = renderIn(

@@ -6,11 +6,13 @@
 import { sql } from "drizzle-orm";
 import {
   boolean,
+  date,
   index,
   pgTable,
   primaryKey,
   text,
   timestamp,
+  unique,
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
@@ -73,6 +75,17 @@ export const participants = pgTable(
     reviewState: participantReviewStateEnum("review_state").notNull().default("NONE"),
     pseudonymRef: text("pseudonym_ref").unique(),
     anonymizedAt: timestamp("anonymized_at", { withTimezone: true, mode: "date" }),
+    /**
+     * DEC-067 (0034): lo DECLARADO para evaluar la elegibilidad. O las tres
+     * columnas o ninguna (`participants_eligibility_declaration_complete`).
+     * `YYYY-MM-DD` como cadena: una fecha de nacimiento no tiene hora ni zona.
+     */
+    dateOfBirth: date("date_of_birth", { mode: "string" }),
+    residenceState: text("residence_state"),
+    eligibilityDeclaredAt: timestamp("eligibility_declared_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
     createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
   },
@@ -81,6 +94,34 @@ export const participants = pgTable(
     index("participants_review_state_idx")
       .on(table.reviewState)
       .where(sql`review_state <> 'NONE'`),
+  ],
+);
+
+/**
+ * DEC-067 (0034): que version de que documento acepto cada participante. Se
+ * anade, no se edita: `lsw_app` solo tiene SELECT e INSERT.
+ */
+export const participantConsents = pgTable(
+  "participant_consents",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    participantId: uuid("participant_id")
+      .notNull()
+      .references(() => participants.id, { onDelete: "restrict" }),
+    consentKey: text("consent_key").notNull(),
+    documentVersion: text("document_version").notNull(),
+    locale: localeCodeEnum("locale").notNull(),
+    acceptedAt: timestamp("accepted_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    unique("participant_consents_unique").on(
+      table.participantId,
+      table.consentKey,
+      table.documentVersion,
+    ),
+    index("participant_consents_participant_idx").on(table.participantId),
   ],
 );
 

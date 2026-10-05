@@ -162,7 +162,8 @@
     "AMOE_ENTRY_CAP_REACHED": "A este participante no le queda espacio bajo el máximo de participaciones por persona.",
     "RULES_VERSION_NOT_ACTIVE": "Esta promoción no tiene versión de reglas activa.",
     "CONFIG_JSON_INVALID": "Este JSON no se puede leer. Revisa el campo señalado.",
-    "MULTIPLIER_INVALID": "El multiplicador tiene que ser un entero mayor que cero."
+    "MULTIPLIER_INVALID": "El multiplicador tiene que ser un entero mayor que cero.",
+    "ELIGIBILITY_ALREADY_DECLARED": "Ya habías confirmado tu fecha de nacimiento y tu estado. Si hay un error en esos datos, escríbenos a info@LoneStarWinners.com."
   },
   "availability": {
     "IN_STOCK": "Disponible",
@@ -723,7 +724,11 @@
       "phone": "Celular",
       "phoneHint": "Solo números de EE. UU., por ejemplo (512) 555-0100.",
       "smsCode": "Código del mensaje de texto",
-      "smsCodeHint": "Vence en 10 minutos y sirve una sola vez."
+      "smsCodeHint": "Vence en 10 minutos y sirve una sola vez.",
+      "dateOfBirth": "Fecha de nacimiento",
+      "dateOfBirthHint": "Las Reglas Oficiales de cada promoción fijan la edad para participar. Solo la usamos para comprobarlo.",
+      "residenceState": "Estado donde vives",
+      "residenceStatePlaceholder": "Elige tu estado"
     },
     "channel": {
       "legend": "Usar",
@@ -742,7 +747,11 @@
       "heading": "Antes de continuar",
       "OFFICIAL_RULES": "He leído las Reglas Oficiales de la promoción vigente.",
       "fallback": "Acepto esta condición, que está descrita en las Reglas Oficiales.",
-      "versionLabel": "Versión {version}"
+      "versionLabel": "Versión {version}",
+      "TERMS": "Acepto los Términos y condiciones.",
+      "PRIVACY": "He leído la Política de privacidad.",
+      "readDocuments": "Puedes leerlos aquí:",
+      "officialRulesLink": "Reglas Oficiales"
     },
     "unverified": {
       "title": "Tu correo todavía no está verificado",
@@ -1762,5 +1771,63 @@
       "cardsHintWithLimit": "Cuántas fichas venían en el mismo sobre. Las Reglas Oficiales admiten {max}; más de eso se marca para revisión, no se rechaza aquí.",
       "submit": "Añadir a la cola de revisión"
     }
+  },
+  "eligibility": {
+    "title": "Antes de pagar, confirma tus datos",
+    "body": "Para saber si puedes participar en el sorteo según las Reglas Oficiales necesitamos tu fecha de nacimiento y tu estado. Solo te lo pedimos una vez.",
+    "submit": "Guardar y continuar"
+  },
+  "usStates": {
+    "AL": "Alabama",
+    "AK": "Alaska",
+    "AZ": "Arizona",
+    "AR": "Arkansas",
+    "CA": "California",
+    "CO": "Colorado",
+    "CT": "Connecticut",
+    "DE": "Delaware",
+    "DC": "Distrito de Columbia",
+    "FL": "Florida",
+    "GA": "Georgia",
+    "HI": "Hawái",
+    "ID": "Idaho",
+    "IL": "Illinois",
+    "IN": "Indiana",
+    "IA": "Iowa",
+    "KS": "Kansas",
+    "KY": "Kentucky",
+    "LA": "Luisiana",
+    "ME": "Maine",
+    "MD": "Maryland",
+    "MA": "Massachusetts",
+    "MI": "Míchigan",
+    "MN": "Minnesota",
+    "MS": "Misisipi",
+    "MO": "Misuri",
+    "MT": "Montana",
+    "NE": "Nebraska",
+    "NV": "Nevada",
+    "NH": "Nuevo Hampshire",
+    "NJ": "Nueva Jersey",
+    "NM": "Nuevo México",
+    "NY": "Nueva York",
+    "NC": "Carolina del Norte",
+    "ND": "Dakota del Norte",
+    "OH": "Ohio",
+    "OK": "Oklahoma",
+    "OR": "Oregón",
+    "PA": "Pensilvania",
+    "RI": "Rhode Island",
+    "SC": "Carolina del Sur",
+    "SD": "Dakota del Sur",
+    "TN": "Tennessee",
+    "TX": "Texas",
+    "UT": "Utah",
+    "VT": "Vermont",
+    "VA": "Virginia",
+    "WA": "Washington",
+    "WV": "Virginia Occidental",
+    "WI": "Wisconsin",
+    "WY": "Wyoming"
   }
 }
