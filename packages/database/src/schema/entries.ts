@@ -204,9 +204,18 @@ export const promotionEntryNumberSequences = pgTable("promotion_entry_number_seq
   /** Solo sube. Un reversal NO devuelve numeros al pozo. */
   nextNumber: bigint("next_number", { mode: "bigint" }).notNull().default(1n),
   formatPrefix: text("format_prefix").notNull(),
-  formatDigits: smallint("format_digits").notNull().default(9),
+  /** DEC-080: 8 por defecto desde la migracion 0037; el cifrador admite 6-9. */
+  formatDigits: smallint("format_digits").notNull().default(8),
   createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+  /**
+   * DEC-080: clave de la permutacion de los numeros visibles. 32 bytes de
+   * CSPRNG que pone PostgreSQL al crear la fila; inmutable (trigger).
+   */
+  numberKey: bytea("number_key")
+    .notNull()
+    .default(sql`(uuid_send(gen_random_uuid()) || uuid_send(gen_random_uuid()))`),
+  numberScheme: text("number_scheme").notNull().default("LSW/ENTRY-NUMBER/FEISTEL/v1"),
 });
 
 /**

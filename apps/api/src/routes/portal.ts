@@ -23,17 +23,24 @@
  * baja sin explicacion.
  *
  * ---------------------------------------------------------------------------
- * LOS NUMEROS VAN DETRAS DE UN FLAG, Y NO SON EL SORTEO
+ * VER LOS NUMEROS VA DETRAS DE UN FLAG, Y LOS NUMEROS NO SON EL SORTEO
  * ---------------------------------------------------------------------------
  *
  * `visible_entry_numbers_enabled` arranca apagado (DEC-032). Con el apagado,
- * `entry-numbers` devuelve 404: la funcion no existe, y eso no es un error.
+ * `entry-numbers` devuelve 404: la funcion no existe, y eso no es un error. Los
+ * numeros se asignan igual (DEC-080); el flag decide solo si se ven.
  *
- * Que existan numeros NO autoriza a sortear sobre ellos. La secuencia es
- * monotona y predecible; DEC-017 exige cinco cerrojos para cualquier seleccion.
+ * Que existan numeros NO autoriza a sortear sobre ellos. El ganador lo elige el
+ * Administrador sobre el universo exportado; DEC-017 exige cinco cerrojos para
+ * cualquier seleccion interna.
  */
 
-import { formatEntryNumber } from "@lsw/sweepstakes";
+import {
+  computeEntryNumberActivity,
+  createEntryNumberCipher,
+  DEFAULT_ENTRY_NUMBER_DIGITS,
+  type BatchActivity,
+} from "@lsw/sweepstakes";
 import type { FastifyRequest } from "fastify";
 import { z } from "zod";
 
@@ -45,13 +52,21 @@ import {
   residenceStateSchema,
 } from "../http/eligibility-input.js";
 import { ApiError, ApiErrors, errorEnvelopeSchema } from "../http/errors.js";
-import { buildPage, decodeCursor, paginationQuerySchema, pageSchema } from "../http/pagination.js";
+import {
+  buildPage,
+  decodeCursor,
+  encodeCursor,
+  paginationQuerySchema,
+  pageSchema,
+} from "../http/pagination.js";
 import type { ParticipantPrincipal } from "../http/principal-narrow.js";
 import type { RouteDefinition } from "../http/route-registry.js";
 import { readAppliedCap } from "./amoe.js";
 import {
   awardHoldSchema,
-  entryNumberBatchSchema,
+  type entryNumberBatchSchema,
+  type entryNumberSchema,
+  entryNumbersPageSchema,
   entrySummarySchema,
   entryTransactionSchema,
   participantProfilePatchSchema,
@@ -61,6 +76,50 @@ import { domainServicesFor } from "../services/domain-registry.js";
 
 const promotionQuerySchema = z.object({ promotion_id: z.uuid() });
 const promotionPageQuerySchema = promotionQuerySchema.extend(paginationQuerySchema.shape);
+
+/**
+ * "Mis numeros" pagina por NUMEROS: hasta mil por pagina, quinientos por
+ * defecto. Con el tope de 10,000 por persona de las Reglas son diez paginas en
+ * el peor caso, y cada una pesa unas decenas de KB.
+ */
+const entryNumbersQuerySchema = promotionQuerySchema.extend({
+  cursor: z.string().min(1).max(512).optional(),
+  limit: z.coerce.number().int().min(1).max(1000).default(500),
+});
+
+/**
+ * Posicion de "mis numeros": el lote y cuantos numeros de el ya se sirvieron.
+ *
+ * Se usa el identificador del lote y no su ordinal interno, que contaria
+ * cuantas participaciones se emitieron antes. Un lote que no es del
+ * participante, o un desplazamiento fuera de su lote, es un cursor invalido:
+ * la misma respuesta que `decodeCursor` da a uno malformado.
+ */
+function readEntryNumberCursor(
+  cursor: string | undefined,
+  batches: readonly BatchActivity[],
+): { readonly batchIndex: number; readonly offset: number } {
+  if (cursor === undefined) {
+    return { batchIndex: 0, offset: 0 };
+  }
+  const position = decodeCursor(cursor);
+  const batchIndex = batches.findIndex((batch) => batch.batchId === position.sortKey);
+  const offset = Number(position.id);
+  const batch = batches[batchIndex];
+  if (
+    batch === undefined ||
+    !Number.isSafeInteger(offset) ||
+    offset < 0 ||
+    offset >= batch.quantity
+  ) {
+    throw new ApiError({
+      statusCode: 422,
+      code: "VALIDATION_FAILED",
+      details: { issues: [{ path: "cursor", code: "invalid_cursor" }] },
+    });
+  }
+  return { batchIndex, offset };
+}
 
 /** DEC-067: si la cuenta declaro, y cuando. Nunca lo declarado. */
 const eligibilityStatusSchema = z.object({
@@ -220,23 +279,24 @@ export function buildPortalRoutes(dependencies: AppDependencies): RouteDefinitio
       method: "GET",
       url: "/api/v1/account/entry-numbers",
       operationId: "listEntryNumbers",
-      summary: 'Rangos de numeros asignados al participante ("mis numeros").',
+      summary: 'Numeros de participacion del participante ("mis numeros").',
       description:
-        "Detras del flag `visible_entry_numbers_enabled`, apagado. Con el flag apagado devuelve 404. Los numeros viajan como CADENA (DEC-010). AVISO: la secuencia NO es el algoritmo del sorteo (DEC-017).",
+        "Detras del flag `visible_entry_numbers_enabled`: con el flag apagado devuelve 404, aunque los numeros existen igual (DEC-080). Cada participacion tiene un numero distinto, derivado de su ordinal interno con la permutacion con clave de la promocion. `active: false` marca los anulados por devolucion, contracargo, descalificacion o ajuste, con la misma regla que el universo exportado al Administrador. Pagina por numeros (`limit` hasta 1000). Los numeros viajan como CADENA (DEC-010). AVISO: los numeros NO son el sorteo (DEC-017); el ganador lo elige el Administrador.",
       tags: ["portal"],
       authorization: { kind: "PERMISSION", permission: "entry.self.read" },
       schema: {
-        querystring: promotionPageQuerySchema,
+        querystring: entryNumbersQuerySchema,
         response: {
-          200: pageSchema(entryNumberBatchSchema),
+          200: entryNumbersPageSchema,
           401: errorEnvelopeSchema,
           404: errorEnvelopeSchema,
           409: errorEnvelopeSchema,
+          422: errorEnvelopeSchema,
         },
       },
       handler: async (request) => {
         const principal = await requireParticipant(request);
-        const query = request.query as z.infer<typeof promotionPageQuerySchema>;
+        const query = request.query as z.infer<typeof entryNumbersQuerySchema>;
         await requirePromotion(query.promotion_id);
 
         const flags = await domain.repositories.promotions.readFlags();
@@ -246,36 +306,89 @@ export function buildPortalRoutes(dependencies: AppDependencies): RouteDefinitio
           throw ApiErrors.notFound();
         }
 
-        const format = await domain.repositories.entryNumbers.getFormat(query.promotion_id);
-        if (format === null) {
-          // El flag esta encendido pero la promocion no tiene secuencia
-          // inicializada. NO se inventa un prefijo: el identificador visible
-          // aparece en pantalla y en soporte, y uno improvisado seria imposible
-          // de reconciliar despues.
-          throw new ApiError({ statusCode: 409, code: "ENTRY_NUMBER_FORMAT_NOT_CONFIGURED" });
-        }
-
         const batches = await domain.repositories.entryNumbers.listBatchesForParticipant(
           query.promotion_id,
           principal.participantId,
         );
+        const transactions = await domain.repositories.ledger.listForParticipant(
+          query.promotion_id,
+          principal.participantId,
+        );
+        const format = await domain.repositories.entryNumbers.getFormat(query.promotion_id);
 
-        const after = query.cursor === undefined ? null : decodeCursor(query.cursor).sortKey;
-        const start = after === null ? 0 : batches.findIndex((row) => row.id === after) + 1;
-        const window = batches.slice(start, start + query.limit + 1);
-        const page = buildPage(window, query.limit, (row) => ({ sortKey: row.id, id: row.id }));
+        if (format === null && batches.length > 0) {
+          // Un lote sin secuencia es imposible por construccion: la secuencia
+          // nace con la primera asignacion (0037). NO se inventa una clave: un
+          // numero derivado de otra no coincidiria con el que se exporta.
+          throw new ApiError({ statusCode: 409, code: "ENTRY_NUMBER_FORMAT_NOT_CONFIGURED" });
+        }
+
+        // La MISMA regla que el congelado del export: lo que aqui sale vigente
+        // es lo que entra en el universo del sorteo.
+        const activity = computeEntryNumberActivity({
+          batches,
+          transactions,
+          cutoff: domain.clock.now(),
+          maxSequence: null,
+        });
+        const sources = new Map(transactions.map((row) => [row.id, row]));
+        const cipher = format === null ? null : createEntryNumberCipher(format.key, format.digits);
+
+        const position = readEntryNumberCursor(query.cursor, activity.batches);
+
+        const items: z.infer<typeof entryNumberBatchSchema>[] = [];
+        let remaining = query.limit;
+        let next: { readonly batchId: string; readonly offset: number } | null = null;
+
+        for (let index = position.batchIndex; index < activity.batches.length; index += 1) {
+          const batch = activity.batches[index];
+          const source = batch === undefined ? undefined : sources.get(batch.entryTransactionId);
+          if (batch === undefined || source === undefined || cipher === null) {
+            throw new Error("Lote de numeros sin su transaccion del ledger.");
+          }
+          const from = index === position.batchIndex ? position.offset : 0;
+          if (remaining === 0) {
+            next = { batchId: batch.batchId, offset: from };
+            break;
+          }
+          const to = Math.min(batch.quantity, from + remaining);
+
+          const numbers: z.infer<typeof entryNumberSchema>[] = [];
+          for (let offset = from; offset < to; offset += 1) {
+            numbers.push({
+              number: cipher.encode(batch.range.start + BigInt(offset)),
+              // Los vigentes son los PRIMEROS del rango (`entry-number-activity.ts`).
+              active: offset < batch.activeQuantity,
+            });
+          }
+
+          items.push({
+            batch_id: batch.batchId,
+            source_type: source.sourceType,
+            awarded_at: source.effectiveAt.toISOString(),
+            quantity: batch.quantity,
+            active_quantity: batch.activeQuantity,
+            numbers,
+          });
+          remaining -= to - from;
+
+          if (to < batch.quantity) {
+            next = { batchId: batch.batchId, offset: to };
+            break;
+          }
+        }
+
+        const activeNumbers = activity.batches.reduce((sum, row) => sum + row.activeQuantity, 0);
+        const totalNumbers = activity.batches.reduce((sum, row) => sum + row.quantity, 0);
 
         return {
-          items: page.items.map((batch) => ({
-            batch_id: batch.id,
-            quantity: batch.quantity,
-            first_number: formatEntryNumber(format.prefix, format.digits, batch.range.start),
-            // El rango es SEMIABIERTO `[start, end)`: el ultimo numero es
-            // `end - 1`. Con rangos cerrados por ambos lados, dos bloques
-            // contiguos se solaparian en el extremo.
-            last_number: formatEntryNumber(format.prefix, format.digits, batch.range.end - 1n),
-          })),
-          next_cursor: page.next_cursor,
+          promotion_id: query.promotion_id,
+          digits: format?.digits ?? DEFAULT_ENTRY_NUMBER_DIGITS,
+          active_numbers: activeNumbers,
+          void_numbers: totalNumbers - activeNumbers,
+          items,
+          next_cursor:
+            next === null ? null : encodeCursor({ sortKey: next.batchId, id: String(next.offset) }),
         };
       },
     },

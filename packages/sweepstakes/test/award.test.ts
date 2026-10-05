@@ -274,15 +274,17 @@ describe("topes", () => {
   });
 });
 
-describe("numeros visibles", () => {
-  it("con el flag apagado NO se asigna ningun rango", async () => {
+describe("numeros de participacion (DEC-080)", () => {
+  it("con el flag apagado TAMBIEN se asigna el rango: el flag solo decide si se ve", async () => {
     const { harness, award } = setup();
     const outcome = await award.awardForQualifiedOrder(qualifiedOrder());
     if (outcome.status !== "AWARDED") {
       throw new Error("se esperaba AWARDED");
     }
-    expect(outcome.batch).toBeNull();
-    expect(harness.entryNumbers.all()).toHaveLength(0);
+    // Sin secuencia previa: la primera asignacion la crea, como en PostgreSQL.
+    expect(outcome.batch.range).toEqual({ start: 1n, end: 51n });
+    expect(outcome.batch.entryTransactionId).toBe(outcome.transaction.id);
+    expect(harness.entryNumbers.all()).toHaveLength(1);
   });
 
   it("con el flag encendido asigna un rango contiguo que no se solapa", async () => {
@@ -297,8 +299,8 @@ describe("numeros visibles", () => {
     if (first.status !== "AWARDED" || second.status !== "AWARDED") {
       throw new Error("se esperaban dos concesiones");
     }
-    expect(first.batch?.range).toEqual({ start: 1n, end: 51n });
-    expect(second.batch?.range).toEqual({ start: 51n, end: 101n });
+    expect(first.batch.range).toEqual({ start: 1n, end: 51n });
+    expect(second.batch.range).toEqual({ start: 51n, end: 101n });
     expect(harness.entryNumbers.all()).toHaveLength(2);
   });
 });

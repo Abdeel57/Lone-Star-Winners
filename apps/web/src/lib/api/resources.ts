@@ -27,7 +27,7 @@ import type {
   CheckoutSessionResponse,
   CheckoutSessionState,
   ConsentAcceptance,
-  EntryBatchPage,
+  EntryNumbersPage,
   EntryQuote,
   EntrySummary,
   EntryTransactionPage,
@@ -168,12 +168,7 @@ export const API_PATHS = {
   entrySummary: "/account/entry-summary",
   /** Movimientos del ledger del propio participante. */
   entryTransactions: "/account/entry-transactions",
-  /**
-   * Rangos de numeros asignados.
-   *
-   * El nombre de la ruta es el del contrato (`entry-numbers`) aunque el dominio
-   * y la interfaz los llamen batches. El documento manda.
-   */
+  /** Numeros de participacion del participante (DEC-080). */
   entryNumbers: "/account/entry-numbers",
   /** Pedidos del propio participante. */
   orders: "/account/orders",
@@ -1019,18 +1014,13 @@ export function fetchEntryTransactions(
 }
 
 /**
- * Rangos de numeros asignados.
- *
- * LA RUTA ES `/account/entry-numbers`, que es la que publica el contrato. El
- * dominio los llama batches -y asi se llaman en la interfaz- pero el nombre de
- * la ruta lo fija el documento y aqui no se renombra: una ruta inventada seria
- * un 404 el dia que el backend la sirva.
+ * Numeros de participacion del participante (DEC-080), paginados por numeros.
  *
  * Detras de `visible_entry_numbers_enabled`. Con el flag apagado el backend
  * responde 404, asi que quien llame tiene que haber comprobado el flag antes;
  * el 404 se deja subir para que un fallo de coordinacion se vea.
  */
-export function fetchEntryBatches(
+export function fetchEntryNumbers(
   query: {
     readonly promotion_id: string;
     readonly cursor?: string;
@@ -1038,14 +1028,14 @@ export function fetchEntryBatches(
   },
   locale: Locale,
   session: SessionContext,
-): Promise<ApiResult<EntryBatchPage>> {
+): Promise<ApiResult<EntryNumbersPage>> {
   const search = queryString({
     promotion_id: query.promotion_id,
     cursor: query.cursor,
     limit: query.limit,
   });
 
-  return apiGet<EntryBatchPage>(`${API_PATHS.entryNumbers}${search}`, {
+  return apiGet<EntryNumbersPage>(`${API_PATHS.entryNumbers}${search}`, {
     locale,
     ...sessionOptions(session),
   });

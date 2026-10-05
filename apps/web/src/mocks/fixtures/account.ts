@@ -1,7 +1,7 @@
 import type {
   ConsentRequirement,
-  EntryBatch,
-  EntryBatchPage,
+  EntryNumberBatch,
+  EntryNumbersPage,
   EntryCalculationSnapshot,
   EntrySummary,
   EntryTransaction,
@@ -355,45 +355,67 @@ export const entryTransactionFirstPage: EntryTransactionPage = {
 export const emptyTransactionPage: EntryTransactionPage = { items: [], next_cursor: null };
 
 // ---------------------------------------------------------------------------
-// Lotes de numeros (detras de `visible_entry_numbers_enabled`)
+// Numeros de participacion (DEC-080; detras de `visible_entry_numbers_enabled`)
 // ---------------------------------------------------------------------------
 
-/** Un solo lote. */
-export const singleEntryBatch: readonly EntryBatch[] = [
-  {
-    batch_id: "ebt_0000000000000001",
-    quantity: 11_000,
-    first_number: "LSW26-000450001",
-    last_number: "LSW26-000461000",
-  },
-];
+/**
+ * Numeros de FIXTURE. Tienen la forma de los reales -ocho cifras, revueltos-
+ * pero no salen de ninguna clave: el cifrado se prueba en `@lsw/sweepstakes`.
+ */
+function fixtureNumbers(
+  values: readonly string[],
+  activeCount: number,
+): EntryNumberBatch["numbers"] {
+  return values.map((number, index) => ({ number, active: index < activeCount }));
+}
 
-/** Varios lotes, incluido uno de una sola participacion. */
-export const manyEntryBatches: readonly EntryBatch[] = [
-  ...singleEntryBatch,
-  {
-    batch_id: "ebt_0000000000000002",
-    quantity: 200,
-    first_number: "LSW26-000512400",
-    last_number: "LSW26-000512599",
-  },
-  {
-    batch_id: "ebt_0000000000000003",
-    quantity: 250,
-    first_number: "LSW26-000598120",
-    last_number: "LSW26-000598369",
-  },
-  {
-    batch_id: "ebt_0000000000000004",
-    quantity: 1,
-    first_number: "LSW26-000601777",
-    last_number: "LSW26-000601777",
-  },
-];
+/** Una compra de 5 participaciones, todas vigentes. */
+export const purchaseNumberBatch: EntryNumberBatch = {
+  batch_id: "11111111-1111-4111-8111-000000000001",
+  source_type: "PURCHASE",
+  awarded_at: "2026-10-05T18:30:00.000Z",
+  quantity: 5,
+  active_quantity: 5,
+  numbers: fixtureNumbers(["04669096", "56479695", "14799535", "53489437", "31888931"], 5),
+};
 
-export const singleBatchPage: EntryBatchPage = { items: singleEntryBatch, next_cursor: null };
-export const manyBatchesPage: EntryBatchPage = { items: manyEntryBatches, next_cursor: null };
-export const emptyBatchPage: EntryBatchPage = { items: [], next_cursor: null };
+/** Una compra devuelta: sus 3 numeros, anulados. */
+export const refundedNumberBatch: EntryNumberBatch = {
+  batch_id: "11111111-1111-4111-8111-000000000002",
+  source_type: "PURCHASE",
+  awarded_at: "2026-10-06T15:10:00.000Z",
+  quantity: 3,
+  active_quantity: 0,
+  numbers: fixtureNumbers(["70215844", "00938127", "88401263"], 0),
+};
+
+/** Una tarjeta por correo, partida: llegan 4 de sus 2,000 numeros en esta pagina. */
+export const amoeNumberBatch: EntryNumberBatch = {
+  batch_id: "11111111-1111-4111-8111-000000000003",
+  source_type: "AMOE",
+  awarded_at: "2026-10-07T20:00:00.000Z",
+  quantity: 2_000,
+  active_quantity: 2_000,
+  numbers: fixtureNumbers(["61930572", "27755108", "95018346", "40382711"], 4),
+};
+
+export const entryNumbersPage: EntryNumbersPage = {
+  promotion_id: activePromotion.id,
+  digits: 8,
+  active_numbers: 2_005,
+  void_numbers: 3,
+  items: [purchaseNumberBatch, refundedNumberBatch, amoeNumberBatch],
+  next_cursor: "eyJrIjoiMTExMTExMTEtMTExMS00MTExLTgxMTEtMDAwMDAwMDAwMDAzIiwiaSI6IjQifQ",
+};
+
+export const emptyEntryNumbersPage: EntryNumbersPage = {
+  promotion_id: activePromotion.id,
+  digits: 8,
+  active_numbers: 0,
+  void_numbers: 0,
+  items: [],
+  next_cursor: null,
+};
 
 // ---------------------------------------------------------------------------
 // Pedidos

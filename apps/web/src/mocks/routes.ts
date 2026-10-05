@@ -28,8 +28,8 @@ import {
   activeSession,
   cashPendingOrder,
   entrySummary,
+  entryNumbersPage,
   entryTransactionPage,
-  manyBatchesPage,
   orderDetails,
   orderPage,
   participant,
@@ -223,7 +223,7 @@ export const mockRoutes: readonly MockRoute[] = [
    * defecto. Que el fixture exista no enciende nada: hace falta ademas un
    * escenario de configuracion que encienda el flag.
    */
-  { method: "GET", path: API_PATHS.entryNumbers, body: manyBatchesPage },
+  { method: "GET", path: API_PATHS.entryNumbers, body: entryNumbersPage },
   { method: "GET", path: API_PATHS.orders, body: orderPage },
   ...orderDetails.map((order): MockRoute => ({
     method: "GET",

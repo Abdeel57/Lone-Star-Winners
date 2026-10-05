@@ -197,6 +197,13 @@
       "when": 1787616036000,
       "tag": "0036_guest_cart_and_shipping",
       "breakpoints": false
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1787616037000,
+      "tag": "0037_entry_numbers_always",
+      "breakpoints": false
     }
   ]
 }

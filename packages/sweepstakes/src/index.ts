@@ -47,6 +47,8 @@ export * from "./capabilities.js";
 export * from "./rules-keys.js";
 export * from "./engine-version.js";
 export * from "./ledger.js";
+export * from "./entry-number-cipher.js";
+export * from "./entry-number-activity.js";
 export * from "./calculation/index.js";
 export * from "./ports/index.js";
 export * from "./balance/index.js";

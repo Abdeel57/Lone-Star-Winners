@@ -9,13 +9,23 @@
  * en el dominio (DEC-011).
  */
 
+import { createHash } from "node:crypto";
+
+import { ENTRY_NUMBER_SCHEME } from "../entry-number-cipher.js";
 import type { EntrySourceType } from "../enums.js";
 import type { EntryNumberRange } from "../ledger.js";
-import type {
-  EntryBatchRecord,
-  EntryNumberFormat,
-  EntryNumberPort,
+import {
+  DEFAULT_ENTRY_NUMBER_DIGITS,
+  DEFAULT_ENTRY_NUMBER_PREFIX,
+  type EntryBatchRecord,
+  type EntryNumberFormat,
+  type EntryNumberPort,
 } from "../ports/entry-numbers.js";
+
+/** Clave reproducible para tests. Ver `InMemoryEntryNumberPort`. */
+function deterministicKey(promotionId: string): Uint8Array {
+  return new Uint8Array(createHash("sha256").update(`in-memory:${promotionId}`).digest());
+}
 import type { ParticipantIdentityPort, ParticipantIdentitySnapshot } from "../ports/identity.js";
 import type { PromotionContext, PromotionContextPort } from "../ports/promotion-context.js";
 import type {
@@ -97,19 +107,31 @@ export class InMemoryCalculationSnapshotRepository implements CalculationSnapsho
 /**
  * Pozo de numeros en memoria.
  *
- * Reproduce las dos garantias que importan: la secuencia SOLO AVANZA -un
- * reversal no devuelve numeros al pozo, porque reutilizar un identificador
- * haria que significase dos cosas en dos momentos- y dos bloques de la misma
- * promocion NO SE SOLAPAN, que en PostgreSQL lo garantiza una exclusion GiST.
+ * Reproduce las garantias que importan: la secuencia SOLO AVANZA -un reversal
+ * no devuelve numeros al pozo, porque reutilizar un identificador haria que
+ * significase dos cosas en dos momentos-, dos bloques de la misma promocion NO
+ * SE SOLAPAN, que en PostgreSQL lo garantiza una exclusion GiST, y la secuencia
+ * se crea con la primera asignacion, como hace `lsw_allocate_entry_range`
+ * desde la migracion 0037 (DEC-080).
+ *
+ * La clave de una secuencia creada aqui se deriva del identificador de la
+ * promocion: este paquete no tiene fuente de aleatoriedad (ver `index.ts`), y
+ * en un test una clave reproducible es una ventaja.
  */
 export class InMemoryEntryNumberPort implements EntryNumberPort {
   private readonly nextNumber = new Map<string, bigint>();
   private readonly formats = new Map<string, EntryNumberFormat>();
   private readonly batches: EntryBatchRecord[] = [];
 
-  public constructor(formats: ReadonlyMap<string, EntryNumberFormat> = new Map()) {
+  public constructor(
+    formats: ReadonlyMap<string, { readonly prefix: string; readonly digits: number }> = new Map(),
+  ) {
     for (const [promotionId, format] of formats) {
-      this.formats.set(promotionId, format);
+      this.formats.set(promotionId, {
+        ...format,
+        key: deterministicKey(promotionId),
+        scheme: ENTRY_NUMBER_SCHEME,
+      });
       this.nextNumber.set(promotionId, 1n);
     }
   }
@@ -118,12 +140,15 @@ export class InMemoryEntryNumberPort implements EntryNumberPort {
     if (!Number.isSafeInteger(quantity) || quantity <= 0) {
       return Promise.reject(new RangeError("Un rango de entries exige una cantidad positiva."));
     }
-    const start = this.nextNumber.get(promotionId);
-    if (start === undefined) {
-      return Promise.reject(
-        new RangeError(`La promocion ${promotionId} no tiene secuencia de numeros inicializada.`),
-      );
+    if (!this.formats.has(promotionId)) {
+      this.formats.set(promotionId, {
+        prefix: DEFAULT_ENTRY_NUMBER_PREFIX,
+        digits: DEFAULT_ENTRY_NUMBER_DIGITS,
+        key: deterministicKey(promotionId),
+        scheme: ENTRY_NUMBER_SCHEME,
+      });
     }
+    const start = this.nextNumber.get(promotionId) ?? 1n;
     const end = start + BigInt(quantity);
     this.nextNumber.set(promotionId, end);
     return Promise.resolve({ start, end });
@@ -158,9 +183,13 @@ export class InMemoryEntryNumberPort implements EntryNumberPort {
     participantId: string,
   ): Promise<readonly EntryBatchRecord[]> {
     return Promise.resolve(
-      this.batches.filter(
-        (batch) => batch.promotionId === promotionId && batch.participantId === participantId,
-      ),
+      this.batches
+        .filter(
+          (batch) => batch.promotionId === promotionId && batch.participantId === participantId,
+        )
+        .sort((a, b) =>
+          a.range.start === b.range.start ? 0 : a.range.start < b.range.start ? -1 : 1,
+        ),
     );
   }
 

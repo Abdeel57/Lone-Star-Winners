@@ -3973,3 +3973,81 @@ Panel → Envío, mensajes), `docs/API_CONTRACT.md`, e2e `13-guest-cart`.
 
 Proposed by: sesión del usuario (2026-10-05)
 Agreed by: pendiente — backend-sweepstakes, security-integration, frontend-ux
+
+## DEC-080
+
+Status: Proposed
+
+Date: 2026-10-05
+
+Decision:
+**Un número al azar por participación, para todas, y la misma regla de
+anulación en la cuenta y en el export.** El cliente quiere que cada
+participación tenga su número (10 participaciones = 10 números), que el
+participante los vea en su cuenta y que se publique el número ganador. El
+sorteo lo sigue haciendo el Administrador (Reglas, sección 7).
+
+1. **Se numera siempre.** Antes solo recibían bloque las compras, y solo con
+   `visible_entry_numbers_enabled` encendido; el correo y los ajustes nunca. Y
+   sin bloques el export no se podía finalizar (`EMPTY_UNIVERSE` /
+   `TOTAL_MISMATCH`, AGENT_HANDOFF "Finalizar un export exige la numeración
+   visible encendida"). Ahora:
+   - `AwardService` asigna el bloque de la compra siempre;
+   - un trigger de restricción DIFERIDO (`entry_transactions_ensure_numbers`)
+     numera al confirmar cualquier transacción positiva que llegue sin bloque
+     (correo, ajustes, scripts). Diferido para no chocar con la compra, que
+     inserta su bloque después de la fila;
+   - un trigger BEFORE INSERT (`entry_transactions_lock_numbers`) toma el
+     cerrojo de numeración al insertar la fila positiva. Sin él, el correo y los
+     ajustes lo tomarían al confirmar, después del cerrojo de la cadena de
+     auditoría y al revés que la compra: interbloqueo con operaciones
+     simultáneas (orden de cerrojos de la 0024);
+   - `lsw_allocate_entry_range` crea la secuencia de la promoción con su primera
+     participación (ningún código de producción la creaba);
+   - `lsw_number_unnumbered_entries()` numera lo ya otorgado en orden de
+     escritura; la migración la llama y se puede repetir (idempotente).
+
+   El flag decide solo si el participante VE sus números.
+
+2. **El número visible es una permutación con clave del ordinal interno.** Red
+   de Feistel de 10 rondas con cycle-walking sobre `[0, 10^d)`
+   (`entry-number-cipher.ts`, esquema `LSW/ENTRY-NUMBER/FEISTEL/v1`), con una
+   clave de 32 bytes de CSPRNG por promoción (`number_key`). Biyección: no hay
+   repetidos por construcción y la unicidad sigue siendo la de la exclusión
+   GiST. 8 cifras por defecto (cien millones). La clave, el esquema y el ancho
+   no se pueden cambiar (trigger): cambiarlos cambiaría números ya mostrados.
+   Vectores conocidos en el test.
+3. **Qué números se anulan (`computeEntryNumberActivity`).** Un reversal anclado
+   (devolución, parcial, contracargo, fraude) anula números del lote de la
+   compra que revierte, desde el final; lo no anclado (descalificación, ajuste a
+   la baja) sale de los lotes más recientes (la política anterior del congelado).
+   Dentro de un lote los vigentes son los primeros: el ordinal `first + k` del
+   congelado es el número interno `lower(range) + k`. La usan el portal y el
+   congelado del export: lo que el participante ve vigente es lo que entra en el
+   universo.
+4. **"Mis números"** (`GET /account/entry-numbers`) pagina por números (500, hasta
+   1000), con procedencia, fecha y `active` por número. La cuenta los muestra por
+   compra/tarjeta/ajuste, tachados los anulados.
+
+Pendiente (siguiente entrega): el archivo de números para el Administrador, el
+registro del número ganador que reporte y su publicación en la página
+(`winner.publish`, `winner_publication_enabled`).
+
+Migración `0037_entry_numbers_always` (journal idx 28, después de la 0036 de
+DEC-079). Se estrena en el preDeploy de Railway.
+
+Alternatives:
+A — Guardar un número aleatorio por participación (descartada: una fila por
+participación, reintentos por colisión y abandonar los rangos sobre los que
+trabajan la exclusión GiST, el export y los reversals). B — Seguir con números
+consecutivos (descartada: el cliente los quiere al azar). C — Un número por
+compra que valga N veces (descartada por el cliente: menos claro).
+
+Affected areas: `packages/sweepstakes` (cifrador, actividad, puerto, award, en
+memoria), `packages/database` (0037, esquema, repositorios de números y de
+reconciliación), `apps/api` (`portal.ts`, esquemas, contrato), `apps/web`
+(cuenta, componente, mensajes, mocks), `docs/API_CONTRACT.md`,
+`docs/LEGAL_PENDING.md`.
+
+Proposed by: sesión del usuario (2026-10-05)
+Agreed by: pendiente — backend-sweepstakes, security-integration, frontend-ux

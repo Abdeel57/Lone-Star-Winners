@@ -10,6 +10,12 @@
  *   advertencia esta escrita en `lsw_allocate_entry_range` y en la migracion
  *   0006.
  *
+ * DESDE DEC-080 SE ASIGNA SIEMPRE
+ *
+ *   Con el flag de numeros visibles encendido o apagado. La compra llama a
+ *   `allocateRange` + `saveBatch`; el resto de transacciones positivas las
+ *   numera el trigger diferido de la migracion 0037 al confirmar.
+ *
  * LA ASIGNACION LA HACE EL MOTOR, NO ESTE ARCHIVO
  *
  *   `lsw_allocate_entry_range` toma un lock consultivo por promocion y avanza
@@ -23,7 +29,7 @@
  *   lo comprueba.
  */
 
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 import {
   parseEntryNumberRange,
   serializeEntryNumberRange,
@@ -32,7 +38,6 @@ import {
   type EntryNumberPort,
   type EntryNumberRange,
 } from "@lsw/sweepstakes";
-import { sql } from "drizzle-orm";
 
 import { entryBatches, promotionEntryNumberSequences } from "../schema/entries.js";
 import { currentExecutor, isInTransaction, type DbExecutor } from "./executor.js";
@@ -125,7 +130,9 @@ export class DrizzleEntryNumberRepository implements EntryNumberPort {
           eq(entryBatches.participantId, participantId),
         ),
       )
-      .orderBy(asc(entryBatches.createdAt));
+      // Orden de ASIGNACION, el mismo que usa el congelado del export. Dos
+      // lotes de la misma transaccion de base de datos comparten `created_at`.
+      .orderBy(asc(sql`lower(${entryBatches.numberRange})`));
 
     return rows.map(toBatch);
   }
@@ -135,15 +142,25 @@ export class DrizzleEntryNumberRepository implements EntryNumberPort {
       .select({
         prefix: promotionEntryNumberSequences.formatPrefix,
         digits: promotionEntryNumberSequences.formatDigits,
+        key: promotionEntryNumberSequences.numberKey,
+        scheme: promotionEntryNumberSequences.numberScheme,
       })
       .from(promotionEntryNumberSequences)
       .where(eq(promotionEntryNumberSequences.promotionId, promotionId))
       .limit(1);
 
     const row = rows[0];
-    // `null` = la promocion no tiene secuencia inicializada. NO se inventa un
-    // prefijo: el identificador visible aparece en pantalla y en soporte, y uno
-    // improvisado seria imposible de reconciliar despues.
-    return row === undefined ? null : { prefix: row.prefix, digits: row.digits };
+    // `null` = la promocion todavia no ha numerado ninguna participacion: la
+    // secuencia nace con la primera (DEC-080). NO se inventa una clave: un
+    // numero derivado de una clave improvisada no coincidiria con el que se
+    // mostrara despues.
+    return row === undefined
+      ? null
+      : {
+          prefix: row.prefix,
+          digits: row.digits,
+          key: new Uint8Array(row.key),
+          scheme: row.scheme,
+        };
   }
 }

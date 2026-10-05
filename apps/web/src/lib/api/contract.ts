@@ -1415,33 +1415,55 @@ export interface EntryTransaction {
 export type EntryTransactionPage = CursorPage<EntryTransaction>;
 
 /**
- * [CONTRATO] Rango de numeros asignado al participante.
+ * [CONTRATO] Un numero de participacion (DEC-080).
  *
- * Copia literal de un elemento de `GET /account/entry-numbers`.
- *
- * LOS NUMEROS SON CADENAS, jamas numeros (DEC-010). `LSW26-000450001` no es un
- * entero, y aunque lo fuera, un identificador que se formatea con separador de
- * miles deja de ser el identificador.
- *
- * Toda la ruta esta detras de `visible_entry_numbers_enabled`, apagado. Con el
- * flag apagado el backend responde 404 -los rangos se asignan igual, para que
- * sean reconstruibles hacia atras, pero no se muestran-, asi que la interfaz NO
- * pide este recurso salvo que el flag este encendido.
- *
- * AVISO que el contrato repite y aqui se repite tambien: la secuencia de
- * numeros NO es el algoritmo del sorteo. Que existan numeros no autoriza a
- * sortear sobre ellos (DEC-017, principio #11).
+ * LOS NUMEROS SON CADENAS, jamas numeros (DEC-010): `04669096` empieza por cero,
+ * y un identificador que se formatea con separador de miles deja de ser el
+ * identificador.
  */
-export interface EntryBatch {
-  readonly batch_id: string;
-  readonly quantity: number;
-  /** Primer numero del rango. CADENA (DEC-010). */
-  readonly first_number: string;
-  /** Ultimo numero del rango. CADENA (DEC-010). */
-  readonly last_number: string;
+export interface EntryNumber {
+  readonly number: string;
+  /** `false` = anulado por devolucion, contracargo, descalificacion o ajuste. */
+  readonly active: boolean;
 }
 
-export type EntryBatchPage = CursorPage<EntryBatch>;
+/** Procedencia de un lote. El copy es del frontend (DEC-022). */
+export type EntryNumberSource = "PURCHASE" | "AMOE" | "ADMIN" | "SYSTEM";
+
+/**
+ * [CONTRATO] Un lote de numeros dentro de una pagina de "mis numeros".
+ *
+ * Un lote es lo que dio UNA transaccion: una compra, una tarjeta por correo, un
+ * ajuste. Si es largo, sigue en la pagina siguiente con el mismo `batch_id`.
+ */
+export interface EntryNumberBatch {
+  readonly batch_id: string;
+  readonly source_type: EntryNumberSource;
+  readonly awarded_at: string;
+  readonly quantity: number;
+  readonly active_quantity: number;
+  readonly numbers: readonly EntryNumber[];
+}
+
+/**
+ * [CONTRATO] `GET /account/entry-numbers` (DEC-080).
+ *
+ * Se pagina por NUMEROS. Toda la ruta esta detras de
+ * `visible_entry_numbers_enabled`: con el flag apagado el backend responde 404
+ * -los numeros se asignan igual, pero no se muestran-, asi que la interfaz NO
+ * pide este recurso salvo que el flag este encendido.
+ *
+ * AVISO que el contrato repite y aqui se repite tambien: los numeros NO son el
+ * sorteo. El ganador lo elige el Administrador (DEC-017, principio #11).
+ */
+export interface EntryNumbersPage {
+  readonly promotion_id: string;
+  readonly digits: number;
+  readonly active_numbers: number;
+  readonly void_numbers: number;
+  readonly items: readonly EntryNumberBatch[];
+  readonly next_cursor: string | null;
+}
 
 /**
  * [PROVISIONAL] Estado de un pedido.

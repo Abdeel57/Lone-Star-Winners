@@ -33,9 +33,9 @@ vi.mock("@/lib/account-actions", () => {
   return { updateProfileAction: () => Promise.resolve(idle) };
 });
 
-import { EntryBatchList } from "@/components/entry-batch-list";
 import { EntryCalculationTrace } from "@/components/entry-calculation-trace";
 import { EntryLedgerList } from "@/components/entry-ledger-list";
+import { EntryNumberList } from "@/components/entry-number-list";
 import { EntrySummaryCards } from "@/components/entry-summary-cards";
 import { OrderCard } from "@/components/order-card";
 import { OrderLineList } from "@/components/order-line-list";
@@ -45,15 +45,16 @@ import { readCalculationTrace } from "@/lib/entry-calculation";
 import { LOCALES, type Locale } from "@/i18n/locales";
 import {
   chargebackOrder,
+  emptyEntryNumbersPage,
   emptySummary,
+  entryNumbersPage,
   entrySummary,
   entryTransactions,
   grantedOrder,
-  manyEntryBatches,
   orderSummaries,
   participant,
+  purchaseNumberBatch,
   refundedOrder,
-  singleEntryBatch,
   summaryWithReversals,
 } from "@/mocks/fixtures/account";
 
@@ -134,42 +135,85 @@ describe("saldo de participaciones", () => {
   });
 });
 
-describe("rangos de numeros", () => {
-  it("un solo lote se pinta con su rango completo", () => {
-    const batch = singleEntryBatch[0];
-    expect(batch).toBeDefined();
-    if (batch === undefined) return;
+describe("numeros de participacion (DEC-080)", () => {
+  function renderNumbers(
+    locale: Locale,
+    page = entryNumbersPage,
+    links: { moreHref: string | null; firstHref: string | null } = {
+      moreHref: null,
+      firstHref: null,
+    },
+  ) {
+    return renderIn(
+      locale,
+      <EntryNumberList page={page} locale={locale} timeZone={TIME_ZONE} {...links} />,
+    );
+  }
 
-    renderIn("en", <EntryBatchList batches={singleEntryBatch} locale="en" />);
+  it("pinta cada numero tal cual llega, con sus ceros a la izquierda", () => {
+    renderNumbers("en");
 
-    // Los patrones salen de un fixture de este repositorio, no de entrada de
-    // usuario, y los identificadores no llevan metacaracteres.
-    /* eslint-disable security/detect-non-literal-regexp */
-    expect(screen.getByText(new RegExp(batch.first_number))).toBeInTheDocument();
-    expect(screen.getByText(new RegExp(batch.last_number))).toBeInTheDocument();
-    /* eslint-enable security/detect-non-literal-regexp */
+    for (const entry of purchaseNumberBatch.numbers) {
+      expect(screen.getByText(entry.number)).toBeInTheDocument();
+    }
+    // `04669096` no se convierte en `4,669,096` ni en `4669096` (DEC-010).
+    expect(screen.getByText("04669096")).toBeInTheDocument();
   });
 
-  it("varios lotes se pintan como rangos y NO como una fila por participacion", () => {
-    const { container } = renderIn("en", <EntryBatchList batches={manyEntryBatches} locale="en" />);
+  it("los anulados se ven tachados y se anuncian como anulados", () => {
+    renderNumbers("es");
 
-    // Cuatro lotes, cuatro elementos. Once mil participaciones no producen once
-    // mil filas: ese es el motivo entero de que existan los rangos.
-    expect(container.querySelectorAll("li")).toHaveLength(manyEntryBatches.length);
+    const voided = screen.getByText("70215844").closest("li");
+    expect(voided).toHaveClass("line-through");
+    expect(voided).toHaveTextContent(esMessages.account.entries.numberVoid);
+
+    const active = screen.getByText("04669096").closest("li");
+    expect(active).not.toHaveClass("line-through");
+    expect(active).not.toHaveTextContent(esMessages.account.entries.numberVoid);
   });
 
-  it("sin lotes asignados lo dice, en vez de dejar la seccion vacia", () => {
-    renderIn("es", <EntryBatchList batches={[]} locale="es" />);
-    expect(screen.getByText(esMessages.account.entries.batchesEmpty)).toBeInTheDocument();
+  it("dice cuantos hay vigentes y anulados, con las cifras del servidor", () => {
+    renderNumbers("en");
+    expect(screen.getByText("2,005 active numbers")).toBeInTheDocument();
+    expect(screen.getByText("3 void numbers")).toBeInTheDocument();
+  });
+
+  it("un lote partido entre paginas dice cuantos de su total se ven aqui", () => {
+    renderNumbers("es");
+    expect(screen.getByText("En esta página: 4 de 2,000 números.")).toBeInTheDocument();
+  });
+
+  it("enlaza a la pagina siguiente y de vuelta al principio", () => {
+    renderNumbers("es", entryNumbersPage, {
+      moreHref: "/account/entries?cursor=abc#numeros",
+      firstHref: "/account/entries#numeros",
+    });
+
+    expect(
+      screen.getByRole("link", { name: esMessages.account.entries.numbersMore }),
+    ).toHaveAttribute("href", "/account/entries?cursor=abc#numeros");
+    expect(
+      screen.getByRole("link", { name: esMessages.account.entries.numbersFirstPage }),
+    ).toHaveAttribute("href", "/account/entries#numeros");
+  });
+
+  it("sin numeros lo dice, en vez de dejar la seccion vacia", () => {
+    renderNumbers("es", emptyEntryNumbersPage);
+    expect(screen.getByText(esMessages.account.entries.numbersEmpty)).toBeInTheDocument();
   });
 
   it.each(LOCALES)("advierte que los numeros no son el sorteo en %s", (locale) => {
-    // DEC-017 y principio 11: que existan numeros no autoriza a sortear sobre
-    // ellos, y quien ve numeros asignados asume lo contrario si nadie lo dice.
-    renderIn(locale, <EntryBatchList batches={singleEntryBatch} locale={locale} />);
+    // DEC-017 y principio 11: quien ve numeros asume que se sortea sobre ellos
+    // si nadie le dice quien elige al ganador.
+    renderNumbers(locale);
 
     const messages = locale === "en" ? enMessages : esMessages;
-    expect(screen.getByText(messages.account.entries.batchesNote)).toBeInTheDocument();
+    expect(screen.getByText(messages.account.entries.numbersNote)).toBeInTheDocument();
+  });
+
+  it.each(LOCALES)("no usa vocabulario de rifa en %s", (locale) => {
+    const { container } = renderNumbers(locale);
+    expect(container.textContent).not.toMatch(/boleto|ticket|raffle|rifa|chance to win/iu);
   });
 });
 

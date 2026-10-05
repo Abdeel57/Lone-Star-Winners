@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   fetchCheckoutSession,
-  fetchEntryBatches,
+  fetchEntryNumbers,
   fetchEntrySummary,
   fetchEntryTransactions,
   fetchOrder,
@@ -184,23 +184,26 @@ describe("portal del participante", () => {
     expect(result.data.items.some((item) => item.reverses_transaction_id !== null)).toBe(true);
   });
 
-  it("los rangos de numeros viajan como CADENA (DEC-010)", async () => {
-    const result = await fetchEntryBatches({ promotion_id: activePromotion.id }, "en", SESSION);
+  it("los numeros de participacion viajan como CADENA, con sus ceros (DEC-010)", async () => {
+    const result = await fetchEntryNumbers({ promotion_id: activePromotion.id }, "en", SESSION);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
-    for (const batch of result.data.items) {
-      expect(typeof batch.first_number).toBe("string");
-      expect(typeof batch.last_number).toBe("string");
+    const numbers = result.data.items.flatMap((batch) => batch.numbers);
+    expect(numbers.length).toBeGreaterThan(0);
+    for (const entry of numbers) {
+      expect(typeof entry.number).toBe("string");
+      expect(entry.number).toHaveLength(result.data.digits);
     }
+    expect(numbers.some((entry) => entry.number.startsWith("0"))).toBe(true);
   });
 
-  it("con el flag apagado, los rangos responden 404 y el fallo SUBE", async () => {
+  it("con el flag apagado, los numeros responden 404 y el fallo SUBE", async () => {
     // Que suba es deliberado: la pantalla no debe pedirlos con el flag apagado,
     // asi que un 404 aqui es un fallo de coordinacion y hay que poder verlo.
     mockApiServer.use(scenarios.entryNumbersHidden());
 
-    const result = await fetchEntryBatches({ promotion_id: activePromotion.id }, "en", SESSION);
+    const result = await fetchEntryNumbers({ promotion_id: activePromotion.id }, "en", SESSION);
     expect(result.ok).toBe(false);
     if (result.ok) return;
 

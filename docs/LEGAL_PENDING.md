@@ -238,7 +238,8 @@ que se decida, ninguna promoción puede otorgar participaciones por compra.
 
 ## Visible entry numbers and export universe
 
-TBD
+PARCIALMENTE RESUELTO por el cliente (DEC-080, 2026-10-05). Falta la
+confirmación del abogado.
 
 ¿Se numeran todas las participaciones aunque no se muestren al participante,
 y tienen esos números efecto legal (sorteo por ordinal)? Hoy la exportación
@@ -246,6 +247,29 @@ al administrador externo solo puede finalizarse con la numeración visible
 encendida, y la política ante reversals es que los lotes más recientes
 pierden ordinales (HO-033). Ambas cosas dependen de lo que digan las
 Official Rules sobre cómo se identifica una participación en el sorteo.
+
+Lo que decidió el cliente y quedó implementado (DEC-080):
+
+1. **Se numera todo, siempre.** Cada participación -compra, correo, ajuste-
+   recibe un número propio, se muestre o no. El export ya no depende del flag.
+2. **El número visible no es consecutivo.** Es el ordinal interno pasado por
+   una permutación con clave aleatoria de la promoción: no se repite y no deja
+   adivinar el siguiente.
+3. **Qué números se anulan.** Una devolución, un contracargo o un fraude anulan
+   los números de LA compra que revierten (las Reglas anulan "las
+   participaciones atribuibles" a esa compra); una devolución parcial anula los
+   últimos números de su compra. Lo que no señala compra (descalificación,
+   ajuste a la baja) anula los más recientes. La misma regla rige la cuenta del
+   participante y el congelado del export.
+4. **El sorteo no cambia.** Lo hace el Administrador (Reglas, sección 7) sobre
+   el universo exportado. Los números son para que cada participante vea sus
+   participaciones y para publicar el número ganador.
+
+Lo que sigue pendiente del abogado: que mostrar números por participación no
+cambie la naturaleza de la promoción (el flag `visible_entry_numbers_enabled`
+sigue siendo legalmente material y exige dos cuentas de Cumplimiento), si las
+Reglas deben mencionar los números y la regla del punto 3, y el formato en que
+el Administrador recibe el universo.
 
 ## Merchandise availability and entry eligibility
 

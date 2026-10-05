@@ -23,31 +23,35 @@
  * `export_snapshot_entry_ranges` guarda el universo elegible como tramos de
  * ordinales 1-based contiguos. Congelarlo exige responder a una pregunta que el
  * ledger no responde solo: cuando un reversal deja a un participante con menos
- * entries de las que otorgaron sus lotes, QUE lotes conservan ordinales.
+ * entries de las que otorgaron sus lotes, QUE numeros conservan ordinal.
  *
- * Aqui se hace asi:
+ * Desde DEC-080 la responde `computeEntryNumberActivity` (`@lsw/sweepstakes`),
+ * la MISMA funcion que decide que numeros ve vigentes el participante en su
+ * cuenta. Si cada lado lo calculara a su manera, alguien podria ver vigente un
+ * numero que no entro en el sorteo. En resumen:
  *
- *   1. el TOTAL por participante sale de `lsw_export_universe_at`, que es la
- *      unica definicion del saldo (DEC-007). No se recalcula, no se estima y no
- *      se duplica su predicado;
- *   2. ese total se reparte entre los lotes del participante EN ORDEN DE
- *      ASIGNACION -el lote mas antiguo primero-, dando a cada uno como mucho su
- *      cantidad original. El faltante, por tanto, cae sobre los lotes mas
- *      recientes.
+ *   1. una devolucion, un contracargo o un fraude anulan numeros del lote de LA
+ *      compra que revierten (las Reglas anulan las participaciones atribuibles
+ *      a esa compra);
+ *   2. lo que no senala compra -descalificacion, ajuste a la baja- sale de los
+ *      lotes mas recientes, que es la politica que ya se aplicaba aqui;
+ *   3. dentro de un lote, los vigentes son los PRIMEROS de su rango. Por eso un
+ *      tramo basta para describirlo: el ordinal `first_ordinal + k` es el numero
+ *      interno `lower(number_range) + k`.
  *
- * El punto 2 es una POLITICA, no una verdad del ledger: podria ser al reves y el
- * total no cambiaria. Se elige "los mas recientes pierden" porque es la unica
- * que no altera un numero que un participante ya vio conservado en un corte
- * anterior. Queda anotada aqui, y en el handoff, para que la revise quien decide
- * si los numeros visibles tienen efecto legal; no la fija este codigo.
- *
- * Con `visible_entry_numbers_enabled` apagado -el default de DEC-032- no existe
- * ningun lote, y el congelado produce CERO tramos. No se inventa ninguno: la
- * reconciliacion lo declara como hallazgo critico y el snapshot no se finaliza.
- * Es la respuesta correcta, no un fallo: un universo sin tramos no se puede
- * entregar a un tercero como si estuviera verificado.
+ * El TOTAL por participante sigue saliendo de `lsw_export_universe_at` y manda:
+ * los tramos se recorren en su orden, y si un participante tiene menos numeros
+ * vigentes que saldo -una transaccion positiva sin lote- NO se inventa ninguno.
+ * La reconciliacion lo declara hallazgo critico y el snapshot no se finaliza.
+ * Desde la migracion 0037 toda transaccion positiva se numera al confirmarse,
+ * asi que ese caso indica una fila escrita por fuera de las reglas.
  */
 
+import {
+  computeEntryNumberActivity,
+  parseEntryNumberRange,
+  type ActivityTransaction,
+} from "@lsw/sweepstakes";
 import { sql } from "drizzle-orm";
 
 import { currentExecutor, type DbExecutor } from "./executor.js";
@@ -74,8 +78,43 @@ interface UniverseRow extends Record<string, unknown> {
 interface BatchRow extends Record<string, unknown> {
   readonly batch_id: string;
   readonly participant_id: string;
+  readonly entry_transaction_id: string;
+  readonly number_range: string;
   readonly provenance: string;
   readonly quantity: number;
+}
+
+interface ActivityRow extends Record<string, unknown> {
+  readonly id: string;
+  readonly participant_id: string;
+  readonly quantity_delta: number;
+  readonly status: string;
+  readonly effective_at: Date | string;
+  readonly expires_at: Date | string | null;
+  readonly sequence_no: string | number;
+  readonly reverses_transaction_id: string | null;
+}
+
+/**
+ * `node-postgres` devuelve `timestamptz` como `Date` y `bigint` como texto con
+ * la configuracion por defecto; se normaliza aqui para no depender de ello.
+ */
+function toActivityTransaction(row: ActivityRow): ActivityTransaction {
+  return {
+    id: row.id,
+    participantId: row.participant_id,
+    quantityDelta: Number(row.quantity_delta),
+    status: row.status as ActivityTransaction["status"],
+    effectiveAt: row.effective_at instanceof Date ? row.effective_at : new Date(row.effective_at),
+    expiresAt:
+      row.expires_at === null
+        ? null
+        : row.expires_at instanceof Date
+          ? row.expires_at
+          : new Date(row.expires_at),
+    sequenceNo: Number(row.sequence_no),
+    reversesTransactionId: row.reverses_transaction_id,
+  };
 }
 
 interface PromotionRow extends Record<string, unknown> {
@@ -149,7 +188,25 @@ export class DrizzleExportReconciliationRepository {
 
     const universe = await this.loadUniverseRows(manifest);
     const batches = await this.loadBatches(manifest.promotionId);
+    const transactions = await this.loadActivityTransactions(manifest.promotionId);
 
+    const activity = computeEntryNumberActivity({
+      batches: batches.map((batch) => ({
+        id: batch.batch_id,
+        entryTransactionId: batch.entry_transaction_id,
+        participantId: batch.participant_id,
+        quantity: batch.quantity,
+        range: parseEntryNumberRange(batch.number_range),
+      })),
+      transactions,
+      cutoff: new Date(manifest.cutoffAt),
+      maxSequence: Number(manifest.ledgerHighWaterMark),
+    });
+    const activeByBatch = new Map(
+      activity.batches.map((batch) => [batch.batchId, batch.activeQuantity]),
+    );
+
+    // `loadBatches` ya viene en orden de asignacion.
     const byParticipant = new Map<string, PendingRange[]>();
     for (const batch of batches) {
       const list = byParticipant.get(batch.participant_id) ?? [];
@@ -157,7 +214,7 @@ export class DrizzleExportReconciliationRepository {
         batchId: batch.batch_id,
         participantReference: batch.participant_id,
         provenance: batch.provenance,
-        quantity: batch.quantity,
+        quantity: activeByBatch.get(batch.batch_id) ?? 0,
       });
       byParticipant.set(batch.participant_id, list);
     }
@@ -177,6 +234,9 @@ export class DrizzleExportReconciliationRepository {
         if (remaining <= 0) {
           break;
         }
+        // `candidate.quantity` son los numeros VIGENTES del lote. El minimo con
+        // el saldo solo puede recortar si las dos copias del predicado
+        // divergieran; en ese caso manda el saldo y la reconciliacion lo ve.
         const quantity = Math.min(remaining, candidate.quantity);
         if (quantity <= 0) {
           continue;
@@ -370,6 +430,8 @@ export class DrizzleExportReconciliationRepository {
     const result = await this.db.execute<BatchRow>(sql`
       SELECT b.id            AS batch_id,
              b.participant_id,
+             b.entry_transaction_id,
+             b.number_range::text AS number_range,
              t.source_type::text AS provenance,
              b.quantity
         FROM entry_batches b
@@ -378,6 +440,28 @@ export class DrizzleExportReconciliationRepository {
        ORDER BY lower(b.number_range), b.id
     `);
     return result.rows;
+  }
+
+  /**
+   * Las transacciones de la promocion, SIN filtrar: el corte y la marca de
+   * agua los aplica `computeEntryNumberActivity` con el mismo predicado que el
+   * saldo, y un reversal anclado puede apuntar a una fila que no cuenta.
+   */
+  private async loadActivityTransactions(promotionId: string): Promise<ActivityTransaction[]> {
+    const result = await this.db.execute<ActivityRow>(sql`
+      SELECT t.id,
+             t.participant_id,
+             t.quantity_delta,
+             t.status::text AS status,
+             t.effective_at,
+             t.expires_at,
+             t.sequence_no,
+             t.reverses_transaction_id
+        FROM entry_transactions t
+       WHERE t.promotion_id = ${promotionId}::uuid
+       ORDER BY t.sequence_no
+    `);
+    return result.rows.map(toActivityTransaction);
   }
 
   private async loadPromotion(manifest: ExportSnapshotManifestRecord): Promise<PromotionRow> {

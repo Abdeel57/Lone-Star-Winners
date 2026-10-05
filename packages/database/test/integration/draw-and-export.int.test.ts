@@ -288,7 +288,8 @@ describe("DEC-016 - los tramos del universo no pueden solaparse", () => {
   }
 
   it("la exclusion GiST rechaza dos tramos que se pisan", async () => {
-    // Necesita un `entry_batches` real: la clave ajena lo exige.
+    // Necesita un `entry_batches` real: la clave ajena lo exige. Desde 0037 lo
+    // asigna el trigger diferido al confirmar la transaccion (DEC-080).
     const transactionId = await singleValue<string>(
       app,
       sql`INSERT INTO entry_transactions (
@@ -302,19 +303,9 @@ describe("DEC-016 - los tramos del universo no pueden solaparse", () => {
           ) RETURNING id`,
     );
 
-    await app.execute(
-      sql`INSERT INTO promotion_entry_number_sequences (promotion_id, format_prefix, format_digits)
-          VALUES (${fixture.promotionId}, 'LSW26', 9)
-          ON CONFLICT (promotion_id) DO NOTHING`,
-    );
-
     const batchId = await singleValue<string>(
       app,
-      sql`INSERT INTO entry_batches (entry_transaction_id, promotion_id, participant_id,
-                                     quantity, number_range)
-          VALUES (${transactionId}, ${fixture.promotionId}, ${fixture.participantId},
-                  10, lsw_allocate_entry_range(${fixture.promotionId}, 10))
-          RETURNING id`,
+      sql`SELECT id FROM entry_batches WHERE entry_transaction_id = ${transactionId}`,
     );
 
     await insertRange(1, 10, batchId);

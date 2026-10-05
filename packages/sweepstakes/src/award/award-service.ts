@@ -10,7 +10,7 @@
  *     -> requisito de verificacion de email (retencion si procede)
  *     -> motor determinista -> EntryCalculationSnapshot inmutable
  *     -> movimiento PURCHASE_EARNED con source_type = PURCHASE
- *     -> bloque de numeros, solo si visible_entry_numbers_enabled
+ *     -> bloque de numeros, siempre (DEC-080; el flag solo decide si se ven)
  *     -> AuditEvent
  *
  * ---------------------------------------------------------------------------
@@ -117,7 +117,7 @@ export type AwardOutcome =
       readonly entries: number;
       readonly transaction: LedgerTransaction;
       readonly snapshot: CalculationSnapshotRecord;
-      readonly batch: EntryBatchRecord | null;
+      readonly batch: EntryBatchRecord;
     }
   | {
       readonly status: "ALREADY_AWARDED";
@@ -595,7 +595,7 @@ export class AwardService {
         throw error;
       }
 
-      const batch = await this.allocateNumbersIfEnabled(context, transaction, now);
+      const batch = await this.allocateNumbers(context, transaction, now);
 
       await this.deps.audit.emit({
         action: "entry.award.created",
@@ -625,20 +625,19 @@ export class AwardService {
   }
 
   /**
-   * Asigna un bloque de numeros, si el flag lo permite.
+   * Asigna el bloque de numeros de la compra, SIEMPRE (DEC-080).
    *
-   * Con `visible_entry_numbers_enabled` apagado -que es el default de DEC-032-
-   * no se reserva nada y no se consume secuencia. La elegibilidad no depende de
-   * que existan numeros: la responde el ledger.
+   * Antes solo se asignaba con `visible_entry_numbers_enabled` encendido, y eso
+   * dejaba el export al Administrador sin universo que congelar: los tramos
+   * del snapshot son bloques. El flag sigue decidiendo si el participante VE
+   * sus numeros (`portal.ts`), no si existen. La elegibilidad tampoco depende
+   * de ellos: la responde el ledger.
    */
-  private async allocateNumbersIfEnabled(
+  private async allocateNumbers(
     context: PromotionContext,
     transaction: LedgerTransaction,
     now: Date,
-  ): Promise<EntryBatchRecord | null> {
-    if (!context.flags.visible_entry_numbers_enabled) {
-      return null;
-    }
+  ): Promise<EntryBatchRecord> {
     const range = await this.deps.entryNumbers.allocateRange(
       context.promotionId,
       transaction.quantityDelta,

@@ -5,13 +5,13 @@ import { getTranslations, setRequestLocale } from "next-intl/server";
 
 import { AccountShell, MfaRequired, SignInRequired } from "@/components/account-shell";
 import { ApiErrorState } from "@/components/api-error-state";
-import { EntryBatchList } from "@/components/entry-batch-list";
+import { EntryNumberList } from "@/components/entry-number-list";
 import { EntrySummaryCards } from "@/components/entry-summary-cards";
 import { Link } from "@/i18n/navigation";
 import { routing } from "@/i18n/routing";
 import {
   fetchActivePromotion,
-  fetchEntryBatches,
+  fetchEntryNumbers,
   fetchEntrySummary,
   pickLocalized,
 } from "@/lib/api";
@@ -24,8 +24,8 @@ export const dynamic = "force-dynamic";
 /**
  * Mis participaciones.
  *
- * LOS RANGOS DE NUMEROS SOLO SE PIDEN SI EL FLAG ESTA ENCENDIDO
- * ------------------------------------------------------------
+ * LOS NUMEROS SOLO SE PIDEN SI EL FLAG ESTA ENCENDIDO
+ * ---------------------------------------------------
  * `visible_entry_numbers_enabled` esta apagado por defecto y con el apagado el
  * backend responde 404. Con el flag apagado esta pagina NO hace la peticion: no
  * es una optimizacion, es que pedir un recurso sabiendo que va a responder 404
@@ -34,13 +34,18 @@ export const dynamic = "force-dynamic";
  *
  * El flag se lee EN SERVIDOR, en la misma peticion que el render (DEC-013).
  *
- * NINGUNA CIFRA SE DERIVA AQUI. El saldo llega calculado y los rangos llegan
- * asignados; esta pagina los coloca.
+ * NINGUNA CIFRA SE DERIVA AQUI. El saldo llega calculado y los numeros llegan
+ * asignados, con su estado; esta pagina los coloca.
+ *
+ * Los numeros se paginan con `?cursor=` (DEC-080), igual que el historial: el
+ * cursor es OPACO y se transporta sin interpretarlo.
  */
 export default async function AccountEntriesPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ locale: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { locale } = await params;
   if (!hasLocale(routing.locales, locale)) notFound();
@@ -91,10 +96,17 @@ export default async function AccountEntriesPage({
 
   const numbersVisible = isFeatureEnabled(flags, "visible_entry_numbers_enabled");
 
-  const [summaryResult, batchesResult] = await Promise.all([
+  const query = await searchParams;
+  const cursor = typeof query.cursor === "string" && query.cursor.length > 0 ? query.cursor : null;
+
+  const [summaryResult, numbersResult] = await Promise.all([
     fetchEntrySummary(promotion.id, locale, session),
     numbersVisible
-      ? fetchEntryBatches({ promotion_id: promotion.id }, locale, session)
+      ? fetchEntryNumbers(
+          { promotion_id: promotion.id, ...(cursor === null ? {} : { cursor }) },
+          locale,
+          session,
+        )
       : Promise.resolve(null),
   ]);
 
@@ -149,17 +161,27 @@ export default async function AccountEntriesPage({
          * encendido, en cambio, un fallo de lectura SI se dice, porque entonces
          * el participante espera ver algo.
          */}
-        {batchesResult === null ? null : (
-          <section aria-labelledby="entries-batches">
-            <h2 id="entries-batches" className="lsw-display text-heading-lg text-text">
-              {t("batchesHeading")}
+        {numbersResult === null ? null : (
+          <section id="numeros" aria-labelledby="entries-numbers">
+            <h2 id="entries-numbers" className="lsw-display text-heading-lg text-text">
+              {t("numbersHeading")}
             </h2>
 
             <div className="mt-s4">
-              {batchesResult.ok ? (
-                <EntryBatchList batches={batchesResult.data.items} locale={locale} />
+              {numbersResult.ok ? (
+                <EntryNumberList
+                  page={numbersResult.data}
+                  locale={locale}
+                  timeZone={promotion.legal_timezone}
+                  moreHref={
+                    numbersResult.data.next_cursor === null
+                      ? null
+                      : `/account/entries?cursor=${encodeURIComponent(numbersResult.data.next_cursor)}#numeros`
+                  }
+                  firstHref={cursor === null ? null : "/account/entries#numeros"}
+                />
               ) : (
-                <Alert tone="warning">{t("batchesUnavailable")}</Alert>
+                <Alert tone="warning">{t("numbersUnavailable")}</Alert>
               )}
             </div>
           </section>

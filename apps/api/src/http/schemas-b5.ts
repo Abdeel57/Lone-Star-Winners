@@ -272,12 +272,39 @@ export const entryTransactionSchema = z.object({
     .nullable(),
 });
 
+/**
+ * Numeros de participacion del participante (DEC-080).
+ *
+ * Se pagina por NUMEROS, no por lotes: un lote de una tarjeta por correo trae
+ * 2,000 y uno de compra puede traer miles. Cada elemento es un lote con el
+ * tramo de sus numeros que cabe en la pagina; un lote largo continua en la
+ * siguiente con el mismo `batch_id`.
+ */
+export const entryNumberSchema = z.object({
+  /** CADENA, jamas numero (DEC-010): conserva los ceros a la izquierda. */
+  number: z.string(),
+  /** `false` = anulado (devolucion, contracargo, descalificacion, ajuste). */
+  active: z.boolean(),
+});
+
 export const entryNumberBatchSchema = z.object({
   batch_id: z.uuid(),
+  source_type: z.enum(["PURCHASE", "AMOE", "ADMIN", "SYSTEM"]),
+  /** Cuando entraron en vigor las participaciones del lote. */
+  awarded_at: z.string(),
   quantity: z.number().int(),
-  /** CADENA, jamas numero (DEC-010). */
-  first_number: z.string(),
-  last_number: z.string(),
+  active_quantity: z.number().int(),
+  numbers: z.array(entryNumberSchema),
+});
+
+export const entryNumbersPageSchema = z.object({
+  promotion_id: z.uuid(),
+  /** Cifras de cada numero de esta promocion. */
+  digits: z.number().int(),
+  active_numbers: z.number().int(),
+  void_numbers: z.number().int(),
+  items: z.array(entryNumberBatchSchema),
+  next_cursor: z.string().nullable(),
 });
 
 export const awardHoldSchema = z.object({

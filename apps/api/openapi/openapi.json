@@ -397,7 +397,7 @@
     },
     "/api/v1/account/entry-numbers": {
       "get": {
-        "description": "Detras del flag `visible_entry_numbers_enabled`, apagado. Con el flag apagado devuelve 404. Los numeros viajan como CADENA (DEC-010). AVISO: la secuencia NO es el algoritmo del sorteo (DEC-017).",
+        "description": "Detras del flag `visible_entry_numbers_enabled`: con el flag apagado devuelve 404, aunque los numeros existen igual (DEC-080). Cada participacion tiene un numero distinto, derivado de su ordinal interno con la permutacion con clave de la promocion. `active: false` marca los anulados por devolucion, contracargo, descalificacion o ajuste, con la misma regla que el universo exportado al Administrador. Pagina por numeros (`limit` hasta 1000). Los numeros viajan como CADENA (DEC-010). AVISO: los numeros NO son el sorteo (DEC-017); el ganador lo elige el Administrador.",
         "operationId": "listEntryNumbers",
         "parameters": [
           {
@@ -415,8 +415,8 @@
             "name": "limit",
             "required": false,
             "schema": {
-              "default": 25,
-              "maximum": 100,
+              "default": 500,
+              "maximum": 1000,
               "minimum": 1,
               "type": "integer"
             }
@@ -439,32 +439,74 @@
                 "schema": {
                   "additionalProperties": false,
                   "properties": {
+                    "active_numbers": {
+                      "maximum": 9007199254740991,
+                      "minimum": -9007199254740991,
+                      "type": "integer"
+                    },
+                    "digits": {
+                      "maximum": 9007199254740991,
+                      "minimum": -9007199254740991,
+                      "type": "integer"
+                    },
                     "items": {
                       "items": {
                         "additionalProperties": false,
                         "properties": {
+                          "active_quantity": {
+                            "maximum": 9007199254740991,
+                            "minimum": -9007199254740991,
+                            "type": "integer"
+                          },
+                          "awarded_at": {
+                            "type": "string"
+                          },
                           "batch_id": {
                             "format": "uuid",
                             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
                             "type": "string"
                           },
-                          "first_number": {
-                            "type": "string"
-                          },
-                          "last_number": {
-                            "type": "string"
+                          "numbers": {
+                            "items": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "active": {
+                                  "type": "boolean"
+                                },
+                                "number": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "number",
+                                "active"
+                              ],
+                              "type": "object"
+                            },
+                            "type": "array"
                           },
                           "quantity": {
                             "maximum": 9007199254740991,
                             "minimum": -9007199254740991,
                             "type": "integer"
+                          },
+                          "source_type": {
+                            "enum": [
+                              "PURCHASE",
+                              "AMOE",
+                              "ADMIN",
+                              "SYSTEM"
+                            ],
+                            "type": "string"
                           }
                         },
                         "required": [
                           "batch_id",
+                          "source_type",
+                          "awarded_at",
                           "quantity",
-                          "first_number",
-                          "last_number"
+                          "active_quantity",
+                          "numbers"
                         ],
                         "type": "object"
                       },
@@ -479,9 +521,23 @@
                           "type": "null"
                         }
                       ]
+                    },
+                    "promotion_id": {
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                      "type": "string"
+                    },
+                    "void_numbers": {
+                      "maximum": 9007199254740991,
+                      "minimum": -9007199254740991,
+                      "type": "integer"
                     }
                   },
                   "required": [
+                    "promotion_id",
+                    "digits",
+                    "active_numbers",
+                    "void_numbers",
                     "items",
                     "next_cursor"
                   ],
@@ -607,6 +663,45 @@
               }
             },
             "description": "Respuesta 409."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "additionalProperties": {},
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "request_id"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 422."
           }
         },
         "security": [
@@ -614,7 +709,7 @@
             "sessionCookie": []
           }
         ],
-        "summary": "Rangos de numeros asignados al participante (\"mis numeros\").",
+        "summary": "Numeros de participacion del participante (\"mis numeros\").",
         "tags": [
           "portal"
         ],

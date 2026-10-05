@@ -1161,30 +1161,23 @@ Method: GET
 Endpoint: /api/v1/account/entry-numbers
 
 Purpose:
-Rangos de números asignados al participante ("mis números").
+Números de participación del participante ("mis números"). Desde DEC-080 la
+forma vigente es la de la sección de implementación (un número por
+participación, paginado por números); este bloque queda como historia de la
+propuesta.
 
 Authentication: sesión de participante
 
-Request: ?promotion_id=<uuid>&cursor=<opaque>&limit=<1..100>
+Request: ?promotion_id=<uuid>&cursor=<opaque>&limit=<1..1000>
 
-Response: 200
-{
-  "items": [
-    {
-      "batch_id": "uuid",
-      "quantity": 11000,
-      "first_number": "LSW26-000450001",
-      "last_number": "LSW26-000461000"
-    }
-  ],
-  "next_cursor": null
-}
+Response: 200 -> ver "GET /api/v1/account/entry-numbers" en la sección
+IMPLEMENTED.
 
 Los números viajan como CADENA, jamás como número (DEC-010).
 
 Detrás del flag `visible_entry_numbers_enabled`, apagado. Con el flag apagado
-devuelve 404: los rangos se asignan igual -para que sean reconstruibles hacia
-atrás- pero no se muestran.
+devuelve 404: los números se asignan igual -para que sean reconstruibles hacia
+atrás y para que el export tenga universo- pero no se muestran.
 
 AVISO: la secuencia de números NO es el algoritmo del sorteo. Que existan
 números no autoriza a sortear sobre ellos (DEC-017).
@@ -2157,23 +2150,37 @@ Status: IMPLEMENTED
 Method: GET
 Endpoint: /api/v1/account/entry-numbers
 
-Purpose: rangos de números asignados ("mis números").
+Purpose: números de participación del participante ("mis números"), uno por
+participación (DEC-080).
 
-Request: ?promotion_id=<uuid>&cursor=<opaque>&limit=<1..100>
+Request: ?promotion_id=<uuid>&cursor=<opaque>&limit=<1..1000, 500 por defecto>
 
 Response: 200
-{ "items": [ { "batch_id", "quantity", "first_number", "last_number" } ],
+{ "promotion_id", "digits": 8, "active_numbers", "void_numbers",
+  "items": [ { "batch_id", "source_type", "awarded_at", "quantity",
+               "active_quantity",
+               "numbers": [ { "number": "04669096", "active": true } ] } ],
   "next_cursor": null }
+
+Pagina por NÚMEROS: un lote largo sigue en la página siguiente con el mismo
+batch_id. Cada número es el ordinal interno de la participación pasado por la
+permutación con clave de la promoción (sin repetidos por construcción).
+`active: false` = anulado por devolución, contracargo, descalificación o
+ajuste, con la MISMA regla que el congelado del export
+(`computeEntryNumberActivity`).
 
 Los números viajan como CADENA, jamás como número (DEC-010).
 
-Detrás del flag visible_entry_numbers_enabled, apagado: con el flag apagado
-devuelve 404, y con él encendido pero sin secuencia inicializada devuelve
-409 ENTRY_NUMBER_FORMAT_NOT_CONFIGURED en vez de inventar un prefijo.
+Detrás del flag visible_entry_numbers_enabled: con el flag apagado devuelve 404
+(los números existen igual desde DEC-080). 409
+ENTRY_NUMBER_FORMAT_NOT_CONFIGURED solo si hubiera lotes sin secuencia, que la
+migración 0037 hace imposible. 422 VALIDATION_FAILED con un cursor que no es de
+un lote propio.
 
-AVISO: la secuencia NO es el algoritmo del sorteo (DEC-017).
+AVISO: los números NO son el sorteo (DEC-017): el ganador lo elige el
+Administrador sobre el universo exportado.
 
-Errors: 404 NOT_FOUND; 409 ENTRY_NUMBER_FORMAT_NOT_CONFIGURED
+Errors: 404 NOT_FOUND; 409 ENTRY_NUMBER_FORMAT_NOT_CONFIGURED; 422 VALIDATION_FAILED
 
 Authorization: entry.self.read
 

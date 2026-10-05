@@ -27,7 +27,7 @@
       "authorization": "entry.self.read",
       "requires_step_up": false,
       "tags": ["portal"],
-      "summary": "Rangos de numeros asignados al participante (\"mis numeros\")."
+      "summary": "Numeros de participacion del participante (\"mis numeros\")."
     },
     {
       "method": "GET",

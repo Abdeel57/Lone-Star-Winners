@@ -1049,6 +1049,11 @@ describe("el saldo es derivado, y la cache no es fuente de verdad (DEC-007)", ()
 // ---------------------------------------------------------------------------
 
 describe("DEC-009 - rangos de numeros sin solapamiento posible", () => {
+  /**
+   * Desde la migracion 0037 (DEC-080) toda transaccion positiva se numera al
+   * confirmarse: `insertTransaction` va en autocommit, asi que al volver ya
+   * tiene su bloque. Aqui se lee el que asigno el trigger.
+   */
   async function allocateBatch(participantId: string, quantity: number, ref: string) {
     const transactionId = await insertTransaction({
       participantId,
@@ -1061,10 +1066,7 @@ describe("DEC-009 - rangos de numeros sin solapamiento posible", () => {
 
     return singleValue<string>(
       app,
-      sql`INSERT INTO entry_batches (entry_transaction_id, promotion_id, participant_id, quantity, number_range)
-          VALUES (${transactionId}, ${fixture.promotionId}, ${participantId}, ${quantity},
-                  lsw_allocate_entry_range(${fixture.promotionId}, ${quantity}))
-          RETURNING number_range::text`,
+      sql`SELECT number_range::text FROM entry_batches WHERE entry_transaction_id = ${transactionId}`,
     );
   }
 
@@ -1090,21 +1092,25 @@ describe("DEC-009 - rangos de numeros sin solapamiento posible", () => {
     const existing = await allocateBatch(participantId, 10, "order:range-overlap-base");
     const start = Number(/^\[(\d+),/u.exec(existing)?.[1]);
 
-    const transactionId = await insertTransaction({
-      participantId,
-      type: "PURCHASE_EARNED",
-      sourceType: "PURCHASE",
-      sourceRef: "order:range-overlap-clash",
-      delta: 3,
-      reasonKey: "ORDER_QUALIFIED",
-    });
-
+    // La fila y su bloque en la MISMA transaccion: el bloque a mano llega antes
+    // que el trigger diferido, y es la exclusion la que tiene que rechazarlo.
     await expect(
-      app.execute(
-        sql`INSERT INTO entry_batches (entry_transaction_id, promotion_id, participant_id, quantity, number_range)
-            VALUES (${transactionId}, ${fixture.promotionId}, ${participantId}, 3,
-                    int8range(${start + 1}, ${start + 4}, '[)'))`,
-      ),
+      app.transaction(async (tx) => {
+        const transactionId = await insertTransaction({
+          db: tx,
+          participantId,
+          type: "PURCHASE_EARNED",
+          sourceType: "PURCHASE",
+          sourceRef: "order:range-overlap-clash",
+          delta: 3,
+          reasonKey: "ORDER_QUALIFIED",
+        });
+        await tx.execute(
+          sql`INSERT INTO entry_batches (entry_transaction_id, promotion_id, participant_id, quantity, number_range)
+              VALUES (${transactionId}, ${fixture.promotionId}, ${participantId}, 3,
+                      int8range(${start + 1}, ${start + 4}, '[)'))`,
+        );
+      }),
     ).rejects.toSatisfy(dbErrorMatching(/entry_batches_no_overlap|conflicting key value/iu));
   });
 
@@ -1119,6 +1125,7 @@ describe("DEC-009 - rangos de numeros sin solapamiento posible", () => {
 
   it("un reversal NO devuelve numeros al pozo: cambia la elegibilidad, no la identidad", async () => {
     const participantId = await createParticipant("range-reversal");
+    // El bloque lo asigna el trigger diferido al confirmar (0037).
     const transactionId = await insertTransaction({
       participantId,
       type: "PURCHASE_EARNED",
@@ -1127,11 +1134,6 @@ describe("DEC-009 - rangos de numeros sin solapamiento posible", () => {
       delta: 4,
       reasonKey: "ORDER_QUALIFIED",
     });
-    await app.execute(
-      sql`INSERT INTO entry_batches (entry_transaction_id, promotion_id, participant_id, quantity, number_range)
-          VALUES (${transactionId}, ${fixture.promotionId}, ${participantId}, 4,
-                  lsw_allocate_entry_range(${fixture.promotionId}, 4))`,
-    );
 
     const sequenceBefore = await singleValue<string | number>(
       app,
@@ -1236,6 +1238,8 @@ describe("concurrencia", () => {
       createParticipant("concurrent-b"),
     ]);
 
+    // Desde 0037 la asignacion la hace el trigger diferido al confirmar cada
+    // INSERT; las dos confirmaciones compiten por el mismo lock consultivo.
     const allocate = async (participantId: string, ref: string): Promise<string> => {
       const transactionId = await insertTransaction({
         participantId,
@@ -1247,10 +1251,7 @@ describe("concurrencia", () => {
       });
       return singleValue<string>(
         app,
-        sql`INSERT INTO entry_batches (entry_transaction_id, promotion_id, participant_id, quantity, number_range)
-            VALUES (${transactionId}, ${fixture.promotionId}, ${participantId}, 100,
-                    lsw_allocate_entry_range(${fixture.promotionId}, 100))
-            RETURNING number_range::text`,
+        sql`SELECT number_range::text FROM entry_batches WHERE entry_transaction_id = ${transactionId}`,
       );
     };
 
