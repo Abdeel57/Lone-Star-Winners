@@ -110,6 +110,71 @@ export const SESSION_POLICIES: Readonly<Record<SessionAudience, SessionPolicy>> 
   }),
 });
 
+// ---------------------------------------------------------------------------
+// Sesion anonima de carrito (DEC-079)
+// ---------------------------------------------------------------------------
+
+/**
+ * Politica de la sesion ANONIMA que solo sirve para ser duena de un carrito.
+ *
+ * NO ES UNA TERCERA AUDIENCIA
+ *   `SessionAudience` describe a alguien que ha demostrado quien es. Esta sesion
+ *   no demuestra nada: la recibe cualquier visitante al anadir su primer
+ *   articulo. Meterla en `SessionAudience` haria que cada `switch` sobre la
+ *   audiencia tuviera que decidir que concederle, y el que se olvidara le
+ *   concederia lo de un participante. Por eso es una politica aparte, sin MFA,
+ *   sin roles y sin rotacion: no hay privilegio que elevar.
+ *
+ * MISMO MECANISMO, NO OTRO SISTEMA
+ *   Token de `generateSessionToken`, SHA-256 con `hashSessionToken`, cookie
+ *   `httpOnly` y `Secure`, revocable en tabla. Lo unico distinto es para que
+ *   sirve, y eso lo dice la tabla en la que vive (`cart_sessions`).
+ *
+ * 30 DIAS
+ *   Un carrito que se llena un dia y se paga a la semana es lo normal en una
+ *   tienda. El tope es el mismo que el de una sesion de participante: un token
+ *   que solo da acceso a un carrito no justifica vivir mas que uno que da
+ *   acceso a una cuenta.
+ */
+export interface CartSessionPolicy {
+  readonly cookie: SessionCookiePolicy;
+  readonly absoluteTtlMinutes: number;
+}
+
+export const CART_SESSION_POLICY: CartSessionPolicy = Object.freeze({
+  // `Lax` y raiz, como el escaparate: el carrito se ve desde cualquier pagina
+  // y un enlace entrante (un correo, un anuncio) debe encontrarlo.
+  cookie: Object.freeze({ httpOnly: true, secure: true, sameSite: "lax", path: "/" }),
+  absoluteTtlMinutes: Math.min(60 * 24 * 30, SESSION_LIMITS.PARTICIPANT.maxAbsoluteTtlMinutes),
+});
+
+export type CartSessionState = "ACTIVE" | "EXPIRED_ABSOLUTE" | "REVOKED";
+
+export interface CartSessionFacts {
+  readonly createdAt: EpochMillis;
+  readonly revokedAt: EpochMillis | null;
+}
+
+/**
+ * Estado de una sesion de carrito. Mismo orden que `evaluateSession`: primero
+ * la revocacion, despues la caducidad.
+ */
+export function evaluateCartSession(
+  facts: CartSessionFacts,
+  now: EpochMillis,
+  policy: CartSessionPolicy = CART_SESSION_POLICY,
+): CartSessionState {
+  if (facts.revokedAt !== null && facts.revokedAt <= now) {
+    return "REVOKED";
+  }
+
+  if (now - facts.createdAt >= policy.absoluteTtlMinutes * MINUTE_MS) {
+    return "EXPIRED_ABSOLUTE";
+  }
+
+  return "ACTIVE";
+}
+
 /** Audiencia que corresponde a un conjunto de roles. Un solo rol de personal basta. */
 export function audienceForRoles(roles: readonly RoleId[]): SessionAudience {
   return roles.some((role) => ROLES[role].kind === "STAFF") ? "STAFF" : "PARTICIPANT";

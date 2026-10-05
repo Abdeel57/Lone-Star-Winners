@@ -27,17 +27,13 @@
  * ni saldo.
  *
  * ---------------------------------------------------------------------------
- * POR QUE ESTE RESOLUTOR NO ESTA INSTALADO TODAVIA
+ * EL VISITANTE SIN CUENTA (DEC-023, DEC-079)
  * ---------------------------------------------------------------------------
  *
- * `app.ts` sigue montando `noPrincipalResolver`, y la decision es de la sesion
- * que escribio el autorizador: las rutas de carrito admiten ademas SESIONES
- * ANONIMAS (DEC-023), que no existen aun, y montar este resolutor a medias
- * dejaria el carrito funcionando solo para quien ya tiene cuenta.
- *
- * Mientras siga asi, todo handler que llame a `lswPrincipalResolver` recibe
- * `null` y responde 401. Es coherente y falla cerrado; no es lo definitivo. El
- * cambio es de UNA linea y esta en el informe del hito B5.
+ * `app.ts` monta este resolutor. Las rutas de carrito admiten ademas sesiones
+ * ANONIMAS, y desde DEC-079 existen: las emite `cart-session.ts` en
+ * `cart_sessions`, una tabla aparte de `sessions` para que ninguna puerta de
+ * participante o de personal pueda aceptarlas por error.
  */
 
 import type { FastifyRequest } from "fastify";
@@ -45,6 +41,7 @@ import type { FastifyRequest } from "fastify";
 import type { ApiConfig } from "../config/env.js";
 import type { IdentityRepositories } from "../services/identity-ports.js";
 import type { ParticipantLookup } from "../services/participant-lookup.js";
+import { resolveCartSession } from "./cart-session.js";
 import type { RequestPrincipal } from "./principal.js";
 import { resolveSession, type ResolvedSession } from "./session-authorizer.js";
 
@@ -76,22 +73,29 @@ export async function principalFromSession(
 /**
  * Resolutor de identidad para las rutas que leen datos de alguien.
  *
- * Devuelve `null` -y no un principal anonimo- cuando no hay sesion. Emitir aqui
- * una cookie propia para el visitante sin cuenta seria exactamente el segundo
- * sistema de sesion que `CLAUDE.md` seccion 4 prohibe; cuando el modulo de
- * identidad emita sesiones anonimas, este es el punto donde se traducen.
+ * DEC-079: si no hay participante, prueba la sesion ANONIMA de carrito y la
+ * traduce a `ANONYMOUS_SESSION`. Ese principal solo sirve en las rutas de
+ * carrito: el resto (`portal.ts`, `orders.ts`, `amoe.ts`) exige
+ * `kind === "PARTICIPANT"`, y sus puertas leen `sessions`, donde una sesion de
+ * carrito no existe. Este resolutor NO emite nada: emitir la sesion es cosa de
+ * `POST /cart/items`, la unica ruta que la necesita.
+ *
+ * Gana el participante: con sesion de cuenta, el carrito es el de la cuenta
+ * aunque la cookie de carrito siga en el navegador.
  */
 export function createSessionPrincipalResolver(dependencies: PrincipalResolverDependencies) {
   return async (request: FastifyRequest): Promise<RequestPrincipal | null> => {
-    const session = await resolveSession(request, {
-      identity: dependencies.identity,
-      config: dependencies.config,
-    });
+    const deps = { identity: dependencies.identity, config: dependencies.config };
+    const session = await resolveSession(request, deps);
 
-    if (session === null) {
-      return null;
+    if (session !== null) {
+      const participant = await principalFromSession(dependencies.participants, session);
+      if (participant !== null) {
+        return participant;
+      }
     }
 
-    return await principalFromSession(dependencies.participants, session);
+    const cartSession = await resolveCartSession(request, deps);
+    return cartSession === null ? null : { kind: "ANONYMOUS_SESSION", sessionRef: cartSession.id };
   };
 }

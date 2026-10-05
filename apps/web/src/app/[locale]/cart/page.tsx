@@ -6,11 +6,12 @@ import { getTranslations, setRequestLocale } from "next-intl/server";
 import { ApiErrorState, useApiErrorMessage } from "@/components/api-error-state";
 import { CartLineRow } from "@/components/cart-line-row";
 import { CartSummaryMeta } from "@/components/cart-summary-meta";
+import { CartTotals } from "@/components/cart-totals";
 import { EntryQuotePanel } from "@/components/entry-quote-panel";
-import { formatMoney } from "@/i18n/formatters";
 import { Link } from "@/i18n/navigation";
 import { routing } from "@/i18n/routing";
 import { fetchActivePromotion, fetchCart } from "@/lib/api";
+import { loadSession } from "@/lib/participant-server";
 import { readSession } from "@/lib/session-server";
 
 /**
@@ -67,11 +68,13 @@ export default async function CartPage({
   const session = await readSession();
 
   // La zona legal contra la que se formatea el instante de la cotizacion sale
-  // de la promocion, no del navegador (DEC-011). Las dos lecturas van en
-  // paralelo: ninguna depende de la otra.
-  const [cartResult, promotionResult] = await Promise.all([
+  // de la promocion, no del navegador (DEC-011). Las lecturas van en paralelo:
+  // ninguna depende de otra. `loadSession` solo sirve para saber si quien mira
+  // tiene cuenta (DEC-079): sin cookie no sale a la red.
+  const [cartResult, promotionResult, account] = await Promise.all([
     fetchCart(locale, session),
     fetchActivePromotion(locale),
+    loadSession(locale),
   ]);
 
   const timeZone =
@@ -79,11 +82,11 @@ export default async function CartPage({
       ? promotionResult.data.legal_timezone
       : null;
 
-  // El importe LLEGA CALCULADO. Aqui solo se formatea, y solo si existe.
-  const subtotal =
-    cartResult.ok && cartResult.data.subtotal !== null
-      ? formatMoney(cartResult.data.subtotal, locale)
-      : null;
+  // DEC-079: sin cuenta se llena el carrito; la cuenta se pide al pagar.
+  const isGuest = account.state.kind !== "active";
+  // Con mercancia y sin tarifa de envio puesta, el checkout respondera 409:
+  // no se ofrece un boton que lleva a un fallo.
+  const shippingBlocked = cartResult.ok && cartResult.data.shipping.status === "NOT_CONFIGURED";
 
   return (
     <div className="lsw-container py-s10 pb-s16">
@@ -118,39 +121,10 @@ export default async function CartPage({
         </div>
       )}
 
-      {!cartResult.ok && cartResult.error.status === 401 ? (
-        // UN 401 AQUI NO ES UN FALLO.
-        //
-        // Las cinco rutas de carrito son `PARTICIPANT_SELF` y la identidad la
-        // resuelve `packages/security` (DEC-006, un unico sistema de sesion).
-        // Hasta que ese puerto este conectado -y despues, para cualquier
-        // visitante sin sesion- la respuesta legitima es "inicia sesion", no
-        // una pantalla de error. Pintar aqui "algo ha fallado" mandaria a
-        // soporte a alguien que solo tiene que entrar en su cuenta.
-        <div className="mt-s8">
-          <EmptyState
-            headingLevel="h2"
-            title={t("cart.signInRequired.title")}
-            description={t("cart.signInRequired.body")}
-            action={
-              // Con vuelta al carrito. Mandar a alguien a la portada despues de
-              // entrar le obliga a rehacer el camino hasta donde estaba, y el
-              // sitio donde peor sienta eso es justo el paso anterior a pagar.
-              <div className="flex flex-wrap items-center gap-3">
-                <Link
-                  href="/account/login?next=%2Fcart"
-                  className={buttonVariants({ variant: "accent" })}
-                >
-                  {t("account.signInRequired.signIn")}
-                </Link>
-                <Link href="/shop" className={buttonVariants({ variant: "secondary" })}>
-                  {t("cart.continueShopping")}
-                </Link>
-              </div>
-            }
-          />
-        </div>
-      ) : !cartResult.ok ? (
+      {/* DEC-079: un visitante SIN cuenta tiene carrito. Ya no hay rama de
+          "inicia sesion para ver tu carrito": la cuenta se pide al pagar, y
+          cualquier fallo de lectura es un fallo de verdad. */}
+      {!cartResult.ok ? (
         <div className="mt-s8">
           <ApiErrorState failure={cartResult.error} headingLevel="h2" />
         </div>
@@ -193,34 +167,44 @@ export default async function CartPage({
           <aside className="flex flex-col gap-4">
             <Card elevation="raised" padding="md">
               <CardTitle as="h2" size="sm">
-                {t("cart.subtotal")}
+                {t("cart.totals.heading")}
               </CardTitle>
 
-              {/* `subtotal` es `null` en un carrito vacio -sin lineas no hay
-                  moneda que declarar- y esta rama solo se pinta con lineas. Aun
-                  asi se comprueba: un `null` inesperado imprimiria "null" donde
-                  va un importe, y ese es exactamente el sitio donde no se puede
-                  ensenar un texto sin sentido. */}
-              {subtotal === null ? (
-                <p className="mt-s2 text-body text-text-muted">{t("cart.subtotalUnavailable")}</p>
-              ) : (
-                <p className="font-display mt-s2 text-display-md font-bold tabular-nums text-text">
-                  {subtotal}
-                </p>
-              )}
-
-              <p className="mt-s2 text-caption text-text-subtle">{t("cart.subtotalNote")}</p>
+              {/* DEC-079: subtotal, envio y total, los tres calculados por el
+                  backend. `subtotal` es `null` en un carrito vacio y esta rama
+                  solo se pinta con lineas; aun asi, sin subtotal no hay nada
+                  que resumir. */}
+              <div className="mt-s4">
+                {cartResult.data.subtotal === null ? (
+                  <p className="text-body text-text-muted">{t("cart.subtotalUnavailable")}</p>
+                ) : (
+                  <CartTotals cart={cartResult.data} locale={locale} />
+                )}
+              </div>
 
               {/* ROJO (DEC-042): es la accion de COMPRA de la pantalla. El oro
                   de esta columna se queda donde importa, en la cifra de
                   participaciones que pinta `EntryQuotePanel` justo debajo. */}
-              <div className="mt-s4 flex flex-col gap-s3">
-                <Link
-                  href="/checkout"
-                  className={buttonVariants({ variant: "accent", fullWidth: true })}
-                >
-                  {t("cart.checkout")}
-                </Link>
+              <div className="mt-s5 flex flex-col gap-s3">
+                {shippingBlocked ? (
+                  // Sin tarifa de envio no se puede cobrar la mercancia: el
+                  // boton no lleva a un checkout que va a responder 409.
+                  <Alert tone="warning">{t("cart.totals.shippingNotConfigured")}</Alert>
+                ) : (
+                  <Link
+                    href="/checkout"
+                    className={buttonVariants({ variant: "accent", fullWidth: true })}
+                  >
+                    {t("cart.checkout")}
+                  </Link>
+                )}
+
+                {/* DEC-079: sin cuenta se puede llenar el carrito; para pagar se
+                    pide. Se avisa AQUI, antes del clic, para que pedir la cuenta
+                    no parezca una sorpresa ni un error. */}
+                {isGuest && !shippingBlocked ? (
+                  <p className="text-caption text-text-subtle">{t("cart.guestNote")}</p>
+                ) : null}
 
                 <Link
                   href="/shop"

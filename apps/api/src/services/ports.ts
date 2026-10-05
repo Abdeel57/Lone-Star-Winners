@@ -306,6 +306,51 @@ export interface CartRepository {
    * webhook no hace nada.
    */
   convertForPaidOrder(orderId: string): Promise<void>;
+  /**
+   * DEC-079: pasa el carrito de una sesion ANONIMA al participante de esa
+   * identidad, al iniciar sesion o registrarse.
+   *
+   * Se SUMA al carrito que la cuenta ya tuviera, linea a linea, con el mismo
+   * tope de cantidad que `POST /cart/items`. Una linea en otra moneda que la del
+   * carrito de la cuenta se queda fuera: un carrito con dos monedas no tiene
+   * subtotal. El carrito anonimo pasa a `ABANDONED`.
+   *
+   * Recibe la IDENTIDAD y no el participante porque es lo que sabe quien acaba
+   * de autenticarse; la traduccion se hace en la misma consulta. Sin perfil de
+   * participante -una cuenta de personal- no hace nada. Todo en una
+   * transaccion: o se pasa el carrito entero o no se pasa.
+   */
+  adoptSessionCart(
+    sessionRef: string,
+    identityId: string,
+    promotionId: string | null,
+  ): Promise<{ readonly adoptedLines: number }>;
+}
+
+// ---------------------------------------------------------------------------
+// Envio (DEC-079)
+// ---------------------------------------------------------------------------
+
+export interface ShippingRateRecord {
+  readonly id: string;
+  readonly amountMinor: bigint;
+  readonly currency: string;
+  readonly setAt: Date;
+  /** `admin_users.id` de quien la puso. */
+  readonly setByAdminUserId: string;
+}
+
+export interface ShippingRateRepository {
+  /** La vigente: la ultima que se puso. `null` si nunca se ha puesto ninguna. */
+  current(): Promise<ShippingRateRecord | null>;
+  /** Pone una tarifa nueva. Nunca edita la anterior: queda de historico. */
+  set(input: {
+    readonly amountMinor: bigint;
+    readonly currency: string;
+    readonly setByAdminUserId: string;
+  }): Promise<ShippingRateRecord>;
+  /** Las ultimas `limit`, de la mas reciente a la mas antigua. */
+  history(limit: number): Promise<readonly ShippingRateRecord[]>;
 }
 
 // ---------------------------------------------------------------------------
@@ -337,4 +382,6 @@ export interface Repositories {
   readonly carts: CartRepository;
   readonly config: ConfigRepository;
   readonly entryBalances: EntryBalanceRepository;
+  /** DEC-079: tarifa fija de envio. */
+  readonly shipping: ShippingRateRepository;
 }

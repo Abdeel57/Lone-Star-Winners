@@ -12,7 +12,9 @@ import { describe, expect, it } from "vitest";
 
 import {
   audienceForRoles,
+  CART_SESSION_POLICY,
   clampSessionPolicy,
+  evaluateCartSession,
   evaluateSession,
   getRateLimitBucket,
   RATE_LIMIT_BUCKETS,
@@ -265,5 +267,51 @@ describe("rate limiting", () => {
     // Solo por IP no frena el relleno de credenciales distribuido; solo por
     // identidad permite barrer cuentas desde un mismo origen.
     expect(getRateLimitBucket("auth.login")?.scope).toBe("IP_AND_IDENTITY");
+  });
+});
+
+describe("DEC-079: sesion anonima de carrito", () => {
+  const cart = (overrides: Partial<{ createdAt: number; revokedAt: number | null }> = {}) => ({
+    createdAt: T0,
+    revokedAt: null,
+    ...overrides,
+  });
+
+  it("la cookie es httpOnly, Secure, Lax y de raiz, como la del escaparate", () => {
+    expect(CART_SESSION_POLICY.cookie).toEqual({
+      httpOnly: true,
+      secure: true,
+      sameSite: "lax",
+      path: "/",
+    });
+  });
+
+  it("no vive mas que una sesion de participante", () => {
+    expect(CART_SESSION_POLICY.absoluteTtlMinutes).toBeLessThanOrEqual(
+      SESSION_LIMITS.PARTICIPANT.maxAbsoluteTtlMinutes,
+    );
+  });
+
+  it("caduca en el minuto exacto de su vida maxima, no uno despues", () => {
+    const ttl = CART_SESSION_POLICY.absoluteTtlMinutes * MINUTE;
+    expect(evaluateCartSession(cart(), T0 + ttl - 1)).toBe("ACTIVE");
+    expect(evaluateCartSession(cart(), T0 + ttl)).toBe("EXPIRED_ABSOLUTE");
+  });
+
+  it("revocada gana a caducada: primero se mira la revocacion", () => {
+    const ttl = CART_SESSION_POLICY.absoluteTtlMinutes * MINUTE;
+    expect(evaluateCartSession(cart({ revokedAt: T0 + MINUTE }), T0 + ttl + MINUTE)).toBe(
+      "REVOKED",
+    );
+  });
+
+  it("una revocacion con fecha futura todavia no cuenta", () => {
+    expect(evaluateCartSession(cart({ revokedAt: T0 + 10 * MINUTE }), T0 + MINUTE)).toBe("ACTIVE");
+  });
+
+  it("no es una audiencia: no hay politica de carrito en SESSION_POLICIES", () => {
+    // Si lo fuera, cada `switch` sobre la audiencia tendria que decidir que
+    // concederle, y el que se olvidara le daria lo de un participante.
+    expect(Object.keys(SESSION_POLICIES).sort()).toEqual(["PARTICIPANT", "STAFF"]);
   });
 });

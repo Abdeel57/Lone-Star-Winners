@@ -54,6 +54,7 @@ import type { FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 
 import type { AppDependencies } from "../app.js";
+import { clearCartSessionCookie, resolveCartSession } from "../http/cart-session.js";
 import {
   assertDeclaration,
   consentsInputSchema,
@@ -297,7 +298,7 @@ const ANONYMOUS: SessionResponse = {
 };
 
 export function buildAuthRoutes(dependencies: AppDependencies): RouteDefinition[] {
-  const { identity, config, email, sms, botCheck } = dependencies;
+  const { identity, config, email, sms, botCheck, repositories } = dependencies;
 
   /** DEC-060: el verificador de SMS, o 503 si el registro con celular esta apagado. */
   function requireSms(): SmsVerifier {
@@ -391,6 +392,51 @@ export function buildAuthRoutes(dependencies: AppDependencies): RouteDefinition[
       token,
       cookieOptionsFor(audience, cookieConfig, policy.absoluteTtlMinutes * 60),
     );
+  }
+
+  /**
+   * DEC-079: el carrito que el visitante lleno SIN cuenta pasa a la cuenta.
+   *
+   * Se llama justo despues de abrir una sesion de PARTICIPANTE (alta o
+   * login). Suma las lineas al carrito de la cuenta, revoca la sesion anonima y
+   * borra su cookie: a partir de aqui el carrito es el de la cuenta y la sesion
+   * anonima no vuelve a servir para nada. No se promueve: la sesion de
+   * participante es nueva, asi que un token anonimo capturado antes del login
+   * no da acceso a la cuenta (fijacion de sesion).
+   *
+   * NUNCA tumba el inicio de sesion. La persona ya demostro quien es; si la
+   * adopcion falla, se registra y su carrito anonimo sigue donde estaba.
+   */
+  async function adoptGuestCart(
+    request: FastifyRequest,
+    reply: FastifyReply,
+    identityId: string,
+    now: Date,
+  ): Promise<void> {
+    const guest = await resolveCartSession(request, { identity, config }, now.getTime());
+    if (guest === null) {
+      return;
+    }
+
+    try {
+      const promotion = await repositories.promotions.findActive();
+      const { adoptedLines } = await repositories.carts.adoptSessionCart(
+        guest.id,
+        identityId,
+        promotion?.id ?? null,
+      );
+      await identity.cartSessions.revoke(guest.id, "adopted_by_account", now);
+      clearCartSessionCookie(reply, config);
+      request.log.info(
+        { event: "cart.guest_adopted", adopted_lines: adoptedLines },
+        "carrito adoptado",
+      );
+    } catch (error) {
+      request.log.warn(
+        { event: "cart.guest_adoption_failed", err: error },
+        "no se pudo pasar el carrito anonimo a la cuenta",
+      );
+    }
   }
 
   /**
@@ -562,6 +608,8 @@ export function buildAuthRoutes(dependencies: AppDependencies): RouteDefinition[
         // identidad recien creada no tiene roles, y si algun dia los tuviera
         // no seria por esta ruta.
         await openSession(request, reply, created.id, "PARTICIPANT", now);
+        // DEC-079: lo que lleno sin cuenta, a la cuenta recien creada.
+        await adoptGuestCart(request, reply, created.id, now);
 
         // DEC-058: el enlace de verificacion sale en segundo plano. La cuenta
         // ya existe y la sesion ya esta abierta; si el proveedor falla, la
@@ -701,6 +749,12 @@ export function buildAuthRoutes(dependencies: AppDependencies): RouteDefinition[
 
         const audience = audienceForRoles(roles);
         await openSession(request, reply, found.id, audience, now);
+
+        // DEC-079: solo el escaparate tiene carrito. Una sesion de personal no
+        // adopta nada, ni siquiera con la cookie de carrito presente.
+        if (audience === "PARTICIPANT") {
+          await adoptGuestCart(request, reply, found.id, now);
+        }
 
         const pending = requiresMfa(roles);
         const state = pending ? ("MFA_PENDING" as const) : ("ACTIVE" as const);

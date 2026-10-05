@@ -28,3 +28,5 @@ export * from "./media.js";
 export * from "./email-tokens.js";
 // DEC-078: cobro en efectivo en un punto de venta fisico. Al final.
 export * from "./cash-payments.js";
+// DEC-079: carrito sin cuenta y tarifa de envio. Al final.
+export * from "./guest-cart-and-shipping.js";

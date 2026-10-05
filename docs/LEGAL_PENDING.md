@@ -572,3 +572,28 @@ no puede decidir es si las Reglas la contemplan. Preguntas para el abogado:
 16. **Comprobante del cobro.** Queda registrado quién confirmó, cuándo, el
     motivo y una nota libre (número de recibo). Confirmar si el Administrador
     del sorteo necesita además un comprobante físico o un formato concreto.
+
+## Envío e impuestos en el carrito (DEC-079, 2026-10-05)
+
+Construido a petición del usuario: el carrito muestra subtotal, envío y total,
+y la cuenta se pide solo al pagar. Lo que no puede decidir el código:
+
+17. **Impuesto sobre la venta.** Por decisión del usuario **no se cobra** por
+    ahora (`tax_total_minor` vacío en todos los pedidos). Texas grava la venta
+    de mercancía y, en general, también el envío que se cobra con ella; hay que
+    confirmar con el contador si debe cobrarse, desde cuándo y si los paquetes
+    de participaciones (que no se envían) están sujetos. Mientras no se decida,
+    cada venta de mercancía puede generar un impuesto que la tienda tendría que
+    pagar de su bolsillo.
+18. **El envío no genera participaciones.** Tarifa fija por pedido, nunca
+    gratis, solo cuando hay mercancía; los paquetes no llevan envío. Confirmar
+    que las Reglas Oficiales lo dicen ("las participaciones se calculan sobre el
+    precio de los productos, sin envío ni impuestos").
+19. **Reembolso parcial con envío.** Si se devuelve parte de un pedido, el
+    sistema considera devuelto primero el envío y solo lo que pase de ahí
+    reduce participaciones (devolver solo el envío no quita ninguna). Encaja con
+    el punto 18; confirmar, junto con la pregunta 4.
+20. **Carrito sin cuenta.** El visitante puede llenar el carrito sin
+    registrarse (una cookie técnica, sin datos personales, que caduca a los 30
+    días); la cuenta es obligatoria para pagar. Confirmar si la política de
+    privacidad o de cookies debe mencionarla.

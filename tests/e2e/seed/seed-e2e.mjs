@@ -57,6 +57,7 @@ import {
   COMPLIANCE_OFFICER_EMAIL,
   FAKE_PARTICIPANT_PASSWORD,
   FAKE_STAFF_PASSWORD,
+  E2E_SHIPPING_MINOR,
   FIXTURE_FILE,
   PACKAGE_CATEGORY_KEY,
   PACKAGE_NAME,
@@ -398,6 +399,18 @@ async function seed(client) {
     password: FAKE_STAFF_PASSWORD,
     encryptionKey,
   });
+
+  /*
+   * DEC-079: tarifa fija de envio de RELLENO. Sin ella, un carrito con
+   * mercancia no se puede pagar (409 SHIPPING_NOT_CONFIGURED) y los specs de
+   * checkout fallarian por el motivo equivocado. No es la del cliente: esa la
+   * pone el panel.
+   */
+  await client.query(
+    `INSERT INTO shipping_rates (amount_minor, currency, set_by_admin_user_id)
+     VALUES ($1, $2, $3)`,
+    [E2E_SHIPPING_MINOR.toString(), PRODUCT_CURRENCY, promotionManager.adminUserId],
+  );
 
   // -------------------------------------------------------------------------
   // 3. Catalogo: una MERCANCIA y un PAQUETE DE PARTICIPACIONES

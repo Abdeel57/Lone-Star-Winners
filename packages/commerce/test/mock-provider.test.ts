@@ -66,6 +66,7 @@ describe("sesion de checkout", () => {
     idempotencyKey: "key-1",
     total: { amountMinor: 5000n as MinorAmount, currency: "USD" as CurrencyCode },
     lineItems: [],
+    shipping: null,
     successUrl: "https://lsw.invalid/ok",
     cancelUrl: "https://lsw.invalid/cancel",
     metadata: {},

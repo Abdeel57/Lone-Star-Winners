@@ -30,6 +30,8 @@ import type {
   PromotionRepository,
   Repositories,
   RulesVersionRecord,
+  ShippingRateRecord,
+  ShippingRateRepository,
 } from "../../src/services/ports.js";
 import { FEATURE_FLAG_KEYS, type FeatureFlagKey } from "../../src/http/feature-flag-catalog.js";
 import { pageOfCatalog } from "../../src/services/catalog-order.js";
@@ -174,12 +176,31 @@ export const FIXTURE_DRAFT_PRODUCT: ProductRecord = {
 
 export { DRAFT_VARIANT_ID };
 
+/**
+ * DEC-079: tarifa de envio de PRUEBA. No es la del cliente: el cliente la pone
+ * en el panel. Existe para que un carrito con mercancia tenga total.
+ */
+export const FIXTURE_SHIPPING_RATE: ShippingRateRecord = {
+  id: "abababab-abab-4bab-8bab-abababababab",
+  amountMinor: 799n,
+  currency: "USD",
+  setAt: new Date("2026-09-15T00:00:00.000Z"),
+  setByAdminUserId: "cdcdcdcd-cdcd-4dcd-8dcd-cdcdcdcdcdcd",
+};
+
 export interface FakeOptions {
   readonly activePromotion?: PromotionRecord | null;
   readonly products?: readonly ProductRecord[];
   readonly flags?: Partial<Record<FeatureFlagKey, boolean>>;
   readonly participantEntriesBefore?: number;
   readonly rulesVersion?: RulesVersionRecord | null;
+  /** DEC-079: `null` = nunca se ha puesto tarifa. Por defecto, la de prueba. */
+  readonly shippingRate?: ShippingRateRecord | null;
+  /**
+   * DEC-079: de identidad a participante, para `adoptSessionCart`. El doble no
+   * guarda identidades; una identidad que no este aqui no tiene perfil.
+   */
+  readonly participantByIdentity?: Readonly<Record<string, string>>;
 }
 
 interface StoredLine {
@@ -224,6 +245,27 @@ export function createFakeRepositories(options: FakeOptions = {}): FakeRepositor
 
   const storedCarts = new Map<string, StoredCart>();
   let nextLineId = 0;
+
+  /**
+   * El primer carrito lleva `CART_ID`, que es lo que comprueban las pruebas de
+   * siempre; los siguientes, uno propio. DEC-079 hace posible tener dos a la
+   * vez -el anonimo y el de la cuenta- y con el mismo id `findById` no sabria
+   * cual es cual.
+   */
+  let cartsCreated = 0;
+  function nextCartId(): string {
+    cartsCreated += 1;
+    return cartsCreated === 1
+      ? CART_ID
+      : `bbbbbbbb-0000-4000-8000-${String(cartsCreated).padStart(12, "0")}`;
+  }
+
+  const shippingRates: ShippingRateRecord[] =
+    options.shippingRate === undefined
+      ? [FIXTURE_SHIPPING_RATE]
+      : options.shippingRate === null
+        ? []
+        : [options.shippingRate];
 
   /**
    * Reloj MONOTONO del doble, un segundo por mutacion.
@@ -354,7 +396,7 @@ export function createFakeRepositories(options: FakeOptions = {}): FakeRepositor
         return Promise.resolve(toCartRecord(existing));
       }
       const created: StoredCart = {
-        id: CART_ID,
+        id: nextCartId(),
         ownerKey: ownerKey(owner),
         promotionId,
         updatedAt: tick(),
@@ -413,6 +455,66 @@ export function createFakeRepositories(options: FakeOptions = {}): FakeRepositor
      * `drizzle-repositories.ts`.
      */
     convertForPaidOrder: () => Promise.resolve(),
+    /**
+     * DEC-079. El doble SUMA lineas y retira el carrito anonimo del almacen; la
+     * transaccion, el `FOR UPDATE` y el tope de la CHECK se prueban contra
+     * PostgreSQL real.
+     */
+    adoptSessionCart: (sessionRef: string, identityId: string, promotionId: string | null) => {
+      const participantId = options.participantByIdentity?.[identityId];
+      const guest = findByOwner({ kind: "SESSION", sessionRef });
+      if (participantId === undefined || guest === null) {
+        return Promise.resolve({ adoptedLines: 0 });
+      }
+
+      const owner: CartOwnerRef = { kind: "PARTICIPANT", participantId };
+      let target = findByOwner(owner);
+      if (target === null) {
+        target = {
+          id: nextCartId(),
+          ownerKey: ownerKey(owner),
+          promotionId,
+          updatedAt: tick(),
+          lines: [],
+        };
+        storedCarts.set(target.ownerKey, target);
+      }
+
+      for (const line of guest.lines) {
+        const existing = target.lines.find((candidate) => candidate.variantId === line.variantId);
+        if (existing === undefined) {
+          nextLineId += 1;
+          target.lines.push({
+            id: `aaaaaaaa-0000-4000-8000-${String(nextLineId).padStart(12, "0")}`,
+            variantId: line.variantId,
+            quantity: Math.min(line.quantity, 10_000),
+          });
+        } else {
+          existing.quantity = Math.min(existing.quantity + line.quantity, 10_000);
+        }
+      }
+      target.updatedAt = tick();
+
+      // `ABANDONED` en el motor: el doble lo saca del almacen de abiertos.
+      storedCarts.delete(guest.ownerKey);
+      return Promise.resolve({ adoptedLines: guest.lines.length });
+    },
+  };
+
+  const shipping: ShippingRateRepository = {
+    current: () => Promise.resolve(shippingRates[0] ?? null),
+    set: (input) => {
+      const record: ShippingRateRecord = {
+        id: `efefefef-0000-4000-8000-${String(shippingRates.length + 1).padStart(12, "0")}`,
+        amountMinor: input.amountMinor,
+        currency: input.currency,
+        setAt: tick(),
+        setByAdminUserId: input.setByAdminUserId,
+      };
+      shippingRates.unshift(record);
+      return Promise.resolve(record);
+    },
+    history: (limit) => Promise.resolve(shippingRates.slice(0, limit)),
   };
 
   const config: ConfigRepository = {
@@ -429,5 +531,5 @@ export function createFakeRepositories(options: FakeOptions = {}): FakeRepositor
     activeEntries: () => Promise.resolve(options.participantEntriesBefore ?? 0),
   };
 
-  return { promotions, catalog, carts, config, entryBalances, _carts: storedCarts };
+  return { promotions, catalog, carts, config, entryBalances, shipping, _carts: storedCarts };
 }

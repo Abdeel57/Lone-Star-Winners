@@ -17,6 +17,7 @@ import type { SessionAudience } from "@lsw/security";
 import { and, count, eq, gt, gte, isNull, sql } from "drizzle-orm";
 
 import type {
+  CartSessionRecord,
   ConsentAcceptanceInput,
   ConsumeEmailTokenResult,
   CreateSessionInput,
@@ -36,9 +37,24 @@ const {
   participants,
   participantConsents,
   sessions,
+  cartSessions,
   adminUserRoles,
   adminUsers,
 } = schema;
+
+function toCartSession(row: {
+  id: string;
+  expiresAt: Date;
+  revokedAt: Date | null;
+  createdAt: Date;
+}): CartSessionRecord {
+  return {
+    id: row.id,
+    expiresAt: row.expiresAt,
+    revokedAt: row.revokedAt,
+    createdAt: row.createdAt,
+  };
+}
 
 /** DEC-067: las columnas de la declaracion, para el INSERT o el UPDATE de `participants`. */
 function declarationColumns(eligibility: EligibilityDeclarationInput) {
@@ -675,6 +691,40 @@ export function createIdentityRepositories(db: Database): IdentityRepositories {
           .where(and(eq(sessions.identityId, identityId), isNull(sessions.revokedAt)));
 
         return result.rowCount ?? 0;
+      },
+    },
+
+    // DEC-079: misma forma que `sessions`, sin identidad.
+    cartSessions: {
+      async create(input) {
+        const rows = await db
+          .insert(cartSessions)
+          .values({ tokenHash: input.tokenHash, expiresAt: input.expiresAt })
+          .returning();
+
+        const row = rows[0];
+        if (row === undefined) {
+          throw new Error("cart_session_insert_returned_no_row");
+        }
+        return toCartSession(row);
+      },
+
+      async findByTokenHash(tokenHash) {
+        const rows = await db
+          .select()
+          .from(cartSessions)
+          .where(eq(cartSessions.tokenHash, tokenHash))
+          .limit(1);
+
+        const row = rows[0];
+        return row === undefined ? null : toCartSession(row);
+      },
+
+      async revoke(sessionId, reason, now) {
+        await db
+          .update(cartSessions)
+          .set({ revokedAt: now, revocationReason: reason })
+          .where(and(eq(cartSessions.id, sessionId), isNull(cartSessions.revokedAt)));
       },
     },
   };

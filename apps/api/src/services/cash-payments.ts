@@ -113,10 +113,12 @@ export function createCashCheckout(
           cartId: cart.cartId,
           currency: cart.currency,
           subtotalMinor: cart.subtotalMinor,
-          // Igual que en la tarjeta: envio e impuestos no estan determinados.
-          shippingTotalMinor: null,
+          // DEC-079: igual que en la tarjeta. El envio sale de la MISMA foto
+          // (`freezeOpenCart`), y lo que se cobra en caja es el total con envio.
+          // Impuestos: pendiente legal.
+          shippingTotalMinor: cart.shippingMinor,
           taxTotalMinor: null,
-          totalMinor: cart.subtotalMinor,
+          totalMinor: cart.totalMinor,
           shippingAddress: { ...shippingAddress },
           items: cart.items,
           createdAt: now,

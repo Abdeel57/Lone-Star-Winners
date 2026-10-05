@@ -58,6 +58,12 @@ const WEBHOOK_SECRET = "whsec_fake_integration_fixture";
 const UNIT_PRICE_MINOR = 2500;
 const QUANTITY = 2;
 const EXPECTED_ENTRIES = 50;
+/**
+ * DEC-079: tarifa fija de envio de RELLENO. Se cobra con la mercancia y NO da
+ * participaciones: por eso `EXPECTED_ENTRIES` sigue saliendo solo de la gorra.
+ */
+const SHIPPING_MINOR = 799;
+const ORDER_TOTAL_MINOR = UNIT_PRICE_MINOR * QUANTITY + SHIPPING_MINOR;
 
 const SHIPPING = {
   full_name: "Cash Buyer Fixture",
@@ -190,6 +196,12 @@ async function seed(config: ApiConfig): Promise<Scenario> {
     retry: await insertParticipant("retry-buyer@example.invalid"),
     pending: await insertParticipant("pending-buyer@example.invalid"),
   };
+
+  // DEC-079: sin tarifa, un carrito con mercancia no se puede pagar (409).
+  await db.execute(
+    sql`INSERT INTO shipping_rates (amount_minor, currency, set_by_admin_user_id)
+        VALUES (${SHIPPING_MINOR}, 'USD', ${manager.adminUserId})`,
+  );
 
   const productId = await one<string>(
     sql`INSERT INTO products (sku, slug, status, currency, kind, category_key)
@@ -536,7 +548,7 @@ describe("pago con tarjeta: el camino de siempre sigue igual", () => {
           client_reference_id: cardOrderId,
           payment_status: "paid",
           payment_intent: `pi_${randomUUID().replaceAll("-", "")}`,
-          amount_total: UNIT_PRICE_MINOR * QUANTITY,
+          amount_total: ORDER_TOTAL_MINOR,
           currency: "usd",
           metadata: { order_id: cardOrderId },
         },
@@ -594,7 +606,7 @@ describe("pago en efectivo: el pedido queda pendiente y no genera participacione
     expect(body.entry_state).toBe("PENDING_QUALIFICATION");
     expect(body.entries_granted).toBeNull();
     expect(body.total).toEqual({
-      amount_minor: String(UNIT_PRICE_MINOR * QUANTITY),
+      amount_minor: String(ORDER_TOTAL_MINOR),
       currency: "USD",
     });
   });
@@ -605,6 +617,7 @@ describe("pago en efectivo: el pedido queda pendiente y no genera participacione
       status: string;
       payment_state: string;
       total_minor: string;
+      shipping_total_minor: string;
       currency: string;
       participant_id: string;
       full_name: string;
@@ -614,7 +627,9 @@ describe("pago en efectivo: el pedido queda pendiente y no genera participacione
       qualified_at: Date | null;
     }>(
       sql`SELECT o.provider, o.status::text AS status, o.payment_state::text AS payment_state,
-                 o.total_minor::text AS total_minor, o.currency, o.participant_id,
+                 o.total_minor::text AS total_minor,
+                 o.shipping_total_minor::text AS shipping_total_minor,
+                 o.currency, o.participant_id,
                  o.shipping_address ->> 'full_name' AS full_name,
                  i.sku, i.quantity, o.paid_at, o.qualified_at
             FROM orders o JOIN order_items i ON i.order_id = o.id
@@ -625,7 +640,8 @@ describe("pago en efectivo: el pedido queda pendiente y no genera participacione
       provider: "cash",
       status: "PENDING_PAYMENT",
       payment_state: "PENDING",
-      total_minor: String(UNIT_PRICE_MINOR * QUANTITY),
+      total_minor: String(ORDER_TOTAL_MINOR),
+      shipping_total_minor: String(SHIPPING_MINOR),
       currency: "USD",
       participant_id: scenario.participants.cash,
       full_name: SHIPPING.full_name,
@@ -712,7 +728,7 @@ describe("el panel encuentra la orden por numero o por cliente", () => {
     expect(view.can_generate_entries).toBe(false);
     expect(view.confirmation).toBeNull();
     expect(view.amount).toEqual({
-      amount_minor: String(UNIT_PRICE_MINOR * QUANTITY),
+      amount_minor: String(ORDER_TOTAL_MINOR),
       currency: "USD",
     });
     expect(view.entries).toMatchObject({ status: "AWAITING_PAYMENT", entries_granted: null });
@@ -833,7 +849,7 @@ describe("confirmar el efectivo: pagado y participaciones generadas", () => {
     );
     expect(row.rows[0]).toEqual({
       order_number: cashOrder.order_number,
-      amount_minor: String(UNIT_PRICE_MINOR * QUANTITY),
+      amount_minor: String(ORDER_TOTAL_MINOR),
     });
 
     expect(

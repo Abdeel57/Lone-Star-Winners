@@ -238,6 +238,9 @@ export const emptyCartWithQuote: CartWithQuote = {
   item_count: 0,
   lines: [],
   subtotal: null,
+  // DEC-079: sin lineas no hay nada que enviar ni total.
+  shipping: { status: "NOT_REQUIRED", amount: null },
+  total: null,
   entry_quote: {
     ...baseQuote,
     // Tambien `null`, y por el mismo motivo (contrato, seccion 5).
@@ -258,6 +261,10 @@ export const cartWithQuote: CartWithQuote = {
   item_count: 3,
   lines: [ELIGIBLE_LINE, INELIGIBLE_LINE],
   subtotal: { amount_minor: "6800", currency: "USD" },
+  // DEC-079: tarifa de PRUEBA; la del cliente la pone el panel. Dato escrito,
+  // no una suma: el total lo publica el backend.
+  shipping: { status: "CHARGED", amount: { amount_minor: "799", currency: "USD" } },
+  total: { amount_minor: "7599", currency: "USD" },
   entry_quote: baseQuote,
 };
 
@@ -269,6 +276,8 @@ export const cartWithTwoVariantsOfSameProduct: CartWithQuote = {
   item_count: 3,
   lines: [ELIGIBLE_LINE, SECOND_ELIGIBLE_LINE],
   subtotal: { amount_minor: "7500", currency: "USD" },
+  shipping: { status: "CHARGED", amount: { amount_minor: "799", currency: "USD" } },
+  total: { amount_minor: "8299", currency: "USD" },
   entry_quote: baseQuote,
 };
 
@@ -324,6 +333,8 @@ export const cartWithAvailabilityStates: CartWithQuote = {
   item_count: 7,
   lines: [ELIGIBLE_LINE, LOW_STOCK_LINE, OUT_OF_STOCK_LINE],
   subtotal: { amount_minor: "17500", currency: "USD" },
+  shipping: { status: "CHARGED", amount: { amount_minor: "799", currency: "USD" } },
+  total: { amount_minor: "18299", currency: "USD" },
   entry_quote: availabilityQuote,
 };
 

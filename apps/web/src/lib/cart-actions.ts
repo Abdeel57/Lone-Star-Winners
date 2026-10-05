@@ -87,8 +87,28 @@ function textFrom(formData: FormData, field: string): string | null {
   return raw;
 }
 
-/** Anade una variante al carrito. */
-export async function addToCartAction(formData: FormData): Promise<CartActionResult> {
+/**
+ * Anade una variante al carrito.
+ *
+ * FIRMA DE `useActionState`, A PROPOSITO
+ * --------------------------------------
+ * `(estadoPrevio, formData)` y no `(formData)`, para que los formularios la
+ * pasen TAL CUAL a `useActionState`. Si la envuelven en una funcion de cliente,
+ * React ya no puede enviar el formulario antes de hidratar: un clic en una
+ * pagina que todavia no cargo el bundle no hacia nada, sin mensaje y sin
+ * articulo (lo destapo el e2e del cobro en efectivo). Con la server action
+ * directa, el formulario funciona sin JavaScript. El estado previo no se usa:
+ * cada intento es independiente.
+ *
+ * SIN CUENTA TAMBIEN (DEC-079)
+ * ----------------------------
+ * Un visitante sin cuenta recibe aqui su sesion de carrito: la API la emite y
+ * `mutableSession` pasa su `Set-Cookie` al navegador.
+ */
+export async function addToCartAction(
+  _previous: CartActionResult,
+  formData: FormData,
+): Promise<CartActionResult> {
   const locale = localeFrom(formData);
   const variantId = textFrom(formData, "variant_id");
   const quantity = integerFrom(formData, "quantity");

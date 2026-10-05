@@ -81,6 +81,8 @@ import type {
   AdminSettingChangeRequest,
   AdminSettingChangeRequestInput,
   AdminSettingChangeRequestPage,
+  AdminShippingRateInput,
+  AdminShippingRateResponse,
 } from "./admin-contract";
 import { apiGet, apiRequest, queryString, type ApiRequestOptions } from "./http";
 import { ok, type ApiResult } from "./result";
@@ -213,6 +215,8 @@ export const API_PATHS = {
   adminAdjustments: "/admin/entry-adjustments",
   /** Categorias del catalogo en el panel (§13.6). */
   adminProductCategories: "/admin/product-categories",
+  /** DEC-079: tarifa fija de envio (§16). */
+  adminShippingRate: "/admin/shipping-rate",
   /** Subida de imagenes de catalogo (§14, DEC-056). */
   adminMedia: "/admin/media",
   /** Feature flags con su materialidad legal (§13.9). */
@@ -1896,6 +1900,30 @@ export function updateAdminProductVariant(
     adminProductVariantPath(productId, variantId),
     { locale, body: patch, ...sessionOptions(session) },
   );
+}
+
+/** DEC-079: tarifa fija de envio vigente y su historico. */
+export function fetchAdminShippingRate(
+  locale: Locale,
+  session: SessionContext,
+): Promise<ApiResult<AdminShippingRateResponse>> {
+  return apiGet<AdminShippingRateResponse>(API_PATHS.adminShippingRate, {
+    locale,
+    ...sessionOptions(session),
+  });
+}
+
+/** DEC-079: pone una tarifa nueva. La API rechaza el cero con 422. */
+export function setAdminShippingRate(
+  input: AdminShippingRateInput,
+  locale: Locale,
+  session: SessionContext,
+): Promise<ApiResult<AdminShippingRateResponse>> {
+  return apiRequest<AdminShippingRateResponse>("PUT", API_PATHS.adminShippingRate, {
+    locale,
+    body: input,
+    ...sessionOptions(session),
+  });
 }
 
 /** Categorias del catalogo en el panel. */

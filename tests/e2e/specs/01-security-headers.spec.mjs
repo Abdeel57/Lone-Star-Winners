@@ -82,13 +82,17 @@ test("el escaparate no anuncia el stack @mockable", async ({ request, baseURL })
 });
 
 test.describe("peticiones sin sesion", () => {
-  test("un POST al carrito sin cookie se rechaza con 401 UNAUTHENTICATED", async ({ request }) => {
+  test("DEC-079: un POST al carrito sin cookie y con una variante inexistente da 404 y NO emite sesion", async ({
+    request,
+  }) => {
     /*
-     * NO HAY TOKEN CSRF EN ESTE PROYECTO, y esta prueba es la que comprueba lo
-     * que hay en su lugar: la API es deny-by-default, asi que una peticion sin
-     * cookie de sesion no llega al handler. El `preHandler` de
-     * `route-registry.ts` pregunta al autorizador antes, y sin sesion la
-     * respuesta es 401.
+     * El carrito es PUBLICO desde DEC-079: un visitante sin cuenta puede
+     * llenarlo. Lo que esta prueba comprueba es que esa apertura no se
+     * convierte en un grifo de sesiones: la sesion anonima de carrito se emite
+     * DESPUES de validar la variante, asi que una peticion rechazada no deja ni
+     * fila ni cookie. Y sin token CSRF en el proyecto, lo que hay en su lugar
+     * sigue en pie: cookie `SameSite=Lax` y deny-by-default en todo lo que no
+     * es el carrito propio (ver la prueba administrativa de abajo).
      *
      * `request` es un contexto de peticion SIN el almacen de cookies del
      * navegador: no lleva ninguna sesion, que es justo lo que se quiere probar.
@@ -98,13 +102,25 @@ test.describe("peticiones sin sesion", () => {
       failOnStatusCode: false,
     });
 
-    expect(response.status()).toBe(401);
+    expect(response.status()).toBe(404);
+    expect(response.headers()["set-cookie"]).toBeUndefined();
 
     const body = await response.json();
-    expect(body.error.code).toBe("UNAUTHENTICATED");
+    expect(body.error.code).toBe("PRODUCT_NOT_FOUND");
     // El envelope de DEC-022 no lleva mensaje: `code` ES la clave de traduccion.
     expect(body.error.request_id).toBeTruthy();
     expect(body.error.message).toBeUndefined();
+  });
+
+  test("DEC-079: leer el carrito sin cookie devuelve uno vacio y no emite sesion", async ({
+    request,
+  }) => {
+    const response = await request.get(`${API_BASE_URL}/cart`);
+
+    expect(response.status()).toBe(200);
+    expect(response.headers()["set-cookie"]).toBeUndefined();
+    const body = await response.json();
+    expect(body.item_count).toBe(0);
   });
 
   test("un POST administrativo sin cookie se rechaza con 401", async ({ request }) => {

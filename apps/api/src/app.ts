@@ -43,6 +43,7 @@ import { createSessionAuthorizer } from "./http/session-authorizer.js";
 import { createSessionPrincipalResolver } from "./http/session-principal.js";
 import { buildAuthRoutes } from "./routes/auth.js";
 import { buildCartRoutes } from "./routes/cart.js";
+import { buildAdminShippingRoutes } from "./routes/admin-shipping.js";
 import { buildHealthRoutes } from "./routes/health.js";
 // DEC-056: imagenes de catalogo subidas desde el panel.
 import { buildMediaRoutes } from "./routes/media.js";
@@ -156,6 +157,7 @@ export function collectRouteDefinitions(dependencies: AppDependencies): RouteDef
     ...buildAdminRulesRoutes(dependencies),
     ...buildMediaRoutes(dependencies),
     ...buildPrivacyRequestRoutes(dependencies),
+    ...buildAdminShippingRoutes(dependencies),
   ];
 
   const metaRoutes = buildMetaRoutes({
@@ -195,6 +197,7 @@ export function collectContractRouteDefinitions(dependencies: AppDependencies): 
     ...buildAdminRulesRoutes(dependencies),
     ...buildMediaRoutes(dependencies),
     ...buildPrivacyRequestRoutes(dependencies),
+    ...buildAdminShippingRoutes(dependencies),
   ];
   routes.push(
     ...buildMetaRoutes({ serverUrl: dependencies.config.http.publicUrl, allRoutes: () => routes }),
@@ -240,11 +243,10 @@ export async function createApp(dependencies: AppDependencies): Promise<FastifyI
   //        publico por uno real, respaldado por la tabla de sesiones. Es el
   //        momento en que las rutas con permiso dejan de ser inalcanzables.
   //
-  //        El resolutor de principal ya traduce sesion -> participante. Un
-  //        visitante SIN cuenta sigue sin carrito: las rutas de carrito admiten
-  //        ademas sesiones anonimas (DEC-023) y esas no existen todavia, asi
-  //        que el resolutor devuelve `null` para el y su ruta responde 401.
-  //        Falla cerrado, y se cierra del todo cuando exista el registro.
+  //        El resolutor de principal traduce sesion -> participante y, sin
+  //        cuenta, sesion anonima de carrito -> `ANONYMOUS_SESSION` (DEC-079).
+  //        Ese principal solo lo aceptan las rutas de carrito; el resto exige
+  //        `PARTICIPANT` y su puerta lee `sessions`, donde no existe.
   app.decorate(
     "lswAuthorizer",
     createSessionAuthorizer({

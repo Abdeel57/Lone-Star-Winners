@@ -24,10 +24,14 @@ import { safeImageUrl } from "@/lib/media-url";
  *
  * `useActionState` esta aqui SOLO para poder enseñar el fallo junto al boton
  * -"esa talla se acaba de agotar" es informacion que pertenece a este
- * formulario, no a otra pagina-. La accion se pasa DIRECTAMENTE a `<form
- * action>`, asi que React la envia igual sin JavaScript: el formulario funciona
- * antes de que cargue el bundle, y con JavaScript ademas conserva el error sin
- * recargar.
+ * formulario, no a otra pagina-. La server action se le pasa TAL CUAL, sin
+ * envoltorio de cliente, y por eso React envia el formulario igual sin
+ * JavaScript: funciona antes de que cargue el bundle, y con JavaScript ademas
+ * conserva el error sin recargar. (Hasta DEC-079 la envolvia una funcion de
+ * cliente y un clic antes de hidratar se perdia.)
+ *
+ * SIN CUENTA TAMBIEN (DEC-079): un visitante anade igual; la cuenta se pide al
+ * pagar.
  *
  * AQUI NO SE CALCULA NINGUNA PARTICIPACION
  * ----------------------------------------
@@ -76,17 +80,6 @@ function variantName(variant: ProductVariant, locale: Locale): string {
   return name === null ? variant.sku : pickLocalized(name, locale);
 }
 
-/**
- * Adaptador de firma para `useActionState`.
- *
- * `useActionState` llama a la accion con `(estadoPrevio, formData)`. La accion
- * del servidor no necesita el estado previo -cada intento es independiente- y
- * por eso lo descarta aqui en vez de aceptarlo y no usarlo.
- */
-async function submit(_previous: CartActionResult, formData: FormData): Promise<CartActionResult> {
-  return addToCartAction(formData);
-}
-
 export function AddToCartForm({
   product,
   locale,
@@ -96,7 +89,9 @@ export function AddToCartForm({
 }) {
   const t = useTranslations("product");
   const availabilityLabel = useAvailabilityLabel();
-  const [state, formAction, pending] = useActionState(submit, INITIAL);
+  // La server action, SIN envoltorio de cliente: es lo que permite enviar el
+  // formulario antes de hidratar (ver `addToCartAction`).
+  const [state, formAction, pending] = useActionState(addToCartAction, INITIAL);
 
   const purchasable = product.variants.filter(
     (variant) => variant.availability.status !== "OUT_OF_STOCK",
@@ -247,11 +242,6 @@ function AddToCartError({ code }: { readonly code: string }) {
 
   let message: string;
   switch (code) {
-    case "UNAUTHENTICATED":
-      // Las rutas de carrito son `PARTICIPANT_SELF`: sin sesion no hay carrito.
-      // Se dice como lo que es -falta iniciar sesion- y no como un fallo.
-      message = tErrors("UNAUTHENTICATED");
-      break;
     case "VARIANT_NOT_PURCHASABLE":
       message = tErrors("VARIANT_NOT_PURCHASABLE");
       break;

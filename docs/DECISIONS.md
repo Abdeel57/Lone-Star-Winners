@@ -3874,3 +3874,87 @@ confirmación, portal, panel de pedidos, mensajes), `docs/API_CONTRACT.md`, CI
 
 Proposed by: sesión del usuario (2026-10-05)
 Agreed by: pendiente — backend-sweepstakes, security-integration, frontend-ux
+
+## DEC-079
+
+Status: Proposed
+
+Date: 2026-10-05
+
+Decision:
+**Carrito sin cuenta, total con envío y cuenta obligatoria solo para pagar.**
+El visitante llena el carrito sin registrarse, ve subtotal, envío y total, y
+el checkout le pide crear la cuenta o iniciar sesión; al hacerlo, el carrito
+pasa a la cuenta y vuelve al pago.
+
+1. **Sesión de carrito, no una segunda autenticación (DEC-006).** El primer
+   `POST /api/v1/cart/items` sin sesión emite una sesión de carrito con las
+   mismas primitivas que las de persona (token opaco, SHA-256 en hex, cookie
+   `httpOnly`/`SameSite=Lax`, revocable), en una tabla APARTE, `cart_sessions`,
+   con su cookie `<SESSION_COOKIE_NAME>_cart` y su política
+   (`CART_SESSION_POLICY`, 30 días como máximo). No identifica a nadie: solo es
+   dueña de un carrito (`carts.session_ref`). Ninguna puerta de participante ni
+   de personal la lee; el resolvedor devuelve el principal de participante y, si
+   no lo hay, `ANONYMOUS_SESSION`. Las rutas del carrito pasan a `PUBLIC`, pero
+   el carrito sigue saliendo SIEMPRE del principal, nunca del cuerpo ni de la
+   URL. La sesión solo se emite tras validar la variante: un `POST` con una
+   variante inexistente no deja cookie, y `GET /cart` sin cookie responde el
+   carrito vacío sin emitir nada.
+2. **El carrito pasa a la cuenta al registrarse o iniciar sesión** (audiencia
+   `PARTICIPANT`), en una transacción: las líneas se suman a las de la cuenta
+   (con el tope de 10,000 por línea), las de otra moneda se descartan, el
+   carrito invitado queda `ABANDONED`, la sesión de carrito se revoca
+   (`adopted_by_account`) y su cookie se borra. Nunca se promueve: el login
+   abre una sesión de participante nueva (sin fijación de sesión). Si la
+   adopción falla, el login no falla.
+3. **Envío: tarifa fija por pedido, nunca gratis**, que fija el personal en
+   Panel → Envío (`GET`/`PUT /api/v1/admin/shipping-rate`, capacidades
+   `product.read`/`product.write`). `shipping_rates` es de solo inserción
+   (CHECK `> 0`, trigger `lsw_reject_mutation`); la vigente es la última fila y
+   queda el historial con quién y cuándo. Reglas (`services/shipping.ts`):
+   solo paquetes de participaciones o carrito vacío → `NOT_REQUIRED` (no se
+   envían); con mercancía → `CHARGED` con la tarifa; con mercancía y sin
+   tarifa → `NOT_CONFIGURED`, total `null` y el checkout (tarjeta y efectivo)
+   responde `409 SHIPPING_NOT_CONFIGURED`. No se cobra un pedido con un envío
+   inventado.
+4. **El envío no genera participaciones** (pedido del usuario). El motor ya
+   calculaba sobre el subtotal elegible; ahora está escrito en el carrito, el
+   checkout y las Reglas pendientes (LEGAL_PENDING).
+5. **Impuestos: no se cobran por ahora** (decisión del usuario, pendiente del
+   contador/abogado). `tax_total_minor` queda `null`.
+6. **Pedido y proveedor.** `orders.shipping_total_minor` congela la tarifa
+   (`null` si no aplica) y `total = subtotal + envío`. A Stripe va como una
+   línea más con `metadata[line_kind]=shipping`.
+7. **Reembolso parcial sin desglose por línea:** lo que no es mercancía
+   (total − subtotal de líneas, es decir, el envío) se considera devuelto
+   primero; solo lo que pasa de ahí reduce participaciones. Devolver solo el
+   envío no quita ninguna.
+8. **Arreglo encontrado por el camino.** "Añadir al carrito" no funcionaba
+   antes de que la página terminara de hidratarse: el formulario envolvía la
+   acción en una función de cliente. Ahora `useActionState` recibe la acción de
+   servidor directamente y el formulario funciona desde el primer instante.
+
+Migración `0036_guest_cart_and_shipping` (journal idx 27). Se estrena en el
+preDeploy de Railway. **Al desplegar no hay tarifa**: hasta que el personal la
+fije, los carritos con mercancía no se pueden pagar (los paquetes sí).
+
+Alternatives:
+A — Filas anónimas en `sessions` (descartada: toda la autorización da por hecho
+que una sesión es una persona; un `identity_id` nulo abriría huecos en cada
+puerta). B — Carrito solo en el navegador (localStorage) que se sube al pagar
+(descartada: los precios y la elegibilidad los calcula la API, y un carrito del
+cliente es una fuente de verdad paralela). C — `shipping_options` de Stripe
+(descartada: el total y el envío deben salir de nuestra API y quedar en el
+pedido también para el pago en efectivo, que no pasa por Stripe). D — Envío
+gratis a partir de un importe (descartada por el usuario: nunca gratis).
+
+Affected areas: `packages/database` (0036, esquema), `packages/security`
+(`CART_SESSION_POLICY`, `evaluateCartSession`), `packages/commerce` (línea de
+envío en Stripe, prorrateo de reembolsos), `apps/api` (sesión de carrito,
+resolvedor, rutas de carrito, adopción en auth, `shipping.ts`, `cart-freeze.ts`,
+checkout de tarjeta y efectivo, `admin-shipping.ts`, contrato), `apps/web`
+(carrito, checkout con cuenta obligatoria, totales, formularios de añadir,
+Panel → Envío, mensajes), `docs/API_CONTRACT.md`, e2e `13-guest-cart`.
+
+Proposed by: sesión del usuario (2026-10-05)
+Agreed by: pendiente — backend-sweepstakes, security-integration, frontend-ux

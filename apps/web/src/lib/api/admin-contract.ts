@@ -3,6 +3,7 @@ import type {
   CursorPage,
   EntryMultiplier,
   LocalizedText,
+  MoneyMinor,
   ProductKind,
   PromotionStatus,
 } from "./contract";
@@ -533,4 +534,26 @@ export interface AdminAmoeTranscriptionResponse {
   readonly participant_id: string;
   /** `true` cuando la ficha creo el participante (sin credenciales). */
   readonly participant_created: boolean;
+}
+
+/**
+ * [CONTRATO] Tarifa fija de envio (§16, DEC-079). Solo insercion: cada cambio
+ * es una fila nueva y la primera de `history` es la vigente.
+ */
+export interface AdminShippingRateRow {
+  readonly amount: MoneyMinor;
+  readonly set_at: string;
+  readonly set_by_admin_user_id: string;
+}
+
+export interface AdminShippingRateResponse {
+  /** `null` si nunca se puso: un carrito con mercancia no se puede pagar. */
+  readonly current: AdminShippingRateRow | null;
+  readonly history: readonly AdminShippingRateRow[];
+}
+
+/** `amount_minor` es entero en centavos, de 1 a 99 999. Nunca cero. */
+export interface AdminShippingRateInput {
+  readonly amount_minor: number;
+  readonly currency: string;
 }

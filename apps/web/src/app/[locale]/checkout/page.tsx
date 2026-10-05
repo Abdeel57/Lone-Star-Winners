@@ -5,10 +5,12 @@ import { getTranslations, setRequestLocale } from "next-intl/server";
 
 import { MfaRequired, SignInRequired } from "@/components/account-shell";
 import { ApiErrorState } from "@/components/api-error-state";
+import { CartTotals } from "@/components/cart-totals";
 import { CheckoutForm } from "@/components/checkout-form";
 import { EligibilityDeclarationForm } from "@/components/eligibility-declaration-form";
 import { EntryQuotePanel } from "@/components/entry-quote-panel";
 import { formatMoney } from "@/i18n/formatters";
+import type { Locale } from "@/i18n/locales";
 import { Link } from "@/i18n/navigation";
 import { routing } from "@/i18n/routing";
 import {
@@ -17,9 +19,11 @@ import {
   fetchMyEligibility,
   fetchSiteConfig,
   pickLocalized,
+  type CartWithQuote,
 } from "@/lib/api";
 import { isFeatureEnabled, toFeatureFlags } from "@/lib/flags";
 import { loadParticipant } from "@/lib/participant-server";
+import { readSession } from "@/lib/session-server";
 
 /** Un checkout es de una sesion concreta: nunca se prerenderiza. */
 export const dynamic = "force-dynamic";
@@ -30,8 +34,9 @@ export const dynamic = "force-dynamic";
  * TRES COMPROBACIONES ANTES DE ENSENAR EL FORMULARIO, y las tres son estados de
  * pantalla y no errores:
  *
- * 1. Sin sesion -> se pide iniciarla, con vuelta a esta misma pagina. Un pedido
- *    pertenece a una cuenta.
+ * 1. Sin sesion -> se pide la cuenta (crearla o iniciarla), con vuelta a esta
+ *    misma pagina. Un pedido pertenece a una cuenta. DEC-079: el visitante ve a
+ *    la vez su carrito y su total, y al volver el carrito ya es de la cuenta.
  * 2. Con el carrito vacio -> se dice, y se enlaza a la tienda. Ensenar un
  *    formulario de direccion para cobrar cero es peor que decirlo.
  * 3. Si el carrito no se puede leer -> el estado de error con su referencia.
@@ -54,9 +59,26 @@ export default async function CheckoutPage({ params }: { params: Promise<{ local
   const { session, state } = await loadParticipant(locale);
 
   if (state.kind === "anonymous") {
+    // DEC-079: el visitante sin cuenta llega aqui con SU carrito (sesion de
+    // carrito). Se le pide la cuenta para pagar, y a la vez se le ensena lo que
+    // va a pagar: pedir una cuenta sin decir por cuanto es lo que hace que la
+    // gente se vaya. Al volver del alta o del login, el carrito ya es de la
+    // cuenta (lo pasa la API) y esta misma pagina sigue con el pago.
+    const guestCart = await fetchCart(locale, await readSession());
+    const hasLines = guestCart.ok && guestCart.data.lines.length > 0;
+
     return (
       <CheckoutShell title={t("title")}>
-        <SignInRequired returnPath="/checkout" />
+        {hasLines ? (
+          <div className="grid gap-s6 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
+            <AccountRequired />
+            <aside className="flex flex-col gap-s4">
+              <OrderSummary cart={guestCart.data} locale={locale} />
+            </aside>
+          </div>
+        ) : (
+          <SignInRequired returnPath="/checkout" />
+        )}
       </CheckoutShell>
     );
   }
@@ -130,12 +152,6 @@ export default async function CheckoutPage({ params }: { params: Promise<{ local
       ? promotionResult.data.legal_timezone
       : "UTC";
 
-  // `subtotal` es `null` en un carrito vacio, que aqui ya se descarto arriba.
-  // Se comprueba igualmente: imprimir "null" donde va el importe a pagar es el
-  // peor sitio posible para un texto sin sentido.
-  const subtotal =
-    cartResult.data.subtotal === null ? null : formatMoney(cartResult.data.subtotal, locale);
-
   return (
     <CheckoutShell title={t("title")} intro={t("intro")}>
       <div className="grid gap-s6 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
@@ -159,47 +175,7 @@ export default async function CheckoutPage({ params }: { params: Promise<{ local
         )}
 
         <aside className="flex flex-col gap-s4">
-          <Card elevation="raised" padding="md">
-            <CardTitle as="h2" size="sm">
-              {t("reviewHeading")}
-            </CardTitle>
-
-            <ul className="mt-s4 flex list-none flex-col gap-s3">
-              {lines.map((line) => (
-                <li key={line.id} className="flex items-baseline justify-between gap-s3">
-                  <span className="min-w-0 text-body-sm text-text-muted">
-                    {pickLocalized(line.name, locale)}
-                    {" · "}
-                    <span className="tabular-nums">{line.quantity}</span>
-                  </span>
-
-                  {/* El subtotal de linea LLEGA CALCULADO. Aqui no se multiplica
-                      cantidad por precio, ni siquiera cuando parece trivial. */}
-                  <span className="shrink-0 text-body-sm tabular-nums text-text">
-                    {formatMoney(line.line_subtotal, locale)}
-                  </span>
-                </li>
-              ))}
-            </ul>
-
-            {subtotal === null ? null : (
-              <p className="mt-s4 flex items-baseline justify-between gap-s3 border-t border-border pt-s3">
-                <span className="text-body-sm text-text-muted">{t("reviewHeading")}</span>
-                <span className="font-display text-heading-sm font-bold tabular-nums text-text">
-                  {subtotal}
-                </span>
-              </p>
-            )}
-
-            <div className="mt-s4">
-              <Link
-                href="/cart"
-                className="text-body-sm text-text-muted underline underline-offset-4"
-              >
-                {t("backToCart")}
-              </Link>
-            </div>
-          </Card>
+          <OrderSummary cart={cartResult.data} locale={locale} />
 
           <EntryQuotePanel quote={quote} locale={locale} timeZone={timeZone} />
 
@@ -207,6 +183,95 @@ export default async function CheckoutPage({ params }: { params: Promise<{ local
         </aside>
       </div>
     </CheckoutShell>
+  );
+}
+
+/**
+ * Lo que se va a pagar: lineas, y subtotal, envio y total (DEC-079).
+ *
+ * Lo comparten el checkout con cuenta y el del visitante sin cuenta. Ninguna
+ * cifra se calcula aqui: el subtotal de linea, el envio y el total llegan
+ * calculados por el backend.
+ */
+async function OrderSummary({
+  cart,
+  locale,
+}: {
+  readonly cart: CartWithQuote;
+  readonly locale: Locale;
+}) {
+  const t = await getTranslations("checkout");
+
+  return (
+    <Card elevation="raised" padding="md">
+      <CardTitle as="h2" size="sm">
+        {t("reviewHeading")}
+      </CardTitle>
+
+      <ul className="mt-s4 flex list-none flex-col gap-s3">
+        {cart.lines.map((line) => (
+          <li key={line.id} className="flex items-baseline justify-between gap-s3">
+            <span className="min-w-0 text-body-sm text-text-muted">
+              {pickLocalized(line.name, locale)}
+              {" · "}
+              <span className="tabular-nums">{line.quantity}</span>
+            </span>
+
+            {/* El subtotal de linea LLEGA CALCULADO. Aqui no se multiplica
+                cantidad por precio, ni siquiera cuando parece trivial. */}
+            <span className="shrink-0 text-body-sm tabular-nums text-text">
+              {formatMoney(line.line_subtotal, locale)}
+            </span>
+          </li>
+        ))}
+      </ul>
+
+      <div className="mt-s4 border-t border-border pt-s3">
+        <CartTotals cart={cart} locale={locale} />
+      </div>
+
+      <div className="mt-s4">
+        <Link href="/cart" className="text-body-sm text-text-muted underline underline-offset-4">
+          {t("backToCart")}
+        </Link>
+      </div>
+    </Card>
+  );
+}
+
+/**
+ * DEC-079: el visitante sin cuenta, en el paso de pagar.
+ *
+ * Crear cuenta va PRIMERO: quien llega aqui sin sesion lo mas probable es que
+ * no la tenga. Las dos salidas llevan `?next=/checkout`, y al volver el carrito
+ * ya es de la cuenta: lo pasa la API al registrarse o iniciar sesion.
+ */
+async function AccountRequired() {
+  const t = await getTranslations("checkout.accountRequired");
+  const query = `?next=${encodeURIComponent("/checkout")}`;
+
+  return (
+    <section aria-labelledby="checkout-account-required">
+      <h2 id="checkout-account-required" className="lsw-display text-heading-lg text-text">
+        {t("title")}
+      </h2>
+      <p className="mt-s3 max-w-[40rem] text-body text-text-muted">{t("body")}</p>
+
+      <div className="mt-s6 flex flex-col gap-s3 sm:flex-row sm:flex-wrap">
+        <Link
+          href={`/account/register${query}`}
+          className={buttonVariants({ variant: "accent", size: "lg" })}
+        >
+          {t("register")}
+        </Link>
+        <Link
+          href={`/account/login${query}`}
+          className={buttonVariants({ variant: "secondary", size: "lg" })}
+        >
+          {t("signIn")}
+        </Link>
+      </div>
+    </section>
   );
 }
 

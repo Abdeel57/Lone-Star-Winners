@@ -382,6 +382,12 @@ export const entryQuoteSchema = z.object({
   ),
 });
 
+/** DEC-079: envio de un carrito. Ver `cartWithQuoteSchema.shipping`. */
+export const cartShippingSchema = z.object({
+  status: z.enum(["NOT_REQUIRED", "CHARGED", "NOT_CONFIGURED"]),
+  amount: moneySchema.nullable(),
+});
+
 export const cartWithQuoteSchema = z.object({
   id: z.uuid(),
   currency: z.string().length(3).nullable(),
@@ -409,6 +415,26 @@ export const cartWithQuoteSchema = z.object({
   item_count: z.number().int(),
   lines: z.array(cartLineSchema),
   subtotal: moneySchema.nullable(),
+  /**
+   * DEC-079: envio del carrito, con la MISMA regla que se cobra al pagar.
+   *
+   *   `NOT_REQUIRED`   solo paquetes de participaciones, o carrito vacio.
+   *                    `amount` es `null`: no hay nada que enviar.
+   *   `CHARGED`        lleva mercancia; `amount` es la tarifa fija vigente.
+   *   `NOT_CONFIGURED` lleva mercancia y no hay tarifa puesta. `amount` es
+   *                    `null` y el checkout responde 409
+   *                    `SHIPPING_NOT_CONFIGURED`: nunca se envia gratis por
+   *                    omision.
+   *
+   * El envio NO genera participaciones: `entry_quote` no lo incluye.
+   */
+  shipping: cartShippingSchema,
+  /**
+   * DEC-079: lo que se cobraria hoy, subtotal + envio. Sin impuestos (pendiente
+   * legal). `null` con el carrito vacio o con el envio `NOT_CONFIGURED`: un
+   * total sin el envio que se va a cobrar seria una cifra falsa.
+   */
+  total: moneySchema.nullable(),
   /**
    * `null` cuando no hay promocion activa. Un carrito sigue siendo valido en el
    * periodo entre promociones: se puede comprar mercancia sin que haya nada que

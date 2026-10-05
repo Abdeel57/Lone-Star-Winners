@@ -311,6 +311,26 @@ export class StripePaymentProvider implements PaymentProvider {
       ]);
     });
 
+    // DEC-079: el envio, como una linea mas de la pagina de pago. Se usa una
+    // linea y no `shipping_options` para no depender de que Stripe recoja la
+    // direccion y gestione tarifas: la direccion ya la pide la tienda antes de
+    // llegar aqui y la tarifa es una sola. La metadata la marca como envio
+    // para que nadie la confunda con mercancia al conciliar.
+    if (input.shipping !== null) {
+      const prefix = `line_items[${input.lineItems.length.toString(10)}]`;
+      entries.push([`${prefix}[quantity]`, "1"]);
+      entries.push([
+        `${prefix}[price_data][currency]`,
+        input.shipping.amount.currency.toLowerCase(),
+      ]);
+      entries.push([
+        `${prefix}[price_data][unit_amount]`,
+        input.shipping.amount.amountMinor.toString(10),
+      ]);
+      entries.push([`${prefix}[price_data][product_data][name]`, input.shipping.description]);
+      entries.push([`${prefix}[price_data][product_data][metadata][line_kind]`, "shipping"]);
+    }
+
     const session = await this.request("POST", "/checkout/sessions", {
       body: formBody(entries),
       idempotencyKey: input.idempotencyKey,

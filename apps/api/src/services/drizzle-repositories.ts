@@ -20,7 +20,7 @@
  *      violaria el principio 4.
  */
 
-import { and, asc, eq, gt, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, isNull, sql } from "drizzle-orm";
 import type { Database } from "@lsw/database";
 import {
   cartItems,
@@ -28,6 +28,8 @@ import {
   featureFlagSettings,
   featureFlags,
   orders,
+  participants,
+  shippingRates,
   productCategories,
   productCategoryTranslations,
   productTranslations,
@@ -60,6 +62,8 @@ import type {
   RulesVersionRecord,
   VariantRecord,
   CartRepository,
+  ShippingRateRecord,
+  ShippingRateRepository,
 } from "./ports.js";
 
 /**
@@ -664,6 +668,144 @@ function createCartRepository(db: Database): CartRepository {
           ),
         );
     },
+
+    adoptSessionCart: async (sessionRef, identityId, promotionId) => {
+      return await db.transaction(async (tx) => {
+        const [participant] = await tx
+          .select({ id: participants.id })
+          .from(participants)
+          .where(eq(participants.identityId, identityId))
+          .limit(1);
+        // Una cuenta de personal no tiene carrito: no hay nada que adoptar.
+        if (participant === undefined) {
+          return { adoptedLines: 0 };
+        }
+
+        // `FOR UPDATE`: dos inicios de sesion simultaneos con la misma cookie
+        // no pueden sumar el mismo carrito dos veces.
+        const [guest] = await tx
+          .select({ id: carts.id })
+          .from(carts)
+          .where(and(eq(carts.sessionRef, sessionRef), eq(carts.status, "OPEN")))
+          .for("update")
+          .limit(1);
+        if (guest === undefined) {
+          return { adoptedLines: 0 };
+        }
+
+        const guestLines = await tx
+          .select({
+            productVariantId: cartItems.productVariantId,
+            quantity: cartItems.quantity,
+            currency: productVariants.currency,
+          })
+          .from(cartItems)
+          .innerJoin(productVariants, eq(productVariants.id, cartItems.productVariantId))
+          .where(eq(cartItems.cartId, guest.id));
+
+        // El carrito de la cuenta, creandolo si no existe. Mismo
+        // `onConflictDoNothing` que `openFor`: decide el indice unico.
+        await tx
+          .insert(carts)
+          .values({ participantId: participant.id, sessionRef: null, promotionId })
+          .onConflictDoNothing();
+        const [target] = await tx
+          .select({ id: carts.id, currency: carts.currency })
+          .from(carts)
+          .where(and(eq(carts.participantId, participant.id), eq(carts.status, "OPEN")))
+          .for("update")
+          .limit(1);
+        if (target === undefined) {
+          throw new Error("no se pudo abrir el carrito de la cuenta para adoptar el anonimo");
+        }
+
+        // La moneda la fija la primera linea (trigger de la 0009). Si la cuenta
+        // no tenia ninguna, la fija la primera que se adopta.
+        let currency = target.currency;
+        let adopted = 0;
+        for (const line of guestLines) {
+          if (currency !== null && line.currency !== currency) {
+            continue;
+          }
+          currency = line.currency;
+          await tx
+            .insert(cartItems)
+            .values({
+              cartId: target.id,
+              productVariantId: line.productVariantId,
+              quantity: Math.min(line.quantity, CART_LINE_MAX_QUANTITY),
+            })
+            .onConflictDoUpdate({
+              target: [cartItems.cartId, cartItems.productVariantId],
+              // El mismo tope que la CHECK de la 0009 y que `POST /cart/items`:
+              // sumar dos carritos no puede producir una cantidad que el motor
+              // rechace y tumbe el inicio de sesion entero.
+              set: {
+                quantity: sql`LEAST(${cartItems.quantity} + ${line.quantity}, ${CART_LINE_MAX_QUANTITY})`,
+              },
+            });
+          adopted += 1;
+        }
+
+        await tx.update(carts).set({ status: "ABANDONED" }).where(eq(carts.id, guest.id));
+
+        return { adoptedLines: adopted };
+      });
+    },
+  };
+}
+
+/** Tope de cantidad por linea: el de la CHECK de `cart_items` (migracion 0009). */
+const CART_LINE_MAX_QUANTITY = 10_000;
+
+// ---------------------------------------------------------------------------
+// Envio (DEC-079)
+// ---------------------------------------------------------------------------
+
+function createShippingRateRepository(db: Database): ShippingRateRepository {
+  function toRecord(row: typeof shippingRates.$inferSelect): ShippingRateRecord {
+    return {
+      id: row.id,
+      amountMinor: row.amountMinor,
+      currency: row.currency,
+      setAt: row.setAt,
+      setByAdminUserId: row.setByAdminUserId,
+    };
+  }
+
+  return {
+    current: async () => {
+      const [row] = await db
+        .select()
+        .from(shippingRates)
+        .orderBy(desc(shippingRates.setAt))
+        .limit(1);
+      return row === undefined ? null : toRecord(row);
+    },
+
+    set: async (input) => {
+      const [row] = await db
+        .insert(shippingRates)
+        .values({
+          amountMinor: input.amountMinor,
+          currency: input.currency,
+          setByAdminUserId: input.setByAdminUserId,
+        })
+        .returning();
+      if (row === undefined) {
+        throw new Error("shipping_rate_insert_returned_no_row");
+      }
+      return toRecord(row);
+    },
+
+    history: async (limit) => {
+      const rows = await db
+        .select()
+        .from(shippingRates)
+        .orderBy(desc(shippingRates.setAt))
+        .limit(limit);
+      return rows.map(toRecord);
+    },
   };
 }
 
@@ -720,5 +862,6 @@ export function createRepositories(db: Database): Repositories {
     carts: createCartRepository(db),
     config: createConfigRepository(db),
     entryBalances: createEntryBalanceRepository(db),
+    shipping: createShippingRateRepository(db),
   };
 }

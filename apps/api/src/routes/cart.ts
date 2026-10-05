@@ -1,5 +1,6 @@
 /**
- * Carrito de SERVIDOR y cotizacion de entries (DEC-023, hito B3).
+ * Carrito de SERVIDOR y cotizacion de entries (DEC-023, hito B3; sin cuenta y
+ * con envio desde DEC-079).
  *
  * EL CONTRATO QUE `frontend` MARCO COMO BLOQUEANTE DURO
  *
@@ -13,32 +14,35 @@
  *   `quantity`: una INSTRUCCION sobre el carrito, no su contenido. El precio, el
  *   SKU y la elegibilidad los pone el servidor leyendo el catalogo.
  *
- * POR QUE HOY ESTAS RUTAS DEVUELVEN 401
+ * DE QUIEN ES EL CARRITO (DEC-079)
  *
- *   Un carrito pertenece a alguien -a un participante o a una sesion anonima- y
- *   quien resuelve esa identidad es `packages/security` (DEC-006). Mientras no
- *   exista, `lswPrincipalResolver` devuelve `null` y `denyAllAuthorizer` niega
- *   todo lo que no sea publico.
+ *   De un participante si hay sesion de cuenta, o de una sesion ANONIMA de
+ *   carrito si no la hay. La sesion anonima la emite `POST /cart/items` la
+ *   primera vez que un visitante anade algo -leer no crea nada- con el mismo
+ *   sistema de sesion del proyecto (`http/cart-session.ts`). Al iniciar sesion
+ *   o registrarse, ese carrito se suma al de la cuenta (`routes/auth.ts`).
  *
- *   Inventar aqui una cookie de carrito propia habria hecho que funcionaran
- *   antes, y habria creado un segundo sistema de sesion, que es lo que prohibe
- *   `CLAUDE.md` seccion 4. La logica esta completa y probada; lo que falta es
- *   una pieza de otro dominio.
+ *   Por eso estas rutas son `PUBLIC`: cualquiera puede tener carrito. Lo que no
+ *   puede nadie es leer o tocar el de otro: el carrito sale SIEMPRE del
+ *   principal de la peticion -nunca de un id que mande el cliente- y una linea
+ *   ajena responde lo mismo que una que no existe.
  *
- * PRECIO Y COTIZACION SON COSAS DISTINTAS
+ * PRECIO, ENVIO Y COTIZACION SON COSAS DISTINTAS
  *
- *   `subtotal` es dinero: lo que costaria pagar el carrito. `entry_quote` son
- *   entries: lo que ESTIMA generar bajo las Official Rules vigentes. La segunda
- *   es orientativa hasta que el pedido alcance el estado cualificante, y por eso
- *   viaja con `evaluated_at` y `rules_version_id`.
+ *   `subtotal` y `total` son dinero: lo que costaria pagar el carrito, el
+ *   segundo con el envio (DEC-079). `entry_quote` son entries: lo que ESTIMA
+ *   generar bajo las Official Rules vigentes, sobre la mercancia y sin el
+ *   envio. La cotizacion es orientativa hasta que el pedido alcance el estado
+ *   cualificante, y por eso viaja con `evaluated_at` y `rules_version_id`.
  */
 
 import { z } from "zod";
 
 import type { AppDependencies } from "../app.js";
+import { issueCartSession } from "../http/cart-session.js";
 import { ApiErrors, errorEnvelopeSchema } from "../http/errors.js";
 import { cartOwnerOf, type RequestPrincipal } from "../http/principal.js";
-import type { RouteDefinition } from "../http/route-registry.js";
+import type { RouteAuthorization, RouteDefinition } from "../http/route-registry.js";
 import { cartWithQuoteSchema } from "../http/schemas.js";
 /**
  * La disponibilidad y el predicado que decide el 409 viven en UN solo sitio,
@@ -48,6 +52,7 @@ import { cartWithQuoteSchema } from "../http/schemas.js";
 import { availabilityFor, fitsStock } from "../services/availability.js";
 import { quoteServerCart, type EntryQuoteResponse } from "../services/entry-quote.js";
 import type { CartRecord } from "../services/ports.js";
+import { shippingFor, type ShippingQuote } from "../services/shipping.js";
 import type { FastifyRequest } from "fastify";
 
 const itemIdParamsSchema = z.object({ item_id: z.uuid() });
@@ -67,18 +72,20 @@ const setQuantityBodySchema = z.object({
 });
 
 /**
- * Quien pregunta, o 401.
+ * DEC-079: el carrito es de quien pregunta, tenga cuenta o no.
  *
- * `denyAllAuthorizer` ya habria rechazado la peticion antes de llegar aqui. La
- * comprobacion se repite a proposito: el dia que exista un autorizador real,
- * este handler seguira sin poder leer un carrito sin saber de quien es.
+ * Una sola justificacion para las cinco rutas: es la misma decision, y si
+ * cambiara tendria que cambiar en las cinco a la vez.
  */
-async function requirePrincipal(request: FastifyRequest): Promise<RequestPrincipal> {
-  const principal = await request.server.lswPrincipalResolver(request);
-  if (principal === null) {
-    throw ApiErrors.unauthenticated();
-  }
-  return principal;
+const CART_AUTHORIZATION: RouteAuthorization = {
+  kind: "PUBLIC",
+  justification:
+    "DEC-079: un visitante sin cuenta tiene carrito; la cuenta se pide al pagar. El carrito sale SIEMPRE del principal de la peticion -sesion de participante o sesion anonima de carrito emitida por el mismo sistema de sesion- y nunca de un id del cliente; una linea ajena responde 404 igual que una inexistente. El checkout sigue exigiendo participante.",
+};
+
+/** Quien pregunta, o `null` si todavia no tiene ni sesion de carrito. */
+async function principalOf(request: FastifyRequest): Promise<RequestPrincipal | null> {
+  return await request.server.lswPrincipalResolver(request);
 }
 
 /** Suma de cantidades, no numero de lineas. */
@@ -86,7 +93,7 @@ function itemCountOf(cart: CartRecord): number {
   return cart.lines.reduce((total, line) => total + line.quantity, 0);
 }
 
-function subtotalOf(cart: CartRecord): { amount_minor: string; currency: string } | null {
+function subtotalMinorOf(cart: CartRecord): bigint | null {
   if (cart.currency === null || cart.lines.length === 0) {
     return null;
   }
@@ -94,14 +101,34 @@ function subtotalOf(cart: CartRecord): { amount_minor: string; currency: string 
   for (const line of cart.lines) {
     total += line.unitAmountMinor * BigInt(line.quantity);
   }
-  return { amount_minor: total.toString(10), currency: cart.currency };
+  return total;
 }
+
+function money(amountMinor: bigint, currency: string) {
+  return { amount_minor: amountMinor.toString(10), currency };
+}
+
+/** El carrito vacio que se devuelve cuando el solicitante no tiene ninguno. */
+const EMPTY_CART: z.infer<typeof cartWithQuoteSchema> = {
+  id: "00000000-0000-0000-0000-000000000000",
+  currency: null,
+  // No hay fila, asi que no hay instante. `now()` aqui seria afirmar que un
+  // carrito inexistente acaba de cambiar.
+  updated_at: null,
+  // Cero cosas son cero, no ausencia de cuenta.
+  item_count: 0,
+  lines: [],
+  subtotal: null,
+  shipping: { status: "NOT_REQUIRED", amount: null },
+  total: null,
+  entry_quote: null,
+};
 
 export function buildCartRoutes(dependencies: AppDependencies): RouteDefinition[] {
   const { repositories } = dependencies;
 
   /**
-   * Serializa el carrito CON su cotizacion.
+   * Serializa el carrito CON su envio, su total y su cotizacion.
    *
    * La cotizacion se calcula sobre `cart`, que acaba de salir de la base de
    * datos. Sin promocion activa se devuelve `null` en vez de un 409: un carrito
@@ -110,7 +137,7 @@ export function buildCartRoutes(dependencies: AppDependencies): RouteDefinition[
    */
   async function present(
     cart: CartRecord,
-    principal: RequestPrincipal,
+    principal: RequestPrincipal | null,
   ): Promise<z.infer<typeof cartWithQuoteSchema>> {
     let quote: EntryQuoteResponse | null = null;
     try {
@@ -126,6 +153,14 @@ export function buildCartRoutes(dependencies: AppDependencies): RouteDefinition[
         throw error;
       }
     }
+
+    // DEC-079: la MISMA regla que cobra `freezeOpenCart` al pagar.
+    const shipping: ShippingQuote = shippingFor(
+      cart.lines,
+      cart.currency,
+      await repositories.shipping.current(),
+    );
+    const subtotal = subtotalMinorOf(cart);
 
     return {
       id: cart.id,
@@ -157,7 +192,18 @@ export function buildCartRoutes(dependencies: AppDependencies): RouteDefinition[
         // misma pregunta por una unidad (`CATALOG_PROBE_QUANTITY`).
         availability: availabilityFor(line.stockQuantity, line.quantity),
       })),
-      subtotal: subtotalOf(cart),
+      subtotal: subtotal === null || cart.currency === null ? null : money(subtotal, cart.currency),
+      shipping: {
+        status: shipping.kind,
+        amount: shipping.kind === "CHARGED" ? money(shipping.amountMinor, shipping.currency) : null,
+      },
+      total:
+        subtotal === null || cart.currency === null || shipping.kind === "NOT_CONFIGURED"
+          ? null
+          : money(
+              subtotal + (shipping.kind === "CHARGED" ? shipping.amountMinor : 0n),
+              cart.currency,
+            ),
       entry_quote: quote,
     };
   }
@@ -173,30 +219,23 @@ export function buildCartRoutes(dependencies: AppDependencies): RouteDefinition[
       method: "GET",
       url: "/api/v1/cart",
       operationId: "getCart",
-      summary: "Carrito vigente de la sesion, con su cotizacion de entries.",
-      description: "Un carrito inexistente devuelve uno vacio, nunca un 404.",
+      summary: "Carrito vigente de quien pregunta, con envio, total y cotizacion de entries.",
+      description:
+        "Un carrito inexistente devuelve uno vacio, nunca un 404. Sin cuenta, el carrito es el de la sesion anonima de carrito (DEC-079); leer no la crea.",
       tags: ["cart"],
-      authorization: { kind: "PARTICIPANT", selfOnly: true },
-      schema: { response: { 200: cartWithQuoteSchema, 401: errorEnvelopeSchema } },
+      authorization: CART_AUTHORIZATION,
+      schema: { response: { 200: cartWithQuoteSchema } },
       handler: async (request) => {
-        const principal = await requirePrincipal(request);
-        const existing = await repositories.carts.findOpen(cartOwnerOf(principal));
+        const principal = await principalOf(request);
+        if (principal === null) {
+          return EMPTY_CART;
+        }
 
         // Leer no crea nada: un `GET` que insertara una fila haria que cada
         // rastreador dejara un carrito vacio en la base de datos.
+        const existing = await repositories.carts.findOpen(cartOwnerOf(principal));
         if (existing === null) {
-          return {
-            id: "00000000-0000-0000-0000-000000000000",
-            currency: null,
-            // No hay fila, asi que no hay instante. `now()` aqui seria
-            // afirmar que un carrito inexistente acaba de cambiar.
-            updated_at: null,
-            // Cero cosas son cero, no ausencia de cuenta.
-            item_count: 0,
-            lines: [],
-            subtotal: null,
-            entry_quote: null,
-          };
+          return EMPTY_CART;
         }
 
         return present(existing, principal);
@@ -209,23 +248,23 @@ export function buildCartRoutes(dependencies: AppDependencies): RouteDefinition[
       operationId: "addCartItem",
       summary: "Anadir una variante al carrito.",
       description:
-        "El cuerpo lleva `variant_id` y `quantity`, no el precio: el importe lo pone el servidor leyendo el catalogo (DEC-023).",
+        "El cuerpo lleva `variant_id` y `quantity`, no el precio: el importe lo pone el servidor leyendo el catalogo (DEC-023). Sin cuenta ni sesion de carrito, emite la sesion anonima de carrito y su cookie (DEC-079).",
       tags: ["cart"],
-      authorization: { kind: "PARTICIPANT", selfOnly: true },
+      authorization: CART_AUTHORIZATION,
       schema: {
         body: addItemBodySchema,
         response: {
           200: cartWithQuoteSchema,
-          401: errorEnvelopeSchema,
           404: errorEnvelopeSchema,
           409: errorEnvelopeSchema,
           422: errorEnvelopeSchema,
         },
       },
-      handler: async (request) => {
-        const principal = await requirePrincipal(request);
+      handler: async (request, reply) => {
         const body = request.body as z.infer<typeof addItemBodySchema>;
 
+        // Todo lo que puede rechazar la peticion va ANTES de emitir la sesion:
+        // una variante inexistente no debe dejar una sesion de carrito huerfana.
         const found = await repositories.catalog.findVariant(body.variant_id);
         if (found === null) {
           throw ApiErrors.productNotFound(body.variant_id);
@@ -245,6 +284,16 @@ export function buildCartRoutes(dependencies: AppDependencies): RouteDefinition[
         if (stock !== null && !fitsStock(stock, body.quantity)) {
           throw ApiErrors.insufficientStock(stock);
         }
+
+        // DEC-079: sin cuenta ni sesion de carrito, se emite la sesion aqui y
+        // solo aqui. Es el primer momento en que el visitante TIENE algo que
+        // guardar.
+        const principal: RequestPrincipal =
+          (await principalOf(request)) ??
+          ({
+            kind: "ANONYMOUS_SESSION",
+            sessionRef: (await issueCartSession(reply, dependencies, new Date())).id,
+          } as const);
 
         const cart = await openCart(principal);
 
@@ -266,24 +315,26 @@ export function buildCartRoutes(dependencies: AppDependencies): RouteDefinition[
       operationId: "updateCartItem",
       summary: "Cambiar la cantidad de una linea.",
       tags: ["cart"],
-      authorization: { kind: "PARTICIPANT", selfOnly: true },
+      authorization: CART_AUTHORIZATION,
       schema: {
         params: itemIdParamsSchema,
         body: setQuantityBodySchema,
         response: {
           200: cartWithQuoteSchema,
-          401: errorEnvelopeSchema,
           404: errorEnvelopeSchema,
           409: errorEnvelopeSchema,
           422: errorEnvelopeSchema,
         },
       },
       handler: async (request) => {
-        const principal = await requirePrincipal(request);
+        const principal = await principalOf(request);
         const params = request.params as z.infer<typeof itemIdParamsSchema>;
         const body = request.body as z.infer<typeof setQuantityBodySchema>;
 
-        const cart = await repositories.carts.findOpen(cartOwnerOf(principal));
+        // Sin principal no hay carrito, y una linea que no esta en tu carrito
+        // es un 404 igual que una que no existe.
+        const cart =
+          principal === null ? null : await repositories.carts.findOpen(cartOwnerOf(principal));
         if (cart === null) {
           throw ApiErrors.cartItemNotFound();
         }
@@ -338,20 +389,20 @@ export function buildCartRoutes(dependencies: AppDependencies): RouteDefinition[
       operationId: "removeCartItem",
       summary: "Quitar una linea del carrito.",
       tags: ["cart"],
-      authorization: { kind: "PARTICIPANT", selfOnly: true },
+      authorization: CART_AUTHORIZATION,
       schema: {
         params: itemIdParamsSchema,
         response: {
           200: cartWithQuoteSchema,
-          401: errorEnvelopeSchema,
           404: errorEnvelopeSchema,
         },
       },
       handler: async (request) => {
-        const principal = await requirePrincipal(request);
+        const principal = await principalOf(request);
         const params = request.params as z.infer<typeof itemIdParamsSchema>;
 
-        const cart = await repositories.carts.findOpen(cartOwnerOf(principal));
+        const cart =
+          principal === null ? null : await repositories.carts.findOpen(cartOwnerOf(principal));
         if (cart === null) {
           throw ApiErrors.cartItemNotFound();
         }
@@ -371,19 +422,19 @@ export function buildCartRoutes(dependencies: AppDependencies): RouteDefinition[
       operationId: "getCartEntryQuote",
       summary: "Cotizacion de entries del carrito de servidor, con desglose auditable.",
       description:
-        "DEC-023. Se calcula sobre el carrito del SERVIDOR: no hay forma de enviar items. La cifra es ORIENTATIVA hasta que el pedido alcance el estado que las Official Rules definan como cualificante.",
+        "DEC-023. Se calcula sobre el carrito del SERVIDOR: no hay forma de enviar items. La cifra es ORIENTATIVA hasta que el pedido alcance el estado que las Official Rules definan como cualificante. El envio no genera participaciones (DEC-079).",
       tags: ["cart"],
-      authorization: { kind: "PARTICIPANT", selfOnly: true },
+      authorization: CART_AUTHORIZATION,
       schema: {
         response: {
           200: cartWithQuoteSchema.shape.entry_quote.unwrap(),
-          401: errorEnvelopeSchema,
           409: errorEnvelopeSchema,
         },
       },
       handler: async (request) => {
-        const principal = await requirePrincipal(request);
-        const cart = await repositories.carts.findOpen(cartOwnerOf(principal));
+        const principal = await principalOf(request);
+        const cart =
+          principal === null ? null : await repositories.carts.findOpen(cartOwnerOf(principal));
 
         // Sin carrito se cotiza uno vacio en vez de devolver 404: la respuesta
         // correcta a "cuantas entries genera mi carrito" cuando no hay carrito

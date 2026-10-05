@@ -82,12 +82,28 @@ export interface CheckoutLineItem {
   readonly description: string;
 }
 
+/**
+ * DEC-079: el envio del pedido, aparte de la mercancia.
+ *
+ * No es un `CheckoutLineItem` porque no es una variante del catalogo ni una
+ * linea del pedido: es un cargo del pedido entero. Cada proveedor decide como
+ * lo presenta en su pagina de pago.
+ */
+export interface CheckoutShipping {
+  readonly amount: Money;
+  /** Lo que ve la persona en la pasarela ("Shipping"). */
+  readonly description: string;
+}
+
 export interface CreateCheckoutSessionInput {
   /** Identificador interno de la orden. El proveedor lo recibe como referencia. */
   readonly orderId: string;
   readonly idempotencyKey: string;
+  /** Lo que se cobra en total: mercancia + envio. */
   readonly total: Money;
   readonly lineItems: readonly CheckoutLineItem[];
+  /** `null` si el pedido no lleva nada que enviar (solo paquetes). */
+  readonly shipping: CheckoutShipping | null;
   readonly successUrl: string;
   readonly cancelUrl: string;
   /**

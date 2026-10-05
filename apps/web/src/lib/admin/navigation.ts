@@ -33,6 +33,8 @@ export const ADMIN_NAV = [
   { key: "dashboard", path: "", capabilities: ["dashboard.read"] },
   { key: "promotions", path: "/promotions", capabilities: ["promotion.read"] },
   { key: "catalog", path: "/catalog", capabilities: ["product.read"] },
+  // DEC-079: la tarifa de envio es un precio de la tienda, con la misma lectura.
+  { key: "shipping", path: "/shipping", capabilities: ["product.read"] },
   { key: "orders", path: "/orders", capabilities: ["order.read"] },
   { key: "participants", path: "/participants", capabilities: ["participant.list"] },
   { key: "amoe", path: "/amoe", capabilities: ["amoe.review.read"] },

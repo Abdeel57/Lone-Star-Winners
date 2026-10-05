@@ -17,6 +17,7 @@ import type { CreateOrderItemInput } from "@lsw/database";
 
 import { ApiError } from "../http/errors.js";
 import type { CartLineRecord, CartOwnerRef, Repositories } from "./ports.js";
+import { shippingAmountOf, shippingFor } from "./shipping.js";
 
 export interface FrozenCart {
   readonly cartId: string;
@@ -24,6 +25,14 @@ export interface FrozenCart {
   readonly promotionId: string | null;
   readonly rulesVersionId: string | null;
   readonly subtotalMinor: bigint;
+  /**
+   * DEC-079: envio que se cobra con este pedido, o `null` si no lleva mercancia
+   * (solo paquetes). Nunca cero: un carrito con mercancia sin tarifa no llega
+   * aqui, se rechaza con `409 SHIPPING_NOT_CONFIGURED`.
+   */
+  readonly shippingMinor: bigint | null;
+  /** Lo que se cobra: subtotal + envio. Sin impuestos (pendiente legal). */
+  readonly totalMinor: bigint;
   readonly items: readonly CreateOrderItemInput[];
   /** Las lineas del carrito tal cual, para describirlas a una pasarela. */
   readonly lines: readonly CartLineRecord[];
@@ -72,12 +81,22 @@ export async function freezeOpenCart(
     };
   });
 
+  // DEC-079: la MISMA regla que ensena el total en el carrito.
+  const shipping = shippingFor(cart.lines, cart.currency, await repositories.shipping.current());
+  if (shipping.kind === "NOT_CONFIGURED") {
+    // Nunca se envia gratis por omision: sin tarifa, no se cobra.
+    throw new ApiError({ statusCode: 409, code: "SHIPPING_NOT_CONFIGURED" });
+  }
+  const shippingMinor = shippingAmountOf(shipping);
+
   return {
     cartId: cart.id,
     currency: cart.currency,
     promotionId: promotion?.id ?? null,
     rulesVersionId: promotion?.rulesVersionId ?? null,
     subtotalMinor: subtotal,
+    shippingMinor,
+    totalMinor: subtotal + (shippingMinor ?? 0n),
     items,
     lines: cart.lines,
   };

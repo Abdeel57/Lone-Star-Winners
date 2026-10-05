@@ -133,6 +133,8 @@
     "CART_EMPTY": "No hay nada en tu carrito.",
     "CHECKOUT_UNAVAILABLE": "Ahora mismo no se puede finalizar la compra. No se ha cobrado nada.",
     "SHIPPING_ADDRESS_INVALID": "No hemos podido usar esa dirección de envío. Revísala e inténtalo de nuevo.",
+    "SHIPPING_NOT_CONFIGURED": "Todavía no podemos cobrar el envío de la mercancía. Inténtalo un poco más tarde.",
+    "SHIPPING_RATE_ZERO": "El envío nunca es gratis: pon un importe mayor que cero.",
     "INVALID_CREDENTIALS": "Esos datos y esa contraseña no corresponden a ninguna cuenta. Revisa que estén bien escritos; la contraseña distingue mayúsculas de minúsculas.",
     "EMAIL_ALREADY_REGISTERED": "Ya existe una cuenta con ese correo.",
     "WEAK_PASSWORD": "Esa contraseña no cumple nuestros requisitos. Elige otra.",
@@ -213,12 +215,18 @@
     },
     "remove": "Quitar",
     "removeLabel": "Quitar {name}",
-    "signInRequired": {
-      "body": "Un carrito pertenece a una cuenta. En cuanto inicies sesión, lo que añadas se queda contigo en cualquier dispositivo.",
-      "title": "Inicia sesión para ver tu carrito"
+    "guestNote": "Para pagar te pediremos crear una cuenta o iniciar sesión. Lo que tienes en el carrito se queda.",
+    "totals": {
+      "heading": "Resumen",
+      "subtotal": "Subtotal",
+      "shipping": "Envío",
+      "shippingNotRequired": "No aplica",
+      "shippingPending": "Por confirmar",
+      "total": "Total",
+      "shippingNoEntries": "El envío no genera participaciones.",
+      "shippingNotConfigured": "Todavía no podemos cobrar el envío de la mercancía, así que este carrito no se puede pagar por ahora. Inténtalo un poco más tarde."
     },
     "subtotal": "Subtotal",
-    "subtotalNote": "El envío y los impuestos se calculan al finalizar el pedido.",
     "subtotalUnavailable": "Ahora mismo no podemos mostrar un subtotal de este carrito.",
     "title": "Tu carrito",
     "unitPrice": "Precio unitario",
@@ -937,8 +945,12 @@
   "checkout": {
     "title": "Finalizar la compra",
     "intro": "Estás comprando mercancía. Las participaciones promocionales se otorgan conforme a las Reglas Oficiales.",
-    "signInRequiredTitle": "Inicia sesión para finalizar la compra",
-    "signInRequiredBody": "Un pedido pertenece a una cuenta, así que necesitamos saber quién eres antes de que pagues.",
+    "accountRequired": {
+      "title": "Crea tu cuenta para pagar",
+      "body": "Tu carrito se guarda: al crear tu cuenta o iniciar sesión vuelves aquí con todo lo que añadiste. Pedimos una cuenta porque cada pedido y sus participaciones van a nombre de una persona.",
+      "register": "Crear cuenta y continuar",
+      "signIn": "Ya tengo cuenta"
+    },
     "emptyTitle": "No hay nada que comprar",
     "emptyBody": "Añade antes mercancía elegible a tu carrito.",
     "addressHeading": "A dónde va",
@@ -1027,6 +1039,7 @@
       "dashboard": "Panel",
       "promotions": "Promociones",
       "catalog": "Catálogo",
+      "shipping": "Envío",
       "orders": "Pedidos",
       "participants": "Participantes",
       "amoe": "Revisión gratuita",
@@ -1196,6 +1209,26 @@
       "engineSaid": "El sistema lo rechazó por este motivo:",
       "noUpdateCapability": "Puedes ver esta promoción pero no editarla: requiere la capacidad promotion.update.",
       "rulesManageCta": "Gestionar versiones"
+    },
+    "shipping": {
+      "title": "Envío",
+      "description": "Tarifa fija que se cobra una vez por pedido cuando lleva mercancía.",
+      "rules": "Los paquetes de participaciones no se envían. El envío no genera participaciones. Nunca puede ser cero: siempre se cobra.",
+      "currentHeading": "Tarifa vigente",
+      "currentSince": "Desde el {when}.",
+      "noneTitle": "Todavía no hay tarifa de envío",
+      "noneBody": "Mientras no la pongas, los carritos con mercancía no se pueden pagar. Los paquetes de participaciones sí.",
+      "formHeading": "Cambiar la tarifa",
+      "amountLabel": "Importe por pedido (USD)",
+      "amountHint": "Por ejemplo: 7.99. Se aplica a los pedidos nuevos; los que ya se hicieron conservan el envío que pagaron.",
+      "save": "Guardar tarifa",
+      "saved": "Tarifa guardada. Ya se aplica en el carrito y al pagar.",
+      "readOnly": "Puedes consultar la tarifa, pero cambiarla requiere el permiso de editar el catálogo.",
+      "historyHeading": "Cambios anteriores",
+      "historyCaption": "Historial de la tarifa de envío",
+      "columnAmount": "Importe",
+      "columnSetAt": "Fecha",
+      "historyEmpty": "Todavía no hay cambios."
     },
     "catalog": {
       "title": "Catálogo",

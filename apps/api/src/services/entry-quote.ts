@@ -148,7 +148,11 @@ function toResponse(
 export async function quoteServerCart(
   dependencies: QuoteDependencies,
   cart: CartRecord,
-  principal: RequestPrincipal,
+  /**
+   * `null` = visitante que todavia no tiene ni sesion de carrito (DEC-079). Se
+   * cotiza igual que una sesion anonima: sin saldo previo.
+   */
+  principal: RequestPrincipal | null,
 ): Promise<EntryQuoteResponse> {
   const { repositories } = dependencies;
 
@@ -172,7 +176,7 @@ export async function quoteServerCart(
   const config = await repositories.config.read();
 
   const participantEntriesBefore =
-    principal.kind === "PARTICIPANT"
+    principal !== null && principal.kind === "PARTICIPANT"
       ? await repositories.entryBalances.activeEntries(promotion.id, principal.participantId)
       : 0;
 

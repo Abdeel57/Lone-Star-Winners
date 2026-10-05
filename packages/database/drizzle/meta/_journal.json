@@ -190,6 +190,13 @@
       "when": 1787616035000,
       "tag": "0035_cash_payments",
       "breakpoints": false
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1787616036000,
+      "tag": "0036_guest_cart_and_shipping",
+      "breakpoints": false
     }
   ]
 }

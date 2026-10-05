@@ -550,11 +550,12 @@ export function buildOrdersRoutes(dependencies: AppDependencies): RouteDefinitio
           cartId: cart.cartId,
           currency: cart.currency,
           subtotalMinor: subtotal,
-          // Envio e impuestos todavia no estan determinados. `null` y no cero:
-          // son afirmaciones distintas delante de quien va a pagar.
-          shippingTotalMinor: null,
+          // DEC-079: la tarifa fija si el pedido lleva mercancia; `null` si
+          // solo lleva paquetes, que no se envian. Impuestos: `null`, pendiente
+          // legal (no es "cero impuestos", es "todavia no se cobran").
+          shippingTotalMinor: cart.shippingMinor,
           taxTotalMinor: null,
-          totalMinor: subtotal,
+          totalMinor: cart.totalMinor,
           shippingAddress: { ...body.shipping_address, line2: body.shipping_address.line2 ?? null },
           items: cart.items,
           createdAt: domain.clock.now(),
@@ -574,9 +575,22 @@ export function buildOrdersRoutes(dependencies: AppDependencies): RouteDefinitio
             // crea un segundo cobro.
             idempotencyKey: `order:${draft.id}`,
             total: {
-              amountMinor: minorAmountSchema.parse(subtotal),
+              amountMinor: minorAmountSchema.parse(cart.totalMinor),
               currency: cart.currency as never,
             },
+            // DEC-079: el envio va aparte de las lineas de mercancia. La pasarela
+            // lo cobra como una linea mas, pero no es una linea del pedido y no
+            // genera participaciones.
+            shipping:
+              cart.shippingMinor === null
+                ? null
+                : {
+                    amount: {
+                      amountMinor: minorAmountSchema.parse(cart.shippingMinor),
+                      currency: cart.currency as never,
+                    },
+                    description: "Shipping",
+                  },
             lineItems: cart.lines.map((line) => ({
               productVariantId: line.productVariantId,
               quantity: line.quantity,

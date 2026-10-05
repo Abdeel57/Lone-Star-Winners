@@ -29,6 +29,7 @@ describe("UnconfiguredPaymentProvider", () => {
         idempotencyKey: "key-fake",
         total: { amountMinor: 0n as never, currency: "USD" as never },
         lineItems: [],
+        shipping: null,
         successUrl: "http://localhost/ok",
         cancelUrl: "http://localhost/cancel",
         metadata: {},

@@ -178,18 +178,21 @@ y **no asumible como existente**.
 este contrato, con pruebas propias de `backend`. La revisión de
 `security-integration` es lo que las mueve a `TESTED`.
 
-### Aviso sobre las rutas del carrito
+### Aviso sobre las rutas del carrito (DEC-079)
 
-Las cinco rutas de carrito están implementadas y probadas, y **hoy devuelven
-`401 UNAUTHENTICATED`**. No es un fallo: un carrito pertenece a alguien, y quien
-resuelve esa identidad —participante o sesión anónima— es `packages/security`
-(DEC-006). `apps/api` declara el puerto (`lswPrincipalResolver`) y su valor por
-defecto no conoce a nadie.
+Las cinco rutas de carrito son **`PUBLIC`** desde DEC-079: un visitante **sin
+cuenta** tiene carrito y ve su total; la cuenta se pide **al pagar**. El carrito
+pertenece a un participante (sesión de cuenta) o a una **sesión anónima de
+carrito**, que emite `POST /cart/items` la primera vez que el visitante añade
+algo. Esa sesión la produce el mismo sistema de sesión de DEC-006 —token opaco,
+SHA-256 en tabla, cookie `httpOnly`, revocable—, vive en su propia tabla
+(`cart_sessions`) y **ninguna puerta de participante ni de personal la acepta**.
+Al registrarse o iniciar sesión, su carrito se suma al de la cuenta y la sesión
+anónima se revoca (sección 10).
 
-Inventar una cookie de carrito propia en `apps/api` las habría hecho funcionar
-antes creando un segundo sistema de sesión, que es lo que prohíbe `CLAUDE.md`
-sección 4. En cuanto `packages/security` sustituya ese puerto, las rutas
-funcionan sin tocar una línea de este contrato.
+Que sean `PUBLIC` no significa que cualquiera vea cualquier carrito: el carrito
+sale **siempre** del principal de la petición, nunca de un identificador que
+mande el cliente, y una línea ajena responde `404` igual que una inexistente.
 
 ### Índice de rutas implementadas
 
@@ -208,11 +211,11 @@ markdown, y es lo que verifica el test de contrato de DEC-015.
 | GET    | /api/v1/promotions/:slug/official-rules | `PUBLIC`           |
 | GET    | /api/v1/products                        | `PUBLIC`           |
 | GET    | /api/v1/products/:slug                  | `PUBLIC`           |
-| GET    | /api/v1/cart                            | `PARTICIPANT_SELF` |
-| POST   | /api/v1/cart/items                      | `PARTICIPANT_SELF` |
-| PATCH  | /api/v1/cart/items/:item_id             | `PARTICIPANT_SELF` |
-| DELETE | /api/v1/cart/items/:item_id             | `PARTICIPANT_SELF` |
-| GET    | /api/v1/cart/entry-quote                | `PARTICIPANT_SELF` |
+| GET    | /api/v1/cart                            | `PUBLIC` (DEC-079) |
+| POST   | /api/v1/cart/items                      | `PUBLIC` (DEC-079) |
+| PATCH  | /api/v1/cart/items/:item_id             | `PUBLIC` (DEC-079) |
+| DELETE | /api/v1/cart/items/:item_id             | `PUBLIC` (DEC-079) |
+| GET    | /api/v1/cart/entry-quote                | `PUBLIC` (DEC-079) |
 | POST   | /api/v1/auth/register                   | `PUBLIC`           |
 | POST   | /api/v1/auth/login                      | `PUBLIC`           |
 | POST   | /api/v1/auth/mfa/verify                 | `PUBLIC`           |
@@ -763,12 +766,34 @@ Todas las rutas de esta sección devuelven **`CartWithQuote`**:
     }
   ],
   "subtotal": { "amount_minor": "5000", "currency": "USD" },
+  "shipping": {
+    "status": "CHARGED",
+    "amount": { "amount_minor": "799", "currency": "USD" }
+  },
+  "total": { "amount_minor": "5799", "currency": "USD" },
   "entry_quote": null
 }
 ```
 
 - `subtotal` es **dinero**; `entry_quote` son **entries**. No son lo mismo y no
   se derivan uno del otro.
+- **`shipping` y `total` (DEC-079).** Envío con la **misma regla** con la que se
+  cobra al pagar: tarifa **fija por pedido** si el carrito lleva al menos una
+  línea de mercancía (`kind = MERCHANDISE`); los paquetes de participaciones no
+  se envían. Nunca es gratis.
+
+  | `shipping.status` | cuándo                                 | `shipping.amount` | `total`                   |
+  | ----------------- | -------------------------------------- | ----------------- | ------------------------- |
+  | `NOT_REQUIRED`    | solo paquetes, o carrito vacío         | `null`            | subtotal (o `null` vacío) |
+  | `CHARGED`         | lleva mercancía y hay tarifa vigente   | la tarifa         | subtotal + tarifa         |
+  | `NOT_CONFIGURED`  | lleva mercancía y no hay tarifa puesta | `null`            | `null`                    |
+
+  Con `NOT_CONFIGURED` el checkout responde `409 SHIPPING_NOT_CONFIGURED`: un
+  total sin el envío que se va a cobrar sería una cifra falsa. **Sin impuestos**
+  por ahora (pendiente legal, `docs/LEGAL_PENDING.md`). **El envío no genera
+  participaciones**: `entry_quote` se calcula sobre las líneas, que no lo
+  incluyen ("excluding taxes and shipping").
+
 - `entry_quote` es `null` cuando no hay promoción activa. Un carrito sigue
   siendo válido en el periodo entre promociones: se puede comprar mercancía sin
   que haya nada que cotizar, y hacer fallar `GET /cart` impediría hasta vaciarlo.
@@ -845,17 +870,18 @@ Method: GET
 Endpoint: /api/v1/cart
 
 Purpose:
-Carrito vigente de la sesión, con su cotización de entries.
+Carrito vigente de quien pregunta, con envío, total y cotización de entries.
 
-Authentication: sesión (participante o anónima con cookie de carrito)
+Authentication: opcional. Sesión de participante, sesión anónima de carrito
+(cookie `<SESSION_COOKIE_NAME>_cart`, DEC-079) o ninguna. Leer no emite sesión.
 
 Request: sin parámetros
 
 Response: 200 CartWithQuote
 
-Errors: ninguno propio; un carrito inexistente devuelve uno vacío
+Errors: ninguno propio; un carrito inexistente (o sin sesión) devuelve uno vacío
 
-Authorization: PARTICIPANT_SELF
+Authorization: PUBLIC (DEC-079)
 
 Owner: backend
 
@@ -869,7 +895,10 @@ Endpoint: /api/v1/cart/items
 Purpose:
 Añadir una variante al carrito.
 
-Authentication: sesión
+Authentication: opcional. Sin sesión de participante ni de carrito, la ruta
+EMITE la sesión anónima de carrito y responde con su `Set-Cookie`
+(`httpOnly`, `Secure`, `SameSite=Lax`, `Path=/`, 30 días; DEC-079). Se emite
+después de validar la variante: una petición rechazada no deja sesión.
 
 Request: { "variant_id": "uuid", "quantity": 1 }
 
@@ -879,7 +908,7 @@ Errors:
 404 PRODUCT_NOT_FOUND, 409 VARIANT_NOT_PURCHASABLE, 409 INSUFFICIENT_STOCK,
 422 VALIDATION_FAILED
 
-Authorization: PARTICIPANT_SELF
+Authorization: PUBLIC (DEC-079)
 
 Owner: backend
 
@@ -893,7 +922,7 @@ Endpoint: /api/v1/cart/items/{item_id}
 Purpose:
 Cambiar la cantidad de una línea.
 
-Authentication: sesión
+Authentication: opcional (DEC-079). Sin sesión no hay carrito: 404.
 
 Request: { "quantity": 3 }
 
@@ -901,7 +930,7 @@ Response: 200 CartWithQuote
 
 Errors: 404 CART_ITEM_NOT_FOUND, 409 INSUFFICIENT_STOCK, 422 VALIDATION_FAILED
 
-Authorization: PARTICIPANT_SELF
+Authorization: PUBLIC (DEC-079)
 
 Owner: backend
 
@@ -915,7 +944,7 @@ Endpoint: /api/v1/cart/items/{item_id}
 Purpose:
 Quitar una línea.
 
-Authentication: sesión
+Authentication: opcional (DEC-079). Sin sesión no hay carrito: 404.
 
 Request: `item_id` en la ruta
 
@@ -923,7 +952,7 @@ Response: 200 CartWithQuote
 
 Errors: 404 CART_ITEM_NOT_FOUND
 
-Authorization: PARTICIPANT_SELF
+Authorization: PUBLIC (DEC-079)
 
 Owner: backend
 
@@ -1005,7 +1034,11 @@ declara `EXCLUSIVE` y dos periodos se solapan: el motor **falla en vez de
 desempatar por su cuenta**, y eso se corrige en la configuración legal, no en el
 cliente.
 
-Authorization: PARTICIPANT_SELF
+Sin sesión (DEC-079) cotiza un carrito vacío: 0 entries. Una sesión anónima se
+cotiza sin saldo previo del participante, porque no hay participante; la cifra
+definitiva la da el motor al pagar, ya con cuenta.
+
+Authorization: PUBLIC (DEC-079)
 
 Owner: backend
 
@@ -1558,6 +1591,22 @@ Cinco fallos consecutivos bloquean 15 minutos. El bloqueo es **temporal** a
 propósito: uno permanente convertiría el formulario en una forma de dejar fuera
 a cualquiera cuyo correo se conozca.
 
+### El carrito sin cuenta pasa a la cuenta (DEC-079)
+
+`POST /auth/register` y `POST /auth/login` (este, solo con sesión de
+**participante**; una de personal no adopta nada), si la petición trae la cookie
+de la sesión anónima de carrito (`<SESSION_COOKIE_NAME>_cart`):
+
+1. suman sus líneas al carrito de la cuenta —mismo tope de 10 000 por línea; una
+   línea en otra moneda se queda fuera—, en una transacción;
+2. revocan la sesión anónima (`revocation_reason = adopted_by_account`);
+3. responden con un `Set-Cookie` que borra la cookie de carrito.
+
+La sesión de participante es **nueva**: la anónima nunca se promueve, así que
+un token de carrito capturado antes de iniciar sesión no da acceso a la cuenta.
+Si la adopción falla, se registra en el log y el alta o el login **siguen**: la
+persona ya demostró quién es, y su carrito anónimo sigue donde estaba.
+
 ### `POST /api/v1/auth/mfa/verify`
 
 `Authorization: PUBLIC` — la sesión existe pero está en `MFA_PENDING`, así que
@@ -1877,8 +1926,17 @@ El pedido se crea en DRAFT ANTES de llamar al proveedor: es lo que da el
 congelan aquí -SKU, nombre, precio y elegibilidad-: el precio que vale es el que
 el participante vio al pulsar, no el que hubiera cuando el proveedor liquide.
 
+DEC-079: también se congela el ENVÍO. Con mercancía, `shipping_total_minor` es
+la tarifa fija vigente y `total_minor` = subtotal + envío; sin mercancía (solo
+paquetes), `shipping_total_minor` es `null`. `tax_total_minor` sigue `null`
+(pendiente legal). La pasarela cobra el envío como una línea aparte marcada
+como envío; no es una línea del pedido y no genera participaciones. Lo mismo
+vale para `POST /checkout/cash-order`.
+
 Errors:
 409 CART_EMPTY
+409 SHIPPING_NOT_CONFIGURED (DEC-079: el carrito lleva mercancía y no hay tarifa
+de envío puesta. Nunca se envía gratis por omisión; se pone en el panel)
 503 PAYMENT_PROVIDER_NOT_CONFIGURED (`PAYMENT_PROVIDER=none`)
 503 PAYMENT_PROVIDER_UNAVAILABLE (el proveedor rechazó abrir el cobro: cuenta sin
 métodos de pago activos, clave revocada, caída. No se cobró nada y el borrador
@@ -1962,6 +2020,7 @@ responde 409 CART_EMPTY.
 
 Errors:
 409 CART_EMPTY
+409 SHIPPING_NOT_CONFIGURED (DEC-079, igual que con tarjeta)
 422 VALIDATION_FAILED
 
 Authorization: PARTICIPANT_SELF
@@ -4267,4 +4326,77 @@ que saber que NO llegó). Si solo falla el acuse, responde 202.
 Authorization: PUBLIC
 
 Owner: backend
+```
+
+## 16. Carrito sin cuenta y tarifa de envío (DEC-079)
+
+El carrito sin cuenta está en §5 (forma de `CartWithQuote`) y en la sección 10
+(adopción al iniciar sesión). Aquí, la tarifa que pone el panel.
+
+**Regla del envío.** Tarifa **fija por pedido**, solo si el carrito lleva al
+menos una línea de mercancía (`kind = MERCHANDISE`); los paquetes de
+participaciones no se envían. **Nunca es cero**: lo impone el esquema de la ruta
+(mínimo 1 centavo) y la CHECK `shipping_rates_amount_positive` de la migración
+`0036`. Sin tarifa puesta, un carrito con mercancía no tiene total y el checkout
+responde `409 SHIPPING_NOT_CONFIGURED`. Sin impuestos por ahora (pendiente
+legal). **El envío no genera participaciones.**
+
+**Solo inserción.** Cada cambio es una fila nueva de `shipping_rates`; la
+vigente es la última y las anteriores quedan de histórico con quién y cuándo. Lo
+que pagó cada pedido queda congelado en `orders.shipping_total_minor`, así que
+cambiar la tarifa no altera pedidos ya hechos.
+
+### GET /api/v1/admin/shipping-rate
+
+```text
+Method: GET
+Endpoint: /api/v1/admin/shipping-rate
+
+Purpose:
+Tarifa fija de envío vigente y su histórico (los 20 últimos cambios).
+
+Response: 200
+{
+  "current": {
+    "amount": { "amount_minor": "799", "currency": "USD" },
+    "set_at": "2026-10-05T18:00:00.000Z",
+    "set_by_admin_user_id": "uuid"
+  } | null,
+  "history": [ ...misma forma, de la más reciente a la más antigua... ]
+}
+
+Errors: 401, 403
+
+Authorization: product.read
+
+Owner: backend
+
+Status: IMPLEMENTED
+```
+
+### PUT /api/v1/admin/shipping-rate
+
+```text
+Method: PUT
+Endpoint: /api/v1/admin/shipping-rate
+
+Purpose:
+Poner la tarifa fija de envío. Nunca cero.
+
+Request:
+{ "amount_minor": 799, "currency": "USD" }
+
+`amount_minor` es entero en unidad menor, de 1 a 99 999. El tope (999.99) es de
+cordura contra errores de tecleo, no una regla de negocio.
+
+Response: 200, misma forma que GET.
+
+Errors: 401, 403, 422 VALIDATION_FAILED
+
+Authorization: product.write (la tiene PROMOTION_MANAGER: la tarifa es un precio
+de la tienda y la pone quien pone los precios)
+
+Owner: backend
+
+Status: IMPLEMENTED
 ```

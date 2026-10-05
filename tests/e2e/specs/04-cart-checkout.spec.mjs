@@ -16,6 +16,7 @@ import { expectNoApiErrorState, loginParticipant } from "../lib/actions.mjs";
 import { CART_PAGE_SHAPE_MISMATCH } from "../lib/blockers.mjs";
 import {
   API_BASE_URL,
+  E2E_SHIPPING_MINOR,
   PARTICIPANT_EMAIL,
   PRODUCT_NAME,
   PRODUCT_SLUG,
@@ -72,6 +73,13 @@ test("anadir al carrito desde la ficha de producto crea la linea en el servidor"
   expect(cart.lines[0].line_subtotal.amount_minor).toBe("5000");
   expect(cart.subtotal.amount_minor).toBe("5000");
   expect(cart.subtotal.currency).toBe("USD");
+
+  // DEC-079: tarifa fija de la semilla sobre la mercancia, y el total la suma.
+  expect(cart.shipping).toEqual({
+    status: "CHARGED",
+    amount: { amount_minor: E2E_SHIPPING_MINOR.toString(), currency: "USD" },
+  });
+  expect(cart.total.amount_minor).toBe((5000n + E2E_SHIPPING_MINOR).toString());
 });
 
 test("la cotizacion de participaciones se ancla a la version de reglas vigente", async ({

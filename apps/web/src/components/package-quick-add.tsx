@@ -18,22 +18,18 @@ import { addToCartAction, type CartActionResult } from "@/lib/cart-actions";
  * que elegir, y por eso aqui si: quien llama pasa el `variantId` solo cuando el
  * paquete tiene exactamente una. Con mas, la tarjeta enlaza a la ficha.
  *
- * Es el mismo `<form>` con server action que `AddToCartForm`, con cantidad 1: la
- * accion se pasa DIRECTAMENTE a `action`, asi que el boton funciona antes de
- * que cargue el bundle. `useActionState` solo sirve para enseñar el resultado
- * junto al boton.
+ * Es el mismo `<form>` con server action que `AddToCartForm`, con cantidad 1. La
+ * server action se pasa TAL CUAL a `useActionState`, sin envoltorio de cliente,
+ * asi que el boton funciona antes de que cargue el bundle; `useActionState`
+ * solo sirve para enseñar el resultado junto al boton.
  *
- * SIN SESION NO HAY CARRITO
- * -------------------------
- * Las rutas de carrito son de participante. El primer intento sin sesion vuelve
- * con `UNAUTHENTICATED` y la tarjeta ofrece entrar, en vez de un error.
+ * SIN CUENTA TAMBIEN (DEC-079)
+ * ----------------------------
+ * Un visitante sin cuenta anade igual: el carrito es de su sesion de carrito, y
+ * la cuenta se pide al pagar.
  */
 
 const INITIAL: CartActionResult = { ok: false, code: null, requestId: null };
-
-async function submit(_previous: CartActionResult, formData: FormData): Promise<CartActionResult> {
-  return addToCartAction(formData);
-}
 
 export function PackageQuickAdd({
   variantId,
@@ -49,7 +45,7 @@ export function PackageQuickAdd({
   const t = useTranslations("entryPackages");
   const tProduct = useTranslations("product");
   const tErrors = useTranslations("apiErrors");
-  const [state, formAction, pending] = useActionState(submit, INITIAL);
+  const [state, formAction, pending] = useActionState(addToCartAction, INITIAL);
 
   return (
     <form action={formAction} className={cn("flex flex-col gap-s2", className)}>
@@ -79,10 +75,6 @@ export function PackageQuickAdd({
               {t("viewCart")}
             </Link>
           </>
-        ) : state.code === "UNAUTHENTICATED" ? (
-          <Link href="/account/login" className="font-semibold text-light-accent underline">
-            {t("signIn")}
-          </Link>
         ) : state.code === null ? null : (
           <span className="text-light-accent">{errorMessage(state.code, tErrors)}</span>
         )}

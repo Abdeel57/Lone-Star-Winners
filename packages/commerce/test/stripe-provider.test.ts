@@ -311,6 +311,7 @@ describe("llamadas a la API", () => {
           description: "Lone Star Tee",
         },
       ],
+      shipping: null,
       successUrl: "https://lonestarwinners.com/es/checkout/return?draft=x",
       cancelUrl: "https://lonestarwinners.com/es/checkout/return?draft=x",
       metadata: { order_id: ORDER_ID },
@@ -341,6 +342,50 @@ describe("llamadas a la API", () => {
     // Se cobra en la moneda del pedido: sin conversion a la moneda del visitante.
     expect(form.get("adaptive_pricing[enabled]")).toBe("false");
     expect(form.get("expires_at")).toBe((NOW_SECONDS + 3600).toString(10));
+    // Sin envio no hay segunda linea.
+    expect(form.get("line_items[1][quantity]")).toBeNull();
+  });
+
+  it("DEC-079: el envio va como una linea mas, marcada como envio y no como mercancia", async () => {
+    const { calls, fetchImpl } = fakeFetch(200, {
+      id: "cs_test_2",
+      url: "https://checkout.stripe.com/c/pay/cs_test_2",
+      expires_at: NOW_SECONDS + 3600,
+    });
+
+    await provider(fetchImpl).createCheckoutSession({
+      orderId: ORDER_ID,
+      idempotencyKey: `order:${ORDER_ID}`,
+      total: { amountMinor: 5997n as MinorAmount, currency: "USD" as CurrencyCode },
+      lineItems: [
+        {
+          productVariantId: "var_1",
+          quantity: 2,
+          unitAmount: { amountMinor: 2599n as MinorAmount, currency: "USD" as CurrencyCode },
+          description: "Lone Star Tee",
+        },
+      ],
+      shipping: {
+        amount: { amountMinor: 799n as MinorAmount, currency: "USD" as CurrencyCode },
+        description: "Shipping",
+      },
+      successUrl: "https://lonestarwinners.com/es/checkout/return?draft=x",
+      cancelUrl: "https://lonestarwinners.com/es/checkout/return?draft=x",
+      metadata: { order_id: ORDER_ID },
+    });
+
+    const form = formOf(calls[0]);
+    expect(form.get("line_items[1][quantity]")).toBe("1");
+    expect(form.get("line_items[1][price_data][currency]")).toBe("usd");
+    expect(form.get("line_items[1][price_data][unit_amount]")).toBe("799");
+    expect(form.get("line_items[1][price_data][product_data][name]")).toBe("Shipping");
+    expect(form.get("line_items[1][price_data][product_data][metadata][line_kind]")).toBe(
+      "shipping",
+    );
+    // No se hace pasar por una variante del catalogo.
+    expect(
+      form.get("line_items[1][price_data][product_data][metadata][product_variant_id]"),
+    ).toBeNull();
   });
 
   it("un rechazo de Stripe lanza StripeApiError con status y tipo, sin la clave", async () => {

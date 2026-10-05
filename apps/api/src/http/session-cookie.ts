@@ -18,7 +18,7 @@
  */
 
 import type { CookieSerializeOptions } from "@fastify/cookie";
-import { SESSION_POLICIES, type SessionAudience } from "@lsw/security";
+import { CART_SESSION_POLICY, SESSION_POLICIES, type SessionAudience } from "@lsw/security";
 
 export interface SessionCookieConfig {
   readonly name: string;
@@ -78,4 +78,41 @@ export function clearCookieOptionsFor(
     ...(config.domain === "localhost" ? {} : { domain: config.domain }),
     maxAge: 0,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Cookie de la sesion ANONIMA de carrito (DEC-079)
+// ---------------------------------------------------------------------------
+
+/**
+ * Nombre de la cookie de carrito: la base con sufijo `_cart`.
+ *
+ * Distinta de la de participante para que las dos convivan durante el instante
+ * en que importa: el inicio de sesion. La peticion de login trae la de carrito,
+ * se abre la de participante y el carrito se pasa a la cuenta; si compartieran
+ * nombre, la segunda borraria la primera antes de poder leerla.
+ */
+export function cartCookieNameFor(base: string): string {
+  return `${base}_cart`;
+}
+
+/** Mismos atributos que el resto: los decide `CART_SESSION_POLICY`. */
+export function cartCookieOptions(
+  config: SessionCookieConfig,
+  maxAgeSeconds: number,
+): CookieSerializeOptions {
+  const policy = CART_SESSION_POLICY;
+
+  return {
+    httpOnly: policy.cookie.httpOnly,
+    sameSite: policy.cookie.sameSite,
+    path: policy.cookie.path,
+    secure: config.secure,
+    ...(config.domain === "localhost" ? {} : { domain: config.domain }),
+    maxAge: maxAgeSeconds,
+  };
+}
+
+export function clearCartCookieOptions(config: SessionCookieConfig): CookieSerializeOptions {
+  return cartCookieOptions(config, 0);
 }

@@ -97,6 +97,12 @@ export const PACKAGE_NAME = {
 export const PRODUCT_PRICE_MINOR = 2500n;
 export const PRODUCT_CURRENCY = "USD";
 
+/**
+ * DEC-079: tarifa fija de envio de RELLENO, en unidades menores. Se cobra con
+ * la mercancia y NO da participaciones. La del cliente la pone el panel.
+ */
+export const E2E_SHIPPING_MINOR = 799n;
+
 /** Nombres publicos del producto y de la promocion, por locale. */
 export const PRODUCT_NAME = {
   "en-US": "E2E Fixture Tee",

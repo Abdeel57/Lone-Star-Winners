@@ -705,6 +705,24 @@
       "summary": "Rechazar una solicitud de cambio, con motivo."
     },
     {
+      "method": "GET",
+      "path": "/api/v1/admin/shipping-rate",
+      "operation_id": "getAdminShippingRate",
+      "authorization": "product.read",
+      "requires_step_up": false,
+      "tags": ["admin"],
+      "summary": "Tarifa fija de envio vigente y su historico."
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/admin/shipping-rate",
+      "operation_id": "setAdminShippingRate",
+      "authorization": "product.write",
+      "requires_step_up": false,
+      "tags": ["admin"],
+      "summary": "Poner la tarifa fija de envio. Nunca cero."
+    },
+    {
       "method": "POST",
       "path": "/api/v1/auth/login",
       "operation_id": "login",
@@ -807,16 +825,16 @@
       "method": "GET",
       "path": "/api/v1/cart",
       "operation_id": "getCart",
-      "authorization": "PARTICIPANT_SELF",
+      "authorization": "PUBLIC",
       "requires_step_up": false,
       "tags": ["cart"],
-      "summary": "Carrito vigente de la sesion, con su cotizacion de entries."
+      "summary": "Carrito vigente de quien pregunta, con envio, total y cotizacion de entries."
     },
     {
       "method": "GET",
       "path": "/api/v1/cart/entry-quote",
       "operation_id": "getCartEntryQuote",
-      "authorization": "PARTICIPANT_SELF",
+      "authorization": "PUBLIC",
       "requires_step_up": false,
       "tags": ["cart"],
       "summary": "Cotizacion de entries del carrito de servidor, con desglose auditable."
@@ -825,7 +843,7 @@
       "method": "POST",
       "path": "/api/v1/cart/items",
       "operation_id": "addCartItem",
-      "authorization": "PARTICIPANT_SELF",
+      "authorization": "PUBLIC",
       "requires_step_up": false,
       "tags": ["cart"],
       "summary": "Anadir una variante al carrito."
@@ -834,7 +852,7 @@
       "method": "DELETE",
       "path": "/api/v1/cart/items/:item_id",
       "operation_id": "removeCartItem",
-      "authorization": "PARTICIPANT_SELF",
+      "authorization": "PUBLIC",
       "requires_step_up": false,
       "tags": ["cart"],
       "summary": "Quitar una linea del carrito."
@@ -843,7 +861,7 @@
       "method": "PATCH",
       "path": "/api/v1/cart/items/:item_id",
       "operation_id": "updateCartItem",
-      "authorization": "PARTICIPANT_SELF",
+      "authorization": "PUBLIC",
       "requires_step_up": false,
       "tags": ["cart"],
       "summary": "Cambiar la cantidad de una linea."

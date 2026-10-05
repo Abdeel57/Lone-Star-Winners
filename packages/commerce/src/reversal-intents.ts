@@ -144,12 +144,30 @@ export function eligibleRefundAmount(order: Order, refund: RefundEvent): Eligibl
     return { amountMinor: 0n, basis: "ESTIMATED_PRORATION" };
   }
 
+  // DEC-079: lo que el pedido cobro APARTE de la mercancia -el envio, y los
+  // impuestos el dia que los haya-. Sin desglose no se sabe que parte del
+  // abono fue envio, y el envio no dio participaciones: se supone devuelto
+  // PRIMERO, por la misma razon por la que se trunca abajo (revertir de menos
+  // es preferible a revertir de mas). Un abono de solo el envio no revierte
+  // nada; uno del pedido entero sigue llegando como FULL y revierte todo.
+  // En un pedido sin envio esto es cero y el reparto es el de siempre.
+  const nonMerchandise = order.totalMinor > orderSubtotal ? order.totalMinor - orderSubtotal : 0n;
+  const merchandiseRefundedBefore = positivePart(order.refundedAmountMinor - nonMerchandise);
+  const merchandiseRefundedAfter = positivePart(
+    order.refundedAmountMinor + refund.amountMinor - nonMerchandise,
+  );
+  const merchandiseRefunded = merchandiseRefundedAfter - merchandiseRefundedBefore;
+
   // Aritmetica entera (DEC-010). Se trunca hacia abajo a proposito: ante una
   // estimacion, revertir de menos es preferible a revertir de mas. La politica
   // de redondeo CONFIGURADA se aplica despues, en sweepstakes, sobre el numero
   // de participaciones; esto solo reparte centavos.
-  const amount = (refund.amountMinor * eligibleSubtotal) / orderSubtotal;
+  const amount = (merchandiseRefunded * eligibleSubtotal) / orderSubtotal;
   return { amountMinor: amount, basis: "ESTIMATED_PRORATION" };
+}
+
+function positivePart(value: bigint): bigint {
+  return value > 0n ? value : 0n;
 }
 
 /**

@@ -279,9 +279,35 @@ export interface SessionRepository {
   revokeAllForIdentity(identityId: string, reason: string, now: Date): Promise<number>;
 }
 
+/**
+ * DEC-079: sesion ANONIMA que solo es duena de un carrito.
+ *
+ * No tiene identidad ni scope: no hay nada que autorizar con ella. Su `id` es lo
+ * que guarda `carts.session_ref`.
+ */
+export interface CartSessionRecord {
+  readonly id: string;
+  readonly expiresAt: Date;
+  readonly revokedAt: Date | null;
+  readonly createdAt: Date;
+}
+
+export interface CartSessionRepository {
+  create(input: {
+    readonly tokenHash: string;
+    readonly expiresAt: Date;
+  }): Promise<CartSessionRecord>;
+  /** Busca por HASH del token. El token en claro no llega nunca aqui. */
+  findByTokenHash(tokenHash: string): Promise<CartSessionRecord | null>;
+  /** Revoca. Nunca borra: la fila revocada explica a donde fue su carrito. */
+  revoke(sessionId: string, reason: string, now: Date): Promise<void>;
+}
+
 export interface IdentityRepositories {
   readonly identities: IdentityRepository;
   readonly sessions: SessionRepository;
+  /** DEC-079: sesiones anonimas de carrito. */
+  readonly cartSessions: CartSessionRepository;
   /** DEC-058: enlaces de verificacion y de restablecimiento. */
   readonly emailTokens: EmailTokenRepository;
 }

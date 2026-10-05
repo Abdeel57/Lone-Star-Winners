@@ -194,6 +194,49 @@ describe("importe elegible SIN desglose", () => {
   });
 });
 
+describe("DEC-079: abono sin desglose de un pedido CON envio", () => {
+  /** 5000 de mercancia elegible + 799 de envio. El envio no dio participaciones. */
+  const WITH_SHIPPING = order({ totalMinor: 5799n as MinorAmount });
+
+  it("devolver solo el envio no revierte participaciones", () => {
+    const result = eligibleRefundAmount(
+      WITH_SHIPPING,
+      refund({ amountMinor: 799n as MinorAmount }),
+    );
+    expect(result.amountMinor).toBe(0n);
+    expect(result.basis).toBe("ESTIMATED_PRORATION");
+  });
+
+  it("el envio se da por devuelto PRIMERO: de un abono de 2500 cuentan 1701 de mercancia", () => {
+    const result = eligibleRefundAmount(
+      WITH_SHIPPING,
+      refund({ amountMinor: 2500n as MinorAmount }),
+    );
+    expect(result.amountMinor).toBe(1701n);
+  });
+
+  it("con el envio ya devuelto, el siguiente abono es mercancia entera", () => {
+    const shippingAlreadyRefunded = order({
+      totalMinor: 5799n as MinorAmount,
+      refundedAmountMinor: 799n as MinorAmount,
+    });
+    const result = eligibleRefundAmount(
+      shippingAlreadyRefunded,
+      refund({ amountMinor: 2500n as MinorAmount }),
+    );
+    expect(result.amountMinor).toBe(2500n);
+  });
+
+  it("el pedido entero, envio incluido, es FULL y revierte todo", () => {
+    const intent = buildRefundReversalIntent(
+      WITH_SHIPPING,
+      refund({ amountMinor: 5799n as MinorAmount }),
+    );
+    expect(intent.kind).toBe("FULL");
+    expect(intent.refundedEligibleAmountMinor).toBeNull();
+  });
+});
+
 describe("clasificacion FULL / PARTIAL", () => {
   it("un abono por el total del pedido es FULL", () => {
     const intent = buildRefundReversalIntent(

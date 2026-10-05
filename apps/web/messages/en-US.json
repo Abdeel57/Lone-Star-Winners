@@ -133,6 +133,8 @@
     "CART_EMPTY": "There is nothing in your cart.",
     "CHECKOUT_UNAVAILABLE": "Checkout is not available right now. Nothing has been charged.",
     "SHIPPING_ADDRESS_INVALID": "We could not use that shipping address. Please check it and try again.",
+    "SHIPPING_NOT_CONFIGURED": "We can't charge shipping on merchandise yet. Please try again a little later.",
+    "SHIPPING_RATE_ZERO": "Shipping is never free: enter an amount greater than zero.",
     "INVALID_CREDENTIALS": "Those details and password do not match an account. Check they are typed correctly; the password is case-sensitive.",
     "EMAIL_ALREADY_REGISTERED": "There is already an account with that email.",
     "WEAK_PASSWORD": "That password does not meet our requirements. Please choose another one.",
@@ -213,12 +215,18 @@
     },
     "remove": "Remove",
     "removeLabel": "Remove {name}",
-    "signInRequired": {
-      "body": "A cart belongs to an account. Once you sign in, whatever you add stays with you across devices.",
-      "title": "Sign in to see your cart"
+    "guestNote": "To pay, we will ask you to create an account or sign in. Everything in your cart stays put.",
+    "totals": {
+      "heading": "Summary",
+      "subtotal": "Subtotal",
+      "shipping": "Shipping",
+      "shippingNotRequired": "Not applicable",
+      "shippingPending": "To be confirmed",
+      "total": "Total",
+      "shippingNoEntries": "Shipping does not generate entries.",
+      "shippingNotConfigured": "We can't charge shipping on merchandise yet, so this cart can't be paid for right now. Please try again a little later."
     },
     "subtotal": "Subtotal",
-    "subtotalNote": "Shipping and tax are calculated at checkout.",
     "subtotalUnavailable": "We cannot show a subtotal for this cart right now.",
     "title": "Your cart",
     "unitPrice": "Unit price",
@@ -937,8 +945,12 @@
   "checkout": {
     "title": "Checkout",
     "intro": "You are ordering merchandise. Any promotional entries are awarded under the Official Rules.",
-    "signInRequiredTitle": "Sign in to check out",
-    "signInRequiredBody": "An order belongs to an account, so we need to know who you are before you pay.",
+    "accountRequired": {
+      "title": "Create your account to pay",
+      "body": "Your cart is saved: once you create your account or sign in, you come right back here with everything you added. We ask for an account because every order and its entries are in a person's name.",
+      "register": "Create account and continue",
+      "signIn": "I already have an account"
+    },
     "emptyTitle": "There is nothing to check out",
     "emptyBody": "Add eligible merchandise to your cart first.",
     "addressHeading": "Where it goes",
@@ -1027,6 +1039,7 @@
       "dashboard": "Dashboard",
       "promotions": "Promotions",
       "catalog": "Catalog",
+      "shipping": "Shipping",
       "orders": "Orders",
       "participants": "Participants",
       "amoe": "Free entry review",
@@ -1196,6 +1209,26 @@
       "engineSaid": "The system refused it for this reason:",
       "noUpdateCapability": "You can see this promotion but not edit it: it requires the capability promotion.update.",
       "rulesManageCta": "Manage versions"
+    },
+    "shipping": {
+      "title": "Shipping",
+      "description": "Flat rate charged once per order when it includes merchandise.",
+      "rules": "Entry packages are not shipped. Shipping does not generate entries. It can never be zero: it is always charged.",
+      "currentHeading": "Current rate",
+      "currentSince": "Since {when}.",
+      "noneTitle": "There is no shipping rate yet",
+      "noneBody": "Until you set one, carts with merchandise can't be paid for. Entry packages still can.",
+      "formHeading": "Change the rate",
+      "amountLabel": "Amount per order (USD)",
+      "amountHint": "For example: 7.99. It applies to new orders; existing orders keep the shipping they paid.",
+      "save": "Save rate",
+      "saved": "Rate saved. It now applies in the cart and at checkout.",
+      "readOnly": "You can view the rate, but changing it requires the permission to edit the catalog.",
+      "historyHeading": "Previous changes",
+      "historyCaption": "Shipping rate history",
+      "columnAmount": "Amount",
+      "columnSetAt": "Date",
+      "historyEmpty": "No changes yet."
     },
     "catalog": {
       "title": "Catalog",

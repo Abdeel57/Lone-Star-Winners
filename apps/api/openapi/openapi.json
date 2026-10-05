@@ -27157,6 +27157,469 @@
         }
       }
     },
+    "/api/v1/admin/shipping-rate": {
+      "get": {
+        "operationId": "getAdminShippingRate",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "current": {
+                      "anyOf": [
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "amount": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "amount_minor": {
+                                  "type": "string"
+                                },
+                                "currency": {
+                                  "maxLength": 3,
+                                  "minLength": 3,
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "amount_minor",
+                                "currency"
+                              ],
+                              "type": "object"
+                            },
+                            "set_at": {
+                              "type": "string"
+                            },
+                            "set_by_admin_user_id": {
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "amount",
+                            "set_at",
+                            "set_by_admin_user_id"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "history": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "amount": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "amount_minor": {
+                                "type": "string"
+                              },
+                              "currency": {
+                                "maxLength": 3,
+                                "minLength": 3,
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "amount_minor",
+                              "currency"
+                            ],
+                            "type": "object"
+                          },
+                          "set_at": {
+                            "type": "string"
+                          },
+                          "set_by_admin_user_id": {
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "amount",
+                          "set_at",
+                          "set_by_admin_user_id"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "current",
+                    "history"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 200."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "additionalProperties": {},
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "request_id"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 401."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "additionalProperties": {},
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "request_id"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 403."
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Tarifa fija de envio vigente y su historico.",
+        "tags": [
+          "admin"
+        ],
+        "x-lsw-authorization": {
+          "kind": "PERMISSION",
+          "permission": "product.read",
+          "requires_step_up": false
+        }
+      },
+      "put": {
+        "description": "DEC-079. Tarifa por pedido que lleve mercancia; los paquetes de participaciones no se envian. Cada cambio es una fila nueva: la anterior queda de historico. El envio no genera participaciones.",
+        "operationId": "setAdminShippingRate",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "amount_minor": {
+                    "maximum": 99999,
+                    "minimum": 1,
+                    "type": "integer"
+                  },
+                  "currency": {
+                    "pattern": "^[A-Z]{3}$",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "amount_minor",
+                  "currency"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "current": {
+                      "anyOf": [
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "amount": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "amount_minor": {
+                                  "type": "string"
+                                },
+                                "currency": {
+                                  "maxLength": 3,
+                                  "minLength": 3,
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "amount_minor",
+                                "currency"
+                              ],
+                              "type": "object"
+                            },
+                            "set_at": {
+                              "type": "string"
+                            },
+                            "set_by_admin_user_id": {
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "amount",
+                            "set_at",
+                            "set_by_admin_user_id"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "history": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "amount": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "amount_minor": {
+                                "type": "string"
+                              },
+                              "currency": {
+                                "maxLength": 3,
+                                "minLength": 3,
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "amount_minor",
+                              "currency"
+                            ],
+                            "type": "object"
+                          },
+                          "set_at": {
+                            "type": "string"
+                          },
+                          "set_by_admin_user_id": {
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "amount",
+                          "set_at",
+                          "set_by_admin_user_id"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "current",
+                    "history"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 200."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "additionalProperties": {},
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "request_id"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 401."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "additionalProperties": {},
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "request_id"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 403."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "additionalProperties": {},
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "request_id"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 422."
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Poner la tarifa fija de envio. Nunca cero.",
+        "tags": [
+          "admin"
+        ],
+        "x-lsw-authorization": {
+          "kind": "PERMISSION",
+          "permission": "product.write",
+          "requires_step_up": false
+        }
+      }
+    },
     "/api/v1/auth/login": {
       "post": {
         "description": "Crea una sesion opaca. Para roles administrativos la sesion nace en MFA_PENDING y no sirve hasta completar el segundo factor (DEC-006).",
@@ -28923,7 +29386,7 @@
     },
     "/api/v1/cart": {
       "get": {
-        "description": "Un carrito inexistente devuelve uno vacio, nunca un 404.",
+        "description": "Un carrito inexistente devuelve uno vacio, nunca un 404. Sin cuenta, el carrito es el de la sesion anonima de carrito (DEC-079); leer no la crea.",
         "operationId": "getCart",
         "responses": {
           "200": {
@@ -29273,7 +29736,75 @@
                       },
                       "type": "array"
                     },
+                    "shipping": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "amount": {
+                          "anyOf": [
+                            {
+                              "additionalProperties": false,
+                              "properties": {
+                                "amount_minor": {
+                                  "type": "string"
+                                },
+                                "currency": {
+                                  "maxLength": 3,
+                                  "minLength": 3,
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "amount_minor",
+                                "currency"
+                              ],
+                              "type": "object"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "status": {
+                          "enum": [
+                            "NOT_REQUIRED",
+                            "CHARGED",
+                            "NOT_CONFIGURED"
+                          ],
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "status",
+                        "amount"
+                      ],
+                      "type": "object"
+                    },
                     "subtotal": {
+                      "anyOf": [
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "amount_minor": {
+                              "type": "string"
+                            },
+                            "currency": {
+                              "maxLength": 3,
+                              "minLength": 3,
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "amount_minor",
+                            "currency"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "total": {
                       "anyOf": [
                         {
                           "additionalProperties": false,
@@ -29316,6 +29847,8 @@
                     "item_count",
                     "lines",
                     "subtotal",
+                    "shipping",
+                    "total",
                     "entry_quote"
                   ],
                   "type": "object"
@@ -29323,65 +29856,22 @@
               }
             },
             "description": "Respuesta 200."
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": false,
-                  "properties": {
-                    "error": {
-                      "additionalProperties": false,
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "details": {
-                          "additionalProperties": {},
-                          "propertyNames": {
-                            "type": "string"
-                          },
-                          "type": "object"
-                        },
-                        "request_id": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "request_id"
-                      ],
-                      "type": "object"
-                    }
-                  },
-                  "required": [
-                    "error"
-                  ],
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Respuesta 401."
           }
         },
-        "security": [
-          {
-            "sessionCookie": []
-          }
-        ],
-        "summary": "Carrito vigente de la sesion, con su cotizacion de entries.",
+        "summary": "Carrito vigente de quien pregunta, con envio, total y cotizacion de entries.",
         "tags": [
           "cart"
         ],
         "x-lsw-authorization": {
-          "kind": "PARTICIPANT_SELF",
+          "justification": "DEC-079: un visitante sin cuenta tiene carrito; la cuenta se pide al pagar. El carrito sale SIEMPRE del principal de la peticion -sesion de participante o sesion anonima de carrito emitida por el mismo sistema de sesion- y nunca de un id del cliente; una linea ajena responde 404 igual que una inexistente. El checkout sigue exigiendo participante.",
+          "kind": "PUBLIC",
           "requires_step_up": false
         }
       }
     },
     "/api/v1/cart/entry-quote": {
       "get": {
-        "description": "DEC-023. Se calcula sobre el carrito del SERVIDOR: no hay forma de enviar items. La cifra es ORIENTATIVA hasta que el pedido alcance el estado que las Official Rules definan como cualificante.",
+        "description": "DEC-023. Se calcula sobre el carrito del SERVIDOR: no hay forma de enviar items. La cifra es ORIENTATIVA hasta que el pedido alcance el estado que las Official Rules definan como cualificante. El envio no genera participaciones (DEC-079).",
         "operationId": "getCartEntryQuote",
         "responses": {
           "200": {
@@ -29582,45 +30072,6 @@
             },
             "description": "Respuesta 200."
           },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": false,
-                  "properties": {
-                    "error": {
-                      "additionalProperties": false,
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "details": {
-                          "additionalProperties": {},
-                          "propertyNames": {
-                            "type": "string"
-                          },
-                          "type": "object"
-                        },
-                        "request_id": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "request_id"
-                      ],
-                      "type": "object"
-                    }
-                  },
-                  "required": [
-                    "error"
-                  ],
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Respuesta 401."
-          },
           "409": {
             "content": {
               "application/json": {
@@ -29661,24 +30112,20 @@
             "description": "Respuesta 409."
           }
         },
-        "security": [
-          {
-            "sessionCookie": []
-          }
-        ],
         "summary": "Cotizacion de entries del carrito de servidor, con desglose auditable.",
         "tags": [
           "cart"
         ],
         "x-lsw-authorization": {
-          "kind": "PARTICIPANT_SELF",
+          "justification": "DEC-079: un visitante sin cuenta tiene carrito; la cuenta se pide al pagar. El carrito sale SIEMPRE del principal de la peticion -sesion de participante o sesion anonima de carrito emitida por el mismo sistema de sesion- y nunca de un id del cliente; una linea ajena responde 404 igual que una inexistente. El checkout sigue exigiendo participante.",
+          "kind": "PUBLIC",
           "requires_step_up": false
         }
       }
     },
     "/api/v1/cart/items": {
       "post": {
-        "description": "El cuerpo lleva `variant_id` y `quantity`, no el precio: el importe lo pone el servidor leyendo el catalogo (DEC-023).",
+        "description": "El cuerpo lleva `variant_id` y `quantity`, no el precio: el importe lo pone el servidor leyendo el catalogo (DEC-023). Sin cuenta ni sesion de carrito, emite la sesion anonima de carrito y su cookie (DEC-079).",
         "operationId": "addCartItem",
         "requestBody": {
           "content": {
@@ -30054,7 +30501,75 @@
                       },
                       "type": "array"
                     },
+                    "shipping": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "amount": {
+                          "anyOf": [
+                            {
+                              "additionalProperties": false,
+                              "properties": {
+                                "amount_minor": {
+                                  "type": "string"
+                                },
+                                "currency": {
+                                  "maxLength": 3,
+                                  "minLength": 3,
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "amount_minor",
+                                "currency"
+                              ],
+                              "type": "object"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "status": {
+                          "enum": [
+                            "NOT_REQUIRED",
+                            "CHARGED",
+                            "NOT_CONFIGURED"
+                          ],
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "status",
+                        "amount"
+                      ],
+                      "type": "object"
+                    },
                     "subtotal": {
+                      "anyOf": [
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "amount_minor": {
+                              "type": "string"
+                            },
+                            "currency": {
+                              "maxLength": 3,
+                              "minLength": 3,
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "amount_minor",
+                            "currency"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "total": {
                       "anyOf": [
                         {
                           "additionalProperties": false,
@@ -30097,6 +30612,8 @@
                     "item_count",
                     "lines",
                     "subtotal",
+                    "shipping",
+                    "total",
                     "entry_quote"
                   ],
                   "type": "object"
@@ -30104,45 +30621,6 @@
               }
             },
             "description": "Respuesta 200."
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": false,
-                  "properties": {
-                    "error": {
-                      "additionalProperties": false,
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "details": {
-                          "additionalProperties": {},
-                          "propertyNames": {
-                            "type": "string"
-                          },
-                          "type": "object"
-                        },
-                        "request_id": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "request_id"
-                      ],
-                      "type": "object"
-                    }
-                  },
-                  "required": [
-                    "error"
-                  ],
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Respuesta 401."
           },
           "404": {
             "content": {
@@ -30262,17 +30740,13 @@
             "description": "Respuesta 422."
           }
         },
-        "security": [
-          {
-            "sessionCookie": []
-          }
-        ],
         "summary": "Anadir una variante al carrito.",
         "tags": [
           "cart"
         ],
         "x-lsw-authorization": {
-          "kind": "PARTICIPANT_SELF",
+          "justification": "DEC-079: un visitante sin cuenta tiene carrito; la cuenta se pide al pagar. El carrito sale SIEMPRE del principal de la peticion -sesion de participante o sesion anonima de carrito emitida por el mismo sistema de sesion- y nunca de un id del cliente; una linea ajena responde 404 igual que una inexistente. El checkout sigue exigiendo participante.",
+          "kind": "PUBLIC",
           "requires_step_up": false
         }
       }
@@ -30640,7 +31114,75 @@
                       },
                       "type": "array"
                     },
+                    "shipping": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "amount": {
+                          "anyOf": [
+                            {
+                              "additionalProperties": false,
+                              "properties": {
+                                "amount_minor": {
+                                  "type": "string"
+                                },
+                                "currency": {
+                                  "maxLength": 3,
+                                  "minLength": 3,
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "amount_minor",
+                                "currency"
+                              ],
+                              "type": "object"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "status": {
+                          "enum": [
+                            "NOT_REQUIRED",
+                            "CHARGED",
+                            "NOT_CONFIGURED"
+                          ],
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "status",
+                        "amount"
+                      ],
+                      "type": "object"
+                    },
                     "subtotal": {
+                      "anyOf": [
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "amount_minor": {
+                              "type": "string"
+                            },
+                            "currency": {
+                              "maxLength": 3,
+                              "minLength": 3,
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "amount_minor",
+                            "currency"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "total": {
                       "anyOf": [
                         {
                           "additionalProperties": false,
@@ -30683,6 +31225,8 @@
                     "item_count",
                     "lines",
                     "subtotal",
+                    "shipping",
+                    "total",
                     "entry_quote"
                   ],
                   "type": "object"
@@ -30690,45 +31234,6 @@
               }
             },
             "description": "Respuesta 200."
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": false,
-                  "properties": {
-                    "error": {
-                      "additionalProperties": false,
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "details": {
-                          "additionalProperties": {},
-                          "propertyNames": {
-                            "type": "string"
-                          },
-                          "type": "object"
-                        },
-                        "request_id": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "request_id"
-                      ],
-                      "type": "object"
-                    }
-                  },
-                  "required": [
-                    "error"
-                  ],
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Respuesta 401."
           },
           "404": {
             "content": {
@@ -30770,17 +31275,13 @@
             "description": "Respuesta 404."
           }
         },
-        "security": [
-          {
-            "sessionCookie": []
-          }
-        ],
         "summary": "Quitar una linea del carrito.",
         "tags": [
           "cart"
         ],
         "x-lsw-authorization": {
-          "kind": "PARTICIPANT_SELF",
+          "justification": "DEC-079: un visitante sin cuenta tiene carrito; la cuenta se pide al pagar. El carrito sale SIEMPRE del principal de la peticion -sesion de participante o sesion anonima de carrito emitida por el mismo sistema de sesion- y nunca de un id del cliente; una linea ajena responde 404 igual que una inexistente. El checkout sigue exigiendo participante.",
+          "kind": "PUBLIC",
           "requires_step_up": false
         }
       },
@@ -31166,7 +31667,75 @@
                       },
                       "type": "array"
                     },
+                    "shipping": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "amount": {
+                          "anyOf": [
+                            {
+                              "additionalProperties": false,
+                              "properties": {
+                                "amount_minor": {
+                                  "type": "string"
+                                },
+                                "currency": {
+                                  "maxLength": 3,
+                                  "minLength": 3,
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "amount_minor",
+                                "currency"
+                              ],
+                              "type": "object"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "status": {
+                          "enum": [
+                            "NOT_REQUIRED",
+                            "CHARGED",
+                            "NOT_CONFIGURED"
+                          ],
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "status",
+                        "amount"
+                      ],
+                      "type": "object"
+                    },
                     "subtotal": {
+                      "anyOf": [
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "amount_minor": {
+                              "type": "string"
+                            },
+                            "currency": {
+                              "maxLength": 3,
+                              "minLength": 3,
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "amount_minor",
+                            "currency"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "total": {
                       "anyOf": [
                         {
                           "additionalProperties": false,
@@ -31209,6 +31778,8 @@
                     "item_count",
                     "lines",
                     "subtotal",
+                    "shipping",
+                    "total",
                     "entry_quote"
                   ],
                   "type": "object"
@@ -31216,45 +31787,6 @@
               }
             },
             "description": "Respuesta 200."
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": false,
-                  "properties": {
-                    "error": {
-                      "additionalProperties": false,
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "details": {
-                          "additionalProperties": {},
-                          "propertyNames": {
-                            "type": "string"
-                          },
-                          "type": "object"
-                        },
-                        "request_id": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "request_id"
-                      ],
-                      "type": "object"
-                    }
-                  },
-                  "required": [
-                    "error"
-                  ],
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Respuesta 401."
           },
           "404": {
             "content": {
@@ -31374,17 +31906,13 @@
             "description": "Respuesta 422."
           }
         },
-        "security": [
-          {
-            "sessionCookie": []
-          }
-        ],
         "summary": "Cambiar la cantidad de una linea.",
         "tags": [
           "cart"
         ],
         "x-lsw-authorization": {
-          "kind": "PARTICIPANT_SELF",
+          "justification": "DEC-079: un visitante sin cuenta tiene carrito; la cuenta se pide al pagar. El carrito sale SIEMPRE del principal de la peticion -sesion de participante o sesion anonima de carrito emitida por el mismo sistema de sesion- y nunca de un id del cliente; una linea ajena responde 404 igual que una inexistente. El checkout sigue exigiendo participante.",
+          "kind": "PUBLIC",
           "requires_step_up": false
         }
       }

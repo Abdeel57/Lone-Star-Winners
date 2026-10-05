@@ -78,6 +78,10 @@ const TRANSLATED_CODES = [
   "CART_EMPTY",
   "CHECKOUT_UNAVAILABLE",
   "SHIPPING_ADDRESS_INVALID",
+  // DEC-079: el carrito lleva mercancia y no hay tarifa de envio puesta.
+  "SHIPPING_NOT_CONFIGURED",
+  // DEC-079: la tarifa de envio nunca es cero (lo anticipa el panel).
+  "SHIPPING_RATE_ZERO",
   /*
    * Identidad (DEC-006). Estos codigos los publicara `packages/security`, no
    * `docs/API_CONTRACT.md`, y por eso son la parte mas provisional de esta
@@ -212,6 +216,10 @@ export function useApiErrorMessage(): (code: string | null) => string {
         return t("CHECKOUT_UNAVAILABLE");
       case "SHIPPING_ADDRESS_INVALID":
         return t("SHIPPING_ADDRESS_INVALID");
+      case "SHIPPING_NOT_CONFIGURED":
+        return t("SHIPPING_NOT_CONFIGURED");
+      case "SHIPPING_RATE_ZERO":
+        return t("SHIPPING_RATE_ZERO");
       case "INVALID_CREDENTIALS":
         return t("INVALID_CREDENTIALS");
       case "EMAIL_ALREADY_REGISTERED":

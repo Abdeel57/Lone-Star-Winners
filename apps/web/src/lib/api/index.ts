@@ -154,6 +154,9 @@ export type {
   AdminSettingChangeRequestPage,
   AdminSettingChangeStatus,
   AdminSettingKind,
+  AdminShippingRateInput,
+  AdminShippingRateResponse,
+  AdminShippingRateRow,
 } from "./admin-contract";
 export {
   ADMIN_MEDIA_CONTENT_TYPES,
@@ -248,6 +251,8 @@ export {
   fetchAdminProductCategories,
   fetchAdminProductVariants,
   fetchAdminProducts,
+  fetchAdminShippingRate,
+  setAdminShippingRate,
   fetchAdminPromotion,
   fetchAdminPromotions,
   fetchAdminRulesVersion,

@@ -10,12 +10,11 @@
  *
  * POR QUE SE SUSTITUYEN LOS DOS PUERTOS DE IDENTIDAD
  *
- *   `denyAllAuthorizer` y `noPrincipalResolver` niegan todo lo que no sea
- *   publico, que es la postura correcta mientras `packages/security` no exista
- *   (DEC-006). El primer bloque de este archivo comprueba precisamente esa
- *   postura; los demas la sustituyen para poder ejercitar la logica que hay
- *   detras. Sustituirla en un test es legitimo; hacerlo en `createApp` no lo
- *   seria, y por eso el valor por defecto sigue siendo el que deniega.
+ *   Para fijar QUIEN pregunta sin montar sesiones: la mayoria de bloques
+ *   sustituyen el resolutor por uno que devuelve el principal del caso. El
+ *   bloque de DEC-079 hace lo contrario y deja el resolutor REAL de
+ *   `createApp`, con sesiones de carrito en memoria, porque lo que prueba es
+ *   precisamente el camino cookie -> sesion de carrito -> carrito.
  */
 
 import { describe, expect, it } from "vitest";
@@ -68,33 +67,203 @@ async function appWithPrincipal(
   return app;
 }
 
-describe("deny-by-default mientras no exista sesion (DEC-006, DEC-015)", () => {
-  const routes = [
-    { method: "GET" as const, url: "/api/v1/cart" },
-    { method: "GET" as const, url: "/api/v1/cart/entry-quote" },
-  ];
+/**
+ * DEC-079: sesiones de carrito en memoria, para ejercitar el resolutor REAL de
+ * `createApp` (cookie -> hash -> fila -> politica) sin base de datos.
+ */
+function fakeCartSessions() {
+  const rows = new Map<
+    string,
+    { id: string; createdAt: Date; revokedAt: Date | null; expiresAt: Date }
+  >();
+  let created = 0;
+  return {
+    rows,
+    create: (input: { tokenHash: string; expiresAt: Date }) => {
+      created += 1;
+      const row = {
+        id: `cccccccc-0000-4000-8000-${String(created).padStart(12, "0")}`,
+        createdAt: new Date(),
+        revokedAt: null,
+        expiresAt: input.expiresAt,
+      };
+      rows.set(input.tokenHash, row);
+      return Promise.resolve(row);
+    },
+    findByTokenHash: (hash: string) => Promise.resolve(rows.get(hash) ?? null),
+    revoke: () => Promise.resolve(),
+  };
+}
 
-  for (const route of routes) {
-    it(`${route.method} ${route.url} responde 401, no un carrito vacio`, async () => {
-      const app = await createApp(buildDependencies());
-      const response = await app.inject(route);
+/** `createApp` tal cual, con sesiones de carrito en memoria y sin sesiones de cuenta. */
+function guestDependencies(options: FakeOptions = {}) {
+  const cartSessions = fakeCartSessions();
+  const dependencies = {
+    ...buildDependencies(options),
+    identity: {
+      sessions: { findByTokenHash: () => Promise.resolve(null) },
+      cartSessions,
+    },
+  } as unknown as AppDependencies;
+  return { dependencies, cartSessions };
+}
 
-      expect(response.statusCode).toBe(401);
-      expect(response.json<{ error: { code: string } }>().error.code).toBe("UNAUTHENTICATED");
-      await app.close();
+const CART_COOKIE = `${CONTRACT_GENERATION_CONFIG.session.cookieName}_cart`;
+
+describe("carrito sin cuenta (DEC-079)", () => {
+  it("GET /cart sin ninguna sesion devuelve un carrito vacio, no un 401", async () => {
+    const { dependencies } = guestDependencies();
+    const app = await createApp(dependencies);
+    const response = await app.inject({ method: "GET", url: "/api/v1/cart" });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      lines: [],
+      subtotal: null,
+      shipping: { status: "NOT_REQUIRED", amount: null },
+      total: null,
     });
-  }
+    // Leer no emite nada: un rastreador no deja sesiones ni carritos.
+    expect(response.headers["set-cookie"]).toBeUndefined();
+    await app.close();
+  });
 
-  it("POST /cart/items tambien: un carrito sin dueno no es un carrito", async () => {
-    const app = await createApp(buildDependencies());
+  it("GET /cart/entry-quote sin sesion cotiza cero, no un 401", async () => {
+    const { dependencies } = guestDependencies();
+    const app = await createApp(dependencies);
+    const response = await app.inject({ method: "GET", url: "/api/v1/cart/entry-quote" });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json<{ final_entries: number }>().final_entries).toBe(0);
+    await app.close();
+  });
+
+  it("POST /cart/items sin sesion emite la sesion de carrito y su cookie httpOnly", async () => {
+    const { dependencies, cartSessions } = guestDependencies();
+    const app = await createApp(dependencies);
     const response = await app.inject({
       method: "POST",
       url: "/api/v1/cart/items",
       payload: { variant_id: VARIANT_ID, quantity: 1 },
     });
 
-    expect(response.statusCode).toBe(401);
+    expect(response.statusCode).toBe(200);
+    expect(response.json<{ lines: unknown[] }>().lines).toHaveLength(1);
+
+    const setCookie = String(response.headers["set-cookie"]);
+    expect(setCookie).toContain(`${CART_COOKIE}=`);
+    expect(setCookie).toMatch(/HttpOnly/iu);
+    expect(setCookie).toMatch(/SameSite=Lax/iu);
+    expect(setCookie).toMatch(/Path=\//u);
+
+    // En base de datos solo el HASH del token.
+    expect(cartSessions.rows.size).toBe(1);
+    const [hash] = [...cartSessions.rows.keys()];
+    expect(hash).toMatch(/^[0-9a-f]{64}$/u);
+    expect(setCookie).not.toContain(String(hash));
+
+    // El carrito es de la sesion, no de un participante.
+    const fake = dependencies.repositories as unknown as { _carts: Map<string, unknown> };
+    expect([...fake._carts.keys()]).toEqual([`s:${[...cartSessions.rows.values()][0]?.id ?? ""}`]);
     await app.close();
+  });
+
+  it("con la cookie, el mismo visitante vuelve a ver su carrito", async () => {
+    const { dependencies } = guestDependencies();
+    const app = await createApp(dependencies);
+    const added = await app.inject({
+      method: "POST",
+      url: "/api/v1/cart/items",
+      payload: { variant_id: VARIANT_ID, quantity: 2 },
+    });
+    const token = /=([^;]+)/u.exec(String(added.headers["set-cookie"]))?.[1] ?? "";
+
+    const read = await app.inject({
+      method: "GET",
+      url: "/api/v1/cart",
+      cookies: { [CART_COOKIE]: token },
+    });
+
+    expect(read.json<{ item_count: number }>().item_count).toBe(2);
+    // Y no se emite una segunda sesion: ya la tiene.
+    expect(read.headers["set-cookie"]).toBeUndefined();
+    await app.close();
+  });
+
+  it("una cookie de carrito inventada no da carrito ni se acepta", async () => {
+    const { dependencies } = guestDependencies();
+    const app = await createApp(dependencies);
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/v1/cart",
+      cookies: { [CART_COOKIE]: "A".repeat(43) },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json<{ lines: unknown[] }>().lines).toEqual([]);
+    await app.close();
+  });
+
+  it("PATCH y DELETE sin sesion responden 404, igual que una linea ajena", async () => {
+    const { dependencies } = guestDependencies();
+    const app = await createApp(dependencies);
+    const lineUrl = "/api/v1/cart/items/aaaaaaaa-0000-4000-8000-000000000001";
+
+    const patch = await app.inject({ method: "PATCH", url: lineUrl, payload: { quantity: 2 } });
+    const remove = await app.inject({ method: "DELETE", url: lineUrl });
+
+    expect(patch.statusCode).toBe(404);
+    expect(remove.statusCode).toBe(404);
+    await app.close();
+  });
+});
+
+describe("envio en el carrito (DEC-079)", () => {
+  async function addOne(options: FakeOptions = {}) {
+    const app = await appWithPrincipal(PARTICIPANT, options);
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/v1/cart/items",
+      payload: { variant_id: VARIANT_ID, quantity: 2 },
+    });
+    await app.close();
+    return response.json<{
+      subtotal: { amount_minor: string } | null;
+      shipping: { status: string; amount: { amount_minor: string; currency: string } | null };
+      total: { amount_minor: string; currency: string } | null;
+      entry_quote: { final_entries: number };
+    }>();
+  }
+
+  it("con mercancia se suma la tarifa fija al total", async () => {
+    const body = await addOne();
+
+    expect(body.subtotal?.amount_minor).toBe("5000");
+    expect(body.shipping).toEqual({
+      status: "CHARGED",
+      amount: { amount_minor: "799", currency: "USD" },
+    });
+    expect(body.total).toEqual({ amount_minor: "5799", currency: "USD" });
+  });
+
+  it("el envio NO genera participaciones: la cifra sale solo de la mercancia", async () => {
+    const body = await addOne();
+    // 5000 / 100 = 50, no 57.
+    expect(body.entry_quote.final_entries).toBe(50);
+  });
+
+  it("sin tarifa puesta no hay total: nunca se envia gratis por omision", async () => {
+    const body = await addOne({ shippingRate: null });
+
+    expect(body.shipping).toEqual({ status: "NOT_CONFIGURED", amount: null });
+    expect(body.total).toBeNull();
+  });
+
+  it("solo paquetes de participaciones: no llevan envio y el total es el subtotal", async () => {
+    const body = await addOne({ products: [{ ...FIXTURE_PRODUCT, kind: "ENTRY_PACKAGE" }] });
+
+    expect(body.shipping).toEqual({ status: "NOT_REQUIRED", amount: null });
+    expect(body.total).toEqual({ amount_minor: "5000", currency: "USD" });
   });
 });
 

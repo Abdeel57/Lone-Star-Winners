@@ -983,7 +983,29 @@ export interface CartWithQuote {
   readonly lines: readonly CartLine[];
   /** Subtotal CALCULADO POR EL BACKEND. `null` en un carrito vacio. */
   readonly subtotal: MoneyMinor | null;
+  /**
+   * [CONTRATO] DEC-079. Envio con la MISMA regla con que se cobra al pagar:
+   * tarifa fija si hay mercancia; los paquetes no se envian. La interfaz lo
+   * PINTA, no lo calcula.
+   */
+  readonly shipping: CartShipping;
+  /**
+   * [CONTRATO] DEC-079. Subtotal + envio, calculado por el backend. Sin
+   * impuestos (pendiente legal). `null` con el carrito vacio o con el envio
+   * `NOT_CONFIGURED`.
+   */
+  readonly total: MoneyMinor | null;
   readonly entry_quote: EntryQuote | null;
+}
+
+/**
+ * [CONTRATO] DEC-079. `NOT_REQUIRED`: no hay nada que enviar (solo paquetes, o
+ * vacio). `CHARGED`: `amount` es la tarifa. `NOT_CONFIGURED`: lleva mercancia y
+ * no hay tarifa puesta; el checkout responde 409 `SHIPPING_NOT_CONFIGURED`.
+ */
+export interface CartShipping {
+  readonly status: "NOT_REQUIRED" | "CHARGED" | "NOT_CONFIGURED";
+  readonly amount: MoneyMinor | null;
 }
 
 // ---------------------------------------------------------------------------
