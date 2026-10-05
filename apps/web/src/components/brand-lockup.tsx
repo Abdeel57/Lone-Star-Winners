@@ -26,11 +26,24 @@ import { useTranslations } from "next-intl";
  * El resultado escala a cualquier tamano sin halos de compresion, cambia de
  * idioma sin cambiar de imagen, y sigue siendo el logotipo del cliente.
  *
+ * "WINNERS" MIDE LO MISMO QUE "LONE STAR" (DEC-073)
+ * -------------------------------------------------
+ * Las dos lineas forman un bloque de bordes rectos, como un logotipo y no como
+ * dos palabras apiladas. No se consigue con `letter-spacing`: el valor que
+ * cuadra depende de los anchos de la tipografia y se descuadraria con la
+ * fuente de respaldo. Se hace con la caja:
+ *
+ *   - la linea de abajo es `w-0 min-w-full`. No aporta nada al ancho del
+ *     bloque, que lo fija solo "Lone Star", y despues se estira a ese ancho;
+ *   - cada letra de "Winners" es su propia caja y `justify-between` reparte el
+ *     sobrante entre ellas. Las dos lineas empiezan y acaban a la vez con
+ *     cualquier fuente.
+ *
  * ACCESIBILIDAD
  * -------------
- * La imagen es DECORATIVA (`alt=""`). El nombre de la marca esta a su lado como
- * texto real, asi que darle tambien un texto alternativo haria que un lector de
- * pantalla anunciara "Lone Star Winners" dos veces seguidas.
+ * La imagen es DECORATIVA (`alt=""`) y el logotipo visual va `aria-hidden`:
+ * partido en letras, un lector de pantalla podria deletrearlo. El nombre se
+ * dice una vez, entero, con el texto oculto `brand.name`.
  */
 
 export type BrandLockupSize = "sm" | "md" | "lg";
@@ -53,42 +66,35 @@ function markPixels(size: BrandLockupSize): number {
   }
 }
 
+/**
+ * Cuerpo del logotipo. `leading-none` despues del tamano: el alto de linea del
+ * token separaria las dos lineas y el bloque dejaria de leerse como una pieza.
+ * En `md` cabe en la cabecera de un telefono de 360px junto a la hamburguesa,
+ * la cuenta y el carrito sin descentrar la marca (DEC-073).
+ */
 function wordmarkClass(size: BrandLockupSize): string {
   switch (size) {
     case "sm":
-      return "text-body-sm";
+      return "text-body-sm leading-none";
     case "md":
-      return "text-heading-sm sm:text-heading-md";
+      return "text-heading-sm leading-none sm:text-heading-md sm:leading-none";
     case "lg":
-      return "text-heading-lg sm:text-display-md";
+      return "text-heading-lg leading-none sm:text-display-md sm:leading-none";
   }
 }
 
 export function BrandLockup({
   size = "md",
-  wordmark = "always",
   className,
 }: {
   readonly size?: BrandLockupSize;
-  /**
-   * `sm-up` oculta VISUALMENTE el logotipo tipografico por debajo de 640px y lo
-   * deja solo para tecnologia de asistencia (`sr-only`), de modo que el enlace
-   * de la cabecera conserva su nombre accesible.
-   *
-   * Existe por una razon medida: en 360px, marca + logotipo + conmutador de
-   * idioma + carrito suman mas de lo que cabe, y la cabecera se parte en tres
-   * filas. Al ser fija, esas filas se comen la pantalla en cada scroll. La
-   * estrella coronada sola es reconocible; el logotipo completo vuelve en
-   * cuanto hay sitio.
-   */
-  readonly wordmark?: "always" | "sm-up";
   readonly className?: string;
 }) {
   const t = useTranslations("brand");
   const pixels = markPixels(size);
 
   return (
-    <span className={cn("inline-flex items-center gap-3", className)}>
+    <span className={cn("inline-flex items-center gap-2.5 sm:gap-3", className)}>
       {/* `priority`: el bloque de marca esta siempre por encima del pliegue en
           la cabecera, asi que no debe cargarse con retraso. Las dimensiones van
           explicitas para reservar el hueco antes de que llegue el archivo. */}
@@ -102,14 +108,18 @@ export function BrandLockup({
         style={{ width: pixels, height: pixels }}
       />
 
+      <span className="sr-only">{t("name")}</span>
+
       <span
-        className={cn(
-          "lsw-display flex flex-col leading-none",
-          wordmark === "sm-up" && "sr-only sm:not-sr-only",
-        )}
+        aria-hidden="true"
+        className={cn("lsw-display flex flex-col gap-[0.14em]", wordmarkClass(size))}
       >
-        <span className={cn(wordmarkClass(size), "text-text")}>{t("wordmarkLead")}</span>
-        <span className={cn(wordmarkClass(size), "text-brand")}>{t("wordmarkTail")}</span>
+        <span className="whitespace-nowrap text-text">{t("wordmarkLead")}</span>
+        <span className="flex w-0 min-w-full justify-between text-brand">
+          {Array.from(t("wordmarkTail")).map((letter, index) => (
+            <span key={`${letter}-${String(index)}`}>{letter}</span>
+          ))}
+        </span>
       </span>
     </span>
   );

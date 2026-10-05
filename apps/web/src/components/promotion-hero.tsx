@@ -496,11 +496,15 @@ export function PromotionHero({
                 DEC-068: el fundido se ACORTA. Antes cubria el 70% de la foto en
                 telefono y el vehiculo quedaba en sombra; ahora solo funde el
                 pie (donde entra el titular, que ademas lleva su propia sombra)
-                y en escritorio el borde izquierdo. */}
+                y en escritorio el borde izquierdo.
+
+                DEC-073: los dos degradados dejan pasar el toque. Estan encima
+                de las fotos, y si se quedaran el gesto, el carrusel no se
+                podria deslizar con el dedo. */}
             <div
               aria-hidden="true"
               className={cn(
-                "absolute inset-0 bg-gradient-to-t from-bg via-bg/60 via-15% to-bg/0 to-40%",
+                "pointer-events-none absolute inset-0 bg-gradient-to-t from-bg via-bg/60 via-15% to-bg/0 to-40%",
                 "lg:bg-gradient-to-r lg:via-bg/75 lg:via-[18%] lg:to-[38%]",
               )}
             />
@@ -512,7 +516,7 @@ export function PromotionHero({
                 tambien lo que sostiene el titular. */}
             <div
               aria-hidden="true"
-              className="absolute inset-x-0 bottom-0 h-1/4 bg-gradient-to-t from-bg to-bg/0"
+              className="pointer-events-none absolute inset-x-0 bottom-0 h-1/4 bg-gradient-to-t from-bg to-bg/0"
             />
           </div>
         )}

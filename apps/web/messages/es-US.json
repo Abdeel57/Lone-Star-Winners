@@ -317,7 +317,6 @@
       "label": "Fotos del premio",
       "slideRoleDescription": "foto",
       "slide": "Foto {current} de {total}",
-      "goTo": "Ver la foto {current} de {total}",
       "pause": "Pausar las fotos",
       "play": "Reanudar las fotos"
     },

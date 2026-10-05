@@ -3549,3 +3549,49 @@ portada, mensaje `entryOffer.tilePerPackage`).
 
 Proposed by: sesión del usuario (2026-10-05)
 Agreed by: pendiente — frontend-ux
+
+## DEC-073
+
+Status: Proposed
+
+Date: 2026-10-05
+
+Decision:
+**Logotipo completo en la cabecera del teléfono y carrusel sin controles.** El
+usuario pidió el nombre junto a la estrella, centrado, con "Winners" en oro y
+del mismo largo que "Lone Star", y que las fotos se cambien con el dedo sin
+iconos encima.
+
+1. **`BrandLockup`.** La estrella va a la izquierda y el logotipo en dos líneas
+   también por debajo de 640 px; desaparece la opción `wordmark="sm-up"`.
+   - "Winners" mide exactamente lo mismo que "Lone Star" con cualquier fuente:
+     su línea es `w-0 min-w-full` y cada letra se reparte con
+     `justify-between`.
+   - El logotipo visual va `aria-hidden` y el nombre se lee una vez con
+     `brand.name`.
+   - Medido: cabe centrado en 360 px junto a la hamburguesa, la cuenta y el
+     carrito.
+2. **`HeroCarousel`.** Ya no hay pausa ni barras a la vista.
+   - Es una tira con scroll horizontal nativo y `scroll-snap`: la foto sigue al
+     dedo y un gesto vertical sigue moviendo la página.
+   - Pasa sola cada 6 s y se detiene para siempre cuando el visitante la
+     desliza; también mientras tiene el dedo encima o el foco del teclado, y
+     con `prefers-reduced-motion`.
+   - WCAG 2.2.2: la pausa sigue existiendo, pero solo aparece con el teclado y
+     la leen los lectores de pantalla.
+3. **Los degradados del hero dejan pasar el toque** (`pointer-events-none`).
+   Estaban encima de las fotos y se quedaban el gesto: el deslizamiento de
+   DEC-066 no llegaba al carrusel.
+
+Alternatives:
+A — Indicador discreto de puntos (descartada por ahora: el cliente pidió
+quitar los iconos; la rotación automática ya avisa de que hay más fotos).
+B — Ajustar "Winners" con `letter-spacing` (descartada: se descuadra con la
+fuente de respaldo).
+
+Affected areas: `apps/web` (`brand-lockup.tsx`, `site-header.tsx`,
+`hero-carousel.tsx`, `promotion-hero.tsx`, `globals.css` sin
+`.lsw-progress-fill`, mensaje `home.heroCarousel.goTo` retirado, tests).
+
+Proposed by: sesión del usuario (2026-10-05)
+Agreed by: pendiente — frontend-ux

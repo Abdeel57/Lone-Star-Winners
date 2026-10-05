@@ -665,23 +665,6 @@
     }
   }
 
-  /* Barra que se llena mientras una foto del carrusel esta en pantalla
-     (DEC-068). La duracion la pone el componente, que es quien sabe cada
-     cuanto cambia. */
-  .lsw-progress-fill {
-    transform-origin: left center;
-    animation: lsw-progress-fill var(--lsw-progress-duration, 6s) linear forwards;
-  }
-
-  @keyframes lsw-progress-fill {
-    from {
-      transform: scaleX(0);
-    }
-    to {
-      transform: scaleX(1);
-    }
-  }
-
   /* Rayas que avanzan en la barra del marcador (DEC-068). Es decoracion: la
      longitud de la barra sigue siendo el tramo real transcurrido. */
   .lsw-stripes-moving {
@@ -699,11 +682,6 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .lsw-progress-fill {
-      animation: none;
-      transform: scaleX(1);
-    }
-
     .lsw-stripes-moving {
       animation: none;
     }

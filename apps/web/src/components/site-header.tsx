@@ -149,9 +149,12 @@ export async function SiteHeader({ locale }: { readonly locale: Locale }) {
           </nav>
         </div>
 
-        {/* --- Centro: marca --- */}
+        {/* --- Centro: marca ---
+            Estrella y logotipo tambien en telefono (DEC-073). Antes el logotipo
+            se ocultaba por debajo de 640px porque no cabia junto al conmutador
+            de idioma, que ya vive en el panel de navegacion. */}
         <Link href="/" className={cn("justify-self-center rounded-md", FOCUS)}>
-          <BrandLockup size="md" wordmark="sm-up" />
+          <BrandLockup size="md" />
         </Link>
 
         {/* --- Derecha: acciones --- */}

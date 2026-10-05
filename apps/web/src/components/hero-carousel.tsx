@@ -3,7 +3,7 @@
 import { cn } from "@lsw/ui";
 import Image from "next/image";
 import { useTranslations } from "next-intl";
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState } from "react";
 
 /** Una foto del carrusel, ya filtrada (`safeImageUrl`) y con su `alt` resuelto. */
 export interface HeroSlide {
@@ -12,30 +12,45 @@ export interface HeroSlide {
   readonly alt: string;
 }
 
-/** Cada cuanto cambia de foto. Por encima de 5 s, y con pausa (WCAG 2.2.2). */
+/** Cada cuanto pasa sola a la siguiente foto. */
 const INTERVAL_MS = 6000;
 
-/** Desplazamiento minimo, en pixeles, para que un gesto cuente como deslizar. */
-const SWIPE_PX = 40;
+/**
+ * Margen tras un desplazamiento automatico durante el que los eventos `scroll`
+ * se atribuyen a la animacion y no al visitante. Cubre de sobra el `smooth`
+ * mas lento, que es el de volver de la ultima foto a la primera.
+ */
+const AUTO_SCROLL_MS = 1500;
 
 /**
- * Carrusel de fotos del premio en el hero (DEC-066).
+ * Carrusel de fotos del premio en el hero (DEC-066; sin controles, DEC-073).
  *
- * Las fotos van APILADAS y se funden: no hay desplazamiento lateral, asi que el
- * degradado y el titular del hero no se mueven y el contraste medido en
- * DEC-042 sigue valiendo para todas. Se pinta dentro del hueco de la foto del
- * hero, que es quien decide su tamano en telefono y en escritorio.
+ * SE DESLIZA CON EL DEDO
+ * ----------------------
+ * Es una tira con desplazamiento horizontal NATIVO y `scroll-snap`: la foto
+ * sigue al dedo, conserva la inercia del sistema y se asienta sola en la foto
+ * mas cercana. No hay gesto programado a mano que pueda pelearse con el scroll
+ * vertical de la pagina: el navegador decide si el gesto es horizontal o
+ * vertical, como en cualquier galeria del telefono. El degradado y el titular
+ * del hero estan FUERA de la tira, asi que no se mueven y el contraste medido en
+ * DEC-042 vale para todas las fotos.
  *
- * LO QUE LO DETIENE
- * -----------------
- * - El boton de pausa. Es obligatorio: contenido que se mueve solo mas de 5 s
- *   tiene que poder pararse (WCAG 2.2.2).
- * - Tener el foco en sus controles: nadie quiere que la foto cambie mientras
- *   elige otra.
- * - `prefers-reduced-motion`: no rota solo y el cambio es instantaneo.
+ * SIN CONTROLES A LA VISTA
+ * ------------------------
+ * El cliente pidio quitar la pausa y las barras. Pasa sola cada seis segundos,
+ * que es lo que avisa de que hay mas fotos, y se detiene:
+ * - para siempre en cuanto alguien la desliza: ya ha tomado el control;
+ * - mientras el dedo esta encima, para no moverle la foto debajo;
+ * - mientras tiene el foco del teclado;
+ * - con `prefers-reduced-motion`, en el que no rota sola.
  *
- * Solo la primera foto se pide con prioridad; las demas se cargan sin bloquear
- * la primera pantalla.
+ * WCAG 2.2.2 sigue pidiendo una pausa, y existe: solo aparece al llegar con el
+ * teclado y la leen los lectores de pantalla, como un enlace de "saltar al
+ * contenido". Con el dedo o el raton no se ve.
+ *
+ * Todas las fotos se cargan con la pagina (solo la primera con prioridad): en
+ * una tira horizontal, una foto diferida no empieza a bajar hasta que asoma, y
+ * se veria un hueco negro a mitad del gesto.
  */
 export function HeroCarousel({
   slides,
@@ -48,11 +63,14 @@ export function HeroCarousel({
   readonly imageClassName?: string;
 }) {
   const t = useTranslations("home.heroCarousel");
+  const trackRef = useRef<HTMLDivElement>(null);
+  const autoScrollUntil = useRef(0);
   const [index, setIndex] = useState(0);
   const [paused, setPaused] = useState(false);
+  const [takenOver, setTakenOver] = useState(false);
+  const [holding, setHolding] = useState(false);
   const [focused, setFocused] = useState(false);
   const [reducedMotion, setReducedMotion] = useState(false);
-  const touchStartX = useRef<number | null>(null);
 
   const count = slides.length;
 
@@ -71,46 +89,96 @@ export function HeroCarousel({
     };
   }, []);
 
-  const rotating = count > 1 && !paused && !focused && !reducedMotion;
+  const rotating = count > 1 && !paused && !takenOver && !holding && !focused && !reducedMotion;
 
-  // Un temporizador POR FOTO, no un intervalo fijo (DEC-068): al saltar a otra
-  // foto el plazo vuelve a empezar, y asi la barra de progreso -que tambien
-  // arranca de cero con cada foto- llega al final justo cuando cambia.
+  // Un temporizador POR FOTO, no un intervalo fijo: si la foto cambia por otra
+  // via, el plazo vuelve a empezar y la siguiente tambien dura seis segundos.
   useEffect(() => {
     if (!rotating) return undefined;
     const timer = window.setTimeout(() => {
-      setIndex((current) => (current + 1) % count);
+      const next = (index + 1) % count;
+      setIndex(next);
+      const track = trackRef.current;
+      // jsdom no implementa `scrollTo`; ahi basta con el estado.
+      if (track !== null && typeof track.scrollTo === "function") {
+        autoScrollUntil.current = Date.now() + AUTO_SCROLL_MS;
+        track.scrollTo({ left: next * track.clientWidth, behavior: "smooth" });
+      }
     }, INTERVAL_MS);
     return () => {
       window.clearTimeout(timer);
     };
   }, [rotating, count, index]);
 
-  const goTo = (next: number) => {
-    setIndex(((next % count) + count) % count);
+  // La foto activa sale de la POSICION de la tira, la mueva quien la mueva. Un
+  // desplazamiento que no es el automatico es del visitante -dedo, trackpad o
+  // flechas del teclado- y desde ese momento ya no rota sola.
+  const syncWithScroll = () => {
+    const track = trackRef.current;
+    if (track === null || track.clientWidth === 0) return;
+    const nearest = Math.round(track.scrollLeft / track.clientWidth);
+    setIndex(Math.min(Math.max(nearest, 0), count - 1));
+    if (Date.now() > autoScrollUntil.current) setTakenOver(true);
   };
 
   return (
     <div
-      aria-roledescription={t("roleDescription")}
-      aria-label={t("label")}
       className="absolute inset-0"
-      onTouchStart={(event) => {
-        touchStartX.current = event.touches[0]?.clientX ?? null;
+      onFocus={() => {
+        setFocused(true);
       }}
-      onTouchEnd={(event) => {
-        const start = touchStartX.current;
-        const end = event.changedTouches[0]?.clientX;
-        touchStartX.current = null;
-        if (start === null || end === undefined) return;
-        const delta = end - start;
-        if (Math.abs(delta) < SWIPE_PX) return;
-        goTo(delta < 0 ? index + 1 : index - 1);
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget)) setFocused(false);
       }}
     >
-      {/* Mientras rota solo, el cambio no se anuncia: un lector de pantalla
-          leyendo una foto nueva cada seis segundos seria ruido. Parado, si. */}
-      <div aria-live={rotating ? "off" : "polite"} className="absolute inset-0">
+      {/* Pausa solo para teclado y lectores de pantalla (WCAG 2.2.2). */}
+      {count > 1 ? (
+        <div className="absolute left-s4 top-s4 z-20 lg:left-auto lg:right-s8 lg:top-s8">
+          <button
+            type="button"
+            onClick={() => {
+              setPaused((current) => !current);
+            }}
+            className={cn(
+              "sr-only rounded-pill bg-bg/80 text-body-sm text-text backdrop-blur-sm",
+              "focus:not-sr-only focus:block focus:px-s3 focus:py-s2",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus",
+            )}
+          >
+            {paused ? t("play") : t("pause")}
+          </button>
+        </div>
+      ) : null}
+
+      <div
+        ref={trackRef}
+        role="group"
+        aria-roledescription={t("roleDescription")}
+        aria-label={t("label")}
+        // Una tira con scroll tiene que poder recibir el foco, o el teclado no
+        // tendria como recorrerla (axe: `scrollable-region-focusable`). Con el
+        // foco, las flechas pasan de foto.
+        // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- region con scroll
+        tabIndex={0}
+        // Mientras rota sola, el cambio no se anuncia: un lector de pantalla
+        // leyendo una foto nueva cada seis segundos seria ruido. Parado, si.
+        aria-live={rotating ? "off" : "polite"}
+        onScroll={syncWithScroll}
+        onTouchStart={() => {
+          setHolding(true);
+        }}
+        onTouchEnd={() => {
+          setHolding(false);
+        }}
+        onTouchCancel={() => {
+          setHolding(false);
+        }}
+        className={cn(
+          "absolute inset-0 flex snap-x snap-mandatory overflow-x-auto overflow-y-hidden overscroll-x-contain",
+          "[scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus",
+        )}
+      >
         {slides.map((slide, slideIndex) => {
           const active = slideIndex === index;
           return (
@@ -120,114 +188,22 @@ export function HeroCarousel({
               aria-roledescription={t("slideRoleDescription")}
               aria-label={t("slide", { current: slideIndex + 1, total: count })}
               aria-hidden={!active}
-              className={cn(
-                "absolute inset-0 transition-opacity duration-700 ease-standard motion-reduce:transition-none",
-                active ? "opacity-100" : "opacity-0",
-              )}
+              className="relative h-full w-full shrink-0 snap-center snap-always"
             >
               <Image
                 src={slide.src}
                 alt={slide.alt}
                 fill
                 priority={slideIndex === 0}
+                loading={slideIndex === 0 ? undefined : "eager"}
                 sizes={sizes}
-                className={cn("object-cover", imageClassName)}
+                draggable={false}
+                className={cn("select-none object-cover", imageClassName)}
               />
             </div>
           );
         })}
       </div>
-
-      {/* Controles: pausa y una BARRA POR FOTO que se llena mientras esa foto
-          esta en pantalla (DEC-068, el indicador de la referencia).
-
-          En telefono van centrados sobre el pie de la foto, justo por encima
-          de donde entra el titular. En escritorio, arriba a la derecha: ahi el
-          hero es mas alto que la ventana y abajo quedarian fuera de la primera
-          pantalla. `pointer-events-auto` porque en escritorio la capa de la
-          foto no recibe el raton (ver el hero). */}
-      <div
-        className={cn(
-          "pointer-events-auto absolute bottom-s16 left-1/2 z-20 flex -translate-x-1/2 items-center gap-s1",
-          "rounded-pill bg-bg/55 px-s2 backdrop-blur-sm",
-          "lg:bottom-auto lg:left-auto lg:right-s8 lg:top-s8 lg:translate-x-0",
-        )}
-        onFocus={() => {
-          setFocused(true);
-        }}
-        onBlur={(event) => {
-          if (!event.currentTarget.contains(event.relatedTarget)) setFocused(false);
-        }}
-      >
-        <button
-          type="button"
-          onClick={() => {
-            setPaused((current) => !current);
-          }}
-          aria-label={paused ? t("play") : t("pause")}
-          className="flex h-8 w-8 items-center justify-center rounded-pill text-text hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
-        >
-          {paused ? <PlayIcon /> : <PauseIcon />}
-        </button>
-
-        {slides.map((slide, slideIndex) => {
-          const active = slideIndex === index;
-          return (
-            <button
-              key={`bar-${slide.src}-${String(slideIndex)}`}
-              type="button"
-              onClick={() => {
-                goTo(slideIndex);
-              }}
-              aria-label={t("goTo", { current: slideIndex + 1, total: count })}
-              aria-current={active ? "true" : undefined}
-              className="group flex h-8 w-10 items-center justify-center sm:w-14 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
-            >
-              <span
-                aria-hidden="true"
-                className="block h-1 w-full overflow-hidden rounded-pill bg-text/30 transition-colors duration-fast group-hover:bg-text/50"
-              >
-                {active ? (
-                  <span
-                    // Clave con el estado de rotacion: al pausar la barra se
-                    // queda llena, y al reanudar vuelve a correr desde cero,
-                    // igual que el temporizador.
-                    key={`${String(index)}-${String(rotating)}`}
-                    className={cn("block h-full w-full bg-accent", rotating && "lsw-progress-fill")}
-                    style={
-                      rotating
-                        ? ({
-                            "--lsw-progress-duration": `${String(INTERVAL_MS)}ms`,
-                          } as CSSProperties)
-                        : undefined
-                    }
-                  />
-                ) : null}
-              </span>
-            </button>
-          );
-        })}
-      </div>
     </div>
-  );
-}
-
-function PauseIcon() {
-  return (
-    <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false" className="h-4 w-4">
-      <rect x="3.5" y="3" width="3" height="10" rx="0.75" fill="currentColor" />
-      <rect x="9.5" y="3" width="3" height="10" rx="0.75" fill="currentColor" />
-    </svg>
-  );
-}
-
-function PlayIcon() {
-  return (
-    <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false" className="h-4 w-4">
-      <path
-        d="M5 3.2v9.6a.6.6 0 0 0 .9.5l7.4-4.8a.6.6 0 0 0 0-1L5.9 2.7a.6.6 0 0 0-.9.5Z"
-        fill="currentColor"
-      />
-    </svg>
   );
 }
