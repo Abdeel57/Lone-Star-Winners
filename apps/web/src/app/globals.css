@@ -823,7 +823,13 @@
   }
 
   /* Destello que cruza cada pase POR TURNOS (`--shine-delay` por nivel). En
-     telefono no hay hover: asi la banda se mueve sola sin que nadie toque. */
+     telefono no hay hover: asi la banda se mueve sola sin que nadie toque.
+
+     El final tiene que dejar la franja FUERA de la tarjeta, porque ahi espera
+     el 84% de cada ciclo. La franja mide 1/3 de la tarjeta y sale de -50%: con
+     420% su borde izquierdo quedaba en el 90% y asomaba una banda inclinada en
+     el borde derecho de todos los pases. Con 560% queda en el 137%, fuera
+     incluso contando la inclinacion. */
   .lsw-pass-shine {
     animation: lsw-pass-shine 6.5s cubic-bezier(0.4, 0, 0.2, 1) infinite;
     animation-delay: var(--shine-delay, 0s);
@@ -835,7 +841,7 @@
     }
     16%,
     100% {
-      transform: translateX(420%) skewX(-12deg);
+      transform: translateX(560%) skewX(-12deg);
     }
   }
 
