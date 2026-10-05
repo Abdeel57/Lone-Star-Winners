@@ -253,7 +253,7 @@
     "tileUnitOne": "entry",
     "tileUnitOther": "entries",
     "tilePerMerchandise": "for every {amount} of eligible merchandise",
-    "tilePerPackage": "for every {amount} in entry packages",
+    "tilePerPackage": "for every {amount} in packages",
     "tilePerAny": "for every {amount} of eligible purchases",
     "ratesUnavailable": "This promotion does not declare an entry rate.",
     "perParticipantMax": "Up to {entries} entries per person.",

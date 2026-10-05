@@ -297,43 +297,35 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
         anchorId={PACKAGES_ANCHOR}
       />
 
-      {/* Oferta vigente y via gratuita. Las dos son informacion de la promocion
-          y por eso comparten banda; con `amoe_enabled` apagado, la de la derecha
-          no se renderiza y la oferta ocupa el ancho.
+      {/* OFERTA VIGENTE: BANDA DORADA a todo el ancho (DEC-072). Antes era una
+          tarjeta oscura de media pantalla de telefono; ahora es una franja con
+          las dos cifras, y la pagina se acorta.
 
-          Sin oferta declarada y sin via gratuita no hay ningun panel que pintar,
-          y la banda no se abre: antes quedaba un hueco negro de 8rem entre los
-          paquetes y la cinta (DEC-069). */}
-      {promotion === null || presentation === null || (offer === null && !amoeEnabled) ? null : (
-        <div className="lsw-container py-s10 lg:py-s16">
-          {/* Sin encabezado de seccion propio: cada panel es ya una `<section>`
-              con su titulo, y anadir un tercer titulo encima repetiria el mismo
-              texto dos veces en la misma pantalla. */}
-          {/* Sin la via gratuita, la oferta se queda sola: se estrecha al ancho
-              de lectura en vez de estirarse a los 80rem del contenedor, que es
-              como una tarjeta de cuatro lineas acaba pareciendo un error de
-              maquetacion. */}
-          {/* DEC-071: sola, centrada; con la via gratuita, las dos en fila. */}
-          <div className={`grid gap-s5 ${amoeEnabled ? "lg:grid-cols-2" : "mx-auto max-w-narrow"}`}>
-            {/* La MISMA senal que contiene el hero y la banda de anuncio
-                (DEC-044). Se lee del resumen -no del detalle- porque el hero ya
-                la lee de ahi: si el detalle fallara, el hero seguiria contenido
-                y este panel publicaria el ratio, que es exactamente la
-                contradiccion que DEC-044 vino a cerrar. */}
-            <EntryOfferPanel
-              offer={detail?.entry_offer ?? null}
-              presentation={presentation}
-              multipliersEnabled={multipliersEnabled}
-              rulesPublished={promotion.rules_version_id !== null}
-              locale={locale}
-              timeZone={promotion.legal_timezone}
-              nowIso={nowIso}
-            />
+          La MISMA senal que contiene el hero y la banda de anuncio (DEC-044). Se
+          lee del resumen -no del detalle- porque el hero ya la lee de ahi: si el
+          detalle fallara, el hero seguiria contenido y este panel publicaria el
+          ratio, que es exactamente la contradiccion que DEC-044 vino a cerrar.
+          Sin oferta declarada, el panel no se pinta. */}
+      {promotion === null || presentation === null ? null : (
+        <EntryOfferPanel
+          offer={detail?.entry_offer ?? null}
+          presentation={presentation}
+          multipliersEnabled={multipliersEnabled}
+          rulesPublished={promotion.rules_version_id !== null}
+          locale={locale}
+          timeZone={promotion.legal_timezone}
+          nowIso={nowIso}
+          variant="band"
+        />
+      )}
 
-            {/* Con `amoe_enabled` apagado no se renderiza nada: ocultar es aqui
-                el estado deliberado. Anunciar una via gratuita que no esta
-                configurada seria afirmar algo sobre las condiciones de
-                participacion (CLAUDE.md #1). */}
+      {/* VIA GRATUITA, en su propia banda bajo la oferta. Con `amoe_enabled`
+          apagado no se renderiza nada: ocultar es aqui el estado deliberado.
+          Anunciar una via gratuita que no esta configurada seria afirmar algo
+          sobre las condiciones de participacion (CLAUDE.md #1). */}
+      {promotion === null || presentation === null || !amoeEnabled ? null : (
+        <div className="lsw-container py-s10 lg:py-s12">
+          <div className="mx-auto max-w-narrow">
             <AmoeCallout enabled={amoeEnabled} mode={uiConfig.amoeMode} />
           </div>
         </div>

@@ -3517,3 +3517,35 @@ Affected areas: `apps/web` (`promotion-hero.tsx`, `entry-offer-panel.tsx`,
 
 Proposed by: sesión del usuario (2026-10-05)
 Agreed by: pendiente — frontend-ux
+
+## DEC-072
+
+Status: Proposed
+
+Date: 2026-10-05
+
+Decision:
+**En la portada, la oferta es una banda dorada a todo el ancho.** El usuario
+quería las tarjetas de DEC-071 más cortas, "algo en amarillo fuerte, un bloque
+grande de lado a lado", para que la página no se sienta larga.
+
+1. **`EntryOfferPanel variant="band"`.** Usa el oro de la banda del premio
+   (`.lsw-prize-band`), con tinta encima. La banda lleva:
+   - un antetítulo;
+   - las dos cifras en franja (`RateStrip`): número grande, unidad y "por cada
+     $1.00 en …", separadas por un corte en diagonal;
+   - la nota de que las cifras son informativas.
+
+   En teléfono mide unos 200 px; la tarjeta medía unos 560.
+
+2. **El detalle de promoción sigue con las tarjetas** (`variant="card"`, el
+   valor por defecto).
+3. **Si hay vía gratuita, va en su propia banda debajo.** Antes compartía rejilla
+   con la oferta. La insignia y el anuncio de bonus van sobre negro también en la
+   banda: oro sobre oro no se lee.
+
+Affected areas: `apps/web` (`entry-offer-panel.tsx`, `entry-rate-lines.tsx`,
+portada, mensaje `entryOffer.tilePerPackage`).
+
+Proposed by: sesión del usuario (2026-10-05)
+Agreed by: pendiente — frontend-ux

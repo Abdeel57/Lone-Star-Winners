@@ -253,7 +253,7 @@
     "tileUnitOne": "participación",
     "tileUnitOther": "participaciones",
     "tilePerMerchandise": "por cada {amount} en mercancía elegible",
-    "tilePerPackage": "por cada {amount} en paquetes de participaciones",
+    "tilePerPackage": "por cada {amount} en paquetes",
     "tilePerAny": "por cada {amount} de compra elegible",
     "ratesUnavailable": "Esta promoción no declara ninguna tasa de participaciones.",
     "perParticipantMax": "Máximo {entries} participaciones por persona.",

@@ -1,3 +1,4 @@
+import { cn } from "@lsw/ui";
 import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 
@@ -7,7 +8,7 @@ import type { EntryOffer } from "@/lib/api";
 import { normalizeEntryOffer } from "@/lib/entry-offer";
 import { type PromotionPresentation } from "@/lib/promotion-state";
 
-import { BonusBadge, BonusPeriodRow, RateTiles } from "./entry-rate-lines";
+import { BonusBadge, BonusPeriodRow, RateStrip, RateTiles } from "./entry-rate-lines";
 
 /**
  * Oferta de participaciones de la promocion (§13.5, DEC-052).
@@ -68,6 +69,7 @@ export function EntryOfferPanel({
   locale,
   timeZone,
   nowIso,
+  variant = "card",
 }: {
   readonly offer: EntryOffer | null;
   readonly presentation: PromotionPresentation;
@@ -91,8 +93,16 @@ export function EntryOfferPanel({
    * resuelve el motor y llega en `active_bonus`.
    */
   readonly nowIso: string;
+  /**
+   * `card`, la tarjeta oscura con las tasas en tarjetas (detalle de
+   * promocion). `band`, la BANDA DORADA a todo el ancho con las dos cifras en
+   * franja (portada, DEC-072): mucho mas baja, para que la pagina no se haga
+   * larga entre los paquetes y la tienda.
+   */
+  readonly variant?: "card" | "band";
 }) {
   const t = useTranslations("entryOffer");
+  const band = variant === "band";
 
   const normalized = normalizeEntryOffer(offer, nowIso);
 
@@ -102,8 +112,8 @@ export function EntryOfferPanel({
 
   if (!rulesPublished) {
     return (
-      <section className={PANEL}>
-        <PanelHeading>{t("heading")}</PanelHeading>
+      <Frame band={band}>
+        <PanelHeading band={band}>{t("heading")}</PanelHeading>
 
         {/*
          * En tono de dato y no de alarma: el aviso fuerte -`home.rulesNotPublished`
@@ -115,8 +125,15 @@ export function EntryOfferPanel({
          * Tampoco se pinta `governedNote`: dice que "las cifras que se muestran
          * aqui son informativas", y aqui ya no se muestra ninguna.
          */}
-        <p className="mt-s4 text-body-md text-text-muted">{t("rulesPending")}</p>
-      </section>
+        <p
+          className={cn(
+            "mt-s4 text-body-md",
+            band ? "text-center text-text-inverse/80" : "text-text-muted",
+          )}
+        >
+          {t("rulesPending")}
+        </p>
+      </Frame>
     );
   }
 
@@ -135,12 +152,22 @@ export function EntryOfferPanel({
   const upcomingBonuses = bonusAllowed ? normalized.upcomingBonuses : [];
 
   return (
-    <section className={PANEL}>
-      <PanelHeading>{t("heading")}</PanelHeading>
+    <Frame band={band}>
+      <PanelHeading band={band}>{t("heading")}</PanelHeading>
 
-      {/* DEC-071: las tasas como tarjetas con la cifra grande. */}
+      {/* DEC-071: tarjetas con la cifra grande. DEC-072: en la banda dorada,
+          las dos cifras en una franja. */}
       {normalized.rates.length === 0 ? (
-        <p className="mt-s4 text-body-md text-text-muted">{t("ratesUnavailable")}</p>
+        <p
+          className={cn(
+            "mt-s4 text-body-md",
+            band ? "text-center text-text-inverse/80" : "text-text-muted",
+          )}
+        >
+          {t("ratesUnavailable")}
+        </p>
+      ) : band ? (
+        <RateStrip rates={normalized.rates} locale={locale} className="mt-s2" />
       ) : (
         <RateTiles rates={normalized.rates} locale={locale} className="mt-s5" />
       )}
@@ -148,7 +175,12 @@ export function EntryOfferPanel({
       {/* EL TOPE ES POR PERSONA. No es un universo, no lleva "emitidas" y no se
           resta: `entry_pool` se retiro del contrato con DEC-052 punto 6. */}
       {normalized.perParticipantMax === null ? null : (
-        <p className="mt-s4 text-center font-headline text-body-md font-bold italic text-brand">
+        <p
+          className={cn(
+            "mt-s3 text-center font-headline text-body-md font-bold italic",
+            band ? "text-text-inverse" : "text-brand",
+          )}
+        >
           {t("perParticipantMax", {
             entries: formatEntryCount(normalized.perParticipantMax, locale),
           })}
@@ -156,19 +188,31 @@ export function EntryOfferPanel({
       )}
 
       {normalized.perOrderMax === null ? null : (
-        <p className="mt-s2 text-body-sm text-text-muted">
+        <p
+          className={cn(
+            "mt-s2 text-body-sm",
+            band ? "text-center text-text-inverse/80" : "text-text-muted",
+          )}
+        >
           {t("perOrderMax", { entries: formatEntryCount(normalized.perOrderMax, locale) })}
         </p>
       )}
 
+      {/* El bonus y su anuncio van sobre NEGRO tambien en la banda: la insignia
+          es oro, y oro sobre oro no se lee. */}
       {activeBonus === null ? null : (
-        <div className="mt-s4">
-          <BonusBadge period={activeBonus} locale={locale} />
+        <div className={cn("mt-s4", band && "flex justify-center")}>
+          <span className={cn(band && "inline-flex rounded-pill bg-bg p-[3px]")}>
+            <BonusBadge period={activeBonus} locale={locale} />
+          </span>
         </div>
       )}
 
       {upcomingBonuses.length === 0 ? null : (
-        <section aria-labelledby="entry-offer-upcoming-bonus" className="mt-s5">
+        <section
+          aria-labelledby="entry-offer-upcoming-bonus"
+          className={cn("mt-s5", band && "mx-auto max-w-narrow rounded-lg bg-bg p-s4")}
+        >
           <h3 id="entry-offer-upcoming-bonus" className="text-label font-medium text-text-muted">
             {t("bonusUpcomingHeading")}
           </h3>
@@ -181,20 +225,54 @@ export function EntryOfferPanel({
         </section>
       )}
 
-      <p className="mt-s4 text-center text-caption text-text-subtle">{t("governedNote")}</p>
-    </section>
+      <p
+        className={cn(
+          "mx-auto mt-s3 max-w-narrow text-center text-caption",
+          band ? "text-text-inverse/70" : "mt-s4 text-text-subtle",
+        )}
+      >
+        {t("governedNote")}
+      </p>
+    </Frame>
   );
 }
 
 /**
- * El marco del panel (DEC-071): superficie elevada con un brillo de oro arriba,
- * en vez de la tarjeta plana de antes, que en la portada se leia como un aviso
- * mas y no como la oferta.
+ * El marco. `card` (DEC-071): superficie elevada con sombra. `band` (DEC-072):
+ * el oro de la banda del premio a todo el ancho, con el contenedor dentro.
  */
-const PANEL =
-  "relative overflow-hidden rounded-xl border border-white/10 bg-gradient-to-b from-surface-raised to-surface p-s5 shadow-[0_18px_40px_-24px_rgb(0_0_0/0.9)] sm:p-s6";
+function Frame({ band, children }: { readonly band: boolean; readonly children: ReactNode }) {
+  if (band) {
+    return (
+      <section className="lsw-prize-band relative isolate">
+        <div className="lsw-container py-s6 sm:py-s8">{children}</div>
+      </section>
+    );
+  }
 
-function PanelHeading({ children }: { readonly children: ReactNode }) {
+  return (
+    <section className="relative overflow-hidden rounded-xl border border-white/10 bg-gradient-to-b from-surface-raised to-surface p-s5 shadow-[0_18px_40px_-24px_rgb(0_0_0/0.9)] sm:p-s6">
+      {children}
+    </section>
+  );
+}
+
+function PanelHeading({
+  band,
+  children,
+}: {
+  readonly band: boolean;
+  readonly children: ReactNode;
+}) {
+  if (band) {
+    // Antetitulo en tinta: en la banda manda la cifra, no el titulo.
+    return (
+      <h2 className="text-center font-headline text-label font-black uppercase italic tracking-[0.2em] text-text-inverse/75 sm:text-body-sm">
+        {children}
+      </h2>
+    );
+  }
+
   return (
     <div className="flex flex-col items-center text-center">
       <h2 className="lsw-headline text-heading-lg text-text sm:text-display-sm">{children}</h2>

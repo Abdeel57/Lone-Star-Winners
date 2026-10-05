@@ -101,29 +101,7 @@ export function RateTiles({
   readonly locale: Locale;
   readonly className?: string;
 }) {
-  const t = useTranslations("entryOffer");
-  const sentence = useRateSentence();
-
-  const tiles = rates.flatMap((rate) => {
-    const text = sentence(rate, locale);
-    const amount = formatMoney(rate.amount_unit, locale);
-    if (text === null || amount === null) return [];
-    return [
-      {
-        key: rate.product_kind ?? "ANY",
-        text,
-        figure: fractionText(rate.entries_per_amount_unit, locale),
-        unit:
-          pluralCount(rate.entries_per_amount_unit) === 1 ? t("tileUnitOne") : t("tileUnitOther"),
-        per:
-          rate.product_kind === "ENTRY_PACKAGE"
-            ? t("tilePerPackage", { amount })
-            : rate.product_kind === "MERCHANDISE"
-              ? t("tilePerMerchandise", { amount })
-              : t("tilePerAny", { amount }),
-      },
-    ];
-  });
+  const tiles = useRateFigures(rates, locale);
 
   if (tiles.length === 0) return null;
 
@@ -166,6 +144,98 @@ export function RateTiles({
       ))}
     </ul>
   );
+}
+
+/**
+ * Las tasas en FRANJA, para la banda dorada de la portada (DEC-072): las dos
+ * cifras una junto a otra, en tinta sobre oro, separadas por un corte en
+ * diagonal. Misma informacion y misma frase accesible que `RateTiles`.
+ */
+export function RateStrip({
+  rates,
+  locale,
+  className,
+}: {
+  readonly rates: readonly EntryRate[];
+  readonly locale: Locale;
+  readonly className?: string;
+}) {
+  const tiles = useRateFigures(rates, locale);
+
+  if (tiles.length === 0) return null;
+
+  return (
+    <ul
+      className={cn(
+        "mx-auto grid w-full max-w-2xl list-none",
+        tiles.length > 1 ? "grid-cols-2" : "grid-cols-1",
+        className,
+      )}
+    >
+      {tiles.map((tile, index) => (
+        <li
+          key={tile.key}
+          className={cn(
+            "relative flex items-center justify-center gap-s2 px-s2 sm:gap-s4",
+            // El corte en diagonal entre las dos cifras.
+            index > 0 &&
+              "before:absolute before:inset-y-s1 before:left-0 before:w-[3px] before:-skew-x-12 before:rounded-pill before:bg-text-inverse/30",
+          )}
+        >
+          <span className="sr-only">{tile.text}</span>
+          <span
+            aria-hidden="true"
+            className="lsw-headline text-[clamp(3.25rem,17vw,6rem)] tabular-nums text-text-inverse [text-shadow:0_2px_0_rgb(255_255_255/0.25)]"
+          >
+            {tile.figure}
+          </span>
+          <span aria-hidden="true" className="flex min-w-0 flex-col text-left">
+            <span className="font-headline text-label font-black uppercase italic leading-tight tracking-[0.04em] text-text-inverse sm:text-heading-sm">
+              {tile.unit}
+            </span>
+            <span className="mt-[2px] text-caption font-medium leading-tight text-text-inverse/80 sm:text-body-sm">
+              {tile.per}
+            </span>
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+interface RateFigure {
+  readonly key: string;
+  readonly text: string;
+  readonly figure: string;
+  readonly unit: string;
+  readonly per: string;
+}
+
+/** Las piezas de cada tasa para las dos formas visuales. Sin aritmetica. */
+function useRateFigures(rates: readonly EntryRate[], locale: Locale): readonly RateFigure[] {
+  const t = useTranslations("entryOffer");
+  const sentence = useRateSentence();
+
+  return rates.flatMap((rate) => {
+    const text = sentence(rate, locale);
+    const amount = formatMoney(rate.amount_unit, locale);
+    if (text === null || amount === null) return [];
+    return [
+      {
+        key: rate.product_kind ?? "ANY",
+        text,
+        figure: fractionText(rate.entries_per_amount_unit, locale),
+        unit:
+          pluralCount(rate.entries_per_amount_unit) === 1 ? t("tileUnitOne") : t("tileUnitOther"),
+        per:
+          rate.product_kind === "ENTRY_PACKAGE"
+            ? t("tilePerPackage", { amount })
+            : rate.product_kind === "MERCHANDISE"
+              ? t("tilePerMerchandise", { amount })
+              : t("tilePerAny", { amount }),
+      },
+    ];
+  });
 }
 
 /** Las tasas declaradas, o nada si la promocion no declara ninguna. */
