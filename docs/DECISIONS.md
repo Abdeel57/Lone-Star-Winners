@@ -3476,3 +3476,44 @@ tests), `docs/API_CONTRACT.md`.
 
 Proposed by: sesión del usuario (2026-10-05)
 Agreed by: pendiente — backend-sweepstakes
+
+## DEC-071
+
+Status: Proposed
+
+Date: 2026-10-05
+
+Decision:
+**Hero compacto en teléfono y oferta en tarjetas.** Con la promoción ya
+abierta, el usuario pidió que el contador se vea en una sola pantalla del
+teléfono y que el recuadro de participaciones luzca mejor.
+
+1. **Hero en teléfono:**
+   - la foto pasa a 4:3, como en tableta; el cuadrado recortaba la camioneta
+     por los lados;
+   - las tasas solo se muestran desde tableta: en teléfono el panel de oferta las
+     repite justo debajo, en grande;
+   - lema más pequeño, botón secundario más bajo y menos aire entre bloques.
+
+   Del titular al plazo escrito ahora caben unos 560 px.
+
+2. **Panel de oferta:** título de titular con filete de oro, y las tasas como
+   tarjetas con la cifra grande en oro y debajo qué es y por qué importe.
+   - La frase completa de cada tasa sigue en el DOM para lectores de pantalla;
+     la parte visual va `aria-hidden`.
+   - Centrado en la portada cuando no hay vía gratuita.
+3. **"1 participación", no "1 participaciones".** Plural ICU en
+   `entryOffer.rate*`: solo la tasa entera 1/1 es singular. Es gramática, no
+   aritmética: no se divide nada.
+
+Alternatives:
+A — Mover el contador encima de los botones (descartada: el orden botón →
+contador es el de la referencia que eligió el cliente). B — Quitar las tasas
+del hero también en escritorio (descartada: ahí hay sitio y responden lo
+primero que se pregunta).
+
+Affected areas: `apps/web` (`promotion-hero.tsx`, `entry-offer-panel.tsx`,
+`entry-rate-lines.tsx`, portada, mensajes `entryOffer.rate*` y `tile*`, tests).
+
+Proposed by: sesión del usuario (2026-10-05)
+Agreed by: pendiente — frontend-ux

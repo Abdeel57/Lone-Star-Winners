@@ -1,4 +1,4 @@
-import { Badge } from "@lsw/ui";
+import { Badge, cn } from "@lsw/ui";
 import { useTranslations } from "next-intl";
 
 import { formatInteger, formatMoney, formatZonedDateTime } from "@/i18n/formatters";
@@ -50,21 +50,121 @@ export function fractionText(fraction: EntryMultiplier, locale: Locale): string 
  * participaciones.
  */
 export function RateLine({ rate, locale }: { readonly rate: EntryRate; readonly locale: Locale }) {
+  const sentence = useRateSentence();
+  const text = sentence(rate, locale);
+  if (text === null) return null;
+
+  return <li className="text-body-md text-text">{text}</li>;
+}
+
+/**
+ * Singular o plural de "participacion". Solo es singular la tasa entera 1/1:
+ * "1 participacion", pero "3/2 participaciones" y "2 participaciones". Es
+ * GRAMATICA, no aritmetica: no se divide nada.
+ */
+function pluralCount(fraction: EntryMultiplier): number {
+  return fraction.numerator === 1 && fraction.denominator === 1 ? 1 : 2;
+}
+
+/** La frase completa de una tasa, o `null` si el importe no respeta DEC-010. */
+function useRateSentence(): (rate: EntryRate, locale: Locale) => string | null {
   const t = useTranslations("entryOffer");
 
-  const amount = formatMoney(rate.amount_unit, locale);
-  if (amount === null) return null;
+  return (rate, locale) => {
+    const amount = formatMoney(rate.amount_unit, locale);
+    if (amount === null) return null;
 
-  const entries = fractionText(rate.entries_per_amount_unit, locale);
+    const entries = fractionText(rate.entries_per_amount_unit, locale);
+    const count = pluralCount(rate.entries_per_amount_unit);
+
+    return rate.product_kind === "ENTRY_PACKAGE"
+      ? t("ratePackage", { entries, amount, count })
+      : rate.product_kind === "MERCHANDISE"
+        ? t("rateMerchandise", { entries, amount, count })
+        : t("rateAny", { entries, amount, count });
+  };
+}
+
+/**
+ * Las tasas como TARJETAS: la cifra grande en oro y debajo que es y por que
+ * importe (DEC-071). Es la misma informacion que `RateList` -y la misma frase,
+ * entera, para lectores de pantalla-; cambia la forma de ensenarla.
+ *
+ * ORO las cifras de participaciones, como en todo el sistema (DEC-042).
+ */
+export function RateTiles({
+  rates,
+  locale,
+  className,
+}: {
+  readonly rates: readonly EntryRate[];
+  readonly locale: Locale;
+  readonly className?: string;
+}) {
+  const t = useTranslations("entryOffer");
+  const sentence = useRateSentence();
+
+  const tiles = rates.flatMap((rate) => {
+    const text = sentence(rate, locale);
+    const amount = formatMoney(rate.amount_unit, locale);
+    if (text === null || amount === null) return [];
+    return [
+      {
+        key: rate.product_kind ?? "ANY",
+        text,
+        figure: fractionText(rate.entries_per_amount_unit, locale),
+        unit:
+          pluralCount(rate.entries_per_amount_unit) === 1 ? t("tileUnitOne") : t("tileUnitOther"),
+        per:
+          rate.product_kind === "ENTRY_PACKAGE"
+            ? t("tilePerPackage", { amount })
+            : rate.product_kind === "MERCHANDISE"
+              ? t("tilePerMerchandise", { amount })
+              : t("tilePerAny", { amount }),
+      },
+    ];
+  });
+
+  if (tiles.length === 0) return null;
 
   return (
-    <li className="text-body-md text-text">
-      {rate.product_kind === "ENTRY_PACKAGE"
-        ? t("ratePackage", { entries, amount })
-        : rate.product_kind === "MERCHANDISE"
-          ? t("rateMerchandise", { entries, amount })
-          : t("rateAny", { entries, amount })}
-    </li>
+    <ul
+      className={cn(
+        "grid list-none gap-s3",
+        tiles.length > 1 ? "grid-cols-2" : "grid-cols-1",
+        className,
+      )}
+    >
+      {tiles.map((tile) => (
+        <li
+          key={tile.key}
+          className="relative flex flex-col items-center overflow-hidden rounded-xl border border-brand/30 bg-gradient-to-b from-brand/[0.12] via-surface-raised to-surface-raised px-s3 pb-s4 pt-s5 text-center shadow-[inset_0_1px_0_rgb(255_255_255/0.06)]"
+        >
+          {/* Filete de oro arriba, como los pases de la banda de paquetes. */}
+          <span
+            aria-hidden="true"
+            className="absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-brand/0 via-brand to-brand/0"
+          />
+          {/* La frase entera, una vez, para lectores de pantalla. */}
+          <span className="sr-only">{tile.text}</span>
+          <span
+            aria-hidden="true"
+            className="lsw-headline lsw-gold-sheen text-[clamp(3rem,15vw,4.5rem)] tabular-nums"
+          >
+            {tile.figure}
+          </span>
+          <span
+            aria-hidden="true"
+            className="mt-s1 font-headline text-label font-extrabold uppercase italic tracking-[0.06em] text-text"
+          >
+            {tile.unit}
+          </span>
+          <span aria-hidden="true" className="mt-s1 text-caption leading-snug text-text-muted">
+            {tile.per}
+          </span>
+        </li>
+      ))}
+    </ul>
   );
 }
 

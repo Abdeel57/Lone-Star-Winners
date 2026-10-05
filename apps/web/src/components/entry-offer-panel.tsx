@@ -1,5 +1,5 @@
-import { Card, CardTitle } from "@lsw/ui";
 import { useTranslations } from "next-intl";
+import type { ReactNode } from "react";
 
 import { formatEntryCount } from "@/i18n/formatters";
 import type { Locale } from "@/i18n/locales";
@@ -7,7 +7,7 @@ import type { EntryOffer } from "@/lib/api";
 import { normalizeEntryOffer } from "@/lib/entry-offer";
 import { type PromotionPresentation } from "@/lib/promotion-state";
 
-import { BonusBadge, BonusPeriodRow, RateList } from "./entry-rate-lines";
+import { BonusBadge, BonusPeriodRow, RateTiles } from "./entry-rate-lines";
 
 /**
  * Oferta de participaciones de la promocion (§13.5, DEC-052).
@@ -102,10 +102,8 @@ export function EntryOfferPanel({
 
   if (!rulesPublished) {
     return (
-      <Card as="section" elevation="flat" padding="md">
-        <CardTitle as="h2" size="sm">
-          {t("heading")}
-        </CardTitle>
+      <section className={PANEL}>
+        <PanelHeading>{t("heading")}</PanelHeading>
 
         {/*
          * En tono de dato y no de alarma: el aviso fuerte -`home.rulesNotPublished`
@@ -117,8 +115,8 @@ export function EntryOfferPanel({
          * Tampoco se pinta `governedNote`: dice que "las cifras que se muestran
          * aqui son informativas", y aqui ya no se muestra ninguna.
          */}
-        <p className="mt-s3 text-body-md text-text-muted">{t("rulesPending")}</p>
-      </Card>
+        <p className="mt-s4 text-body-md text-text-muted">{t("rulesPending")}</p>
+      </section>
     );
   }
 
@@ -137,21 +135,20 @@ export function EntryOfferPanel({
   const upcomingBonuses = bonusAllowed ? normalized.upcomingBonuses : [];
 
   return (
-    <Card as="section" elevation="flat" padding="md">
-      <CardTitle as="h2" size="sm">
-        {t("heading")}
-      </CardTitle>
+    <section className={PANEL}>
+      <PanelHeading>{t("heading")}</PanelHeading>
 
+      {/* DEC-071: las tasas como tarjetas con la cifra grande. */}
       {normalized.rates.length === 0 ? (
-        <p className="mt-s3 text-body-md text-text-muted">{t("ratesUnavailable")}</p>
+        <p className="mt-s4 text-body-md text-text-muted">{t("ratesUnavailable")}</p>
       ) : (
-        <RateList rates={normalized.rates} locale={locale} className="mt-s3" />
+        <RateTiles rates={normalized.rates} locale={locale} className="mt-s5" />
       )}
 
       {/* EL TOPE ES POR PERSONA. No es un universo, no lleva "emitidas" y no se
           resta: `entry_pool` se retiro del contrato con DEC-052 punto 6. */}
       {normalized.perParticipantMax === null ? null : (
-        <p className="mt-s4 font-display text-body-md text-brand">
+        <p className="mt-s4 text-center font-headline text-body-md font-bold italic text-brand">
           {t("perParticipantMax", {
             entries: formatEntryCount(normalized.perParticipantMax, locale),
           })}
@@ -184,7 +181,24 @@ export function EntryOfferPanel({
         </section>
       )}
 
-      <p className="mt-s4 text-caption text-text-subtle">{t("governedNote")}</p>
-    </Card>
+      <p className="mt-s4 text-center text-caption text-text-subtle">{t("governedNote")}</p>
+    </section>
+  );
+}
+
+/**
+ * El marco del panel (DEC-071): superficie elevada con un brillo de oro arriba,
+ * en vez de la tarjeta plana de antes, que en la portada se leia como un aviso
+ * mas y no como la oferta.
+ */
+const PANEL =
+  "relative overflow-hidden rounded-xl border border-white/10 bg-gradient-to-b from-surface-raised to-surface p-s5 shadow-[0_18px_40px_-24px_rgb(0_0_0/0.9)] sm:p-s6";
+
+function PanelHeading({ children }: { readonly children: ReactNode }) {
+  return (
+    <div className="flex flex-col items-center text-center">
+      <h2 className="lsw-headline text-heading-lg text-text sm:text-display-sm">{children}</h2>
+      <div aria-hidden="true" className="lsw-gold-rule mt-s3 w-[5rem]" />
+    </div>
   );
 }

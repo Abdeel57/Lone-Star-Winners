@@ -397,7 +397,11 @@ export function PromotionHero({
               // franja de 46svh de antes dejaba el vehiculo pequeno y medio
               // tapado por el titular; ahora se ve entero, como en la
               // referencia, y el titular entra solo sobre el pie fundido.
-              "relative aspect-square max-h-[80svh] w-full sm:aspect-[4/3]",
+              // DEC-071: 4:3 tambien en telefono. El cuadrado recortaba la
+              // camioneta por los lados y empujaba el marcador fuera de la
+              // pantalla; en 4:3 se ve el vehiculo entero y, al bajar un poco,
+              // del titular al marcador cabe en una sola pantalla.
+              "relative aspect-[4/3] max-h-[70svh] w-full",
               // En escritorio: capa pegada al borde derecho, a sangre, con el
               // alto de la PRIMERA PANTALLA y no el de la seccion. DEC-069 metio
               // el marcador en el hero y la seccion crecio por debajo de la
@@ -584,7 +588,7 @@ export function PromotionHero({
                 relleno metalico y sombra-, el tratamiento de las referencias.
                 El tamano se ajusta al ancho para que dos o tres palabras llenen
                 la linea en telefono sin desbordar. */}
-            <h1 id="promotion-title" className="mt-s5 flex flex-col gap-s1">
+            <h1 id="promotion-title" className="mt-s4 flex flex-col gap-s1 sm:mt-s5">
               {prizeName === null ? (
                 <span className={cn("lsw-headline lsw-chrome", headlineSize(title))}>{title}</span>
               ) : (
@@ -629,18 +633,24 @@ export function PromotionHero({
                 abajo dejaba la portada sin la mitad de la respuesta.
 
                 Cae igual con el estado contenido, y por el mismo motivo que el
-                tope: son las cifras mas concretas que la promocion declara. */}
+                tope: son las cifras mas concretas que la promocion declara.
+
+                DEC-071: solo desde tableta. En telefono el panel de oferta va
+                justo debajo de los paquetes con las mismas dos cifras en
+                grande, y aqui eran tres lineas entre el titular y el boton. */}
             {!showsPromotionalHero || offer === null || offer.rates.length === 0 ? null : (
-              <RateList
-                rates={offer.rates}
-                locale={locale}
-                className="mt-s4 max-w-narrow text-text-muted"
-              />
+              <div className="hidden sm:block">
+                <RateList
+                  rates={offer.rates}
+                  locale={locale}
+                  className="mt-s4 max-w-narrow text-text-muted"
+                />
+              </div>
             )}
 
             {/* El lema, en la italica gruesa de la referencia ("+ A $40,000
                 CHECK"). Es texto del panel; aqui solo se le da voz. */}
-            <p className="mt-s4 max-w-narrow font-headline text-body-lg font-bold italic leading-snug text-text sm:text-heading-md">
+            <p className="mt-s3 max-w-narrow font-headline text-body-md font-bold italic leading-snug text-text sm:mt-s4 sm:text-heading-md">
               {pickLocalized(promotion.summary, locale)}
             </p>
 
@@ -701,7 +711,7 @@ export function PromotionHero({
                 </Link>
               </div>
             ) : (
-              <div className="mt-s8 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+              <div className="mt-s5 flex flex-col gap-s2 sm:mt-s8 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
                 <HeroLink
                   href={presentation.showsShopCta ? buyLink : `/promotions/${promotion.slug}`}
                   // Ancho completo en telefono -es la unica accion de la
@@ -723,9 +733,11 @@ export function PromotionHero({
                 {presentation.showsShopCta ? (
                   <Link
                     href={`/promotions/${promotion.slug}`}
+                    // DEC-071: mas bajo en telefono -es la accion secundaria-,
+                    // con el tamano del rojo desde tableta.
                     className={cn(
-                      buttonVariants({ variant: "subtle", size: "xl" }),
-                      "w-full sm:w-auto",
+                      buttonVariants({ variant: "subtle", size: "lg" }),
+                      "w-full sm:h-control-xl sm:w-auto sm:px-8 sm:text-body-lg",
                     )}
                   >
                     {t("viewPromotion")}
@@ -745,7 +757,7 @@ export function PromotionHero({
              * marcador (DEC-044).
              */}
             {countdownTarget === null ? null : (
-              <div className="mt-s8">
+              <div className="mt-s6 sm:mt-s8">
                 <PromotionCountdown
                   targetIso={
                     countdownTarget === "starts_at" ? promotion.starts_at : promotion.ends_at

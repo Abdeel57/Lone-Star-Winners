@@ -772,9 +772,10 @@ describe("EntryOfferPanel (§13.5, DEC-052)", () => {
 
     // 1 por $1 en mercancia y 2 por $1 en paquetes: son dos frases distintas
     // porque son dos afirmaciones distintas, y el segundo borrador de las
-    // Official Rules las separa expresamente (Opciones 1 y 2).
+    // Official Rules las separa expresamente (Opciones 1 y 2). Y en singular
+    // cuando es una: "1 entry", no "1 entries" (DEC-071).
     expect(
-      screen.getByText(/1 entries for every \$1\.00 of eligible merchandise/),
+      screen.getByText(/1 entry for every \$1\.00 of eligible merchandise/),
     ).toBeInTheDocument();
     expect(screen.getByText(/2 entries for every \$1\.00 of an entry package/)).toBeInTheDocument();
   });
@@ -986,7 +987,7 @@ describe("EntryOfferPanel (§13.5, DEC-052)", () => {
     );
 
     expect(
-      screen.getByText(/1 entries for every \$1\.00 of eligible merchandise/),
+      screen.getByText(/1 entry for every \$1\.00 of eligible merchandise/),
     ).toBeInTheDocument();
     expect(screen.queryByText(/per person/)).not.toBeInTheDocument();
   });

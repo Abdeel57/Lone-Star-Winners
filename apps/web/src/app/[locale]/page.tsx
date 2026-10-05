@@ -305,7 +305,7 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
           y la banda no se abre: antes quedaba un hueco negro de 8rem entre los
           paquetes y la cinta (DEC-069). */}
       {promotion === null || presentation === null || (offer === null && !amoeEnabled) ? null : (
-        <div className="lsw-container py-s16">
+        <div className="lsw-container py-s10 lg:py-s16">
           {/* Sin encabezado de seccion propio: cada panel es ya una `<section>`
               con su titulo, y anadir un tercer titulo encima repetiria el mismo
               texto dos veces en la misma pantalla. */}
@@ -313,7 +313,8 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
               de lectura en vez de estirarse a los 80rem del contenedor, que es
               como una tarjeta de cuatro lineas acaba pareciendo un error de
               maquetacion. */}
-          <div className={`grid gap-s5 ${amoeEnabled ? "lg:grid-cols-2" : "max-w-narrow"}`}>
+          {/* DEC-071: sola, centrada; con la via gratuita, las dos en fila. */}
+          <div className={`grid gap-s5 ${amoeEnabled ? "lg:grid-cols-2" : "mx-auto max-w-narrow"}`}>
             {/* La MISMA senal que contiene el hero y la banda de anuncio
                 (DEC-044). Se lee del resumen -no del detalle- porque el hero ya
                 la lee de ahi: si el detalle fallara, el hero seguiria contenido
