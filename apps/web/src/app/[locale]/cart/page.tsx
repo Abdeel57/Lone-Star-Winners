@@ -84,9 +84,10 @@ export default async function CartPage({
 
   // DEC-079: sin cuenta se llena el carrito; la cuenta se pide al pagar.
   const isGuest = account.state.kind !== "active";
-  // Con mercancia y sin tarifa de envio puesta, el checkout respondera 409:
-  // no se ofrece un boton que lleva a un fallo.
-  const shippingBlocked = cartResult.ok && cartResult.data.shipping.status === "NOT_CONFIGURED";
+  // Con mercancia y sin tarifa de envio puesta, enviar a domicilio responde
+  // 409. Pagar sigue siendo posible -en efectivo, recogiendolo en el punto de
+  // venta-, asi que el boton se queda y se avisa de lo que no esta disponible.
+  const shippingPending = cartResult.ok && cartResult.data.shipping.status === "NOT_CONFIGURED";
 
   return (
     <div className="lsw-container py-s10 pb-s16">
@@ -186,23 +187,21 @@ export default async function CartPage({
                   de esta columna se queda donde importa, en la cifra de
                   participaciones que pinta `EntryQuotePanel` justo debajo. */}
               <div className="mt-s5 flex flex-col gap-s3">
-                {shippingBlocked ? (
-                  // Sin tarifa de envio no se puede cobrar la mercancia: el
-                  // boton no lleva a un checkout que va a responder 409.
+                {shippingPending ? (
                   <Alert tone="warning">{t("cart.totals.shippingNotConfigured")}</Alert>
-                ) : (
-                  <Link
-                    href="/checkout"
-                    className={buttonVariants({ variant: "accent", fullWidth: true })}
-                  >
-                    {t("cart.checkout")}
-                  </Link>
-                )}
+                ) : null}
+
+                <Link
+                  href="/checkout"
+                  className={buttonVariants({ variant: "accent", fullWidth: true })}
+                >
+                  {t("cart.checkout")}
+                </Link>
 
                 {/* DEC-079: sin cuenta se puede llenar el carrito; para pagar se
                     pide. Se avisa AQUI, antes del clic, para que pedir la cuenta
                     no parezca una sorpresa ni un error. */}
-                {isGuest && !shippingBlocked ? (
+                {isGuest ? (
                   <p className="text-caption text-text-subtle">{t("cart.guestNote")}</p>
                 ) : null}
 

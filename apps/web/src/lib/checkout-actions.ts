@@ -147,12 +147,37 @@ function paymentMethodFrom(formData: FormData): "CARD" | "CASH" {
   return textFrom(formData, "payment_method") === "CASH" ? "CASH" : "CARD";
 }
 
+/**
+ * DEC-079: con efectivo, como recibe el pedido. Igual que la forma de pago, se
+ * compara contra la lista: cualquier otro valor es envio, que pide direccion y
+ * cobra envio, lo que existia antes. Con tarjeta no se lee: siempre es envio.
+ */
+function fulfillmentFrom(formData: FormData): "DELIVERY" | "PICKUP" {
+  return textFrom(formData, "fulfillment_method") === "PICKUP" ? "PICKUP" : "DELIVERY";
+}
+
 export async function startCheckoutAction(
   _previous: ActionResult,
   formData: FormData,
 ): Promise<ActionResult> {
   const locale = localeFrom(formData);
   if (locale === null) return invalid("VALIDATION_FAILED");
+
+  /*
+   * EFECTIVO Y LO RECOGE DONDE PAGA (DEC-079): sin direccion y sin envio. El
+   * articulo se entrega en el mismo punto de venta, asi que no hay a donde
+   * mandarlo y no se piden seis campos que nadie va a usar.
+   */
+  if (paymentMethodFrom(formData) === "CASH" && fulfillmentFrom(formData) === "PICKUP") {
+    const order = await createCashOrder(
+      { fulfillment_method: "PICKUP" },
+      locale,
+      await mutableSession(),
+    );
+    if (!order.ok) return fromFailure(order.error);
+
+    redirect({ href: `/orders/${encodeURIComponent(order.data.id)}/confirmation`, locale });
+  }
 
   const address = addressFrom(formData);
   if ("missing" in address) return invalid("FIELD_REQUIRED", address.missing);
@@ -173,7 +198,11 @@ export async function startCheckoutAction(
    * pago de abajo.
    */
   if (paymentMethodFrom(formData) === "CASH") {
-    const order = await createCashOrder({ shipping_address: address }, locale, session);
+    const order = await createCashOrder(
+      { fulfillment_method: "DELIVERY", shipping_address: address },
+      locale,
+      session,
+    );
     if (!order.ok) return fromFailure(order.error);
 
     redirect({ href: `/orders/${encodeURIComponent(order.data.id)}/confirmation`, locale });

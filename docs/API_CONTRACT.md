@@ -1931,7 +1931,9 @@ la tarifa fija vigente y `total_minor` = subtotal + envío; sin mercancía (solo
 paquetes), `shipping_total_minor` es `null`. `tax_total_minor` sigue `null`
 (pendiente legal). La pasarela cobra el envío como una línea aparte marcada
 como envío; no es una línea del pedido y no genera participaciones. Lo mismo
-vale para `POST /checkout/cash-order`.
+vale para `POST /checkout/cash-order` con `fulfillment_method = DELIVERY`; con
+`PICKUP` (lo recoge en el punto de venta) no hay envío. Con tarjeta siempre es
+`DELIVERY`.
 
 Errors:
 409 CART_EMPTY
@@ -1991,7 +1993,10 @@ opción del checkout, junto a la sesión con tarjeta.
 Authentication: sesión de participante
 
 Request:
+{ "fulfillment_method": "PICKUP" }
+o
 {
+  "fulfillment_method": "DELIVERY",
   "shipping_address": {
     "full_name": "...", "line1": "...", "line2": null,
     "city": "...", "region": "...", "postal_code": "...", "country": "US"
@@ -1999,6 +2004,20 @@ Request:
 }
 
 Sin `return_url`: no hay pasarela a la que ir y de la que volver.
+
+DEC-079, `fulfillment_method` (opcional; ausente = `DELIVERY`, lo que existía
+antes):
+
+| Valor      | Qué significa                                           | Dirección   | Envío                       | Se cobra en caja   |
+| ---------- | ------------------------------------------------------- | ----------- | --------------------------- | ------------------ |
+| `PICKUP`   | Se entrega en el mismo punto de venta donde se paga     | No (se ignora) | No (`shipping_total` null), ni hace falta tarifa | Subtotal           |
+| `DELIVERY` | Se envía a la dirección                                 | Obligatoria | Tarifa fija si hay mercancía | Subtotal + envío   |
+
+`DELIVERY` sin `shipping_address` responde 422 `VALIDATION_FAILED` con
+`issues: [{ "path": "shipping_address", "code": "required" }]`. El valor queda en
+`orders.fulfillment_method`, no se cambia después, y la ficha del pedido lo
+publica (`OrderDetail.fulfillment_method`). El motor impide un `PICKUP` con
+tarjeta o con envío (CHECK).
 
 Response: 201 (pedido creado) | 200 (ese carrito ya tenía pedido en efectivo)
 `OrderSummary`, con `status: "PENDING_PAYMENT"`, `payment_method: "CASH"`,
@@ -2020,7 +2039,7 @@ responde 409 CART_EMPTY.
 
 Errors:
 409 CART_EMPTY
-409 SHIPPING_NOT_CONFIGURED (DEC-079, igual que con tarjeta)
+409 SHIPPING_NOT_CONFIGURED (DEC-079, solo con `DELIVERY`: igual que con tarjeta)
 422 VALIDATION_FAILED
 
 Authorization: PARTICIPANT_SELF
@@ -2227,7 +2246,11 @@ Endpoint: /api/v1/account/orders/{order_id}
 Purpose: detalle de un pedido, con la traza del cálculo de entries.
 
 Response: 200 OrderDetail = OrderSummary + { items, subtotal, shipping_total,
-tax_total, shipping_address, entry_calculation }.
+tax_total, shipping_address, fulfillment_method, entry_calculation }.
+
+`fulfillment_method` (DEC-079): `DELIVERY` (se envía a `shipping_address`) o
+`PICKUP` (pagado en efectivo y entregado en el punto de venta; `shipping_total`
+y `shipping_address` son `null` porque no hay envío).
 
 `entry_calculation` es { rules_version_id, engine_version, evaluated_at,
 final_entries, trace } leído del EntryCalculationSnapshot persistido, con la

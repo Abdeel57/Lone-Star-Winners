@@ -81,6 +81,7 @@ export type {
   EntryTransactionPage,
   ExportSnapshotStatus,
   FeatureFlagKey,
+  FulfillmentMethod,
   LocalizedText,
   MoneyMinor,
   OfficialRulesDocumentContent,

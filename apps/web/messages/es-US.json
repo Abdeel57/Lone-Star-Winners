@@ -224,7 +224,7 @@
       "shippingPending": "Por confirmar",
       "total": "Total",
       "shippingNoEntries": "El envío no genera participaciones.",
-      "shippingNotConfigured": "Todavía no podemos cobrar el envío de la mercancía, así que este carrito no se puede pagar por ahora. Inténtalo un poco más tarde."
+      "shippingNotConfigured": "El envío a domicilio todavía no está disponible. Puedes pagar en efectivo en un punto de venta y recoger ahí mismo tu pedido, sin envío."
     },
     "subtotal": "Subtotal",
     "subtotalUnavailable": "Ahora mismo no podemos mostrar un subtotal de este carrito.",
@@ -866,6 +866,9 @@
       "notDetermined": "Todavía sin determinar",
       "addressHeading": "Dirección de envío",
       "noAddress": "Este pedido no tiene dirección de envío registrada.",
+      "pickupHeading": "Entrega",
+      "pickupBody": "Se recoge en el punto de venta al pagar en efectivo. Sin envío.",
+      "shippingPickup": "Sin envío (recoge en el punto de venta)",
       "entriesHeading": "Participaciones de este pedido",
       "calculationHeading": "Cómo se llegó a esa cifra",
       "calculationIntro": "Este es el cálculo que registraron nuestros sistemas cuando se procesó este pedido, tal como se aplicó. Se conserva para que la cifra siga pudiendo explicarse cuando el catálogo y las reglas hayan cambiado.",
@@ -955,6 +958,7 @@
     "emptyBody": "Añade antes mercancía elegible a tu carrito.",
     "addressHeading": "A dónde va",
     "reviewHeading": "Lo que estás pidiendo",
+    "pickupNote": "Si pagas en efectivo y lo recoges en el punto de venta, no se cobra envío.",
     "entriesHeading": "Participaciones promocionales cotizadas para este pedido",
     "entriesNote": "Esta cifra la calculan nuestros sistemas a partir de tu carrito. Es orientativa hasta que el pedido alcance el estado que las Reglas Oficiales definen como calificante.",
     "payCta": "Continuar al pago",
@@ -1001,6 +1005,18 @@
       },
       "cashCta": "Hacer el pedido y pagar en efectivo",
       "cashNote": "No se cobra nada ahora. Recibirás un número de orden para darlo en el punto de venta cuando pagues."
+    },
+    "fulfillment": {
+      "heading": "¿Cómo recibes tu pedido?",
+      "pickup": {
+        "title": "Lo recojo donde pago",
+        "body": "Te lo entregan en el punto de venta al pagar. Sin envío: pagas {total}."
+      },
+      "delivery": {
+        "title": "Envíamelo a domicilio",
+        "body": "Se suma el envío de {shipping}: pagas {total}.",
+        "unavailable": "El envío a domicilio todavía no está disponible."
+      }
     }
   },
   "orderConfirmation": {
@@ -1017,7 +1033,8 @@
       "paidTitle": "Pago en efectivo confirmado",
       "orderNumberLabel": "Tu número de orden",
       "pendingBody": "Da este número de orden en un punto de venta y paga {total} en efectivo. Todavía no se ha cobrado nada: tu pedido está pendiente de pago, y tus participaciones se generan cuando la tienda lo confirme.",
-      "paidBody": "La tienda confirmó tu pago en efectivo. Tus participaciones se generan con las mismas reglas que una compra con tarjeta."
+      "paidBody": "La tienda confirmó tu pago en efectivo. Tus participaciones se generan con las mismas reglas que una compra con tarjeta.",
+      "pickupBody": "Te entregan tu pedido ahí mismo, al pagar. Sin envío."
     }
   },
   "admin": {

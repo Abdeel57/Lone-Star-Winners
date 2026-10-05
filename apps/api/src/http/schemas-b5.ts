@@ -118,6 +118,12 @@ export const orderDetailSchema = orderSummarySchema.extend({
   tax_total: moneySchema.nullable(),
   shipping_address: postalAddressSchema.nullable(),
   /**
+   * DEC-079: `DELIVERY` = se envia a `shipping_address`. `PICKUP` = pagado en
+   * efectivo y entregado en el mismo punto de venta: sin envio
+   * (`shipping_total = null`) y sin direccion.
+   */
+  fulfillment_method: z.enum(["DELIVERY", "PICKUP"]),
+  /**
    * Traza del calculo que persistio el `EntryCalculationSnapshot`, o `null` si
    * el pedido no ha generado ninguna. Es lo que permite contestar "por que esta
    * compra genero 37 entries y no 36" meses despues.

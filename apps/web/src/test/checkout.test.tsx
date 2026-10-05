@@ -79,7 +79,7 @@ function renderIn(locale: Locale, ui: ReactNode) {
 
 describe("formulario de checkout", () => {
   it.each(LOCALES)("no recoge ningun dato de pago en %s", (locale) => {
-    const { container } = renderIn(locale, <CheckoutForm locale={locale} />);
+    const { container } = renderIn(locale, <CheckoutForm locale={locale} cashDelivery={null} />);
 
     for (const forbidden of [
       "card_number",
@@ -108,7 +108,7 @@ describe("formulario de checkout", () => {
      * escrita por el frontend (CLAUDE.md #2 y #14). Cuando el backend publique
      * la lista, el desplegable se pinta con SUS valores.
      */
-    const { container } = renderIn("en", <CheckoutForm locale="en" />);
+    const { container } = renderIn("en", <CheckoutForm locale="en" cashDelivery={null} />);
 
     expect(container.querySelector('select[name="region"]')).toBeNull();
     expect(container.querySelector('input[name="region"]')).not.toBeNull();
@@ -116,7 +116,7 @@ describe("formulario de checkout", () => {
   });
 
   it("el pais no trae ningun valor por defecto", () => {
-    const { container } = renderIn("en", <CheckoutForm locale="en" />);
+    const { container } = renderIn("en", <CheckoutForm locale="en" cashDelivery={null} />);
     const country = container.querySelector('input[name="country"]');
 
     expect(country).not.toBeNull();
@@ -124,7 +124,7 @@ describe("formulario de checkout", () => {
   });
 
   it("el codigo postal no impone ningun formato", () => {
-    const { container } = renderIn("en", <CheckoutForm locale="en" />);
+    const { container } = renderIn("en", <CheckoutForm locale="en" cashDelivery={null} />);
     const postal = container.querySelector('input[name="postal_code"]');
 
     expect(postal?.hasAttribute("pattern")).toBe(false);
@@ -132,7 +132,7 @@ describe("formulario de checkout", () => {
   });
 
   it.each(LOCALES)("dice quien cobra, en %s", (locale) => {
-    renderIn(locale, <CheckoutForm locale={locale} />);
+    renderIn(locale, <CheckoutForm locale={locale} cashDelivery={null} />);
 
     const messages = locale === "en" ? enMessages : esMessages;
     expect(screen.getByText(messages.checkout.providerNote)).toBeInTheDocument();

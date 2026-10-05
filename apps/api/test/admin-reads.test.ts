@@ -133,6 +133,7 @@ function orderFixture(overrides: Record<string, unknown> = {}): Record<string, u
       postal_code: "73301",
       country: "US",
     },
+    fulfillmentMethod: "DELIVERY",
     ...overrides,
   };
 }

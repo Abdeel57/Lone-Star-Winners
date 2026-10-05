@@ -224,7 +224,7 @@
       "shippingPending": "To be confirmed",
       "total": "Total",
       "shippingNoEntries": "Shipping does not generate entries.",
-      "shippingNotConfigured": "We can't charge shipping on merchandise yet, so this cart can't be paid for right now. Please try again a little later."
+      "shippingNotConfigured": "Home delivery is not available yet. You can pay in cash at a store location and pick up your order right there, with no shipping."
     },
     "subtotal": "Subtotal",
     "subtotalUnavailable": "We cannot show a subtotal for this cart right now.",
@@ -866,6 +866,9 @@
       "notDetermined": "Not determined yet",
       "addressHeading": "Shipping address",
       "noAddress": "No shipping address is recorded for this order.",
+      "pickupHeading": "Delivery",
+      "pickupBody": "Picked up at the store location when paying in cash. No shipping.",
+      "shippingPickup": "No shipping (store pickup)",
       "entriesHeading": "Entries from this order",
       "calculationHeading": "How that figure was reached",
       "calculationIntro": "This is the calculation our systems recorded when this order was processed, exactly as it was applied. It is kept so the figure can still be explained after the catalog and the rules have changed.",
@@ -955,6 +958,7 @@
     "emptyBody": "Add eligible merchandise to your cart first.",
     "addressHeading": "Where it goes",
     "reviewHeading": "What you are ordering",
+    "pickupNote": "If you pay in cash and pick it up at the store location, no shipping is charged.",
     "entriesHeading": "Promotional entries quoted for this order",
     "entriesNote": "This figure is calculated by our systems from your cart. It is informational until the order reaches the status the Official Rules define as qualifying.",
     "payCta": "Continue to payment",
@@ -1001,6 +1005,18 @@
       },
       "cashCta": "Place order and pay in cash",
       "cashNote": "Nothing is charged now. You will get an order number to give at the store location when you pay."
+    },
+    "fulfillment": {
+      "heading": "How do you get your order?",
+      "pickup": {
+        "title": "I'll pick it up where I pay",
+        "body": "It's handed to you at the store location when you pay. No shipping: you pay {total}."
+      },
+      "delivery": {
+        "title": "Ship it to my home",
+        "body": "Shipping of {shipping} is added: you pay {total}.",
+        "unavailable": "Home delivery is not available yet."
+      }
     }
   },
   "orderConfirmation": {
@@ -1017,7 +1033,8 @@
       "paidTitle": "Cash payment confirmed",
       "orderNumberLabel": "Your order number",
       "pendingBody": "Give this order number at a store location and pay {total} in cash. Nothing has been charged yet: your order is pending payment, and your entries are generated when the store confirms it.",
-      "paidBody": "The store confirmed your cash payment. Your entries are generated with the same rules as a card purchase."
+      "paidBody": "The store confirmed your cash payment. Your entries are generated with the same rules as a card purchase.",
+      "pickupBody": "Your order is handed to you right there when you pay. No shipping."
     }
   },
   "admin": {

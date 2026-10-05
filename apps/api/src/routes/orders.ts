@@ -110,8 +110,18 @@ const shippingAddressBodySchema = z.object({
   country: z.string().min(2).max(2),
 });
 
-/** DEC-078: el pedido en efectivo no tiene pasarela, asi que no hay URL de vuelta. */
-const cashOrderBodySchema = z.object({ shipping_address: shippingAddressBodySchema });
+/**
+ * DEC-078: el pedido en efectivo no tiene pasarela, asi que no hay URL de vuelta.
+ *
+ * DEC-079: `fulfillment_method`. `PICKUP` = se lo entregan en el mismo punto de
+ * venta donde paga: sin envio y sin direccion (si llega una, se ignora).
+ * `DELIVERY` = se lo envian: direccion obligatoria y envio cobrado. Ausente =
+ * `DELIVERY`, lo unico que existia antes de este campo.
+ */
+const cashOrderBodySchema = z.object({
+  fulfillment_method: z.enum(["DELIVERY", "PICKUP"]).optional(),
+  shipping_address: shippingAddressBodySchema.optional(),
+});
 
 const checkoutBodySchema = z.object({
   shipping_address: shippingAddressBodySchema,
@@ -711,7 +721,7 @@ export function buildOrdersRoutes(dependencies: AppDependencies): RouteDefinitio
       operationId: "createCashOrder",
       summary: "Pedido para pagar en efectivo en un punto de venta fisico.",
       description:
-        "DEC-078. Congela el carrito de servidor exactamente igual que la sesion con tarjeta y deja el pedido PENDING_PAYMENT con `payment_method = CASH`. NO genera participaciones: no hay cobro hasta que una persona con `order.cash.confirm` lo confirma en el panel. Idempotente por carrito: repetir el envio devuelve 200 con el mismo pedido en vez de crear otro.",
+        "DEC-078. Congela el carrito de servidor exactamente igual que la sesion con tarjeta y deja el pedido PENDING_PAYMENT con `payment_method = CASH`. NO genera participaciones: no hay cobro hasta que una persona con `order.cash.confirm` lo confirma en el panel. Idempotente por carrito: repetir el envio devuelve 200 con el mismo pedido en vez de crear otro. DEC-079: `fulfillment_method = PICKUP` (se entrega en el punto de venta) no lleva envio ni direccion y no necesita tarifa; `DELIVERY` (por defecto) exige `shipping_address` y cobra el envio.",
       tags: ["commerce"],
       authorization: { kind: "PARTICIPANT", selfOnly: true },
       schema: {
@@ -728,10 +738,22 @@ export function buildOrdersRoutes(dependencies: AppDependencies): RouteDefinitio
         const principal = await requirePrincipal(request);
         const body = request.body as z.infer<typeof cashOrderBodySchema>;
 
+        // DEC-079: sin direccion solo se puede recoger. Se comprueba aqui y no
+        // en el esquema para que el 422 diga QUE campo falta.
+        const address = body.shipping_address;
+        if ((body.fulfillment_method ?? "DELIVERY") === "DELIVERY" && address === undefined) {
+          throw ApiErrors.validationFailed([{ path: "shipping_address", code: "required" }]);
+        }
+
         const outcome = await cashCheckout.placeOrder(
           principal.participantId,
           cartOwnerOf(principal),
-          { ...body.shipping_address, line2: body.shipping_address.line2 ?? null },
+          body.fulfillment_method === "PICKUP" || address === undefined
+            ? { method: "PICKUP" }
+            : {
+                method: "DELIVERY",
+                shippingAddress: { ...address, line2: address.line2 ?? null },
+              },
         );
 
         // Con el pedido ya escrito, el carrito se cierra: lo que hay dentro ya

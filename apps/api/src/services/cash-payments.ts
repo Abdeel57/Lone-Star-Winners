@@ -80,6 +80,20 @@ export function isCashOrder(order: Pick<OrderRecord, "provider">): boolean {
 // Checkout del participante
 // ---------------------------------------------------------------------------
 
+/**
+ * DEC-079: como recibe el pedido quien paga en efectivo.
+ *
+ * `PICKUP`: se lo entregan en el mismo punto de venta donde paga. Sin envio y
+ * sin direccion (no hay a donde mandarlo). `DELIVERY`: pide que se lo envien,
+ * con su direccion, y paga el envio como con tarjeta.
+ */
+export type CashFulfillment =
+  | { readonly method: "PICKUP" }
+  | {
+      readonly method: "DELIVERY";
+      readonly shippingAddress: Readonly<Record<string, string | null>>;
+    };
+
 export interface CashCheckout {
   /**
    * Crea el pedido en efectivo del carrito abierto, o devuelve el que ese
@@ -88,7 +102,7 @@ export interface CashCheckout {
   placeOrder(
     participantId: string,
     owner: CartOwnerRef,
-    shippingAddress: Readonly<Record<string, string | null>>,
+    fulfillment: CashFulfillment,
   ): Promise<{ readonly created: boolean; readonly order: OrderRecord }>;
 }
 
@@ -97,9 +111,9 @@ export function createCashCheckout(
   domain: DomainServices,
 ): CashCheckout {
   return {
-    async placeOrder(participantId, owner, shippingAddress) {
+    async placeOrder(participantId, owner, fulfillment) {
       const orders = domain.repositories.orders;
-      const cart = await freezeOpenCart(dependencies.repositories, owner);
+      const cart = await freezeOpenCart(dependencies.repositories, owner, fulfillment.method);
 
       const orderId = domain.ids.next();
       const now = domain.clock.now();
@@ -113,13 +127,16 @@ export function createCashCheckout(
           cartId: cart.cartId,
           currency: cart.currency,
           subtotalMinor: cart.subtotalMinor,
-          // DEC-079: igual que en la tarjeta. El envio sale de la MISMA foto
-          // (`freezeOpenCart`), y lo que se cobra en caja es el total con envio.
-          // Impuestos: pendiente legal.
+          // DEC-079: el envio sale de la MISMA foto que en la tarjeta
+          // (`freezeOpenCart`). Si se recoge en el punto de venta no hay envio,
+          // y lo que se cobra en caja es el subtotal; si se envia, el total con
+          // envio. Impuestos: pendiente legal.
           shippingTotalMinor: cart.shippingMinor,
           taxTotalMinor: null,
           totalMinor: cart.totalMinor,
-          shippingAddress: { ...shippingAddress },
+          shippingAddress:
+            fulfillment.method === "DELIVERY" ? { ...fulfillment.shippingAddress } : null,
+          fulfillmentMethod: cart.fulfillmentMethod,
           items: cart.items,
           createdAt: now,
         });

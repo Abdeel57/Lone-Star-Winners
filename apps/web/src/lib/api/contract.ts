@@ -1542,6 +1542,12 @@ export type PaymentMethod = "CARD" | "CASH";
 export const PAYMENT_METHODS: readonly PaymentMethod[] = ["CARD", "CASH"];
 
 /**
+ * DEC-079: como se entrega el pedido. `PICKUP` = pagado en efectivo y entregado
+ * en el mismo punto de venta, sin envio. `DELIVERY` = se envia.
+ */
+export type FulfillmentMethod = "DELIVERY" | "PICKUP";
+
+/**
  * [PROVISIONAL] Linea de un pedido.
  *
  * `variant_name` e `image_url` son OPCIONALES porque la API no los publica
@@ -1627,6 +1633,12 @@ export interface OrderDetail extends OrderSummary {
   /** Impuestos, o `null` si todavia no estan determinados. */
   readonly tax_total: MoneyMinor | null;
   readonly shipping_address: PostalAddress | null;
+  /**
+   * DEC-079. OPCIONAL por la misma razon que `payment_method`: si la web se
+   * publica antes que la API, ausente se lee como `DELIVERY`, lo unico que
+   * existia antes.
+   */
+  readonly fulfillment_method?: FulfillmentMethod;
   /** Traza del calculo, o `null` si el pedido no ha generado ninguna. */
   readonly entry_calculation: EntryCalculationSnapshot | null;
 }

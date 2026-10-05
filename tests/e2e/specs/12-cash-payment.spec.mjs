@@ -84,12 +84,13 @@ test.describe.serial("pago en efectivo en un punto de venta", () => {
       await expect(cashButton).toBeVisible({ timeout: 2_000 });
     }).toPass({ timeout: 30_000 });
 
-    await page.locator('input[name="full_name"]').fill("Participante E2E");
-    await page.locator('input[name="line1"]').fill("1 Fixture Street");
-    await page.locator('input[name="city"]').fill("Austin");
-    await page.locator('input[name="region"]').fill("TX");
-    await page.locator('input[name="postal_code"]').fill("73301");
-    await page.locator('input[name="country"]').fill("US");
+    /*
+     * DEC-079: en efectivo el articulo se entrega donde se paga. Recogerlo es
+     * lo marcado, sin envio y SIN DIRECCION: los campos no estan.
+     */
+    await expect(page.getByText("¿Cómo recibes tu pedido?")).toBeVisible();
+    await expect(page.locator('input[name="fulfillment_method"][value="PICKUP"]')).toBeChecked();
+    await expect(page.locator('input[name="line1"]')).toHaveCount(0);
 
     await cashButton.click();
 
@@ -111,6 +112,17 @@ test.describe.serial("pago en efectivo en un punto de venta", () => {
     // Pendiente: ni pagado ni con participaciones.
     await expect(page.getByText("A la espera de pago").first()).toBeVisible();
     await expect(page.getByText("Pendiente de confirmación de pago").first()).toBeVisible();
+
+    // Lo recoge: se paga la camiseta, sin envio.
+    await expect(
+      page.getByText("Te entregan tu pedido ahí mismo, al pagar. Sin envío."),
+    ).toBeVisible();
+    const placed = await (
+      await page.request.get(`${API_BASE_URL}/account/orders/${order.id}`)
+    ).json();
+    expect(placed.fulfillment_method).toBe("PICKUP");
+    expect(placed.shipping_total).toBeNull();
+    expect(placed.total.amount_minor).toBe("2500");
   });
 
   test("el panel lo encuentra por numero de orden y confirma el pago en efectivo", async ({
@@ -126,6 +138,10 @@ test.describe.serial("pago en efectivo en un punto de venta", () => {
     await page.getByRole("link", { name: order.number }).click();
 
     await expect(page.getByText("Pendiente de pago en efectivo").first()).toBeVisible();
+    // DEC-079: quien atiende sabe que lo entrega en mano, no a donde mandarlo.
+    await expect(
+      page.getByText("Se recoge en el punto de venta al pagar en efectivo. Sin envío."),
+    ).toBeVisible();
 
     await page.locator('textarea[name="reason_note"]').fill("Recibo E2E 0001");
     await page.locator('input[name="confirmed"]').check();
@@ -148,5 +164,6 @@ test.describe.serial("pago en efectivo en un punto de venta", () => {
 
     await expect(page.getByText("Pagado", { exact: true }).first()).toBeVisible();
     await expect(page.getByText("Otorgadas", { exact: true }).first()).toBeVisible();
+    await expect(page.getByText("Sin envío (recoge en el punto de venta)")).toBeVisible();
   });
 });

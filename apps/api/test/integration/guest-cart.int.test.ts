@@ -431,3 +431,108 @@ describe("el pedido cobra el envio y no le da participaciones", () => {
     expect(participantId).not.toBe("");
   });
 });
+
+// ---------------------------------------------------------------------------
+// 5. Efectivo: recogerlo donde se paga
+// ---------------------------------------------------------------------------
+
+/** El texto de un fallo de la base, con su causa: ahi viaja el nombre de la CHECK. */
+async function failureOf(query: ReturnType<typeof sql>): Promise<string> {
+  try {
+    await db.execute(query);
+  } catch (error) {
+    return `${String(error)} ${String((error as { cause?: unknown }).cause)}`;
+  }
+  return "";
+}
+
+describe("efectivo y lo recoge en el punto de venta: sin envio", () => {
+  let pickupOrderId = "";
+
+  it("envio sin direccion se rechaza con el campo que falta", async () => {
+    await guest.request("POST", "/api/v1/cart/items", { variant_id: variantId, quantity: 2 });
+
+    const response = await guest.request("POST", "/api/v1/checkout/cash-order", {
+      fulfillment_method: "DELIVERY",
+    });
+    expect(response.statusCode).toBe(422);
+    expect(
+      response.json<{ error: { code: string; details: { issues: { path: string }[] } } }>().error,
+    ).toMatchObject({
+      code: "VALIDATION_FAILED",
+      details: { issues: [{ path: "shipping_address" }] },
+    });
+  });
+
+  it("recoger: total = mercancia, sin envio y sin direccion", async () => {
+    const response = await guest.request("POST", "/api/v1/checkout/cash-order", {
+      fulfillment_method: "PICKUP",
+    });
+    expect(response.statusCode, response.body).toBe(201);
+    pickupOrderId = response.json<{ id: string; total: { amount_minor: string } }>().id;
+    expect(response.json<{ total: { amount_minor: string } }>().total.amount_minor).toBe(
+      String(UNIT_PRICE_MINOR * 2),
+    );
+
+    const row = await db.execute<{
+      fulfillment_method: string;
+      shipping_total_minor: string | null;
+      total_minor: string;
+      has_address: boolean;
+    }>(
+      sql`SELECT fulfillment_method,
+                 shipping_total_minor::text AS shipping_total_minor,
+                 total_minor::text AS total_minor,
+                 shipping_address IS NOT NULL AS has_address
+            FROM orders WHERE id = ${pickupOrderId}`,
+    );
+    expect(row.rows[0]).toEqual({
+      fulfillment_method: "PICKUP",
+      shipping_total_minor: null,
+      total_minor: String(UNIT_PRICE_MINOR * 2),
+      has_address: false,
+    });
+  });
+
+  it("la ficha del pedido lo dice, para entregarlo en mano", async () => {
+    const response = await guest.request("GET", `/api/v1/account/orders/${pickupOrderId}`);
+    expect(response.statusCode, response.body).toBe(200);
+    expect(
+      response.json<{
+        fulfillment_method: string;
+        shipping_total: unknown;
+        shipping_address: unknown;
+        payment_method: string;
+      }>(),
+    ).toMatchObject({
+      fulfillment_method: "PICKUP",
+      shipping_total: null,
+      shipping_address: null,
+      payment_method: "CASH",
+    });
+  });
+
+  it("como se entrega no se cambia despues: la aplicacion no puede tocar la columna", async () => {
+    expect(
+      await failureOf(
+        sql`UPDATE orders SET fulfillment_method = 'DELIVERY' WHERE id = ${pickupOrderId}`,
+      ),
+    ).toMatch(/permission denied/u);
+  });
+
+  it("el motor no admite recoger con tarjeta ni recoger con envio", async () => {
+    expect(
+      await failureOf(
+        sql`INSERT INTO orders (participant_id, currency, subtotal_minor, total_minor, provider, fulfillment_method)
+            VALUES (${participantId}, 'USD', 100, 100, 'stripe', 'PICKUP')`,
+      ),
+    ).toMatch(/orders_pickup_requires_cash/u);
+
+    expect(
+      await failureOf(
+        sql`INSERT INTO orders (participant_id, currency, subtotal_minor, shipping_total_minor, total_minor, provider, fulfillment_method)
+            VALUES (${participantId}, 'USD', 100, ${SHIPPING_MINOR}, ${100 + SHIPPING_MINOR}, 'cash', 'PICKUP')`,
+      ),
+    ).toMatch(/orders_pickup_without_shipping/u);
+  });
+});

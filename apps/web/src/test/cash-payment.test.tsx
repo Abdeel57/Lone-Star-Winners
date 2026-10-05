@@ -139,7 +139,7 @@ describe("checkout: dos formas de pagar", () => {
   it.each(LOCALES)(
     "ofrece tarjeta y efectivo a la vez en %s, con tarjeta por defecto",
     (locale) => {
-      const { container } = renderIn(locale, <CheckoutForm locale={locale} />);
+      const { container } = renderIn(locale, <CheckoutForm locale={locale} cashDelivery={null} />);
       const messages = locale === "en" ? enMessages : esMessages;
 
       const radios = container.querySelectorAll<HTMLInputElement>(
@@ -156,7 +156,7 @@ describe("checkout: dos formas de pagar", () => {
   );
 
   it("con efectivo, el boton y la nota dicen que no se cobra nada ahora", () => {
-    const { container } = renderIn("es", <CheckoutForm locale="es" />);
+    const { container } = renderIn("es", <CheckoutForm locale="es" cashDelivery={null} />);
 
     const cash = container.querySelector<HTMLInputElement>('input[value="CASH"]');
     expect(cash).not.toBeNull();
@@ -181,8 +181,10 @@ describe("checkout: la accion con efectivo", () => {
 
     expect(captured.card).toHaveLength(0);
     expect(captured.cash).toHaveLength(1);
-    // Solo la direccion: lo que se cobra sale del carrito de servidor.
+    // Solo como se entrega y la direccion: lo que se cobra sale del carrito de
+    // servidor. Sin `fulfillment_method` en el formulario, es envio (DEC-079).
     expect(captured.cash[0]).toEqual({
+      fulfillment_method: "DELIVERY",
       shipping_address: {
         full_name: "Cash Buyer",
         line1: "1 Fixture St",
@@ -216,6 +218,93 @@ describe("checkout: la accion con efectivo", () => {
     const result = await startCheckoutAction(IDLE, checkoutForm("CASH"));
     expect(result.status).toBe("error");
     expect(result.code).toBe("CART_EMPTY");
+  });
+});
+
+describe("efectivo: recogerlo donde se paga o enviarlo (DEC-079)", () => {
+  const options = {
+    pickupTotal: "$25.00",
+    delivery: { shipping: "$7.99", total: "$32.99" },
+  } as const;
+
+  function chooseCash(container: HTMLElement): void {
+    const cash = container.querySelector<HTMLInputElement>('input[value="CASH"]');
+    expect(cash).not.toBeNull();
+    if (cash !== null) fireEvent.click(cash);
+  }
+
+  it("con mercancia y efectivo, recoger es lo marcado y no se pide direccion", () => {
+    const { container } = renderIn("es", <CheckoutForm locale="es" cashDelivery={options} />);
+    const copy = esMessages.checkout.fulfillment;
+
+    // Con tarjeta no se pregunta: siempre es envio, con su direccion.
+    expect(screen.queryByText(copy.heading)).not.toBeInTheDocument();
+    expect(container.querySelector('input[name="line1"]')).not.toBeNull();
+
+    chooseCash(container);
+
+    const radios = container.querySelectorAll<HTMLInputElement>(
+      'input[type="radio"][name="fulfillment_method"]',
+    );
+    expect([...radios].map((radio) => radio.value)).toEqual(["PICKUP", "DELIVERY"]);
+    expect([...radios].find((radio) => radio.checked)?.value).toBe("PICKUP");
+    expect(screen.getByText(copy.pickup.title)).toBeInTheDocument();
+    expect(screen.getByText(/\$25\.00/u)).toBeInTheDocument();
+    expect(container.querySelector('input[name="line1"]')).toBeNull();
+  });
+
+  it("si elige envio, vuelven la direccion y el importe con envio", () => {
+    const { container } = renderIn("es", <CheckoutForm locale="es" cashDelivery={options} />);
+    chooseCash(container);
+
+    const delivery = container.querySelector<HTMLInputElement>('input[value="DELIVERY"]');
+    expect(delivery).not.toBeNull();
+    if (delivery !== null) fireEvent.click(delivery);
+
+    expect(container.querySelector('input[name="line1"]')).not.toBeNull();
+    expect(screen.getByText(/\$7\.99.*\$32\.99/u)).toBeInTheDocument();
+  });
+
+  it("sin tarifa de envio, enviar no se puede elegir y recoger sigue disponible", () => {
+    const { container } = renderIn(
+      "es",
+      <CheckoutForm locale="es" cashDelivery={{ pickupTotal: "$25.00", delivery: null }} />,
+    );
+    chooseCash(container);
+
+    expect(container.querySelector<HTMLInputElement>('input[value="DELIVERY"]')?.disabled).toBe(
+      true,
+    );
+    expect(container.querySelector<HTMLInputElement>('input[value="PICKUP"]')?.checked).toBe(true);
+    expect(
+      screen.getByText(esMessages.checkout.fulfillment.delivery.unavailable),
+    ).toBeInTheDocument();
+  });
+
+  it("recogerlo crea el pedido sin direccion y lleva a la confirmacion", async () => {
+    const captured = captureCheckout();
+    const formData = new FormData();
+    formData.set("locale", "es");
+    formData.set("payment_method", "CASH");
+    formData.set("fulfillment_method", "PICKUP");
+
+    await expect(startCheckoutAction(IDLE, formData)).rejects.toThrow(
+      `REDIRECT:/es/orders/${cashPendingOrder.id}/confirmation`,
+    );
+    expect(captured.cash).toEqual([{ fulfillment_method: "PICKUP" }]);
+  });
+
+  it("con tarjeta, un PICKUP manipulado no quita el envio: sigue pidiendo direccion", async () => {
+    const captured = captureCheckout();
+    const formData = new FormData();
+    formData.set("locale", "es");
+    formData.set("payment_method", "CARD");
+    formData.set("fulfillment_method", "PICKUP");
+
+    const result = await startCheckoutAction(IDLE, formData);
+    expect(result.code).toBe("FIELD_REQUIRED");
+    expect(captured.cash).toHaveLength(0);
+    expect(captured.card).toHaveLength(0);
   });
 });
 

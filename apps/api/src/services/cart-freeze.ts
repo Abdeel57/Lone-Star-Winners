@@ -13,7 +13,7 @@
  * el cliente aportara las lineas, aportaria tambien los precios.
  */
 
-import type { CreateOrderItemInput } from "@lsw/database";
+import type { CreateOrderItemInput, FulfillmentMethodValue } from "@lsw/database";
 
 import { ApiError } from "../http/errors.js";
 import type { CartLineRecord, CartOwnerRef, Repositories } from "./ports.js";
@@ -27,10 +27,12 @@ export interface FrozenCart {
   readonly subtotalMinor: bigint;
   /**
    * DEC-079: envio que se cobra con este pedido, o `null` si no lleva mercancia
-   * (solo paquetes). Nunca cero: un carrito con mercancia sin tarifa no llega
-   * aqui, se rechaza con `409 SHIPPING_NOT_CONFIGURED`.
+   * (solo paquetes) o si se recoge en el punto de venta. Nunca cero: un carrito
+   * con mercancia que se envia sin tarifa no llega aqui, se rechaza con
+   * `409 SHIPPING_NOT_CONFIGURED`.
    */
   readonly shippingMinor: bigint | null;
+  readonly fulfillmentMethod: FulfillmentMethodValue;
   /** Lo que se cobra: subtotal + envio. Sin impuestos (pendiente legal). */
   readonly totalMinor: bigint;
   readonly items: readonly CreateOrderItemInput[];
@@ -45,10 +47,15 @@ export interface FrozenCart {
  * comprar. No se recalcula al devolver: si se recalculara, un cambio de la
  * lista de mercancia elegible alteraria el prorrateo de una devolucion de una
  * compra anterior.
+ *
+ * DEC-079: `PICKUP` (recoger en el punto de venta, solo en efectivo) no lleva
+ * envio y no necesita tarifa. Que solo se use con efectivo lo decide quien
+ * llama, y lo garantiza la CHECK `orders_pickup_requires_cash`.
  */
 export async function freezeOpenCart(
   repositories: Repositories,
   owner: CartOwnerRef,
+  fulfillmentMethod: FulfillmentMethodValue = "DELIVERY",
 ): Promise<FrozenCart> {
   const cart = await repositories.carts.findOpen(owner);
   if (cart === null || cart.lines.length === 0) {
@@ -81,13 +88,17 @@ export async function freezeOpenCart(
     };
   });
 
-  // DEC-079: la MISMA regla que ensena el total en el carrito.
-  const shipping = shippingFor(cart.lines, cart.currency, await repositories.shipping.current());
-  if (shipping.kind === "NOT_CONFIGURED") {
-    // Nunca se envia gratis por omision: sin tarifa, no se cobra.
-    throw new ApiError({ statusCode: 409, code: "SHIPPING_NOT_CONFIGURED" });
+  // DEC-079: la MISMA regla que ensena el total en el carrito. Quien recoge en
+  // el punto de venta no paga envio, haya tarifa o no.
+  let shippingMinor: bigint | null = null;
+  if (fulfillmentMethod === "DELIVERY") {
+    const shipping = shippingFor(cart.lines, cart.currency, await repositories.shipping.current());
+    if (shipping.kind === "NOT_CONFIGURED") {
+      // Nunca se envia gratis por omision: sin tarifa, no se cobra.
+      throw new ApiError({ statusCode: 409, code: "SHIPPING_NOT_CONFIGURED" });
+    }
+    shippingMinor = shippingAmountOf(shipping);
   }
-  const shippingMinor = shippingAmountOf(shipping);
 
   return {
     cartId: cart.id,
@@ -96,6 +107,7 @@ export async function freezeOpenCart(
     rulesVersionId: promotion?.rulesVersionId ?? null,
     subtotalMinor: subtotal,
     shippingMinor,
+    fulfillmentMethod,
     totalMinor: subtotal + (shippingMinor ?? 0n),
     items,
     lines: cart.lines,

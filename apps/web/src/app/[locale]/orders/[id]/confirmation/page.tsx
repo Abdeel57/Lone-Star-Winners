@@ -219,6 +219,11 @@ function CashPaymentCard({
           <p>{pending ? t("pendingBody", { total }) : t("paidBody")}</p>
         </Alert>
       </div>
+
+      {/* DEC-079: si lo recoge, que sepa que se lo dan ahi mismo. */}
+      {order.fulfillment_method === "PICKUP" ? (
+        <p className="mt-s4 text-body-sm text-text-muted">{t("pickupBody")}</p>
+      ) : null}
     </Card>
   );
 }

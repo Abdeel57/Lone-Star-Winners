@@ -41,6 +41,14 @@
 --   sobre el precio "excluding taxes and shipping", y el motor ya calcula
 --   sobre las lineas del pedido, que no incluyen el envio.
 --
+-- 3. RECOGER EN EL PUNTO DE VENTA
+--
+--   Quien paga en efectivo recibe el articulo ahi mismo, en el punto de venta
+--   donde paga, y no paga envio; si lo prefiere, puede pedir que se lo envien
+--   y entonces si lo paga. `orders.fulfillment_method` deja escrito cual de
+--   las dos eligio, para que quien atiende sepa si lo entrega en mano o lo
+--   envia. Con tarjeta no hay mostrador: siempre es envio.
+--
 -- Referencias: DEC-003, DEC-005 (forward-only), DEC-006, DEC-010, DEC-023,
 -- DEC-079.
 -- ===========================================================================
@@ -123,7 +131,38 @@ COMMENT ON TABLE shipping_rates IS
 
 
 -- ---------------------------------------------------------------------------
--- 3. Permisos de base de datos (DEC-003)
+-- 3. Recoger en el punto de venta
+--
+--    Los pedidos que ya existen son todos de envio: el DEFAULT los describe
+--    bien, y en PostgreSQL 11+ anadir la columna con DEFAULT constante no
+--    reescribe la tabla.
+--
+--    No entra en el GRANT UPDATE de `orders` (0020): como se entrega se decide
+--    al crear el pedido y no cambia despues.
+-- ---------------------------------------------------------------------------
+
+ALTER TABLE orders
+  ADD COLUMN fulfillment_method text NOT NULL DEFAULT 'DELIVERY';
+
+ALTER TABLE orders
+  ADD CONSTRAINT orders_fulfillment_method_shape
+    CHECK (fulfillment_method IN ('DELIVERY', 'PICKUP')),
+
+  -- Recoger solo existe pagando en el punto de venta: con tarjeta no hay
+  -- mostrador donde entregarlo.
+  ADD CONSTRAINT orders_pickup_requires_cash
+    CHECK (fulfillment_method = 'DELIVERY' OR provider = 'cash'),
+
+  -- Quien recoge no paga envio.
+  ADD CONSTRAINT orders_pickup_without_shipping
+    CHECK (fulfillment_method = 'DELIVERY' OR shipping_total_minor IS NULL);
+
+COMMENT ON COLUMN orders.fulfillment_method IS
+  'DEC-079: DELIVERY (se envia; con mercancia lleva envio) o PICKUP (pagado en efectivo y entregado en el punto de venta, sin envio). Se fija al crear el pedido.';
+
+
+-- ---------------------------------------------------------------------------
+-- 4. Permisos de base de datos (DEC-003)
 --
 --    `cart_sessions`: la aplicacion crea, lee, marca actividad y revoca. No
 --    borra: una sesion revocada es la prueba de a donde fue su carrito.

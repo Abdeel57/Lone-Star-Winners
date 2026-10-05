@@ -586,9 +586,12 @@ y la cuenta se pide solo al pagar. Lo que no puede decidir el código:
     cada venta de mercancía puede generar un impuesto que la tienda tendría que
     pagar de su bolsillo.
 18. **El envío no genera participaciones.** Tarifa fija por pedido, nunca
-    gratis, solo cuando hay mercancía; los paquetes no llevan envío. Confirmar
-    que las Reglas Oficiales lo dicen ("las participaciones se calculan sobre el
-    precio de los productos, sin envío ni impuestos").
+    gratis, solo cuando hay mercancía que se envía. Los paquetes no llevan
+    envío, y quien paga en efectivo puede recoger el artículo en el punto de
+    venta sin pagar envío. Con o sin envío, las participaciones son las mismas
+    porque salen del precio de los productos. Confirmar que las Reglas
+    Oficiales lo dicen ("las participaciones se calculan sobre el precio de los
+    productos, sin envío ni impuestos").
 19. **Reembolso parcial con envío.** Si se devuelve parte de un pedido, el
     sistema considera devuelto primero el envío y solo lo que pase de ahí
     reduce participaciones (devolver solo el envío no quita ninguna). Encaja con

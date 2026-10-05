@@ -3914,9 +3914,19 @@ pasa a la cuenta y vuelve al pago.
    queda el historial con quién y cuándo. Reglas (`services/shipping.ts`):
    solo paquetes de participaciones o carrito vacío → `NOT_REQUIRED` (no se
    envían); con mercancía → `CHARGED` con la tarifa; con mercancía y sin
-   tarifa → `NOT_CONFIGURED`, total `null` y el checkout (tarjeta y efectivo)
-   responde `409 SHIPPING_NOT_CONFIGURED`. No se cobra un pedido con un envío
-   inventado.
+   tarifa → `NOT_CONFIGURED`, total `null` y el checkout con envío responde
+   `409 SHIPPING_NOT_CONFIGURED`. No se cobra un pedido con un envío inventado.
+   **En efectivo el envío es opcional** (pedido del usuario: "el objeto en
+   efectivo te lo dan ahí mismo donde pagues"). El checkout pregunta "¿Cómo
+   recibes tu pedido?": **recogerlo donde paga** (por defecto; sin envío, sin
+   dirección y sin necesitar tarifa: se cobra el subtotal) o **enviarlo a
+   domicilio** (dirección y envío). Queda en `orders.fulfillment_method`
+   (`DELIVERY` | `PICKUP`), que no se cambia después. Las CHECK impiden un
+   `PICKUP` con tarjeta o con envío. La ficha del pedido (portal y panel) dice
+   "Se recoge en el punto de venta" para que se entregue en mano. Con tarjeta
+   siempre es envío. Sin tarifa puesta, el carrito ya no bloquea el pago: avisa
+   de que el envío a domicilio no está disponible y deja pagar en efectivo
+   recogiendo.
 4. **El envío no genera participaciones** (pedido del usuario). El motor ya
    calculaba sobre el subtotal elegible; ahora está escrito en el carrito, el
    checkout y las Reglas pendientes (LEGAL_PENDING).
@@ -3934,9 +3944,11 @@ pasa a la cuenta y vuelve al pago.
    acción en una función de cliente. Ahora `useActionState` recibe la acción de
    servidor directamente y el formulario funciona desde el primer instante.
 
-Migración `0036_guest_cart_and_shipping` (journal idx 27). Se estrena en el
-preDeploy de Railway. **Al desplegar no hay tarifa**: hasta que el personal la
-fije, los carritos con mercancía no se pueden pagar (los paquetes sí).
+Migración `0036_guest_cart_and_shipping` (journal idx 27): `cart_sessions`,
+`shipping_rates` y `orders.fulfillment_method`. Se estrena en el preDeploy de
+Railway. **Al desplegar no hay tarifa**: hasta que el personal la fije, la
+mercancía solo se puede pagar en efectivo recogiéndola (tarjeta y envío a
+domicilio responden 409); los paquetes, de cualquier forma.
 
 Alternatives:
 A — Filas anónimas en `sessions` (descartada: toda la autorización da por hecho
@@ -3947,6 +3959,9 @@ cliente es una fuente de verdad paralela). C — `shipping_options` de Stripe
 (descartada: el total y el envío deben salir de nuestra API y quedar en el
 pedido también para el pago en efectivo, que no pasa por Stripe). D — Envío
 gratis a partir de un importe (descartada por el usuario: nunca gratis).
+E — Deducir "recoge" de un pedido en efectivo sin dirección, sin columna
+(descartada: quien atiende tiene que leer un hecho, no una inferencia, y una
+dirección vacía por un fallo se confundiría con una recogida).
 
 Affected areas: `packages/database` (0036, esquema), `packages/security`
 (`CART_SESSION_POLICY`, `evaluateCartSession`), `packages/commerce` (línea de

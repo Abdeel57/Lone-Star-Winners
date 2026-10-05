@@ -1110,9 +1110,14 @@ export function createCheckoutSession(
  *
  * 201 = pedido nuevo; 200 = ese carrito ya tenia pedido en efectivo (un doble
  * envio), y se devuelve el mismo.
+ *
+ * DEC-079: `PICKUP` (lo recoge en el punto de venta) va sin direccion y sin
+ * envio; `DELIVERY` lleva la direccion y el backend cobra el envio.
  */
 export function createCashOrder(
-  input: { readonly shipping_address: PostalAddress },
+  input:
+    | { readonly fulfillment_method: "PICKUP" }
+    | { readonly fulfillment_method: "DELIVERY"; readonly shipping_address: PostalAddress },
   locale: Locale,
   session: SessionContext,
 ): Promise<ApiResult<OrderSummary>> {

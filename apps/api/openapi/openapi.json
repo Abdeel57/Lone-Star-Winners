@@ -1445,6 +1445,13 @@
                       ],
                       "type": "string"
                     },
+                    "fulfillment_method": {
+                      "enum": [
+                        "DELIVERY",
+                        "PICKUP"
+                      ],
+                      "type": "string"
+                    },
                     "id": {
                       "format": "uuid",
                       "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
@@ -1741,6 +1748,7 @@
                     "shipping_total",
                     "tax_total",
                     "shipping_address",
+                    "fulfillment_method",
                     "entry_calculation"
                   ],
                   "type": "object"
@@ -9014,6 +9022,13 @@
                       ],
                       "type": "string"
                     },
+                    "fulfillment_method": {
+                      "enum": [
+                        "DELIVERY",
+                        "PICKUP"
+                      ],
+                      "type": "string"
+                    },
                     "id": {
                       "format": "uuid",
                       "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
@@ -9310,6 +9325,7 @@
                     "shipping_total",
                     "tax_total",
                     "shipping_address",
+                    "fulfillment_method",
                     "entry_calculation"
                   ],
                   "type": "object"
@@ -31919,13 +31935,20 @@
     },
     "/api/v1/checkout/cash-order": {
       "post": {
-        "description": "DEC-078. Congela el carrito de servidor exactamente igual que la sesion con tarjeta y deja el pedido PENDING_PAYMENT con `payment_method = CASH`. NO genera participaciones: no hay cobro hasta que una persona con `order.cash.confirm` lo confirma en el panel. Idempotente por carrito: repetir el envio devuelve 200 con el mismo pedido en vez de crear otro.",
+        "description": "DEC-078. Congela el carrito de servidor exactamente igual que la sesion con tarjeta y deja el pedido PENDING_PAYMENT con `payment_method = CASH`. NO genera participaciones: no hay cobro hasta que una persona con `order.cash.confirm` lo confirma en el panel. Idempotente por carrito: repetir el envio devuelve 200 con el mismo pedido en vez de crear otro. DEC-079: `fulfillment_method = PICKUP` (se entrega en el punto de venta) no lleva envio ni direccion y no necesita tarifa; `DELIVERY` (por defecto) exige `shipping_address` y cobra el envio.",
         "operationId": "createCashOrder",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
                 "properties": {
+                  "fulfillment_method": {
+                    "enum": [
+                      "DELIVERY",
+                      "PICKUP"
+                    ],
+                    "type": "string"
+                  },
                   "shipping_address": {
                     "properties": {
                       "city": {
@@ -31981,9 +32004,6 @@
                     "type": "object"
                   }
                 },
-                "required": [
-                  "shipping_address"
-                ],
                 "type": "object"
               }
             }

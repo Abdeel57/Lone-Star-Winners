@@ -92,6 +92,14 @@ export const orders = pgTable(
     providerPaymentId: text("provider_payment_id"),
     /** Sin ninguna regla de jurisdiccion: la elegibilidad territorial es legal. */
     shippingAddress: jsonb("shipping_address"),
+    /**
+     * DEC-079 (0036): `DELIVERY` o `PICKUP` (pagado en efectivo y entregado en
+     * el punto de venta, sin envio). Se fija al crear el pedido; las CHECK de la
+     * migracion impiden un `PICKUP` con tarjeta o con envio.
+     */
+    fulfillmentMethod: text("fulfillment_method", { enum: ["DELIVERY", "PICKUP"] })
+      .notNull()
+      .default("DELIVERY"),
     createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
     paidAt: timestamp("paid_at", { withTimezone: true, mode: "date" }),

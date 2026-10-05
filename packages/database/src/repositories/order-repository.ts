@@ -122,7 +122,15 @@ export interface OrderRecord {
   readonly shippingTotalMinor: bigint | null;
   readonly taxTotalMinor: bigint | null;
   readonly shippingAddress: JsonObject | null;
+  /** DEC-079: como se entrega. Ver `FulfillmentMethodValue`. */
+  readonly fulfillmentMethod: FulfillmentMethodValue;
 }
+
+/**
+ * DEC-079: `DELIVERY` = se envia (con mercancia, lleva envio); `PICKUP` =
+ * pagado en efectivo y entregado en el mismo punto de venta, sin envio.
+ */
+export type FulfillmentMethodValue = "DELIVERY" | "PICKUP";
 
 export interface CreateOrderItemInput {
   readonly productId: string;
@@ -165,6 +173,8 @@ export interface CreateOrderInput {
    * pedido duplicado si el valor esta en la fila desde el INSERT.
    */
   readonly provider?: string | null;
+  /** DEC-079: ausente = `DELIVERY`. `PICKUP` solo en efectivo y sin envio (CHECK). */
+  readonly fulfillmentMethod?: FulfillmentMethodValue;
 }
 
 export interface ApplyPaymentStatePatch {
@@ -284,6 +294,7 @@ function toOrder(row: OrderRow, items: readonly ItemRow[]): OrderRecord {
     providerPaymentId: row.providerPaymentId,
     shippingAddress:
       row.shippingAddress === null ? null : toCanonicalJsonObject(row.shippingAddress),
+    fulfillmentMethod: row.fulfillmentMethod,
     createdAt: row.createdAt,
     paidAt: row.paidAt,
     qualifiedAt: row.qualifiedAt,
@@ -310,6 +321,7 @@ function draftRow(input: CreateOrderInput): typeof orders.$inferInsert {
     refundedAmountMinor: 0n,
     shippingAddress: input.shippingAddress,
     provider: input.provider ?? null,
+    fulfillmentMethod: input.fulfillmentMethod ?? "DELIVERY",
     createdAt: input.createdAt,
   };
 }

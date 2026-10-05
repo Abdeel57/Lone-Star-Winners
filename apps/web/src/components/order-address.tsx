@@ -1,7 +1,7 @@
 import { Card, CardTitle } from "@lsw/ui";
 import { useTranslations } from "next-intl";
 
-import type { PostalAddress } from "@/lib/api";
+import type { FulfillmentMethod, PostalAddress } from "@/lib/api";
 
 /**
  * Direccion de envio de un pedido.
@@ -15,9 +15,30 @@ import type { PostalAddress } from "@/lib/api";
  * nacional concreto: el orden de ciudad, region y codigo postal no es el mismo
  * en todas partes, y una plantilla fija seria una regla de jurisdiccion
  * escondida en una pantalla.
+ *
+ * DEC-079: un pedido en efectivo que se RECOGE en el punto de venta no tiene
+ * direccion, y no es un olvido: se dice que se entrega ahi, para que quien
+ * atiende lo entregue en mano en vez de buscar a donde mandarlo.
  */
-export function OrderAddress({ address }: { readonly address: PostalAddress | null }) {
+export function OrderAddress({
+  address,
+  fulfillmentMethod = "DELIVERY",
+}: {
+  readonly address: PostalAddress | null;
+  readonly fulfillmentMethod?: FulfillmentMethod | undefined;
+}) {
   const t = useTranslations("account.order");
+
+  if (fulfillmentMethod === "PICKUP") {
+    return (
+      <Card elevation="raised" padding="lg">
+        <CardTitle as="h2" size="sm">
+          {t("pickupHeading")}
+        </CardTitle>
+        <p className="mt-s4 text-body-sm text-text-muted">{t("pickupBody")}</p>
+      </Card>
+    );
+  }
 
   return (
     <Card elevation="raised" padding="lg">

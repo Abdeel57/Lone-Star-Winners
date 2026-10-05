@@ -9,6 +9,7 @@ import { CartTotals } from "@/components/cart-totals";
 import { CheckoutForm } from "@/components/checkout-form";
 import { EligibilityDeclarationForm } from "@/components/eligibility-declaration-form";
 import { EntryQuotePanel } from "@/components/entry-quote-panel";
+import type { CashDeliveryOptions } from "@/components/fulfillment-choice";
 import { formatMoney } from "@/i18n/formatters";
 import type { Locale } from "@/i18n/locales";
 import { Link } from "@/i18n/navigation";
@@ -170,7 +171,7 @@ export default async function CheckoutPage({ params }: { params: Promise<{ local
           // en un punto de venta- y sigue con la direccion; los dos titulos
           // viven dentro de el, en el orden en que se rellenan.
           <section aria-label={t("title")}>
-            <CheckoutForm locale={locale} />
+            <CheckoutForm locale={locale} cashDelivery={cashDeliveryOf(cartResult.data, locale)} />
           </section>
         )}
 
@@ -184,6 +185,33 @@ export default async function CheckoutPage({ params }: { params: Promise<{ local
       </div>
     </CheckoutShell>
   );
+}
+
+/**
+ * DEC-079: cuanto se paga en efectivo segun se recoja o se envie, con las
+ * cifras de la API formateadas. `null` si el carrito no lleva mercancia (solo
+ * paquetes): no hay nada que recoger ni que enviar.
+ *
+ * Recogerlo cuesta el SUBTOTAL: es lo que cobra el backend cuando no hay envio
+ * (y no hay impuestos, pendiente legal). Enviarlo cuesta el TOTAL del carrito,
+ * que ya lleva el envio. Ninguna de las dos cifras se suma aqui.
+ */
+function cashDeliveryOf(cart: CartWithQuote, locale: Locale): CashDeliveryOptions | null {
+  if (cart.shipping.status === "NOT_REQUIRED" || cart.subtotal === null) return null;
+
+  const pickupTotal = formatMoney(cart.subtotal, locale);
+  if (pickupTotal === null) return null;
+
+  const shipping = cart.shipping.amount === null ? null : formatMoney(cart.shipping.amount, locale);
+  const total = cart.total === null ? null : formatMoney(cart.total, locale);
+
+  return {
+    pickupTotal,
+    delivery:
+      cart.shipping.status === "CHARGED" && shipping !== null && total !== null
+        ? { shipping, total }
+        : null,
+  };
 }
 
 /**
@@ -229,6 +257,13 @@ async function OrderSummary({
       <div className="mt-s4 border-t border-border pt-s3">
         <CartTotals cart={cart} locale={locale} />
       </div>
+
+      {/* DEC-079: el total de arriba es el de envio a domicilio. Quien paga en
+          efectivo y lo recoge no paga el envio, y tiene que saberlo antes de
+          elegir. */}
+      {cart.shipping.status === "NOT_REQUIRED" ? null : (
+        <p className="mt-s3 text-caption text-text-subtle">{t("pickupNote")}</p>
+      )}
 
       <div className="mt-s4">
         <Link href="/cart" className="text-body-sm text-text-muted underline underline-offset-4">

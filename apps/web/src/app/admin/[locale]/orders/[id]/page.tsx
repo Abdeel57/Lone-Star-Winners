@@ -149,9 +149,13 @@ export default async function AdminOrderDetailPage({
           {/*
            * A donde va el pedido. La ruta ya la servia (`orderDetailSchema`, la
            * misma forma que ve el participante) y la pantalla no la pintaba, asi
-           * que no habia forma de saber a donde mandarlo.
+           * que no habia forma de saber a donde mandarlo. DEC-079: si se recoge
+           * en el punto de venta, lo dice, para entregarlo en mano.
            */}
-          <OrderAddress address={result.data.shipping_address} />
+          <OrderAddress
+            address={result.data.shipping_address}
+            fulfillmentMethod={result.data.fulfillment_method}
+          />
 
           <section aria-labelledby="order-trace">
             <h2 id="order-trace" className="lsw-display text-heading-lg text-text">

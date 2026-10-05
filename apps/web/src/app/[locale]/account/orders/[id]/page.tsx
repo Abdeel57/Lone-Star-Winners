@@ -132,7 +132,10 @@ export default async function AccountOrderPage({
 
         <div className="grid gap-s6 md:grid-cols-2">
           <OrderTotals order={order} locale={locale} />
-          <OrderAddress address={order.shipping_address} />
+          <OrderAddress
+            address={order.shipping_address}
+            fulfillmentMethod={order.fulfillment_method}
+          />
         </div>
 
         <div>
@@ -231,11 +234,19 @@ function OrderEntryStatus({
 function OrderTotals({ order, locale }: { readonly order: OrderDetail; readonly locale: Locale }) {
   const t = useTranslations("account.order");
 
+  // DEC-079: recogido en el punto de venta, `shipping_total` es `null` porque
+  // NO HAY envio, no porque falte determinarlo.
+  const pickup = order.fulfillment_method === "PICKUP";
+
   const rows = [
-    { label: t("subtotal"), money: order.subtotal },
-    { label: t("shipping"), money: order.shipping_total },
-    { label: t("tax"), money: order.tax_total },
-    { label: t("total"), money: order.total },
+    { label: t("subtotal"), money: order.subtotal, empty: t("notDetermined") },
+    {
+      label: t("shipping"),
+      money: order.shipping_total,
+      empty: pickup ? t("shippingPickup") : t("notDetermined"),
+    },
+    { label: t("tax"), money: order.tax_total, empty: t("notDetermined") },
+    { label: t("total"), money: order.total, empty: t("notDetermined") },
   ] as const;
 
   return (
@@ -250,7 +261,7 @@ function OrderTotals({ order, locale }: { readonly order: OrderDetail; readonly 
             <dt className="text-body-sm text-text-muted">{row.label}</dt>
             <dd className="text-body-sm tabular-nums text-text">
               {row.money === null
-                ? t("notDetermined")
+                ? row.empty
                 : (formatMoney(row.money, locale) ?? t("notDetermined"))}
             </dd>
           </div>

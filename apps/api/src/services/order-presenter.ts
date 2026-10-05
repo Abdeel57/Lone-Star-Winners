@@ -241,6 +241,7 @@ export async function presentOrderDetail(
       order.shippingTotalMinor === null ? null : money(order.shippingTotalMinor, order.currency),
     tax_total: order.taxTotalMinor === null ? null : money(order.taxTotalMinor, order.currency),
     shipping_address: address === null ? null : presentAddress(address),
+    fulfillment_method: order.fulfillmentMethod,
     entry_calculation:
       snapshot === null
         ? null
