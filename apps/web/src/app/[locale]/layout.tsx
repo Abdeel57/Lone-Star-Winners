@@ -8,6 +8,7 @@ import { getMessages, getTranslations, setRequestLocale } from "next-intl/server
 import type { ReactNode } from "react";
 
 import { AnnouncementBar } from "@/components/announcement-bar";
+import { ScrollReveal } from "@/components/scroll-reveal";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { localeTag } from "@/i18n/locales";
@@ -121,6 +122,9 @@ export default async function LocaleLayout({
           </main>
 
           <SiteFooter showMockNotice={showMockNotice} />
+
+          {/* DEC-075: aparicion al desplazarse. No pinta nada. */}
+          <ScrollReveal />
         </NextIntlClientProvider>
       </body>
     </html>

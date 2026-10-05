@@ -244,7 +244,8 @@ export function EntryOfferPanel({
 function Frame({ band, children }: { readonly band: boolean; readonly children: ReactNode }) {
   if (band) {
     return (
-      <section className="lsw-prize-band relative isolate">
+      // DEC-075: un reflejo de luz recorre el oro cada pocos segundos.
+      <section className="lsw-prize-band lsw-band-sheen relative isolate">
         <div className="lsw-container py-s6 sm:py-s8">{children}</div>
       </section>
     );

@@ -3595,3 +3595,67 @@ Affected areas: `apps/web` (`brand-lockup.tsx`, `site-header.tsx`,
 
 Proposed by: sesión del usuario (2026-10-05)
 Agreed by: pendiente — frontend-ux
+
+## DEC-075
+
+Status: Proposed
+
+Date: 2026-10-05
+
+Decision:
+**Movimiento en la tienda: aparición al desplazarse, entrada del hero y pases
+de paquetes vivos.** El usuario pidió animaciones al deslizarse y en los
+objetos a la venta, para que la página quede "100% profesional". Reglas:
+
+- Solo `transform` y opacidad (el navegador no repinta). Sin librerías: CSS más
+  un componente de 50 líneas.
+- Nada de rebotes ni escalados llamativos: la regla del sistema de diseño
+  (estética de casino) sigue en pie.
+- Todo se apaga con `prefers-reduced-motion`.
+
+1. **`ScrollReveal`** (en el layout de la tienda). Marca ocultos SOLO los
+   nodos `data-reveal` que están por debajo de la primera pantalla al cargar, y
+   los muestra al entrar en vista: opacidad más un desplazamiento corto, 0,7 s,
+   escalonado con `--reveal-delay`.
+   - Al terminar pasan a "done", que no lleva estilo: el hover rápido de las
+     tarjetas no hereda la transición lenta.
+   - Sin JS, o con lo que ya se ve al cargar, no se oculta nada.
+   - Lo llevan los encabezados de sección (desde la izquierda), la cabecera y
+     los pases de paquetes, las tarjetas de mercancía y las cifras de la banda
+     dorada.
+   - En el carrusel horizontal del teléfono, los pases aparecen al deslizar.
+2. **Entrada del hero al cargar:**
+   - el titular entra desde la izquierda con una inclinación de carreras que se
+     endereza;
+   - chips, lema, botones y contador suben escalonados, todo en menos de un
+     segundo;
+   - las cifras del contador entran desde arriba al cambiar (`animate-lsw-tick`
+     en el preset).
+3. **Pases de paquetes:**
+   - el metal de cada nivel (bronce, plata, oro, diamante) fluye despacio, en
+     el marco y en el logotipo;
+   - un destello cruza cada pase por turnos, también en teléfono, donde no hay
+     hover;
+   - las estrellas titilan;
+   - el recomendado tiene un halo dorado que respira;
+   - al pasar el ratón se eleva un poco más.
+4. **Mercancía:** la tarjeta se eleva y la foto se acerca un 4 % al pasar el
+   ratón.
+5. **Banda dorada:** un reflejo de luz la recorre cada pocos segundos.
+6. **Barra de lectura** bajo la cabecera, de rojo a oro. Usa
+   `animation-timeline: scroll()`, solo CSS: donde el navegador no lo soporta,
+   no aparece.
+
+Alternatives:
+A — Una librería de animación (descartada: peso y otra dependencia para lo que
+CSS hace igual). B — Revelar también en el hero (descartada: es la primera
+pantalla y no puede esperar al desplazamiento).
+
+Affected areas: `packages/design-system` (preset: `lsw-tick`), `packages/ui`
+(`countdown.tsx`), `apps/web` (`globals.css`, `scroll-reveal.tsx`, layout de la
+tienda, `section-heading.tsx`, `entry-package-band.tsx`, `product-card.tsx`,
+`merchandise-band.tsx`, `entry-offer-panel.tsx`, `entry-rate-lines.tsx`,
+`promotion-hero.tsx`, `site-header.tsx`).
+
+Proposed by: sesión del usuario (2026-10-05)
+Agreed by: pendiente — frontend-ux

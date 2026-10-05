@@ -201,6 +201,11 @@ export async function SiteHeader({ locale }: { readonly locale: Locale }) {
           </Link>
         </div>
       </div>
+
+      {/* DEC-075: barra fina de lectura, de rojo a oro, que avanza con el
+          desplazamiento. Solo CSS (`animation-timeline`); donde el navegador no
+          lo soporta no aparece. Decorativa. */}
+      <div aria-hidden="true" className="lsw-scroll-progress" />
     </header>
   );
 }

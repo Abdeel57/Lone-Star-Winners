@@ -1,5 +1,6 @@
 import { Badge, Card, CardTitle, cn, MediaFrame } from "@lsw/ui";
 import { useTranslations } from "next-intl";
+import type { CSSProperties } from "react";
 
 import { formatEntryCount, formatMoney, formatZonedDateTime } from "@/i18n/formatters";
 import type { Locale } from "@/i18n/locales";
@@ -128,6 +129,7 @@ export function ProductCard({
   locale,
   headingLevel = "h2",
   bonus,
+  revealIndex,
 }: {
   readonly product: ProductSummary;
   readonly locale: Locale;
@@ -148,6 +150,11 @@ export function ProductCard({
    * propia seccion y no debajo de el (hallazgo A5).
    */
   readonly headingLevel?: "h2" | "h3";
+  /**
+   * Posicion en la rejilla, para escalonar la aparicion al desplazarse
+   * (DEC-075). Sin ella la tarjeta aparece sin retraso.
+   */
+  readonly revealIndex?: number;
 }) {
   const t = useTranslations("shop");
   const tProduct = useTranslations("product");
@@ -197,10 +204,19 @@ export function ProductCard({
       as="li"
       elevation="flat"
       padding="none"
+      // DEC-075: aparece al desplazarse, escalonada por columna.
+      data-reveal
+      style={
+        {
+          "--reveal-delay": `${String(((revealIndex ?? 0) % 4) * 90)}ms`,
+        } as CSSProperties
+      }
       className={cn(
         "group relative flex flex-col overflow-hidden rounded-md",
         "border-light-border bg-light-surface text-light-text shadow-light-sm",
-        "transition-shadow duration-base ease-standard hover:shadow-light-md",
+        // DEC-075: se eleva un poco al pasar el raton, y la foto se acerca.
+        "transition-[box-shadow,transform] duration-base ease-standard hover:-translate-y-1 hover:shadow-light-md",
+        "motion-reduce:hover:translate-y-0",
         // El anillo de foco se pinta sobre la TARJETA y no sobre el texto del
         // titulo: el area pulsable es la tarjeta entera, y un anillo que solo
         // rodeara dos palabras no diria donde esta el foco de verdad.
@@ -236,7 +252,12 @@ export function ProductCard({
             // no existir todavia -no hay almacen de medios- y el 404 lo absorbe
             // el marco, que reserva el hueco igual.
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={imageUrl} alt="" loading="lazy" />
+            <img
+              src={imageUrl}
+              alt=""
+              loading="lazy"
+              className="transition-transform duration-700 ease-standard group-hover:scale-[1.04] motion-reduce:transition-none motion-reduce:group-hover:scale-100"
+            />
           )}
         </MediaFrame>
 

@@ -1,7 +1,7 @@
 import { Badge, buttonVariants, cn } from "@lsw/ui";
 import Image from "next/image";
 import { useTranslations } from "next-intl";
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 
 import { formatEntryCount, formatZonedDateTime } from "@/i18n/formatters";
 import type { Locale } from "@/i18n/locales";
@@ -124,6 +124,15 @@ function headlineSize(text: string): string {
   if (text.length > 40) return "text-[clamp(1.9rem,7.5vw,3.75rem)]";
   if (text.length > 24) return "text-[clamp(2.25rem,9.5vw,4.75rem)]";
   return "text-[clamp(2.75rem,12vw,6.25rem)]";
+}
+
+/**
+ * Retraso de la entrada escalonada del hero al cargar (DEC-075): cada bloque
+ * llega un poco despues del anterior. Las clases `lsw-enter*` estan en
+ * `globals.css` y se apagan con `prefers-reduced-motion`.
+ */
+function enter(delayMs: number): CSSProperties {
+  return { "--enter-delay": `${String(delayMs)}ms` } as CSSProperties;
 }
 
 export function PromotionHero({
@@ -545,7 +554,8 @@ export function PromotionHero({
              * abajo, que es donde se lee de verdad.
              */}
             {!showsPromotionalHero ? null : (
-              <div className="flex flex-wrap items-center gap-3">
+              // DEC-075: el hero entra escalonado al cargar (`enter`).
+              <div className="lsw-enter flex flex-wrap items-center gap-3" style={enter(0)}>
                 {/*
                  * CHIP DE ESTADO SOBRE EL TITULAR.
                  *
@@ -593,22 +603,41 @@ export function PromotionHero({
                 El tamano se ajusta al ancho para que dos o tres palabras llenen
                 la linea en telefono sin desbordar. */}
             <h1 id="promotion-title" className="mt-s4 flex flex-col gap-s1 sm:mt-s5">
+              {/* DEC-075: el titular entra desde la izquierda con una
+                  inclinacion de carreras que se endereza al llegar. */}
               {prizeName === null ? (
-                <span className={cn("lsw-headline lsw-chrome", headlineSize(title))}>{title}</span>
+                <span
+                  className={cn("lsw-headline lsw-chrome lsw-enter-left", headlineSize(title))}
+                  style={enter(80)}
+                >
+                  {title}
+                </span>
               ) : (
                 <>
                   {/* El verbo cae con el estado contenido (DEC-044): "GANA"
                       encabezando un premio es la invitacion misma. El premio y
                       el titulo se quedan, que es lo que DEC-044 deja ver. */}
                   {!showsPromotionalHero ? null : (
-                    <span className="lsw-headline lsw-accent-sheen text-[clamp(1.75rem,7vw,3rem)]">
+                    <span
+                      className="lsw-headline lsw-accent-sheen lsw-enter-left text-[clamp(1.75rem,7vw,3rem)]"
+                      style={enter(60)}
+                    >
                       {t("hero.win")}
                     </span>
                   )}
-                  <span className={cn("lsw-headline lsw-chrome", headlineSize(prizeName))}>
+                  <span
+                    className={cn(
+                      "lsw-headline lsw-chrome lsw-enter-left",
+                      headlineSize(prizeName),
+                    )}
+                    style={enter(140)}
+                  >
                     {prizeName}
                   </span>
-                  <span className="mt-s2 font-headline text-heading-sm font-bold italic uppercase text-text-muted">
+                  <span
+                    className="lsw-enter mt-s2 font-headline text-heading-sm font-bold italic uppercase text-text-muted"
+                    style={enter(220)}
+                  >
                     {title}
                   </span>
                 </>
@@ -654,7 +683,10 @@ export function PromotionHero({
 
             {/* El lema, en la italica gruesa de la referencia ("+ A $40,000
                 CHECK"). Es texto del panel; aqui solo se le da voz. */}
-            <p className="mt-s3 max-w-narrow font-headline text-body-md font-bold italic leading-snug text-text sm:mt-s4 sm:text-heading-md">
+            <p
+              className="lsw-enter mt-s3 max-w-narrow font-headline text-body-md font-bold italic leading-snug text-text sm:mt-s4 sm:text-heading-md"
+              style={enter(200)}
+            >
               {pickLocalized(promotion.summary, locale)}
             </p>
 
@@ -715,7 +747,10 @@ export function PromotionHero({
                 </Link>
               </div>
             ) : (
-              <div className="mt-s5 flex flex-col gap-s2 sm:mt-s8 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
+              <div
+                className="lsw-enter mt-s5 flex flex-col gap-s2 sm:mt-s8 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3"
+                style={enter(280)}
+              >
                 <HeroLink
                   href={presentation.showsShopCta ? buyLink : `/promotions/${promotion.slug}`}
                   // Ancho completo en telefono -es la unica accion de la
@@ -761,7 +796,7 @@ export function PromotionHero({
              * marcador (DEC-044).
              */}
             {countdownTarget === null ? null : (
-              <div className="mt-s6 sm:mt-s8">
+              <div className="lsw-enter mt-s6 sm:mt-s8" style={enter(360)}>
                 <PromotionCountdown
                   targetIso={
                     countdownTarget === "starts_at" ? promotion.starts_at : promotion.ends_at

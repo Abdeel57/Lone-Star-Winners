@@ -1,5 +1,6 @@
 import { buttonVariants, cn } from "@lsw/ui";
 import { useTranslations } from "next-intl";
+import type { CSSProperties } from "react";
 
 import { formatEntryCount, formatMoney } from "@/i18n/formatters";
 import type { Locale } from "@/i18n/locales";
@@ -181,7 +182,7 @@ export function EntryPackageBand({
       className={cn("lsw-band-light scroll-mt-16 py-s12 lg:scroll-mt-20 lg:py-s16", className)}
     >
       <div className="lsw-container">
-        <header className="mx-auto max-w-narrow text-center">
+        <header data-reveal className="mx-auto max-w-narrow text-center">
           <p className="lsw-eyebrow text-light-gold">{t("eyebrow")}</p>
           <h2
             id={labelledBy}
@@ -272,7 +273,20 @@ function PackagePass({
   const onlyVariant = product.variants.length === 1 ? product.variants[0] : undefined;
 
   return (
-    <li className="relative flex w-[78%] max-w-[22rem] shrink-0 snap-center flex-col pt-s5 sm:w-auto sm:max-w-none">
+    <li
+      // DEC-075: los pases aparecen escalonados al llegar a la banda.
+      data-reveal
+      style={{ "--reveal-delay": `${String(index * 110)}ms` } as CSSProperties}
+      className="relative flex w-[78%] max-w-[22rem] shrink-0 snap-center flex-col pt-s5 sm:w-auto sm:max-w-none"
+    >
+      {/* Halo del recomendado: respira detras del pase (DEC-075). */}
+      {recommended ? (
+        <span
+          aria-hidden="true"
+          className="lsw-glow-breathe pointer-events-none absolute inset-x-s2 bottom-[42%] top-s5 rounded-2xl bg-brand/60 blur-2xl"
+        />
+      ) : null}
+
       {recommended ? (
         <span className="lsw-display absolute left-1/2 top-0 z-10 -translate-x-1/2 whitespace-nowrap rounded-pill bg-brand px-s5 py-s1 text-label italic text-on-brand shadow-light-md">
           {t("recommended")}
@@ -285,8 +299,10 @@ function PackagePass({
       <div
         className={cn(
           "group relative isolate overflow-hidden rounded-xl p-[6px] shadow-light-md",
-          "transition-[transform,box-shadow] duration-base ease-standard hover:-translate-y-1",
+          "transition-[transform,box-shadow] duration-base ease-standard hover:-translate-y-1.5",
           "motion-reduce:transition-none motion-reduce:hover:translate-y-0",
+          // DEC-075: el metal del marco fluye despacio, cada nivel en su color.
+          "lsw-metal-flow",
           tier.metal,
           tier.glow,
           recommended && "ring-2 ring-brand ring-offset-2 ring-offset-light-bg",
@@ -313,7 +329,7 @@ function PackagePass({
           <div aria-hidden="true" className="mt-s3 flex flex-col items-center leading-none">
             <span
               className={cn(
-                "lsw-display block bg-clip-text text-[2.6rem] italic leading-[0.9] text-transparent sm:text-[2.9rem]",
+                "lsw-display lsw-metal-flow block bg-clip-text text-[2.6rem] italic leading-[0.9] text-transparent sm:text-[2.9rem]",
                 tier.metal,
               )}
             >
@@ -367,21 +383,28 @@ function PackagePass({
             )}
           </div>
 
-          {/* Estrellas de nivel: una por escalon. */}
+          {/* Estrellas de nivel: una por escalon. Titilan por turnos (DEC-075). */}
           <div aria-hidden="true" className="flex shrink-0 gap-[3px]">
             {Array.from({ length: (index % TIERS.length) + 1 }, (_, star) => (
-              <Star key={star} className={cn("h-4 w-4", tier.accent)} />
+              <Star
+                key={star}
+                className={cn("lsw-twinkle h-4 w-4", tier.accent)}
+                style={{ "--twinkle-delay": `${String(star * 0.35)}s` } as CSSProperties}
+              />
             ))}
           </div>
         </div>
 
-        {/* Brillo que cruza el pase al pasar el raton. */}
+        {/* Destello que cruza el pase. DEC-075: solo, cada pocos segundos y por
+            turnos entre niveles; antes solo con el raton, y en telefono no hay
+            raton. */}
         <span
           aria-hidden="true"
+          style={{ "--shine-delay": `${String(index * 1.6)}s` } as CSSProperties}
           className={cn(
-            "pointer-events-none absolute inset-y-0 -left-1/2 w-1/3 -skew-x-12",
+            "lsw-pass-shine pointer-events-none absolute inset-y-0 -left-1/2 w-1/3 -skew-x-12",
             "bg-gradient-to-r from-transparent via-white/35 to-transparent",
-            "translate-x-[-120%] transition-transform duration-700 ease-standard group-hover:translate-x-[420%]",
+            "translate-x-[-120%]",
             "motion-reduce:hidden",
           )}
         />
@@ -441,9 +464,21 @@ function PackagePass({
 }
 
 /** Estrella de cinco puntas del escudo. Decorativa. */
-function Star({ className }: { readonly className?: string }) {
+function Star({
+  className,
+  style,
+}: {
+  readonly className?: string;
+  readonly style?: CSSProperties;
+}) {
   return (
-    <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false" className={className}>
+    <svg
+      viewBox="0 0 20 20"
+      aria-hidden="true"
+      focusable="false"
+      className={className}
+      {...(style === undefined ? {} : { style })}
+    >
       <path
         fill="currentColor"
         d="M10 1.5l2.6 5.6 6.1.7-4.5 4.2 1.2 6L10 15l-5.4 3 1.2-6L1.3 7.8l6.1-.7z"

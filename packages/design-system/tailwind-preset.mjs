@@ -462,6 +462,12 @@ const preset = {
           from: { transform: "translateY(100%)" },
           to: { transform: "translateY(0)" },
         },
+        // DEC-075: la cifra del marcador entra desde arriba cuando cambia,
+        // como en un panel de salidas. Desplazamiento corto y opacidad.
+        "lsw-tick": {
+          from: { transform: "translateY(-28%)", opacity: "0" },
+          to: { transform: "translateY(0)", opacity: "1" },
+        },
       },
 
       animation: {
@@ -477,6 +483,7 @@ const preset = {
           "lsw-slide-in-left var(--lsw-duration-base) var(--lsw-ease-emphasized)",
         "lsw-slide-in-bottom":
           "lsw-slide-in-bottom var(--lsw-duration-base) var(--lsw-ease-emphasized)",
+        "lsw-tick": "lsw-tick var(--lsw-duration-base) var(--lsw-ease-emphasized)",
       },
     },
   },

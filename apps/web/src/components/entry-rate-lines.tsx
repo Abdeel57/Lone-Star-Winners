@@ -1,5 +1,6 @@
 import { Badge, cn } from "@lsw/ui";
 import { useTranslations } from "next-intl";
+import type { CSSProperties } from "react";
 
 import { formatInteger, formatMoney, formatZonedDateTime } from "@/i18n/formatters";
 import type { Locale } from "@/i18n/locales";
@@ -175,6 +176,9 @@ export function RateStrip({
       {tiles.map((tile, index) => (
         <li
           key={tile.key}
+          // DEC-075: las cifras entran una tras otra al llegar a la banda.
+          data-reveal
+          style={{ "--reveal-delay": `${String(index * 140)}ms` } as CSSProperties}
           className={cn(
             "relative flex items-center justify-center gap-s2 px-s2 sm:gap-s4",
             // El corte en diagonal entre las dos cifras.

@@ -105,7 +105,8 @@ export function SectionHeading({
   );
 
   return (
-    <div className={cn("flex flex-col", className)}>
+    // DEC-075: entra desde la izquierda al desplazarse (ver `ScrollReveal`).
+    <div data-reveal="left" className={cn("flex flex-col", className)}>
       {action === undefined ? (
         heading
       ) : (

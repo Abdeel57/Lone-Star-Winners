@@ -235,8 +235,14 @@ function CountdownUnit({
           "relative flex min-w-0 flex-1 basis-0 flex-col items-center",
         )}
       >
-        {/* `tabular-nums` evita que la cifra cambie de ancho cada segundo. */}
-        <span className="font-headline text-[clamp(2.6rem,11vw,4.75rem)] font-black italic leading-none tabular-nums text-text [text-shadow:0_4px_18px_rgb(0_0_0/0.6)]">
+        {/* `tabular-nums` evita que la cifra cambie de ancho cada segundo.
+            DEC-075: la clave es el VALOR, asi que al cambiar la cifra el nodo
+            se monta de nuevo y entra desde arriba (`lsw-tick`), como en un
+            panel de salidas. Solo se anima la unidad que cambia. */}
+        <span
+          key={value}
+          className="font-headline text-[clamp(2.6rem,11vw,4.75rem)] font-black italic leading-none tabular-nums text-text animate-lsw-tick [text-shadow:0_4px_18px_rgb(0_0_0/0.6)] motion-reduce:animate-none"
+        >
           {String(value).padStart(2, "0")}
         </span>
         <span className="mt-s2 text-overline font-semibold uppercase tracking-[0.2em] text-text-muted">

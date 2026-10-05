@@ -110,11 +110,12 @@ export function MerchandiseBand({
         ) : (
           <>
             <ul className={cn(MERCHANDISE_GRID_CLASS, gridClassName)}>
-              {products.map((product) => (
+              {products.map((product, index) => (
                 <ProductCard
                   key={product.id}
                   product={product}
                   locale={locale}
+                  revealIndex={index}
                   {...(headingLevel === undefined ? {} : { headingLevel })}
                   {...(bonus === undefined || bonus === null ? {} : { bonus })}
                 />
