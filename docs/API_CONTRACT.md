@@ -3935,3 +3935,49 @@ cuyo `Content-Type` sea uno de los tres tipos de imagen.
   no tenga una ruta para editar.
 - Las rutas `/products/…` de ficheros estáticos anteriores a esta sección siguen
   siendo `image_url` válidos.
+
+## 15. Solicitudes de privacidad (DEC-063)
+
+La Política de Privacidad y el Aviso de California publican el formulario de
+`https://LoneStarWinners.com/privacychoices` como vía para ejercer derechos.
+`POST /api/v1/privacy-requests` (PUBLIC) lo recibe.
+
+```text
+Method: POST
+Endpoint: /api/v1/privacy-requests
+
+Purpose:
+Enviar una solicitud de privacidad. La API manda el expediente al buzón del
+negocio (PRIVACY_REQUEST_INBOX; por defecto info@lonestarwinners.com, el de la
+Política) con reply-to de quien la envía, y un acuse a esa persona en su
+idioma. No decide nada ni toca la cuenta: verificar la identidad y responder
+lo hace una persona. No se guarda en la base: el registro es el buzón.
+
+Authentication: ninguna
+
+Request:
+{
+  "request_type": "ACCESS" | "DELETE" | "CORRECT" | "OPT_OUT_SALE_SHARING"
+                | "LIMIT_SENSITIVE" | "APPEAL" | "OTHER",
+  "full_name": "string (1-200)",
+  "email": "string",
+  "phone": "string (<= 40)" | null,        // opcional
+  "state": "string (2-60)",                 // estado de residencia, texto libre
+  "details": "string (<= 4000)" | null,     // opcional
+  "authorized_agent": boolean,              // por defecto false
+  "language": "en-US" | "es-US",            // idioma del acuse, sin defecto
+  "bot_check_token": "string"               // obligatorio si hay Turnstile
+}
+
+Response: 202
+{ "received": true, "reference": "PR-XXXXXXXXXX" }
+
+Errors:
+422 BOT_CHECK_FAILED, 422 VALIDATION_FAILED, 429 RATE_LIMITED,
+503 SERVICE_UNAVAILABLE (el buzón no recibió el expediente: la persona tiene
+que saber que NO llegó). Si solo falla el acuse, responde 202.
+
+Authorization: PUBLIC
+
+Owner: backend
+```

@@ -2,6 +2,7 @@ import { buttonVariants, cn } from "@lsw/ui";
 import { getTranslations } from "next-intl/server";
 
 import { Link } from "@/i18n/navigation";
+import { BUSINESS_CONTACT, LEGAL_DOCUMENTS, LEGAL_ROUTES } from "@/legal/links";
 
 import { BrandLockup } from "./brand-lockup";
 import { FooterDisclosure } from "./footer-disclosure";
@@ -12,9 +13,9 @@ import { LanguageSwitcher } from "./language-switcher";
  *
  * Lleva el enlace a las Reglas Oficiales porque en un producto de sweepstakes
  * ese documento tiene que estar a un clic desde cualquier pantalla, no solo
- * desde la promocion. `Privacy` y `Terms` NO estan: esos documentos todavia no
- * existen y su contenido lo aprueba el abogado del cliente (CLAUDE.md #1).
- * Enlazarlos vacios seria peor que no enlazarlos.
+ * desde la promocion. Los demas documentos legales (Terminos, Privacidad, Aviso
+ * de California) y "Tus opciones de privacidad" van en el grupo de ayuda, con
+ * el contacto del negocio: la Politica de Privacidad remite a los dos.
  *
  * El aviso de datos simulados solo aparece fuera de produccion, y esta ahi para
  * que nadie confunda un fixture con una cifra real de participaciones.
@@ -96,6 +97,23 @@ export async function SiteFooter({ showMockNotice }: { readonly showMockNotice: 
                     {t("nav.faq")}
                   </Link>
                 </li>
+                {LEGAL_DOCUMENTS.map((entry) => (
+                  <li key={entry.route}>
+                    <Link href={entry.route} className={FOOTER_LINK}>
+                      {t(`legal.links.${entry.labelKey}`)}
+                    </Link>
+                  </li>
+                ))}
+                <li>
+                  <Link href={LEGAL_ROUTES.privacyChoices} className={FOOTER_LINK}>
+                    {t("legal.links.privacyChoices")}
+                  </Link>
+                </li>
+                <li>
+                  <a href={`mailto:${BUSINESS_CONTACT.email}`} className={FOOTER_LINK}>
+                    {BUSINESS_CONTACT.email}
+                  </a>
+                </li>
               </ul>
             </FooterDisclosure>
           </nav>
@@ -140,6 +158,11 @@ export async function SiteFooter({ showMockNotice }: { readonly showMockNotice: 
 
             <div className="flex flex-col gap-s2 text-body-sm text-text-muted">
               <p>{t("footer.legalNote")}</p>
+
+              <address className="not-italic">
+                {BUSINESS_CONTACT.legalName} · {BUSINESS_CONTACT.street},{" "}
+                {BUSINESS_CONTACT.cityStateZip}
+              </address>
 
               {/* El ano va como cadena a proposito: un numero en ICU se formatea
                   con separador de miles y saldria "2,026". */}

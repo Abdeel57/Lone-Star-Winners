@@ -58,6 +58,9 @@ export const CONTRACT_GENERATION_CONFIG: ApiConfig = {
   web: {
     publicUrl: "http://localhost:3000",
   },
+  privacy: {
+    requestInbox: "privacy@localhost.invalid",
+  },
   sms: { provider: "none" },
   botCheck: null,
   exposeOpenApiOverHttp: true,

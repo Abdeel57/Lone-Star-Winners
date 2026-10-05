@@ -59,6 +59,18 @@ export function checkboxFrom(formData: FormData, field: string): boolean {
 }
 
 /**
+ * Token del widget de Cloudflare Turnstile.
+ *
+ * El widget lo deja en un campo oculto con el nombre que fija Cloudflare
+ * (`cf-turnstile-response`). Ausente si el widget no esta configurado; la API
+ * decide si hacia falta.
+ */
+export function botCheckTokenFrom(formData: FormData): string | undefined {
+  const raw = formData.get("cf-turnstile-response");
+  return typeof raw === "string" && raw.length > 0 ? raw : undefined;
+}
+
+/**
  * Ruta interna de retorno, validada.
  *
  * ES UNA VALIDACION DE SEGURIDAD, no una comodidad. Un `?next=` que se acepte

@@ -223,6 +223,12 @@ export const environmentSchema = z
     EMAIL_FROM_NAME: z.string().trim().min(1).max(80).default("Lone Star Winners"),
     EMAIL_PROVIDER_API_KEY: z.string().trim().min(1).optional(),
     /**
+     * Buzon que recibe las solicitudes de privacidad de `/privacychoices`. El
+     * valor por defecto es la direccion que publica la Politica de Privacidad
+     * ("HOW TO CONTACT US"); la variable existe para cambiarlo sin desplegar.
+     */
+    PRIVACY_REQUEST_INBOX: z.email().default("info@lonestarwinners.com"),
+    /**
      * URL publica del portal (`apps/web`). La API la necesita para construir
      * los enlaces de los correos, que abren pantallas del portal y no de la
      * API. Es la del dominio que ve el cliente, no la interna de Railway.
@@ -556,6 +562,10 @@ export interface ApiConfig {
   readonly web: {
     readonly publicUrl: string;
   };
+  /** Solicitudes de privacidad (`POST /privacy-requests`): a que buzon llegan. */
+  readonly privacy: {
+    readonly requestInbox: string;
+  };
   /** DEC-060: verificacion de celular por SMS. `none` apaga el registro con celular. */
   readonly sms:
     | { readonly provider: "none" }
@@ -678,6 +688,9 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): ApiConfig {
           },
     web: {
       publicUrl: env.WEB_PUBLIC_URL,
+    },
+    privacy: {
+      requestInbox: env.PRIVACY_REQUEST_INBOX,
     },
     sms:
       twilioConfig(env) ??

@@ -283,6 +283,7 @@ export {
   resetPasswordWithSms,
   startPhoneVerification,
   submitAmoe,
+  submitPrivacyRequest,
   putAdminRulesDocument,
   transcribeAmoeSubmission,
   updateAdminFeatureFlag,

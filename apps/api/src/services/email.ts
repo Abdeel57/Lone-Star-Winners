@@ -33,6 +33,11 @@ export interface EmailMessage {
    * `password_reset`). Va a los logs y a Resend; nunca lleva datos personales.
    */
   readonly kind: string;
+  /**
+   * A quien va la respuesta. Lo usa la solicitud de privacidad que llega al
+   * buzon del negocio: contestar el correo responde a quien la envio.
+   */
+  readonly replyTo?: string;
 }
 
 export interface EmailSender {
@@ -123,6 +128,7 @@ export function createResendEmailSender(options: {
             subject: message.subject,
             html: message.html,
             text: message.text,
+            ...(message.replyTo === undefined ? {} : { reply_to: message.replyTo }),
             tags: [{ name: "kind", value: message.kind }],
           }),
           signal: AbortSignal.timeout(RESEND_TIMEOUT_MS),

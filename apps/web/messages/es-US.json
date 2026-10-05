@@ -370,6 +370,56 @@
       "note": "El valor declarado, el premio y todo lo relativo a su entrega se rigen por las Reglas Oficiales."
     }
   },
+  "legal": {
+    "effective": "Vigente desde el {date}",
+    "englishOnly": "Este documento existe solo en inglés. Lo publicamos tal como lo redactó el abogado de Lone Star Winners.",
+    "otherDocuments": "Otros documentos legales",
+    "links": {
+      "terms": "Términos y condiciones",
+      "privacy": "Política de privacidad",
+      "californiaNotice": "Aviso de privacidad para California",
+      "privacyChoices": "Tus opciones de privacidad"
+    },
+    "terms": {
+      "title": "Términos y condiciones",
+      "lead": "Las condiciones de uso del sitio y de la tienda de Lone Star Winners."
+    },
+    "privacy": {
+      "title": "Política de privacidad",
+      "lead": "Qué datos recopilamos, para qué los usamos y qué derechos tienes."
+    },
+    "californiaNotice": {
+      "title": "Aviso de privacidad para California",
+      "lead": "Aviso en el momento de la recopilación para residentes de California."
+    },
+    "privacyChoices": {
+      "title": "Tus opciones de privacidad",
+      "lead": "Pide acceso a tus datos, que los borremos o corrijamos, o que no se vendan ni compartan.",
+      "intro": "Envía tu solicitud con este formulario. Para proteger tu información, verificaremos tu identidad comparando lo que envíes con nuestros registros, y te responderemos en el plazo que indica nuestra Política de Privacidad.",
+      "emailAlternative": "Si lo prefieres, también puedes escribirnos a",
+      "readPolicy": "Leer la Política de privacidad",
+      "requestType": "¿Qué quieres solicitar?",
+      "requestTypePlaceholder": "Elige una opción",
+      "types": {
+        "ACCESS": "Acceder / saber qué datos tenemos de mí",
+        "DELETE": "Borrar mi información personal",
+        "CORRECT": "Corregir mi información personal",
+        "OPT_OUT_SALE_SHARING": "No vender ni compartir mi información personal",
+        "LIMIT_SENSITIVE": "Limitar el uso de mi información personal sensible",
+        "APPEAL": "Apelar la respuesta a una solicitud anterior",
+        "OTHER": "Otra consulta de privacidad"
+      },
+      "fullName": "Nombre completo",
+      "phone": "Teléfono (opcional)",
+      "state": "Estado donde vives",
+      "details": "Detalles (opcional)",
+      "detailsHint": "Cualquier dato que nos ayude a encontrar tu información o entender tu solicitud.",
+      "authorizedAgent": "Envío esta solicitud como agente autorizado de otra persona",
+      "submit": "Enviar solicitud",
+      "sentTitle": "Recibimos tu solicitud",
+      "sentBody": "Tu referencia es {reference}. Te enviamos un correo de confirmación; guárdala por si nos escribes después."
+    }
+  },
   "ineligibility": {
     "PRODUCT_NOT_ELIGIBLE": "Este artículo no forma parte de la promoción vigente, así que no cuenta para las participaciones promocionales.",
     "fallback": "Este artículo no cuenta para las participaciones promocionales de la promoción vigente. Las Reglas Oficiales describen qué mercancía sí cuenta."

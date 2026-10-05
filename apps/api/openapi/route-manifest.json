@@ -894,6 +894,15 @@
       "summary": "Documento OpenAPI 3.1 generado desde los esquemas Zod."
     },
     {
+      "method": "POST",
+      "path": "/api/v1/privacy-requests",
+      "operation_id": "submitPrivacyRequest",
+      "authorization": "PUBLIC",
+      "requires_step_up": false,
+      "tags": ["privacy"],
+      "summary": "Enviar una solicitud de privacidad (formulario de /privacychoices)."
+    },
+    {
       "method": "GET",
       "path": "/api/v1/product-categories",
       "operation_id": "listProductCategories",

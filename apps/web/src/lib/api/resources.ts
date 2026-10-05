@@ -1,4 +1,5 @@
 import type { Locale } from "@/i18n/locales";
+import type { PrivacyRequestType } from "@/legal/privacy-request-types";
 
 import type {
   AcknowledgedResponse,
@@ -150,6 +151,8 @@ export const API_PATHS = {
   authPhoneStart: "/auth/phone/start",
   /** [CONTRATO] Fijar la contrasena con el codigo SMS (DEC-060). */
   authPasswordResetSms: "/auth/password/reset-sms",
+  /** [CONTRATO] Formulario de `/privacychoices` (DEC-063). PUBLIC. */
+  privacyRequests: "/privacy-requests",
   /** [PROVISIONAL] Perfil del participante. No esta en el contrato. */
   me: "/me",
 
@@ -749,6 +752,32 @@ export function startPhoneVerification(
     locale,
     body: input,
   });
+}
+
+/**
+ * Solicitud de privacidad (DEC-063). La API la manda al buzon del negocio y
+ * acusa recibo; `reference` es lo que la persona cita si escribe despues. 503
+ * significa que NO llego al buzon.
+ */
+export function submitPrivacyRequest(
+  input: {
+    readonly request_type: PrivacyRequestType;
+    readonly full_name: string;
+    readonly email: string;
+    readonly phone: string | null;
+    readonly state: string;
+    readonly details: string | null;
+    readonly authorized_agent: boolean;
+    readonly language: "en-US" | "es-US";
+    readonly bot_check_token?: string;
+  },
+  locale: Locale,
+): Promise<ApiResult<{ readonly received: true; readonly reference: string }>> {
+  return apiRequest<{ readonly received: true; readonly reference: string }>(
+    "POST",
+    API_PATHS.privacyRequests,
+    { locale, body: input },
+  );
 }
 
 /** Fijar la contrasena con el codigo SMS (DEC-060). */

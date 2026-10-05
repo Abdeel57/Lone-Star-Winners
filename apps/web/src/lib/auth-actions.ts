@@ -25,7 +25,14 @@ import {
   SUCCEEDED,
   type ActionResult,
 } from "./action-result";
-import { checkboxFrom, localeFrom, returnPathFrom, secretFrom, textFrom } from "./form-input";
+import {
+  botCheckTokenFrom,
+  checkboxFrom,
+  localeFrom,
+  returnPathFrom,
+  secretFrom,
+  textFrom,
+} from "./form-input";
 import { mutableSession } from "./session-server";
 
 /**
@@ -112,18 +119,6 @@ function destinationFrom(formData: FormData): string {
  */
 function identifierFrom(value: string): { readonly email: string } | { readonly phone: string } {
   return value.includes("@") ? { email: value } : { phone: value };
-}
-
-/**
- * Token del widget de Cloudflare Turnstile.
- *
- * El widget lo deja en un campo oculto con el nombre que fija Cloudflare
- * (`cf-turnstile-response`). Ausente si el widget no esta configurado; la API
- * decide si hacia falta.
- */
-function botCheckTokenFrom(formData: FormData): string | undefined {
-  const raw = formData.get("cf-turnstile-response");
-  return typeof raw === "string" && raw.length > 0 ? raw : undefined;
 }
 
 /** Alta de participante. */

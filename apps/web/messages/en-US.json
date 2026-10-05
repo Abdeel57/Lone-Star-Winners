@@ -370,6 +370,56 @@
       "note": "The stated value, the prize itself and everything about how it is awarded are governed by the Official Rules."
     }
   },
+  "legal": {
+    "effective": "Effective {date}",
+    "englishOnly": "This document is only available in English. It is published exactly as written by Lone Star Winners' attorney.",
+    "otherDocuments": "Other legal documents",
+    "links": {
+      "terms": "Terms & Conditions",
+      "privacy": "Privacy Policy",
+      "californiaNotice": "California Notice at Collection",
+      "privacyChoices": "Your Privacy Choices"
+    },
+    "terms": {
+      "title": "Terms & Conditions",
+      "lead": "The terms that govern the use of the Lone Star Winners site and store."
+    },
+    "privacy": {
+      "title": "Privacy Policy",
+      "lead": "What we collect, how we use it, and the rights you have."
+    },
+    "californiaNotice": {
+      "title": "California Notice at Collection",
+      "lead": "Notice at collection for California residents."
+    },
+    "privacyChoices": {
+      "title": "Your Privacy Choices",
+      "lead": "Ask to access, delete, or correct your data, or to stop its sale or sharing.",
+      "intro": "Send your request with this form. To protect your information, we will verify your identity by comparing what you send with our records, and we will respond within the time stated in our Privacy Policy.",
+      "emailAlternative": "If you prefer, you can also write to us at",
+      "readPolicy": "Read the Privacy Policy",
+      "requestType": "What would you like to request?",
+      "requestTypePlaceholder": "Choose an option",
+      "types": {
+        "ACCESS": "Access / know what data you have about me",
+        "DELETE": "Delete my personal information",
+        "CORRECT": "Correct my personal information",
+        "OPT_OUT_SALE_SHARING": "Do not sell or share my personal information",
+        "LIMIT_SENSITIVE": "Limit the use of my sensitive personal information",
+        "APPEAL": "Appeal the response to a previous request",
+        "OTHER": "Other privacy question"
+      },
+      "fullName": "Full name",
+      "phone": "Phone (optional)",
+      "state": "State where you live",
+      "details": "Details (optional)",
+      "detailsHint": "Anything that helps us find your information or understand your request.",
+      "authorizedAgent": "I am submitting this request as another person's authorized agent",
+      "submit": "Send request",
+      "sentTitle": "We received your request",
+      "sentBody": "Your reference is {reference}. We sent you a confirmation email; keep it in case you write to us later."
+    }
+  },
   "ineligibility": {
     "PRODUCT_NOT_ELIGIBLE": "This item is not part of the current promotion, so it does not count toward promotional entries.",
     "fallback": "This item does not count toward promotional entries in the current promotion. The Official Rules describe which merchandise does."

@@ -63,6 +63,7 @@ import { buildDrawRoutes } from "./routes/draw.js";
 import { buildExportRoutes } from "./routes/export.js";
 import { buildOrdersRoutes, installRawBodyForPaymentWebhooks } from "./routes/orders.js";
 import { buildPortalRoutes } from "./routes/portal.js";
+import { buildPrivacyRequestRoutes } from "./routes/privacy-requests.js";
 import { installPrincipalResolver } from "./http/principal.js";
 import { createFeatureFlagPort } from "./services/draw-service.js";
 import { createIdentityRepositories } from "./services/drizzle-identity.js";
@@ -154,6 +155,7 @@ export function collectRouteDefinitions(dependencies: AppDependencies): RouteDef
     ...buildAdminCatalogRoutes(dependencies),
     ...buildAdminRulesRoutes(dependencies),
     ...buildMediaRoutes(dependencies),
+    ...buildPrivacyRequestRoutes(dependencies),
   ];
 
   const metaRoutes = buildMetaRoutes({
@@ -192,6 +194,7 @@ export function collectContractRouteDefinitions(dependencies: AppDependencies): 
     ...buildAdminCatalogRoutes(dependencies),
     ...buildAdminRulesRoutes(dependencies),
     ...buildMediaRoutes(dependencies),
+    ...buildPrivacyRequestRoutes(dependencies),
   ];
   routes.push(
     ...buildMetaRoutes({ serverUrl: dependencies.config.http.publicUrl, allRoutes: () => routes }),

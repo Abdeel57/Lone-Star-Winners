@@ -3124,6 +3124,41 @@ retención) no es un fallo. Un "fallido"/"caducado" o un "pagado" que llega
 cuando el pedido ya está en un estado que no admite ese cambio se ignora
 (`IGNORED`, 200). Lo que siga fallando es un fallo de verdad y responde 500.
 
+## DEC-063
+
+Status: Proposed
+
+Date: 2026-10-04
+
+Decision:
+**Términos, Privacidad y Aviso de California se publican tal cual llegaron, y
+`/privacychoices` es un formulario que manda la solicitud al buzón del
+negocio.** Los tres documentos del 2026-09-30 se convierten del Word a datos
+(`scripts/legal/`) y se pintan como texto, sin HTML, en `/terms`, `/privacy` y
+`/california-notice`, con aviso de que solo existen en inglés. La Política y
+el Aviso publican `https://LoneStarWinners.com/privacychoices` como vía para
+ejercer derechos: `POST /api/v1/privacy-requests` (PUBLIC, con Turnstile si
+está configurado) envía el expediente a `PRIVACY_REQUEST_INBOX` con la persona
+como `reply_to` y un acuse en su idioma; 503 si el buzón no lo recibió. No se
+guarda en la base: se atiende desde el correo, que es lo que la Política
+describe. El pie enlaza los cuatro y publica el contacto del negocio con la
+dirección de las Reglas del 2026-10-04.
+
+Alternatives:
+A — Tabla de solicitudes con panel de seguimiento (descartada por ahora: el
+volumen esperado es bajo y la Política promete atención humana por correo).
+B — Esperar a la versión corregida de los documentos (descartada por decisión
+del usuario: publicar con el texto actual; los Términos aún dicen "2200 N Alto
+Dr." y "[INSERT BOX NUMBER]", pendiente del abogado).
+
+Affected areas: `apps/web` (`src/legal/`, `components/legal-*.tsx`,
+`components/privacy-request-form.tsx`, `components/site-footer.tsx`, páginas
+legales, mensajes), `apps/api` (`routes/privacy-requests.ts`,
+`services/privacy-request-email.ts`, `config/env.ts`), `docs/API_CONTRACT.md`.
+
+Proposed by: sesión del usuario (2026-10-01/04), lanzamiento de la primera edición
+Agreed by: pendiente — frontend-ux, backend-sweepstakes, security-integration
+
 ## DEC-064
 
 Status: Proposed
