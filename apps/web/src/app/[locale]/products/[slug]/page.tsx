@@ -1,4 +1,4 @@
-import { Alert, Card, CardTitle, MediaFrame } from "@lsw/ui";
+import { Card, CardTitle, MediaFrame } from "@lsw/ui";
 import { notFound } from "next/navigation";
 import { hasLocale, useTranslations } from "next-intl";
 import { getTranslations, setRequestLocale } from "next-intl/server";
@@ -7,11 +7,11 @@ import { AddToCartForm } from "@/components/add-to-cart-form";
 import { ApiErrorState } from "@/components/api-error-state";
 import { AvailabilityBadge } from "@/components/availability-badge";
 import { EntryPackagePanel } from "@/components/entry-package-panel";
+import { ProductEligibilityNotice } from "@/components/product-eligibility-notice";
 import { formatMoney } from "@/i18n/formatters";
 import type { Locale } from "@/i18n/locales";
 import { Link } from "@/i18n/navigation";
 import { routing } from "@/i18n/routing";
-import { useIneligibilityReason } from "@/i18n/storefront-labels";
 import {
   fetchActivePromotion,
   fetchProduct,
@@ -139,7 +139,7 @@ export default async function ProductDetailPage({
             <ProductAvailability product={product} />
           </div>
 
-          <EligibilityNotice product={product} />
+          <ProductEligibilityNotice product={product} />
 
           {/* EL BLOQUE DE PARTICIPACIONES VA ANTES DEL FORMULARIO, y no es un
               detalle de orden: las Official Rules exigen que el numero incluido
@@ -373,37 +373,5 @@ function ProductAvailability({ product }: { readonly product: ProductDetail }) {
     <div>
       <AvailabilityBadge status={status} />
     </div>
-  );
-}
-
-/**
- * Relacion del articulo con la promocion vigente.
- *
- * Tres estados, no dos: elegible, no elegible, y "no hay promocion contra la
- * que evaluar". El tercero no es un caso raro -es lo normal entre promociones-
- * y colapsarlo con "no elegible" diria que el articulo esta excluido cuando lo
- * que pasa es que no hay nada de lo que excluirlo.
- */
-function EligibilityNotice({ product }: { readonly product: ProductDetail }) {
-  const t = useTranslations("product");
-  const tShop = useTranslations("shop");
-  const ineligibilityReason = useIneligibilityReason();
-
-  // `undefined` (la API no publica elegibilidad, HO-019) se trata como `null`:
-  // sin dato no se afirma nada sobre participaciones.
-  const eligibility = product.entry_eligibility ?? null;
-
-  if (eligibility === null) {
-    return <Alert tone="info">{tShop("noPromotionNotice")}</Alert>;
-  }
-
-  if (!eligibility.is_eligible) {
-    return <Alert tone="info">{ineligibilityReason(eligibility.reason_key)}</Alert>;
-  }
-
-  return (
-    <Alert tone="info" title={t("entryHeading")}>
-      {t("eligible")}
-    </Alert>
   );
 }

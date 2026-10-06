@@ -43,9 +43,10 @@ vi.mock("@/lib/cart-actions", () => ({
 import { OrderLineList } from "@/components/order-line-list";
 import { PrizeBand } from "@/components/prize-band";
 import { ProductCard } from "@/components/product-card";
+import { ProductEligibilityNotice } from "@/components/product-eligibility-notice";
 import { formatMoney } from "@/i18n/formatters";
 import type { Locale } from "@/i18n/locales";
-import type { OrderLine, ProductSummary, PromotionDetail } from "@/lib/api/contract";
+import type { OrderLine, ProductDetail, ProductSummary, PromotionDetail } from "@/lib/api/contract";
 import { priceFrom } from "@/lib/product-price";
 import enMessages from "../../messages/en-US.json";
 import esMessages from "../../messages/es-US.json";
@@ -153,6 +154,28 @@ describe("escaparate contra la forma real de la API", () => {
   it("formatMoney tolera la ausencia del importe", () => {
     expect(formatMoney(undefined, "es")).toBeNull();
     expect(formatMoney(null, "en")).toBeNull();
+  });
+
+  it("la ficha NO dice que no hay promocion cuando la API no publica la elegibilidad", () => {
+    // 2026-10-06: con la promocion abierta, cada ficha decia "Ahora mismo no
+    // hay ninguna promocion abierta", porque el campo ausente se trataba como
+    // `null`. Ausente no es dato: no se dice nada.
+    const detail: ProductDetail = {
+      ...realProduct,
+      description: { "en-US": "Description", "es-US": "Descripcion" },
+    };
+    const { container } = renderIn("es", <ProductEligibilityNotice product={detail} />);
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it("con `null` -dato del contrato- la ficha si avisa de que no hay promocion", () => {
+    const detail: ProductDetail = {
+      ...realProduct,
+      description: { "en-US": "Description", "es-US": "Descripcion" },
+      entry_eligibility: null,
+    };
+    renderIn("es", <ProductEligibilityNotice product={detail} />);
+    expect(screen.getByText(esMessages.shop.noPromotionNotice)).toBeInTheDocument();
   });
 
   it("la banda del premio no se pinta cuando la API no publica el premio, y no revienta", () => {
