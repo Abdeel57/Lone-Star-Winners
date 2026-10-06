@@ -103,11 +103,9 @@ export function MobileNav({
           </ul>
         </nav>
 
-        {/* El conmutador de idioma vive aqui en telefono. En la cabecera de
-            360px no cabe junto a la hamburguesa, la marca y el carrito, y
-            partir la cabecera en tres filas -que es lo que hacia antes- se come
-            un tercio de la pantalla en cada scroll, porque la cabecera es
-            fija. */}
+        {/* El idioma tambien aqui. Su sitio principal es la franja de arriba
+            del todo (DEC-081), pero esa franja no es fija: con la pagina
+            desplazada, el panel es la forma de cambiarlo sin volver arriba. */}
         <div className="mt-s6 border-t border-border pt-s5">
           <LanguageSwitcher />
         </div>

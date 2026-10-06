@@ -4051,3 +4051,43 @@ reconciliación), `apps/api` (`portal.ts`, esquemas, contrato), `apps/web`
 
 Proposed by: sesión del usuario (2026-10-05)
 Agreed by: pendiente — backend-sweepstakes, security-integration, frontend-ux
+
+## DEC-081
+
+Status: Accepted
+
+Date: 2026-10-06
+
+Decision:
+**El idioma se cambia desde una franja fina arriba del todo de cada página, en
+todas las anchuras.** Lo pidió el usuario: "ponlo al inicio de la página para
+que sea más fácil cambiar el idioma".
+
+1. **Dónde.** `LanguageBar` va antes de la banda roja de anuncio y de la
+   cabecera, en `app/[locale]/layout.tsx`. No es pegajosa, como la banda: dos
+   elementos fijos apilados se comerían la pantalla de un teléfono. El
+   conmutador se queda también en el panel de navegación (para cambiarlo con la
+   página desplazada) y en el pie.
+2. **Por qué no en la cabecera.** A 360px, hamburguesa, marca centrada, cuenta y
+   carrito ya llenan la fila. Antes, el idioma en teléfono solo estaba dentro
+   del panel de la hamburguesa y al final del pie. La cabecera de escritorio
+   pierde su conmutador: con la franja serían dos iguales uno encima del otro.
+3. **Cómo se ve.** Un globo, la palabra "Idioma"/"Language" y una pastilla con
+   las dos opciones, con la actual rellena en oro (`bg-brand text-on-brand`).
+   Cada idioma va con su propio nombre ("English", "Español") y su `lang`. La
+   pastilla mide 32px, pero el área de pulsación llega a 44px con un
+   pseudo-elemento; la franja mide 44px.
+
+Alternatives considered: A — Códigos "ES | EN" dentro de la cabecera
+(descartada: no caben a 360px con 44px de pulsación, y un código se entiende
+peor que el nombre). B — Franja solo en teléfono y conmutador en la cabecera de
+escritorio (descartada: el control cambiaría de sitio según la anchura). C —
+Dentro de la banda roja (descartada: la banda rota y desaparece cuando no hay
+promoción).
+
+Affected areas: `apps/web` (`language-bar.tsx` nuevo, `language-switcher.tsx`,
+`site-header.tsx`, `mobile-nav.tsx`, `app/[locale]/layout.tsx`,
+`test/components-i18n.test.tsx`).
+
+Proposed by: sesión del usuario (2026-10-06)
+Agreed by: frontend-ux (petición directa del usuario)

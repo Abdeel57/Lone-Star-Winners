@@ -8,6 +8,7 @@ import { getMessages, getTranslations, setRequestLocale } from "next-intl/server
 import type { ReactNode } from "react";
 
 import { AnnouncementBar } from "@/components/announcement-bar";
+import { LanguageBar } from "@/components/language-bar";
 import { ScrollReveal } from "@/components/scroll-reveal";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
@@ -107,6 +108,10 @@ export default async function LocaleLayout({
           <a href="#main" className="lsw-skip-link">
             {t("skipToContent")}
           </a>
+
+          {/* DEC-081: el idioma, lo primero de la pagina y en todas las
+              anchuras. Tampoco es pegajosa, por lo mismo que la banda. */}
+          <LanguageBar />
 
           {/* La banda de anuncio va POR ENCIMA de la cabecera y no es pegajosa:
               dos elementos fijos apilados se comen un tercio de la pantalla de

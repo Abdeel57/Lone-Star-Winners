@@ -7,7 +7,6 @@ import { loadSession } from "@/lib/participant-server";
 
 import { AccountGlyph, AccountMenu, type AccountDestination } from "./account-menu";
 import { BrandLockup } from "./brand-lockup";
-import { LanguageSwitcher } from "./language-switcher";
 import { MobileNav, type NavDestination } from "./mobile-nav";
 
 /**
@@ -152,18 +151,17 @@ export async function SiteHeader({ locale }: { readonly locale: Locale }) {
         {/* --- Centro: marca ---
             Estrella y logotipo tambien en telefono (DEC-073). Antes el logotipo
             se ocultaba por debajo de 640px porque no cabia junto al conmutador
-            de idioma, que ya vive en el panel de navegacion. */}
+            de idioma, que hoy vive en la franja de arriba (DEC-081). */}
         <Link href="/" className={cn("justify-self-center rounded-md", FOCUS)}>
           <BrandLockup size="md" />
         </Link>
 
         {/* --- Derecha: acciones --- */}
         <div className="flex min-w-0 items-center justify-end gap-1 sm:gap-2">
-          {/* El conmutador de idioma sale de la cabecera en telefono y vive en
-              el panel de navegacion. En 360px, hamburguesa + marca + dos
-              enlaces de idioma + carrito no caben en una fila, y la cabecera se
-              partia en tres. */}
-          <LanguageSwitcher className="hidden xl:flex" />
+          {/* El idioma ya no esta aqui: vive en la franja de arriba del todo
+              (`LanguageBar`, DEC-081) en todas las anchuras. En 360px no cabia
+              en esta fila, y en escritorio serian dos conmutadores iguales uno
+              encima del otro. */}
 
           {/*
            * TRES ESTADOS Y NO DOS. Con sesion, el menu de cuenta; sin ella, un

@@ -45,6 +45,7 @@ vi.mock("@/i18n/navigation", async () => {
 });
 
 import { ApiErrorState } from "@/components/api-error-state";
+import { LanguageBar } from "@/components/language-bar";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { PromotionStatusBadge } from "@/components/promotion-status-badge";
 
@@ -207,5 +208,44 @@ describe("LanguageSwitcher (DEC-021)", () => {
     expect(
       screen.getByRole("navigation", { name: esMessages.a11y.languageSwitcher }),
     ).toBeInTheDocument();
+  });
+
+  it("cada idioma va con su `lang`, para que se pronuncie en su idioma", () => {
+    renderIn("es", <LanguageSwitcher />);
+
+    expect(screen.getByRole("link", { name: enMessages.localeName.en })).toHaveAttribute(
+      "lang",
+      "en",
+    );
+    expect(screen.getByRole("link", { name: esMessages.localeName.es })).toHaveAttribute(
+      "lang",
+      "es",
+    );
+  });
+});
+
+describe("LanguageBar (DEC-081)", () => {
+  it("pone el conmutador arriba con la palabra Idioma a la vista", () => {
+    renderIn("es", <LanguageBar />);
+
+    const nav = screen.getByRole("navigation", { name: esMessages.a11y.languageSwitcher });
+    // La palabra se VE (es para quien busca donde se cambia el idioma)...
+    expect(nav).toHaveTextContent(esMessages.a11y.languageSwitcher);
+    // ...pero no se anuncia dos veces: el nombre accesible ya la lleva.
+    expect(screen.getByText(esMessages.a11y.languageSwitcher)).toHaveAttribute(
+      "aria-hidden",
+      "true",
+    );
+    expect(screen.getAllByRole("link")).toHaveLength(2);
+  });
+
+  it("en ingles dice Language y marca English", () => {
+    renderIn("en", <LanguageBar />);
+
+    expect(screen.getByText(enMessages.a11y.languageSwitcher)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: enMessages.localeName.en })).toHaveAttribute(
+      "aria-current",
+      "true",
+    );
   });
 });
