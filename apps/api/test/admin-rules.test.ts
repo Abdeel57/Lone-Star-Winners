@@ -934,6 +934,94 @@ describe("flags y control dual (13.9)", () => {
     expect(applied).toHaveLength(1);
     await app.close();
   });
+
+  /*
+   * REGRESION (2026-10-07, produccion). Una solicitud pedida con el motivo
+   * `OTHER` y su nota no se podia aprobar: se guardaba solo el codigo como
+   * motivo escrito, 5 caracteres, y el trigger de DEC-013 exige 10 -> 500.
+   * El doble del repositorio no tiene trigger, asi que se comprueba lo que la
+   * ruta le PASA: el motivo compuesto, con la nota de quien lo pidio.
+   */
+  it("aprobar una solicitud pedida con OTHER guarda un motivo escrito valido", async () => {
+    shared.adminUserId = OTHER_ADMIN_ID;
+    const reasons: unknown[] = [];
+    const row = {
+      id: "77777777-7777-4777-8777-777777777777",
+      settingKind: "FEATURE_FLAG" as const,
+      settingKey: "entry_multipliers_enabled",
+      requestedValue: { enabled: true },
+      status: "PENDING_APPROVAL" as const,
+      reasonCode: "OTHER",
+      reasonText: "El cliente lo indica",
+      requestedByAdminUserId: ADMIN_ID,
+      requestedAt: NOW,
+      decidedByAdminUserId: null,
+      decidedAt: null,
+      decisionNotes: null,
+      appliedBefore: null,
+      appliedAfter: null,
+    };
+
+    shared.rules = {
+      findSettingChangeRequest: () => Promise.resolve(row),
+      listFlags: () =>
+        Promise.resolve({
+          items: [flagRow("entry_multipliers_enabled", false, true)],
+          amoeMode: null,
+        }),
+      updateFlag: (...args: unknown[]) => {
+        reasons.push(args[2]);
+        return Promise.resolve(flagRow("entry_multipliers_enabled", true, true));
+      },
+      decideSettingChangeRequest: () =>
+        Promise.resolve({
+          ...row,
+          status: "APPLIED" as const,
+          decidedByAdminUserId: OTHER_ADMIN_ID,
+          decidedAt: NOW,
+          appliedBefore: { enabled: false },
+          appliedAfter: { enabled: true },
+        }),
+    };
+
+    const app = await openApp();
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/v1/admin/settings/change-requests/77777777-7777-4777-8777-777777777777/approve",
+      payload: { reason_code: "COMPLIANCE_INSTRUCTION" },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(reasons).toEqual(["OTHER — entry_multipliers_enabled: El cliente lo indica"]);
+    await app.close();
+  });
+
+  it("el PATCH tambien compone el motivo escrito, aunque el codigo sea corto", async () => {
+    const reasons: unknown[] = [];
+    shared.rules = {
+      listFlags: () =>
+        Promise.resolve({
+          items: [flagRow("manual_adjustments_enabled", false, false)],
+          amoeMode: null,
+        }),
+      updateFlag: (...args: unknown[]) => {
+        reasons.push(args[2]);
+        return Promise.resolve(flagRow("manual_adjustments_enabled", true, false));
+      },
+      findPendingSettingChangeRequest: () => Promise.resolve(null),
+    };
+
+    const app = await openApp();
+    const response = await app.inject({
+      method: "PATCH",
+      url: "/api/v1/admin/feature-flags/manual_adjustments_enabled",
+      payload: { enabled: true, reason_code: "OTHER", reason_text: null },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(reasons).toEqual(["OTHER — manual_adjustments_enabled"]);
+    await app.close();
+  });
 });
 
 // ---------------------------------------------------------------------------

@@ -110,6 +110,7 @@ import {
   type RulesVersionRow,
   type SettingChangeRequestRow,
 } from "../services/admin-rules.js";
+import { writtenSettingReason } from "../services/setting-reason.js";
 
 // ---------------------------------------------------------------------------
 // Esquemas
@@ -650,9 +651,14 @@ export function buildAdminRulesRoutes(dependencies: AppDependencies): RouteDefin
         : {}
     ) as Record<string, unknown>;
 
+    // El motivo es el de la SOLICITUD -lo que se pidio y por que-, compuesto
+    // para cumplir el minimo de DEC-013. Con solo el codigo, una solicitud
+    // pedida con `OTHER` no se podia aprobar: el trigger la rechazaba (500).
+    const reason = writtenSettingReason(row.reasonCode, row.settingKey, row.reasonText);
+
     if (row.settingKind === "AMOE_MODE") {
       const mode = (value.amoe_mode ?? null) as AmoeMode | null;
-      await repo().setAmoeMode(mode, row.reasonCode, adminUserId);
+      await repo().setAmoeMode(mode, reason, adminUserId);
       return before;
     }
 
@@ -660,7 +666,7 @@ export function buildAdminRulesRoutes(dependencies: AppDependencies): RouteDefin
     const updated = await repo().updateFlag(
       row.settingKey as FeatureFlagKey,
       enabled,
-      row.reasonCode,
+      reason,
       adminUserId,
     );
     if (updated === null) {
@@ -1293,7 +1299,7 @@ export function buildAdminRulesRoutes(dependencies: AppDependencies): RouteDefin
         const updated = await repo().updateFlag(
           params.key,
           body.enabled,
-          reasonCode,
+          writtenSettingReason(reasonCode, params.key, body.reason_text),
           staff.adminUserId,
         );
         if (updated === null) throw ApiErrors.notFound();
