@@ -77,14 +77,20 @@ import {
   presentOrderDetail,
   presentOrderSummary,
 } from "../services/order-presenter.js";
-import { createPurchaseQualifier } from "../services/purchase-qualification.js";
+import {
+  createPurchaseQualifier,
+  settleWithoutQualifying,
+} from "../services/purchase-qualification.js";
 
 /**
  * Se reexporta desde aqui porque es donde nacio y donde lo importan sus
  * pruebas; la implementacion vive ahora en `services/purchase-qualification.ts`,
  * compartida con el cobro en efectivo (DEC-078).
  */
-export { paidOutsidePromotion } from "../services/purchase-qualification.js";
+export {
+  paidOutsidePromotion,
+  settleWithoutQualifying,
+} from "../services/purchase-qualification.js";
 
 /** Camino de la ruta del webhook. Lo necesita el parser de cuerpo crudo. */
 export const PAYMENT_WEBHOOK_URL = "/api/v1/webhooks/payments/:provider";
@@ -480,8 +486,8 @@ export function buildOrdersRoutes(dependencies: AppDependencies): RouteDefinitio
     if (!paymentTransitionIsValid(order.paymentState, next)) {
       return;
     }
-    const change = applyPaymentState(order, next, event.occurredAt, "PAID");
-    await persistPaymentState(change.order, event, next);
+    // Un reembolso nunca califica: ver `settleWithoutQualifying`.
+    await persistPaymentState(settleWithoutQualifying(order, next, event.occurredAt), event, next);
   }
 
   async function applyDispute(order: Order, event: ProviderEvent): Promise<boolean> {
@@ -508,8 +514,12 @@ export function buildOrdersRoutes(dependencies: AppDependencies): RouteDefinitio
       // Solo si la maquina de estados lo admite desde donde esta el pedido, igual
       // que en los reembolsos.
       if (paymentTransitionIsValid(order.paymentState, "DISPUTED")) {
-        const change = applyPaymentState(order, "DISPUTED", event.occurredAt, "PAID");
-        await persistPaymentState(change.order, event, "DISPUTED");
+        // Una disputa nunca califica: ver `settleWithoutQualifying`.
+        await persistPaymentState(
+          settleWithoutQualifying(order, "DISPUTED", event.occurredAt),
+          event,
+          "DISPUTED",
+        );
       }
 
       // `buildChargebackReversalIntent` EXIGE promocion: antes se llamaba al

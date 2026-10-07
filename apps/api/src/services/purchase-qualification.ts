@@ -55,6 +55,31 @@ export function paidOutsidePromotion(order: Order, at: Date): Order {
 }
 
 /**
+ * Un reembolso o una disputa: mueven el estado de pago y NUNCA califican.
+ *
+ * `applyPaymentState` califica cuando el estado nuevo "satisface" el
+ * cualificante, y `REFUNDED`, `PARTIALLY_REFUNDED` y `DISPUTED` satisfacen
+ * `PAID` (implican que hubo cobro). Para un pedido que no habia calificado eso
+ * fijaba `qualifiedAt` en el momento del reembolso:
+ *
+ * - sin promocion, la CHECK `orders_qualified_requires_promotion` abortaba la
+ *   transaccion, el webhook respondia 500 y Stripe lo reintentaba sin fin
+ *   (LSW-00000007 y LSW-00000008, desde el 2026-10-05);
+ * - con promocion, habria calificado a la hora de la devolucion un pedido que
+ *   no califico al cobrarse.
+ *
+ * Se conserva el `qualifiedAt` que el pedido ya tuviera.
+ */
+export function settleWithoutQualifying(
+  order: Order,
+  next: "REFUNDED" | "PARTIALLY_REFUNDED" | "DISPUTED",
+  at: Date,
+): Order {
+  const change = applyPaymentState(order, next, at, "PAID");
+  return { ...change.order, qualifiedAt: order.qualifiedAt };
+}
+
+/**
  * Que paso con el pedido. Los cuatro primeros dejan el pedido pagado y SIN
  * calificar; solo `QUALIFIED` lo califica, y lo hace en la misma transaccion
  * que corrio el award.

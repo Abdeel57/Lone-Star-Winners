@@ -10,7 +10,7 @@
 import type { CurrencyCode, MinorAmount, Order } from "@lsw/commerce";
 import { describe, expect, it } from "vitest";
 
-import { paidOutsidePromotion } from "../src/routes/orders.js";
+import { paidOutsidePromotion, settleWithoutQualifying } from "../src/routes/orders.js";
 
 const AT = new Date("2026-09-30T07:40:00.000Z");
 
@@ -52,5 +52,55 @@ describe("paidOutsidePromotion", () => {
 
   it("un pedido que se quedo en DRAFT tampoco se puede saltar la maquina de estados", () => {
     expect(() => paidOutsidePromotion(pendingOrder({ status: "DRAFT" }), AT)).toThrow();
+  });
+});
+
+/*
+ * REGRESION (produccion, 2026-10-05 a 2026-10-07). El reembolso de LSW-00000007
+ * y LSW-00000008 -compras sin promocion- fallaba en cada reintento de Stripe:
+ * `REFUNDED` satisface `PAID`, el pedido se calificaba al reembolsarse y la
+ * CHECK `orders_qualified_requires_promotion` abortaba la transaccion (500).
+ */
+describe("settleWithoutQualifying (reembolsos y disputas)", () => {
+  const REFUND_AT = new Date("2026-10-05T20:09:38.000Z");
+  const paidWithoutPromotion = (): Order => paidOutsidePromotion(pendingOrder(), AT);
+
+  it("un reembolso total de un pedido sin promocion NO lo califica", () => {
+    const refunded = settleWithoutQualifying(paidWithoutPromotion(), "REFUNDED", REFUND_AT);
+
+    expect(refunded.paymentState).toBe("REFUNDED");
+    expect(refunded.qualifiedAt).toBeNull();
+  });
+
+  it("tampoco uno parcial, ni una disputa", () => {
+    expect(
+      settleWithoutQualifying(paidWithoutPromotion(), "PARTIALLY_REFUNDED", REFUND_AT).qualifiedAt,
+    ).toBeNull();
+
+    const disputed = settleWithoutQualifying(paidWithoutPromotion(), "DISPUTED", REFUND_AT);
+    expect(disputed.paymentState).toBe("DISPUTED");
+    expect(disputed.chargebackState).toBe("OPEN");
+    expect(disputed.qualifiedAt).toBeNull();
+  });
+
+  it("un pedido que ya habia calificado conserva su instante, no el del reembolso", () => {
+    const qualified = {
+      ...paidWithoutPromotion(),
+      promotionId: "47cf9bd5-e22a-482e-93f6-bdf926751884",
+      qualifiedAt: AT,
+    };
+
+    expect(settleWithoutQualifying(qualified, "REFUNDED", REFUND_AT).qualifiedAt).toEqual(AT);
+  });
+
+  it("un pedido con promocion que NO califico al cobrarse tampoco califica al reembolsarse", () => {
+    const paidOutsideWindow = {
+      ...paidWithoutPromotion(),
+      promotionId: "47cf9bd5-e22a-482e-93f6-bdf926751884",
+    };
+
+    expect(
+      settleWithoutQualifying(paidOutsideWindow, "REFUNDED", REFUND_AT).qualifiedAt,
+    ).toBeNull();
   });
 });
