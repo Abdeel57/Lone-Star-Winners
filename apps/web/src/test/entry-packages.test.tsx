@@ -140,16 +140,110 @@ describe("ProductCard con un paquete de participaciones", () => {
     expect(screen.queryByText(/Ahora \d/)).not.toBeInTheDocument();
     expect(document.body.textContent).not.toMatch(/\d+ participaciones/);
   });
+});
 
-  it("la mercancia sigue sin declarar participaciones", () => {
-    // Es la red que ya existia y que esta ronda no puede aflojar: el catalogo
-    // no declara cuantas entries da un articulo.
-    const { container } = renderIn(
-      "es",
-      <ProductCard product={summaryOf(capProduct)} locale="es" />,
+/*
+ * DEC-083: la mercancia dice su cifra POR UNIDAD, por decision del usuario.
+ * Las mismas redes que en los paquetes: la cifra es la del backend, sin
+ * multiplicar, y sin oferta publicada no se dice ninguna.
+ */
+describe("ProductCard con mercancia (DEC-083)", () => {
+  it("dice las participaciones por unidad que publica el backend", () => {
+    // La gorra del fixture: 35 en todas sus tallas.
+    renderIn("es", <ProductCard product={summaryOf(capProduct)} locale="es" />);
+
+    expect(screen.getByText("35 participaciones por unidad")).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/boleto|oportunidad de ganar/i);
+  });
+
+  it("con un bonus en mercancia pinta `entries_now` y lo nombra", () => {
+    const capWithBonus = {
+      ...capProduct,
+      variants: capProduct.variants.map((variant) => ({
+        ...variant,
+        entry_offer:
+          variant.entry_offer === null || variant.entry_offer === undefined
+            ? null
+            : { ...variant.entry_offer, entries_now: 70, multiplier_ids: [activeBonusPeriod.id] },
+      })),
+    };
+
+    renderIn(
+      "en",
+      <ProductCard
+        product={summaryOf(capWithBonus)}
+        locale="en"
+        bonus={{ period: activeBonusPeriod, timeZone: TIME_ZONE }}
+      />,
     );
 
-    expect(container.textContent).not.toMatch(/participaciones/i);
+    expect(screen.getByText("35 entries per unit")).toBeInTheDocument();
+    expect(screen.getByText(/Now 70 entries with the 5× bonus period, until/)).toBeInTheDocument();
+  });
+
+  it("sin oferta publicada no dice ninguna cifra", () => {
+    const capWithoutOffer = {
+      ...capProduct,
+      variants: capProduct.variants.map((variant) => ({ ...variant, entry_offer: null })),
+    };
+    const { container } = renderIn(
+      "es",
+      <ProductCard product={summaryOf(capWithoutOffer)} locale="es" />,
+    );
+
+    expect(container.textContent).not.toMatch(/\d+ participaciones/);
+  });
+
+  it("si las variantes no ofrecen lo mismo, la tarjeta se calla", () => {
+    const mixed = {
+      ...capProduct,
+      variants: capProduct.variants.map((variant, index) => ({
+        ...variant,
+        entry_offer:
+          variant.entry_offer === null || variant.entry_offer === undefined
+            ? null
+            : { ...variant.entry_offer, base_entries: 35 + index, entries_now: 35 + index },
+      })),
+    };
+    const { container } = renderIn("es", <ProductCard product={summaryOf(mixed)} locale="es" />);
+
+    expect(container.textContent).not.toMatch(/\d+ participaciones/);
+  });
+});
+
+describe("EntryPackagePanel con mercancia (DEC-083)", () => {
+  it("dice la cifra por unidad y explica que la del pedido va sobre el total", () => {
+    renderIn(
+      "es",
+      <EntryPackagePanel
+        product={capProduct}
+        locale="es"
+        activeBonus={null}
+        timeZone={TIME_ZONE}
+      />,
+    );
+
+    expect(screen.getByText(esMessages.product.merchandiseEntriesHeading)).toBeInTheDocument();
+    expect(screen.getAllByText("35 participaciones por unidad").length).toBeGreaterThan(0);
+    expect(screen.getByText(esMessages.product.merchandiseEntriesNote)).toBeInTheDocument();
+  });
+
+  it("mercancia sin ninguna cifra publicada: el bloque no aparece", () => {
+    const capWithoutOffer = {
+      ...capProduct,
+      variants: capProduct.variants.map((variant) => ({ ...variant, entry_offer: null })),
+    };
+    const { container } = renderIn(
+      "es",
+      <EntryPackagePanel
+        product={capWithoutOffer}
+        locale="es"
+        activeBonus={null}
+        timeZone={TIME_ZONE}
+      />,
+    );
+
+    expect(container).toBeEmptyDOMElement();
   });
 });
 
@@ -201,17 +295,6 @@ describe("EntryPackagePanel (declaracion exigida por las Reglas)", () => {
     expect(screen.queryByText(/Incluye/)).not.toBeInTheDocument();
   });
 
-  it("sobre MERCANCIA no renderiza absolutamente nada", () => {
-    const { container } = renderIn(
-      "en",
-      <EntryPackagePanel
-        product={capProduct}
-        locale="en"
-        activeBonus={activeBonusPeriod}
-        timeZone={TIME_ZONE}
-      />,
-    );
-
-    expect(container).toBeEmptyDOMElement();
-  });
+  // "Sobre MERCANCIA no renderiza nada" era la regla antes de DEC-083. La
+  // sustituyen las pruebas de `EntryPackagePanel con mercancia`, mas arriba.
 });

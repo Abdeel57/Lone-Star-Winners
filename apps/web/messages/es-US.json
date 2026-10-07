@@ -493,7 +493,7 @@
     "noVariants": "Este artículo no tiene ninguna opción disponible para pedir.",
     "priceLabel": "Precio",
     "quantityLabel": "Cantidad",
-    "quoteNote": "Añade el artículo a tu carrito para ver la cifra de participaciones que calculan nuestros sistemas.",
+    "quoteNote": "En tu carrito verás la cifra total de tu pedido, calculada por nuestros sistemas.",
     "shippingHeading": "Envío",
     "unavailable": "Este artículo no se puede pedir ahora mismo.",
     "variantLabel": "Opción",
@@ -504,6 +504,10 @@
     "packageNowWithBonusUntil": "Ahora {entries} participaciones con el periodo de bonificación {multiplier}× en {scope}, hasta el {until}",
     "packageEntriesUnavailable": "El número de participaciones de este paquete no está publicado en este momento. Las Reglas Oficiales establecen cómo se otorgan las participaciones.",
     "packageEntriesNote": "Nuestros sistemas calculan estas cantidades y las Reglas Oficiales las rigen. Las participaciones que acaban en tu cuenta dependen del estado de tu pedido.",
+    "merchandiseEntriesHeading": "Participaciones de este artículo",
+    "merchandiseEntriesPerUnit": "{entries} participaciones por unidad",
+    "merchandiseEntriesUnavailable": "La cifra de participaciones de este artículo no está publicada en este momento. Las Reglas Oficiales establecen cómo se otorgan las participaciones.",
+    "merchandiseEntriesNote": "Cifra por unidad, calculada por nuestros sistemas y regida por las Reglas Oficiales. La de tu pedido se calcula sobre su total, y las participaciones que acaban en tu cuenta dependen del estado de tu pedido.",
     "variantLabelSku": "Código de artículo",
     "variantImageAlt": "{name}"
   },
@@ -607,6 +611,7 @@
     "packageNow": "Ahora {entries} participaciones",
     "packageNowWithBonus": "Ahora {entries} participaciones con el periodo de bonificación {multiplier}×",
     "packageNowWithBonusUntil": "Ahora {entries} participaciones con el periodo de bonificación {multiplier}×, hasta el {until}",
+    "merchandiseEntries": "{entries} participaciones por unidad",
     "entryPackagesNotice": "Los paquetes de participaciones se ofrecen conforme a las Reglas Oficiales de la promoción vigente. Esas reglas también describen el método gratuito de participación."
   },
   "states": {

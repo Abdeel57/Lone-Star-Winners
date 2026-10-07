@@ -193,9 +193,8 @@ export function offerHasBonus(offer: VariantEntryOffer): boolean {
  *
  * 1. **El producto es un paquete.** Las Official Rules exigen que "el numero de
  *    participaciones incluido se declare en la pagina donde se ofrece el
- *    paquete"; para la mercancia no existe esa obligacion y la cifra depende
- *    del subtotal del pedido entero, no del articulo. Declararla en una tarjeta
- *    de mercancia seria prometer un resultado que el motor puede no dar.
+ *    paquete". La mercancia tiene su propia funcion, `merchandiseOfferOf`
+ *    (DEC-083), porque su cifra se dice de otra forma: por unidad.
  * 2. **Todas sus variantes ofrecen LO MISMO.** Un paquete con dos variantes de
  *    valor distinto no tiene UN numero de participaciones, tiene dos, y enseñar
  *    el de la primera seria elegir por el comprador. En ese caso la tarjeta se
@@ -209,7 +208,30 @@ export function offerHasBonus(offer: VariantEntryOffer): boolean {
  */
 export function packageOfferOf(product: ProductSummary): VariantEntryOffer | null {
   if (product.kind !== "ENTRY_PACKAGE") return null;
+  return uniformOfferOf(product);
+}
 
+/**
+ * La oferta de un articulo de MERCANCIA, cuando se puede declarar sin
+ * ambiguedad (DEC-083).
+ *
+ * Hasta DEC-083 la mercancia no decia ninguna cifra: la de un pedido se calcula
+ * sobre su subtotal entero y no articulo a articulo. El usuario decidio
+ * ensenarla. Lo que se ensena es la que el backend evalua para UNA unidad de la
+ * variante, y se dice que es por unidad: con el redondeo hacia abajo sobre el
+ * total, un pedido con varios articulos nunca da menos que la suma de sus
+ * unidades, asi que la cifra no promete de mas.
+ *
+ * Las mismas condiciones que un paquete: tipo conocido y todas las variantes
+ * con la misma oferta. Una camiseta con tallas de precio distinto no tiene UNA
+ * cifra, y la tarjeta se calla.
+ */
+export function merchandiseOfferOf(product: ProductSummary): VariantEntryOffer | null {
+  if (product.kind !== "MERCHANDISE") return null;
+  return uniformOfferOf(product);
+}
+
+function uniformOfferOf(product: ProductSummary): VariantEntryOffer | null {
   const offers = product.variants
     .map((variant) => variant.entry_offer ?? null)
     .filter((offer): offer is VariantEntryOffer => offer !== null);

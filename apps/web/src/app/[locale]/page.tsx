@@ -225,8 +225,9 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
 
   /*
    * El bonus vigente, solo para NOMBRAR el multiplicador en la banda de
-   * paquetes. Los mismos cerrojos que `/shop`: el flag del sitio y el de la
-   * propia oferta. Las cifras de cada paquete llegan ya evaluadas del catalogo.
+   * paquetes y en la de mercancia destacada (DEC-083). Los mismos cerrojos que
+   * `/shop`: el flag del sitio y el de la propia oferta. Las cifras de cada
+   * articulo llegan ya evaluadas del catalogo.
    */
   const offer = normalizeEntryOffer(detail?.entry_offer, nowIso);
   const packageBonus: CardBonus | null =
@@ -373,6 +374,9 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
           // bloques oscuros, no el contenido principal de la pagina.
           className="py-s12 lg:py-s16"
           gridClassName="mt-s8"
+          // DEC-083: las tarjetas de mercancia dicen su cifra, y con un bonus
+          // en mercancia tienen que poder nombrarlo, como en `/shop`.
+          bonus={packageBonus}
           heading={
             /* El "ver todo" a la derecha del titular no se compone aqui: es una
                prop de `SectionHeading`, para que todas las secciones con accion

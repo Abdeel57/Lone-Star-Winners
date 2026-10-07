@@ -624,3 +624,16 @@ y la cuenta se pide solo al pagar. Lo que no puede decidir el código:
     registrarse (una cookie técnica, sin datos personales, que caduca a los 30
     días); la cuenta es obligatoria para pagar. Confirmar si la política de
     privacidad o de cookies debe mencionarla.
+
+## Cifra de participaciones en la mercancía (DEC-083, 2026-10-07)
+
+21. **Mostrar cuántas participaciones da un artículo de mercancía.** Por
+    decisión del usuario, la tienda y la ficha de cada artículo dicen ahora
+    "20 participaciones por unidad" y, con un periodo de bonificación,
+    "Ahora 40 …". Hasta ahora solo los paquetes declaraban su cifra, como piden
+    las Reglas; en la mercancía se evitaba a propósito para no presentarla como
+    si se compraran participaciones. La cifra la calcula el servidor, va
+    acompañada de una nota (por unidad, regida por las Reglas Oficiales, la del
+    pedido se calcula sobre el total) y nunca se pinta como insignia sobre la
+    foto. Confirmar con el abogado que mostrarla en la mercancía es compatible
+    con la vía gratuita y con la forma en que las Reglas describen la Opción 1.

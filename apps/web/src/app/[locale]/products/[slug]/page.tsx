@@ -65,7 +65,19 @@ export default async function ProductDetailPage({
   setRequestLocale(locale);
 
   const t = await getTranslations();
-  const result = await fetchProduct(slug, locale);
+
+  /*
+   * EL PRODUCTO Y EL BONUS VIGENTE, EN PARALELO.
+   *
+   * El bonus no depende del producto, y pedirlo despues alargaba la ficha
+   * entera: en el e2e, un clic en "Anadir al carrito" justo al cargar empezo a
+   * perderse de vez en cuando (DEC-083). Para un producto sin tipo conocido se
+   * pide igual y se descarta: es una lectura publica y barata.
+   */
+  const [result, activeBonus] = await Promise.all([
+    fetchProduct(slug, locale),
+    fetchActiveBonus(locale),
+  ]);
 
   // Un 404 aqui SI es significativo: la ruta apunta a un `slug` concreto.
   if (!result.ok && result.error.status === 404) notFound();
@@ -85,13 +97,13 @@ export default async function ProductDetailPage({
   /*
    * EL BONUS VIGENTE, SOLO PARA PODER NOMBRARLO.
    *
-   * Las cifras del paquete llegan ya evaluadas en el propio producto; lo que no
-   * llega ahi es como se llama el periodo que produjo `entries_now` ni cuando
-   * termina. Se pide solo para los paquetes -la mercancia no declara
-   * participaciones incluidas- y es informacion adicional: si falla, el bloque
-   * pinta las cifras igual.
+   * Las cifras llegan ya evaluadas en el propio producto; lo que no llega ahi
+   * es como se llama el periodo que produjo `entries_now` ni cuando termina. Se
+   * pide para paquetes y, desde DEC-083, para mercancia, que tambien dice su
+   * cifra. Es informacion adicional: si falla, el bloque pinta las cifras igual.
    */
-  const bonus = product.kind === "ENTRY_PACKAGE" ? await fetchActiveBonus(locale) : null;
+  const bonus =
+    product.kind === "ENTRY_PACKAGE" || product.kind === "MERCHANDISE" ? activeBonus : null;
 
   return (
     <div className="lsw-container py-s10 pb-s16">
@@ -145,7 +157,7 @@ export default async function ProductDetailPage({
               detalle de orden: las Official Rules exigen que el numero incluido
               se declare en la pagina donde se ofrece el paquete, y declararlo
               DEBAJO del boton de compra seria declararlo despues de la
-              decision. Para la mercancia este componente no pinta nada. */}
+              decision. Para la mercancia dice la cifra por unidad (DEC-083). */}
           <EntryPackagePanel
             product={product}
             locale={locale}

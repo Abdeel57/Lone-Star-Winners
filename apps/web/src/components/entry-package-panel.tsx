@@ -9,7 +9,8 @@ import { offerHasBonus } from "@/lib/entry-offer";
 import { fractionText, useBonusScopeLabel } from "./entry-rate-lines";
 
 /**
- * Participaciones que incluye un paquete (§13.4, DEC-052 punto 7).
+ * Participaciones que incluye un paquete (§13.4, DEC-052 punto 7), y desde
+ * DEC-083 las que da una unidad de mercancia.
  *
  * ES UN REQUISITO DE LAS OFFICIAL RULES, NO UNA DECISION DE DISEÑO. El segundo
  * borrador dice, sobre la Opcion 2, que "the number of entries included in each
@@ -53,17 +54,33 @@ export function EntryPackagePanel({
 }) {
   const t = useTranslations("product");
 
-  // Solo los paquetes declaran participaciones incluidas. Para la mercancia la
-  // cifra depende del subtotal del pedido entero y no del articulo, asi que
-  // declararla aqui prometeria un resultado que el motor puede no dar.
-  if (product.kind !== "ENTRY_PACKAGE") return null;
+  /*
+   * PAQUETES Y, DESDE DEC-083, MERCANCIA.
+   *
+   * El paquete declara las participaciones que INCLUYE. La mercancia dice las
+   * que da UNA unidad: la de un pedido se calcula sobre su subtotal entero,
+   * redondeando hacia abajo una sola vez, asi que varios articulos juntos nunca
+   * dan menos que la suma de sus unidades. Lo dice la nota de debajo.
+   *
+   * Sin tipo conocido no se dice nada: suponerlo seria inventar como se lee la
+   * cifra.
+   */
+  const merchandise = product.kind === "MERCHANDISE";
+  if (product.kind !== "ENTRY_PACKAGE" && !merchandise) return null;
 
   const variants = product.variants;
+
+  // Mercancia sin ninguna cifra publicada -fuera de promocion, o no elegible-:
+  // el bloque entero sobra. En un paquete no: alli la ausencia se dice, porque
+  // las Reglas obligan a declarar lo que incluye.
+  if (merchandise && variants.every((variant) => (variant.entry_offer ?? null) === null)) {
+    return null;
+  }
 
   return (
     <Card as="section" elevation="raised" padding="md">
       <CardTitle as="h2" size="sm">
-        {t("packageEntriesHeading")}
+        {merchandise ? t("merchandiseEntriesHeading") : t("packageEntriesHeading")}
       </CardTitle>
 
       <ul className="mt-s4 flex list-none flex-col gap-s4">
@@ -83,13 +100,21 @@ export function EntryPackagePanel({
               )}
 
               {offer === null ? (
-                <p className="text-body-md text-text-muted">{t("packageEntriesUnavailable")}</p>
+                <p className="text-body-md text-text-muted">
+                  {merchandise
+                    ? t("merchandiseEntriesUnavailable")
+                    : t("packageEntriesUnavailable")}
+                </p>
               ) : (
                 <>
                   <p className="lsw-display text-heading-md text-brand">
-                    {t("packageIncludes", {
-                      entries: formatEntryCount(offer.base_entries, locale),
-                    })}
+                    {merchandise
+                      ? t("merchandiseEntriesPerUnit", {
+                          entries: formatEntryCount(offer.base_entries, locale),
+                        })
+                      : t("packageIncludes", {
+                          entries: formatEntryCount(offer.base_entries, locale),
+                        })}
                   </p>
 
                   {offerHasBonus(offer) ? (
@@ -118,7 +143,7 @@ export function EntryPackagePanel({
        * navegador llega a una pagina de exito-.
        */}
       <Alert tone="info" className="mt-s5">
-        {t("packageEntriesNote")}
+        {merchandise ? t("merchandiseEntriesNote") : t("packageEntriesNote")}
       </Alert>
     </Card>
   );

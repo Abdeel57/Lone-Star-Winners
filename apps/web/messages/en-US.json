@@ -493,7 +493,7 @@
     "noVariants": "This item has no options available to order.",
     "priceLabel": "Price",
     "quantityLabel": "Quantity",
-    "quoteNote": "Add the item to your cart to see the entry figure our systems calculate for it.",
+    "quoteNote": "Your cart shows the total for your order, calculated by our systems.",
     "shippingHeading": "Shipping",
     "unavailable": "This item cannot be ordered right now.",
     "variantLabel": "Option",
@@ -504,6 +504,10 @@
     "packageNowWithBonusUntil": "Now {entries} entries with the {multiplier}× bonus period on {scope}, until {until}",
     "packageEntriesUnavailable": "The number of entries for this package is not published right now. The Official Rules set out how entries are granted.",
     "packageEntriesNote": "Our systems calculate these amounts and the Official Rules govern them. The entries that end up in your account depend on the status of your order.",
+    "merchandiseEntriesHeading": "Entries for this item",
+    "merchandiseEntriesPerUnit": "{entries} entries per unit",
+    "merchandiseEntriesUnavailable": "The number of entries for this item is not published right now. The Official Rules set out how entries are granted.",
+    "merchandiseEntriesNote": "Per-unit figure, calculated by our systems and governed by the Official Rules. Your order's figure is calculated on its total, and the entries that end up in your account depend on the status of your order.",
     "variantLabelSku": "Item code",
     "variantImageAlt": "{name}"
   },
@@ -607,6 +611,7 @@
     "packageNow": "Now {entries} entries",
     "packageNowWithBonus": "Now {entries} entries with the {multiplier}× bonus period",
     "packageNowWithBonusUntil": "Now {entries} entries with the {multiplier}× bonus period, until {until}",
+    "merchandiseEntries": "{entries} entries per unit",
     "entryPackagesNotice": "Entry packages are offered under the Official Rules of the current promotion. The rules also set out the free method of entry."
   },
   "states": {

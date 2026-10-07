@@ -7,7 +7,7 @@ import type { Locale } from "@/i18n/locales";
 import { Link } from "@/i18n/navigation";
 import { useAvailabilityLabel } from "@/i18n/storefront-labels";
 import { pickLocalized, type BonusPeriod, type ProductSummary } from "@/lib/api";
-import { offerHasBonus, packageOfferOf } from "@/lib/entry-offer";
+import { merchandiseOfferOf, offerHasBonus, packageOfferOf } from "@/lib/entry-offer";
 import { safeImageUrl } from "@/lib/media-url";
 import { priceFrom } from "@/lib/product-price";
 import { isProductSoldOut } from "@/lib/product-availability";
@@ -29,21 +29,18 @@ export interface CardBonus {
 /**
  * Tarjeta de producto del catalogo.
  *
- * LO QUE ESTA TARJETA NO DICE
- * ---------------------------
- * **Ninguna cifra de participaciones.** Ni una estimacion, ni un "hasta X", ni
- * un calculo a partir del precio. `docs/API_CONTRACT.md` es explicito: el
- * catalogo no declara cuantas entries da un producto, porque la formula
- * pertenece a la version de reglas y no al producto (DEC-012). La unica cifra
- * de participaciones que existe en toda la interfaz es la que produce el
- * backend sobre el carrito de servidor (DEC-023, requisito R13 de `security`).
+ * LAS CIFRAS DE PARTICIPACIONES LAS PONE EL BACKEND
+ * -------------------------------------------------
+ * Ni una estimacion, ni un "hasta X", ni un calculo a partir del precio: la
+ * tarjeta pinta `base_entries` y `entries_now` tal como el backend las evalua
+ * para la variante (§13.4, requisito R13 de `security`).
  *
- * DEC-038 lo confirma por escrito al adoptar la estetica de la referencia: se
- * toma el LOOK -foto dominante, insignia dorada arriba a la izquierda, boton
- * redondo sobre la imagen- y no su encuadre comercial. La referencia pone sobre
- * cada foto una insignia con la cifra de participaciones que otorga el articulo
- * y el multiplicador que se le aplica; eso es exactamente lo prohibido, y es lo
- * unico de su tarjeta que no se copia. El chip dice ELEGIBLE y nada mas.
+ * Los paquetes las dicen desde DEC-052 ("Incluye 30 participaciones"), porque
+ * las Reglas lo exigen. La mercancia, desde DEC-083, por decision del usuario:
+ * con un bonus solo en mercancia, una tienda sin cifras daba la impresion de
+ * que los articulos no daban participaciones. Lo que sigue sin copiarse de la
+ * referencia (DEC-038) es ponerla como insignia sobre la foto: va debajo del
+ * nombre, como un dato, y el chip de la foto sigue diciendo ELEGIBLE.
  *
  * Lo que si dice es si el articulo FORMA PARTE de la promocion vigente, que es
  * un dato de elegibilidad ya evaluado por el backend contra una version de
@@ -198,6 +195,9 @@ export function ProductCard({
    * se puede publicar el que el backend ya evaluo para ESTA variante.
    */
   const packageOffer = packageOfferOf(product);
+  // DEC-083: la mercancia tambien, por unidad y con las mismas condiciones.
+  const merchandiseOffer = merchandiseOfferOf(product);
+  const offer = packageOffer ?? merchandiseOffer;
 
   return (
     <Card
@@ -355,29 +355,31 @@ export function ProductCard({
         </CardTitle>
 
         {/*
-         * PARTICIPACIONES INCLUIDAS, SOLO EN PAQUETES.
-         *
-         * Es un requisito de las Official Rules -"el numero de participaciones
-         * incluido se declara en la pagina donde se ofrece el paquete"- y no una
-         * decision de diseño. Las dos cifras vienen CALCULADAS POR EL BACKEND
-         * (§13.4): la tarjeta no multiplica `base_entries` por el bonus para
-         * obtener `entries_now`, ni por el precio, ni por nada.
+         * PARTICIPACIONES: "Incluye 30" en un paquete (lo exigen las Official
+         * Rules) y "20 por unidad" en mercancia (DEC-083). Las dos cifras vienen
+         * CALCULADAS POR EL BACKEND (§13.4): la tarjeta no multiplica
+         * `base_entries` por el bonus para obtener `entries_now`, ni por el
+         * precio, ni por nada.
          *
          * Va ANTES del precio y no despues: quien mira un paquete compara
          * participaciones, y el precio es la consecuencia.
          */}
-        {packageOffer === null ? null : (
+        {offer === null ? null : (
           <div className="mt-s3 flex flex-col gap-s1">
             <p className="lsw-display text-body-sm text-light-gold sm:text-body-md">
-              {t("packageIncludes", {
-                entries: formatEntryCount(packageOffer.base_entries, locale),
-              })}
+              {packageOffer === null
+                ? t("merchandiseEntries", {
+                    entries: formatEntryCount(offer.base_entries, locale),
+                  })
+                : t("packageIncludes", {
+                    entries: formatEntryCount(offer.base_entries, locale),
+                  })}
             </p>
 
-            {offerHasBonus(packageOffer) ? (
-              <PackageBonusLine
-                entriesNow={packageOffer.entries_now}
-                multiplierIds={packageOffer.multiplier_ids}
+            {offerHasBonus(offer) ? (
+              <BonusNowLine
+                entriesNow={offer.entries_now}
+                multiplierIds={offer.multiplier_ids}
                 bonus={bonus}
                 locale={locale}
               />
@@ -414,7 +416,7 @@ export function ProductCard({
  * NUNCA se rellena el hueco: un "hasta el ..." inventado sobre una cifra de
  * participaciones es una promesa con fecha que nadie ha aprobado.
  */
-function PackageBonusLine({
+function BonusNowLine({
   entriesNow,
   multiplierIds,
   bonus,

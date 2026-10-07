@@ -191,17 +191,19 @@ describe("ProductCard con las capas de la referencia", () => {
     expect(link.textContent).toContain("View");
   });
 
-  it("sigue sin decir ni una cifra de participaciones", () => {
-    // La referencia visual pone justo aqui su insignia de entries. Es lo unico
-    // de su tarjeta que no se copia (DEC-023, requisito R13 de `security`).
+  it("la cifra de participaciones no va como insignia sobre la foto", () => {
+    // La referencia visual pone justo aqui su insignia de entries y su
+    // multiplicador. Eso sigue sin copiarse (DEC-038). Desde DEC-083 la
+    // mercancia dice su cifra, pero DEBAJO del nombre, como un dato.
     const { container } = renderIn(
       "es",
       <ProductCard product={summaryOf(eligibleProduct)} locale="es" />,
     );
 
-    expect(container.textContent).not.toMatch(/\bparticipaciones\b/i);
-    expect(container.textContent).not.toMatch(/\bentries\b/i);
+    const overPhoto = container.querySelector("div.absolute");
+    expect(overPhoto?.textContent ?? "").not.toMatch(/participaci|entries/i);
     expect(container.textContent).not.toMatch(/\d+\s*[xX]\b/);
+    expect(screen.getByText("25 participaciones por unidad")).toBeInTheDocument();
   });
 });
 

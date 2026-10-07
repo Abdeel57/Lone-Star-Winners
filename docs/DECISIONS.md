@@ -4142,3 +4142,52 @@ Affected areas: `apps/web` (`announcement-bar.tsx`,
 
 Proposed by: sesión del usuario (2026-10-07)
 Agreed by: frontend-ux (petición directa del usuario)
+
+## DEC-083
+
+Status: Accepted
+
+Date: 2026-10-07
+
+Decision:
+**La mercancía dice cuántas participaciones da: la cifra por unidad que
+publica el backend, y la del bonus cuando aplica.** El cliente creó un 2X solo
+en mercancía y creyó que los productos no generaban participaciones: la tienda
+no mostraba ninguna cifra en la mercancía, aunque el motor sí las otorgaba (30
+compras con tarjeta y 87 cobros en efectivo en dos días, todos con su
+concesión). El usuario decidió mostrarla y no compensar las compras hechas
+antes de encender `entry_multipliers_enabled`.
+
+1. **Qué cifra.** `base_entries` y `entries_now` de la variante, tal como los
+   evalúa el backend (§13.4). La interfaz no calcula nada (R13). Se dice
+   "por unidad": la cifra de un pedido se calcula sobre su total redondeando
+   hacia abajo una sola vez, así que varios artículos juntos nunca dan menos
+   que la suma de sus unidades.
+2. **Dónde.** En la tarjeta (`/shop` y mercancía destacada de la portada),
+   debajo del nombre y en el mismo oro que la de los paquetes. En la ficha, en
+   `EntryPackagePanel` con su propio título y una nota. Nunca como insignia
+   sobre la foto, que es lo que DEC-038 descartó de la referencia.
+3. **Cuándo no.** Si alguna variante no tiene oferta, o las variantes ofrecen
+   cifras distintas (`merchandiseOfferOf`), la tarjeta no dice nada. Sin
+   ninguna oferta publicada, la ficha tampoco muestra el bloque.
+4. **El bonus.** Se nombra solo si su `id` está en los `multiplier_ids` de la
+   variante y con los mismos cerrojos de siempre. La portada pasa ahora el
+   bonus también a la franja de mercancía.
+
+Revisa DEC-023/DEC-038 en un único punto: la mercancía ya no está obligada a
+callar su cifra. Queda pendiente de confirmar con el abogado
+(`docs/LEGAL_PENDING.md`, pregunta 21).
+
+Alternatives considered: A — Dejarla sin cifra y explicárselo al cliente
+(descartada por el usuario). B — Ponerla como insignia sobre la foto, como la
+referencia (descartada: es lo que DEC-038 excluyó). C — Una cifra "desde" para
+artículos con variantes de precio distinto (descartada: elegiría por el
+comprador).
+
+Affected areas: `apps/web` (`lib/entry-offer.ts`, `product-card.tsx`,
+`entry-package-panel.tsx`, `products/[slug]/page.tsx`, `[locale]/page.tsx`,
+mensajes `product.merchandise*`, `shop.merchandiseEntries` y
+`product.quoteNote`, pruebas), `docs/LEGAL_PENDING.md`.
+
+Proposed by: sesión del usuario (2026-10-07)
+Agreed by: frontend-ux (petición directa del usuario); pendiente: abogado

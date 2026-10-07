@@ -235,15 +235,16 @@ describe("ProductCard sobre banda clara", () => {
   });
 
   it("el chip sigue sin decir ninguna cifra", () => {
-    // DEC-039 no relaja nada de DEC-023: la referencia pone aqui las entries que
-    // otorga el articulo, y eso es lo unico de su tarjeta que no se copia.
+    // DEC-039 no relaja nada de DEC-023: la referencia pone en el chip las
+    // entries que otorga el articulo, y eso no se copia. La cifra por unidad
+    // de DEC-083 va debajo del nombre, no en el chip.
     const { container } = renderIn(
       "es",
       <ProductCard product={summaryOf(eligibleProduct)} locale="es" />,
     );
 
-    expect(screen.getByText(esMessages.shop.eligibleChip)).toBeInTheDocument();
-    expect(container.textContent).not.toMatch(/\bparticipaciones\b/i);
+    const chip = screen.getByText(esMessages.shop.eligibleChip);
+    expect(chip.closest("div.absolute")?.textContent ?? "").not.toMatch(/participaci/i);
     expect(container.textContent).not.toMatch(/\d+\s*[xX]\b/);
   });
 

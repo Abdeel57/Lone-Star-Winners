@@ -104,16 +104,27 @@ function renderIn(locale: Locale, ui: ReactNode) {
 }
 
 describe("ProductCard", () => {
-  it("no muestra ninguna cifra de participaciones", () => {
-    // El catalogo no declara entries y la tarjeta no las calcula. Si alguien
-    // anadiera una estimacion a partir del precio, esto la detecta.
-    const { container } = renderIn(
-      "en",
-      <ProductCard product={summaryOf(eligibleProduct)} locale="en" />,
-    );
+  it("la cifra de participaciones es la del backend, nunca una estimacion", () => {
+    // DEC-083: la mercancia dice su cifra por unidad, la que publica el backend
+    // en `entry_offer`. La tarjeta no la calcula a partir del precio: con una
+    // oferta distinta del precio, la cifra pintada tiene que ser la oferta.
+    const tee = summaryOf(eligibleProduct);
+    const withOddOffer = {
+      ...tee,
+      variants: tee.variants.map((variant) => ({
+        ...variant,
+        entry_offer:
+          variant.entry_offer === null || variant.entry_offer === undefined
+            ? null
+            : { ...variant.entry_offer, base_entries: 17, entries_now: 17 },
+      })),
+    };
 
-    expect(container.textContent).not.toMatch(/\bentries\b/i);
-    expect(container.textContent).not.toMatch(/\bparticipaciones\b/i);
+    const { container } = renderIn("en", <ProductCard product={withOddOffer} locale="en" />);
+
+    expect(screen.getByText("17 entries per unit")).toBeInTheDocument();
+    // $25.00 de precio: una estimacion diria 25.
+    expect(container.textContent).not.toMatch(/\b25 entries\b/);
   });
 
   it("dice que el articulo forma parte de la promocion, no cuanto otorga", () => {
