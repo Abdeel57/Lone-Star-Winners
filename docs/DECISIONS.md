@@ -4091,3 +4091,54 @@ Affected areas: `apps/web` (`language-bar.tsx` nuevo, `language-switcher.tsx`,
 
 Proposed by: sesión del usuario (2026-10-06)
 Agreed by: frontend-ux (petición directa del usuario)
+
+## DEC-082
+
+Status: Accepted
+
+Date: 2026-10-07
+
+Decision:
+**La banda roja anuncia el periodo bonus con su cuenta atrás, y queda fija
+arriba junto con la cabecera.** Lo pidió el usuario para el 2X de una semana:
+"que se vea en la línea roja … con un contador … y que se quede pegada para
+que siempre esté presente".
+
+1. **Qué dice.** "BONUS 2× EN MERCANCÍA · TERMINA EN 6d 04:10:22", en una sola
+   frase y sin rotar. Si hay un bonus anunciado que aún no empieza, dice
+   "EMPIEZA EN …": las Reglas piden anunciarlo antes de que empiece. Sin bonus,
+   la banda dice lo de siempre (estado, cierre, Reglas Oficiales). En teléfono
+   la frase se parte en dos líneas: qué es y cuánto falta.
+2. **Cuándo.** Con los mismos cerrojos que el hero (`bandBonusFor`): Reglas
+   publicadas, `entry_multipliers_enabled` encendido en el sitio y en la
+   oferta, y una fase que admite participaciones. Con el interruptor apagado
+   no se anuncia nada, porque un "2X" que el motor no aplica sería una promesa
+   falsa en todas las páginas.
+3. **Cuenta atrás.** `AnnouncementCountdown`, de una línea, usa la misma
+   aritmética que `Countdown` (`computeCountdownParts`). El primer valor sale
+   del servidor (`nowIso`). Los dígitos van `aria-hidden` y el lector de
+   pantalla oye el plazo absoluto en la zona legal. Al llegar a cero muestra
+   ese plazo y no decide nada.
+4. **Fija.** La banda y la cabecera van en UN contenedor `sticky top-0` en
+   `app/[locale]/layout.tsx` (unos 110px en teléfono y 105px en escritorio).
+   La cabecera ya no se pega por sí sola. Se suben los `scroll-mt` de los
+   anclajes a `scroll-mt-32`. La franja de idioma (DEC-081) sigue sin fijar.
+
+Esto revisa una decisión anterior: la banda no se fijaba para no apilar dos
+elementos fijos en teléfono, y el bonus vivía solo en el hero. El hero
+conserva el anuncio completo.
+
+Alternatives considered: A — Solo en el hero (descartada: el usuario lo
+quiere en todas las páginas y siempre visible). B — Rotar el bonus con las
+frases de siempre (descartada: la cuenta atrás estaría oculta la mitad del
+tiempo). C — Banda fija y cabecera no (descartada: se perderían el carrito y
+el menú al desplazarse).
+
+Affected areas: `apps/web` (`announcement-bar.tsx`,
+`announcement-countdown.tsx` nuevo, `app/[locale]/layout.tsx`,
+`site-header.tsx`, `entry-package-band.tsx`, `legal-document-view.tsx`,
+`promotion-hero.tsx`, mensajes `announcement.*`,
+`test/announcement-bonus.test.tsx`).
+
+Proposed by: sesión del usuario (2026-10-07)
+Agreed by: frontend-ux (petición directa del usuario)

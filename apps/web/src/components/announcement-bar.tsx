@@ -1,12 +1,23 @@
 import { cn } from "@lsw/ui";
 import { useTranslations } from "next-intl";
+import type { ReactNode } from "react";
 
-import { formatEntryCount, formatZonedDate } from "@/i18n/formatters";
+import { formatEntryCount, formatZonedDate, formatZonedDateTime } from "@/i18n/formatters";
 import type { Locale } from "@/i18n/locales";
 import { usePromotionStatusLabel } from "@/i18n/promotion-labels";
-import { fetchActivePromotion, fetchPromotion, type PromotionSummary } from "@/lib/api";
-import { normalizeEntryOffer } from "@/lib/entry-offer";
+import {
+  fetchActivePromotion,
+  fetchPromotion,
+  type BonusPeriod,
+  type PromotionSummary,
+} from "@/lib/api";
+import { normalizeEntryOffer, type NormalizedEntryOffer } from "@/lib/entry-offer";
+import { isFeatureEnabled } from "@/lib/flags";
+import { loadFeatureFlags } from "@/lib/flags-server";
 import { presentPromotion } from "@/lib/promotion-state";
+
+import { AnnouncementCountdown } from "./announcement-countdown";
+import { fractionText, useBonusScopeLabel } from "./entry-rate-lines";
 
 /**
  * Banda de anuncio, por encima de la cabecera.
@@ -24,6 +35,15 @@ import { presentPromotion } from "@/lib/promotion-state";
  * llena con el unico contenido que aqui es verdad: en que fase esta la
  * promocion, cuando abre o cierra, y que el documento que gobierna son las
  * Reglas Oficiales.
+ *
+ * EL PERIODO BONUS SI ENTRA, CON SU CUENTA ATRAS (DEC-082)
+ * -------------------------------------------------------
+ * Lo pidio el usuario, y no contradice lo anterior: un periodo bonus no es un
+ * reclamo inventado, es CONFIGURACION que las Reglas Oficiales prevén ("el
+ * Patrocinador puede anunciar periodos limitados de bonificacion") y que el
+ * backend publica con su multiplicador, su ambito y sus dos instantes. Lo que
+ * sigue sin escribirse es cuantas participaciones da nada ni ningun adjetivo de
+ * prisa: el plazo lo dice la cuenta atras, que cuenta hacia un instante real.
  *
  * SI NO HAY NADA QUE ANUNCIAR, NO HAY BANDA
  * -----------------------------------------
@@ -63,40 +83,104 @@ import { presentPromotion } from "@/lib/promotion-state";
  * red.
  */
 export async function AnnouncementBar({ locale }: { readonly locale: Locale }) {
-  const result = await fetchActivePromotion(locale);
+  // En paralelo: ninguna lectura depende de la otra. Los flags caen en su valor
+  // seguro (apagado) si la configuracion no se puede leer.
+  const [result, flags] = await Promise.all([
+    fetchActivePromotion(locale),
+    loadFeatureFlags(locale),
+  ]);
   if (!result.ok || result.data === null) return null;
 
   const promotion = result.data;
 
+  // Un solo instante para todo el render: separa bonus vigentes de anunciados y
+  // es el primer valor de la cuenta atras, igual en servidor y en cliente.
+  const nowIso = new Date().toISOString();
+
   /*
    * SIN REGLAS PUBLICADAS NO SE PIDE EL DETALLE (DEC-044).
    *
-   * No es solo un viaje que se ahorra: es que el unico dato que ese viaje trae
-   * -el tope por persona- es precisamente el que la banda no puede escribir
-   * cuando la promocion no tiene documento que la gobierne. La condicion se
-   * vuelve a evaluar dentro de `AnnouncementBand`, que es donde manda; aqui
-   * pasar `null` deja el fallo del lado seguro aunque aquella cambiara.
+   * No es solo un viaje que se ahorra: es que los datos que ese viaje trae -el
+   * tope por persona y los periodos bonus- son precisamente los que la banda no
+   * puede escribir cuando la promocion no tiene documento que la gobierne. La
+   * condicion se vuelve a evaluar dentro de `AnnouncementBand`, que es donde
+   * manda; aqui pasar `null` deja el fallo del lado seguro aunque aquella
+   * cambiara.
    */
-  const perParticipantMax =
-    promotion.rules_version_id === null ? null : await fetchPerParticipantMax(promotion, locale);
+  const offer =
+    promotion.rules_version_id === null ? null : await fetchOffer(promotion, locale, nowIso);
 
   return (
-    <AnnouncementBand promotion={promotion} perParticipantMax={perParticipantMax} locale={locale} />
+    <AnnouncementBand
+      promotion={promotion}
+      perParticipantMax={offer?.perParticipantMax ?? null}
+      bonus={bandBonusFor({
+        promotion,
+        offer,
+        multipliersFlag: isFeatureEnabled(flags, "entry_multipliers_enabled"),
+      })}
+      nowIso={nowIso}
+      locale={locale}
+    />
   );
 }
 
 /**
- * Tope por participante, si la promocion declara uno y los topes estan
- * encendidos.
+ * El periodo bonus que la banda anuncia, si hay alguno (DEC-082).
+ *
+ * LOS MISMOS CERROJOS QUE EL HERO
+ * -------------------------------
+ * Reglas publicadas, el flag del sitio (`entry_multipliers_enabled`), el de la
+ * propia oferta y una fase que admita participaciones. Si cualquiera falla, no
+ * hay anuncio: un "2X" que el motor no aplica seria una promesa falsa en la
+ * franja que se ve en TODAS las paginas, y la que mas se cree.
+ *
+ * VIGENTE ANTES QUE ANUNCIADO
+ * ---------------------------
+ * El vigente llega resuelto por el backend (`active_bonus`, ya con la
+ * estrategia de conflicto aplicada). Si no hay ninguno, se anuncia el proximo
+ * que empieza, porque las Reglas piden anunciar los periodos ANTES de que
+ * empiecen. Solo uno: la banda es una linea.
+ */
+export type BandBonus =
+  | { readonly kind: "ACTIVE"; readonly period: BonusPeriod }
+  | { readonly kind: "UPCOMING"; readonly period: BonusPeriod };
+
+export function bandBonusFor({
+  promotion,
+  offer,
+  multipliersFlag,
+}: {
+  readonly promotion: PromotionSummary;
+  readonly offer: NormalizedEntryOffer | null;
+  readonly multipliersFlag: boolean;
+}): BandBonus | null {
+  if (promotion.rules_version_id === null) return null;
+  if (!multipliersFlag || offer?.multipliersEnabled !== true) return null;
+  if (!presentPromotion(promotion.status).acceptsEntries) return null;
+
+  if (offer.activeBonus !== null) return { kind: "ACTIVE", period: offer.activeBonus };
+
+  const next = [...offer.upcomingBonuses].sort(
+    (a, b) => Date.parse(a.starts_at) - Date.parse(b.starts_at),
+  )[0];
+
+  return next === undefined ? null : { kind: "UPCOMING", period: next };
+}
+
+/**
+ * La oferta de participaciones de la promocion: el tope por persona y los
+ * periodos bonus.
  *
  * La peticion del detalle es de mejor esfuerzo: un fallo aqui deja la barra
  * exactamente como estaba antes de DEC-042, no la tumba. La misma direccion
  * segura de fallo que gobierna los feature flags.
  */
-async function fetchPerParticipantMax(
+async function fetchOffer(
   promotion: PromotionSummary,
   locale: Locale,
-): Promise<number | null> {
+  nowIso: string,
+): Promise<NormalizedEntryOffer | null> {
   const detailResult = await fetchPromotion(promotion.slug, locale);
   if (!detailResult.ok) return null;
 
@@ -114,13 +198,9 @@ async function fetchPerParticipantMax(
    * quien aplica `caps_enabled`: con los topes apagados devuelve `null`, porque
    * un tope declarado que el motor no aplica no se puede anunciar.
    *
-   * El instante es solo para separar bonus vigentes de anunciados, que esta
-   * barra no pinta; se pasa el del render igualmente porque la funcion lo pide
-   * y porque inventar aqui un instante distinto no tendria sentido.
+   * El instante es el del render: separa los bonus vigentes de los anunciados.
    */
-  const offer = normalizeEntryOffer(detailResult.data.entry_offer, new Date().toISOString());
-
-  return offer?.perParticipantMax ?? null;
+  return normalizeEntryOffer(detailResult.data.entry_offer, nowIso);
 }
 
 /**
@@ -165,6 +245,8 @@ async function fetchPerParticipantMax(
 export function AnnouncementBand({
   promotion,
   perParticipantMax,
+  bonus,
+  nowIso,
   locale,
 }: {
   readonly promotion: PromotionSummary;
@@ -176,13 +258,49 @@ export function AnnouncementBand({
    * donde se leyo la oferta.
    */
   readonly perParticipantMax: number | null;
+  /**
+   * Periodo bonus que anunciar, ya decidido por `bandBonusFor` (DEC-082).
+   * Ausente o `null`: la banda dice lo de siempre.
+   */
+  readonly bonus?: BandBonus | null;
+  /** Instante del render, generado en servidor: primer valor de la cuenta atras. */
+  readonly nowIso?: string;
   readonly locale: Locale;
 }) {
   const t = useTranslations();
   const statusLabelFor = usePromotionStatusLabel();
+  const scopeLabel = useBonusScopeLabel();
 
   const hasRules = promotion.rules_version_id !== null;
   const presentation = presentPromotion(promotion.status);
+
+  /*
+   * CON UN BONUS QUE ANUNCIAR, LA BANDA DICE ESO Y NADA MAS (DEC-082).
+   *
+   * Una sola frase, SIN rotacion: la cuenta atras es lo que se viene a ver, y
+   * rotando estaria oculta la mitad del tiempo. El estado y el cierre de la
+   * promocion siguen en el hero y en su pagina, con su propia cuenta atras.
+   *
+   * `hasRules` se vuelve a comprobar aqui aunque `bandBonusFor` ya lo haga: esta
+   * banda es la que manda sobre lo que se escribe sin Reglas (DEC-044), y no
+   * debe depender de que quien la llama haya filtrado bien.
+   */
+  if (bonus !== undefined && bonus !== null && hasRules && nowIso !== undefined) {
+    return (
+      <BandShell label={t("a11y.announcements")}>
+        <BonusPhrase
+          bonus={bonus}
+          nowIso={nowIso}
+          locale={locale}
+          timeZone={promotion.legal_timezone}
+          headline={t("announcement.bonus", {
+            multiplier: fractionText(bonus.period.multiplier, locale),
+            scope: scopeLabel(bonus.period.product_kind_scope),
+          })}
+        />
+      </BandShell>
+    );
+  }
 
   /*
    * El plazo que se anuncia es el MISMO al que apunta la cuenta atras, y por la
@@ -242,12 +360,36 @@ export function AnnouncementBand({
   const rotates = phrases.length > 1;
 
   return (
+    <BandShell label={t("a11y.announcements")}>
+      {/* Rejilla de UNA celda: las frases se superponen, de modo que la barra
+          tiene la altura de la mas alta y no da saltos al alternar. Por eso el
+          texto puede envolver sin provocar reflujo: con el tope dentro, la
+          frase de estado ya no cabe en una linea a 360px, y truncarla dejaria
+          fuera justo el dato nuevo. */}
+      <p className="grid min-w-0 flex-1 justify-items-center text-center">
+        {phrases.map((phrase) => (
+          <span key={phrase} className={rotates ? ROTATING_PHRASE : STATIC_PHRASE}>
+            {phrase}
+          </span>
+        ))}
+      </p>
+    </BandShell>
+  );
+}
+
+/**
+ * La franja roja, con sus galones a los lados. Es la misma para las frases de
+ * siempre y para el anuncio de un bonus: cambia lo que dice, no la pieza.
+ */
+function BandShell({ label, children }: { readonly label: string; readonly children: ReactNode }) {
+  return (
     <div
       // `role="region"` con nombre: es contenido de sitio, no un aviso urgente,
       // y por eso NO es `role="status"` ni una region viva. Anunciar por voz una
-      // frase que cambia sola cada siete segundos haria la pagina inutilizable.
+      // frase que cambia sola cada siete segundos -o una cuenta atras que cambia
+      // cada segundo- haria la pagina inutilizable.
       role="region"
-      aria-label={t("a11y.announcements")}
+      aria-label={label}
       className={cn(
         // ROJA (DEC-042). Es la franja de la referencia, y el unico sitio del
         // sitio donde el rojo hace de fondo a todo lo ancho. El texto va en
@@ -256,30 +398,75 @@ export function AnnouncementBand({
         // El patron topografico va en su tinta NEGRA: el dorado, calibrado para
         // superficies casi negras, sobre este rojo no se ve.
         "lsw-topo-ink border-b border-accent-active bg-accent text-on-accent",
-        // La banda no se hace pegajosa: la cabecera si lo es, y dos elementos
-        // fijos apilados se comen un tercio de la pantalla de un telefono.
+        // Fija junto con la cabecera (DEC-082): la pega el contenedor de
+        // `app/[locale]/layout.tsx`, no esta banda.
         "relative z-base",
       )}
     >
       <div className="lsw-container flex items-center justify-center gap-3 py-2">
         <Chevron direction="left" />
-
-        {/* Rejilla de UNA celda: las frases se superponen, de modo que la barra
-            tiene la altura de la mas alta y no da saltos al alternar. Por eso el
-            texto puede envolver sin provocar reflujo: con el tope dentro, la
-            frase de estado ya no cabe en una linea a 360px, y truncarla dejaria
-            fuera justo el dato nuevo. */}
-        <p className="grid min-w-0 flex-1 justify-items-center text-center">
-          {phrases.map((phrase) => (
-            <span key={phrase} className={rotates ? ROTATING_PHRASE : STATIC_PHRASE}>
-              {phrase}
-            </span>
-          ))}
-        </p>
-
+        {children}
         <Chevron direction="right" />
       </div>
     </div>
+  );
+}
+
+/**
+ * "BONUS 2× EN MERCANCIA · TERMINA EN 5d 03:12:45" (DEC-082).
+ *
+ * Tres datos y ninguno inventado: el multiplicador, sobre que aplica y cuanto
+ * falta, todo tal como lo publica el backend. Sin exclamacion y sin "ultimas
+ * horas": la cuenta atras ya dice el plazo, y decirlo dos veces seria la prisa
+ * fabricada que la banda no puede escribir.
+ *
+ * Para el lector de pantalla, "termina en" y los digitos van ocultos y se
+ * anuncia el plazo absoluto: "termina el 13 de octubre de 2026, 7:00 p.m. CDT".
+ */
+function BonusPhrase({
+  bonus,
+  nowIso,
+  locale,
+  timeZone,
+  headline,
+}: {
+  readonly bonus: BandBonus;
+  readonly nowIso: string;
+  readonly locale: Locale;
+  /** Zona legal de la promocion (DEC-011). Nunca la del navegador. */
+  readonly timeZone: string;
+  readonly headline: string;
+}) {
+  const t = useTranslations("announcement");
+
+  const active = bonus.kind === "ACTIVE";
+  const targetIso = active ? bonus.period.ends_at : bonus.period.starts_at;
+  const absolute =
+    formatZonedDateTime(targetIso, locale, { timeZone, showTimeZoneName: true }) ?? targetIso;
+  const deadlineLabel = active
+    ? t("bonusEndsAt", { until: absolute })
+    : t("bonusStartsAt", { from: absolute });
+
+  return (
+    <p className={cn(STATIC_PHRASE, "min-w-0 flex-1 text-center")}>
+      <span>{headline}</span>
+      {/* En telefono la frase no cabe en una linea: se parte A PROPOSITO en
+          dos -que es y cuanto falta- en vez de dejar que el navegador corte
+          por donde caiga y deje el punto al principio de la segunda. */}
+      <span aria-hidden="true" className="hidden sm:inline">
+        {" · "}
+      </span>
+      <span className="block whitespace-nowrap sm:inline">
+        <span aria-hidden="true">{active ? t("bonusEndsIn") : t("bonusStartsIn")} </span>
+        <AnnouncementCountdown
+          targetIso={targetIso}
+          nowIso={nowIso}
+          daysUnit={t("daysShort")}
+          deadlineLabel={deadlineLabel}
+          completedLabel={deadlineLabel}
+        />
+      </span>
+    </p>
   );
 }
 

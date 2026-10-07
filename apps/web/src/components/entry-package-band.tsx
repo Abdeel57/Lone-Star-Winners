@@ -177,9 +177,10 @@ export function EntryPackageBand({
     <section
       {...(anchorId === undefined ? {} : { id: anchorId })}
       aria-labelledby={labelledBy}
-      // `scroll-mt`: la cabecera es fija, y sin margen el salto dejaria el
-      // titular de la banda debajo de ella.
-      className={cn("lsw-band-light scroll-mt-16 py-s12 lg:scroll-mt-20 lg:py-s16", className)}
+      // `scroll-mt`: la banda roja y la cabecera son fijas (DEC-082, unos 110px
+      // en telefono, algo mas si la banda envuelve), y sin margen el salto
+      // dejaria el titular de la banda debajo de ellas.
+      className={cn("lsw-band-light scroll-mt-32 py-s12 lg:py-s16", className)}
     >
       <div className="lsw-container">
         {/* DEC-077: sin antetitulo y con una entradilla de tres palabras. */}

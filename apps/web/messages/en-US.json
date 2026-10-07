@@ -628,7 +628,13 @@
     "officialRules": "The Official Rules govern every promotion",
     "rulesPending": "Official Rules pending publication",
     "withCap": "{status} — up to {entries} entries per person",
-    "withDeadlineAndCap": "{status} — {when} — up to {entries} entries per person"
+    "withDeadlineAndCap": "{status} — {when} — up to {entries} entries per person",
+    "bonus": "{multiplier}× bonus on {scope}",
+    "bonusEndsIn": "ends in",
+    "bonusStartsIn": "starts in",
+    "bonusEndsAt": "ends {until}",
+    "bonusStartsAt": "starts {from}",
+    "daysShort": "d"
   },
   "marquee": {
     "item1": "Eligible merchandise",

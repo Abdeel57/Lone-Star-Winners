@@ -867,12 +867,10 @@ export function PromotionHero({
             {/*
              * ANUNCIO DE BONUS, dentro del hero y debajo de la linea legal.
              *
-             * Va aqui y no en la banda de anuncio de arriba por dos razones. La
-             * primera es de sitio: la banda es UNA linea en caja alta a todo lo
-             * ancho del sitio, y un periodo bonus necesita decir el
-             * multiplicador, sobre que aplica y hasta cuando, que son tres
-             * datos. La segunda es de alcance: la banda se ve en todas las
-             * paginas, y el bonus pertenece a la promocion.
+             * Desde DEC-082 la banda roja de arriba tambien lo anuncia, en una
+             * linea y con su cuenta atras, en todas las paginas. Este es el
+             * anuncio COMPLETO: el plazo escrito con su zona legal y los
+             * periodos anunciados que vienen despues, que en la banda no caben.
              *
              * Y va DESPUES de la linea legal a proposito: lo ultimo que se lee
              * antes del anuncio es que manda el documento.

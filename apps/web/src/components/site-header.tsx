@@ -58,7 +58,8 @@ import { MobileNav, type NavDestination } from "./mobile-nav";
  *
  * La cabecera sigue siendo fija, sobre negro semitransparente con desenfoque:
  * al hacer scroll, el contenido pasa POR DEBAJO de la marca en vez de empujarla
- * fuera.
+ * fuera. Desde DEC-082 la fija el contenedor del layout, junto con la banda
+ * roja de anuncio.
  */
 export async function SiteHeader({ locale }: { readonly locale: Locale }) {
   const t = await getTranslations();
@@ -108,7 +109,9 @@ export async function SiteHeader({ locale }: { readonly locale: Locale }) {
   return (
     <header
       className={cn(
-        "sticky top-0 z-sticky border-b border-border",
+        // Fija, pero no por si sola: la pega junto con la banda roja el
+        // contenedor de `app/[locale]/layout.tsx` (DEC-082).
+        "border-b border-border",
         "bg-bg/90 supports-[backdrop-filter]:bg-bg/70 supports-[backdrop-filter]:backdrop-blur-md",
       )}
     >

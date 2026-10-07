@@ -628,7 +628,13 @@
     "officialRules": "Las Reglas Oficiales rigen cada promoción",
     "rulesPending": "Reglas Oficiales pendientes de publicación",
     "withCap": "{status} — máximo {entries} participaciones por persona",
-    "withDeadlineAndCap": "{status} — {when} — máximo {entries} participaciones por persona"
+    "withDeadlineAndCap": "{status} — {when} — máximo {entries} participaciones por persona",
+    "bonus": "Bonus {multiplier}× en {scope}",
+    "bonusEndsIn": "termina en",
+    "bonusStartsIn": "empieza en",
+    "bonusEndsAt": "termina el {until}",
+    "bonusStartsAt": "empieza el {from}",
+    "daysShort": "d"
   },
   "marquee": {
     "item1": "Mercancía elegible",

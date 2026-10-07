@@ -35,7 +35,8 @@ function Block({ block }: { readonly block: LegalBlock }) {
       return (
         <h2
           id={anchorFor(block.text)}
-          className="mt-s4 scroll-mt-24 font-display text-heading-md font-semibold text-text"
+          // `scroll-mt-32`: banda roja + cabecera fijas (DEC-082).
+          className="mt-s4 scroll-mt-32 font-display text-heading-md font-semibold text-text"
         >
           {block.text}
         </h2>

@@ -110,17 +110,28 @@ export default async function LocaleLayout({
           </a>
 
           {/* DEC-081: el idioma, lo primero de la pagina y en todas las
-              anchuras. Tampoco es pegajosa, por lo mismo que la banda. */}
+              anchuras. No es pegajosa: con la pagina desplazada, el idioma
+              sigue en el panel de navegacion. */}
           <LanguageBar />
 
-          {/* La banda de anuncio va POR ENCIMA de la cabecera y no es pegajosa:
-              dos elementos fijos apilados se comen un tercio de la pantalla de
-              un telefono. Si no hay promocion vigente -o la lectura falla- no
-              renderiza nada, de modo que la cabecera queda exactamente donde
-              estaba. */}
-          <AnnouncementBar locale={locale} />
-
-          <SiteHeader locale={locale} />
+          {/*
+           * BANDA ROJA Y CABECERA, FIJAS JUNTAS (DEC-082).
+           *
+           * El usuario quiere la promocion -y la cuenta atras de un bonus- a la
+           * vista siempre. Antes la banda no se pegaba para no apilar dos
+           * elementos fijos; ahora se pegan los dos en UN contenedor, que es una
+           * sola pieza de unos 110px en telefono: la banda ocupa una linea
+           * (dos como mucho) y la cabecera ya era fija.
+           *
+           * El `sticky` vive aqui y no en cada pieza: dos `sticky top-0`
+           * seguidos se montarian uno encima del otro. Si no hay promocion
+           * vigente, la banda no renderiza nada y queda solo la cabecera, igual
+           * que antes.
+           */}
+          <div className="sticky top-0 z-sticky">
+            <AnnouncementBar locale={locale} />
+            <SiteHeader locale={locale} />
+          </div>
 
           <main id="main" aria-label={t("mainLandmark")} className="flex-1">
             {children}
