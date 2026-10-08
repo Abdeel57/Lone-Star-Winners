@@ -1540,6 +1540,58 @@
                       ],
                       "type": "string"
                     },
+                    "fulfillment": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "carrier": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "delivered_at": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "state": {
+                          "enum": [
+                            "NOT_APPLICABLE",
+                            "UNFULFILLED",
+                            "PARTIALLY_FULFILLED",
+                            "FULFILLED",
+                            "RETURNED"
+                          ],
+                          "type": "string"
+                        },
+                        "tracking_number": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "state",
+                        "delivered_at",
+                        "carrier",
+                        "tracking_number"
+                      ],
+                      "type": "object"
+                    },
                     "fulfillment_method": {
                       "enum": [
                         "DELIVERY",
@@ -1583,6 +1635,13 @@
                               "currency"
                             ],
                             "type": "object"
+                          },
+                          "product_kind": {
+                            "enum": [
+                              "MERCHANDISE",
+                              "ENTRY_PACKAGE"
+                            ],
+                            "type": "string"
                           },
                           "product_name": {
                             "additionalProperties": false,
@@ -1647,7 +1706,8 @@
                           "unit_price",
                           "line_total",
                           "sweepstakes_eligible",
-                          "refunded_quantity"
+                          "refunded_quantity",
+                          "product_kind"
                         ],
                         "type": "object"
                       },
@@ -1844,6 +1904,7 @@
                     "tax_total",
                     "shipping_address",
                     "fulfillment_method",
+                    "fulfillment",
                     "entry_calculation"
                   ],
                   "type": "object"
@@ -9117,6 +9178,58 @@
                       ],
                       "type": "string"
                     },
+                    "fulfillment": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "carrier": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "delivered_at": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "state": {
+                          "enum": [
+                            "NOT_APPLICABLE",
+                            "UNFULFILLED",
+                            "PARTIALLY_FULFILLED",
+                            "FULFILLED",
+                            "RETURNED"
+                          ],
+                          "type": "string"
+                        },
+                        "tracking_number": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "state",
+                        "delivered_at",
+                        "carrier",
+                        "tracking_number"
+                      ],
+                      "type": "object"
+                    },
                     "fulfillment_method": {
                       "enum": [
                         "DELIVERY",
@@ -9160,6 +9273,13 @@
                               "currency"
                             ],
                             "type": "object"
+                          },
+                          "product_kind": {
+                            "enum": [
+                              "MERCHANDISE",
+                              "ENTRY_PACKAGE"
+                            ],
+                            "type": "string"
                           },
                           "product_name": {
                             "additionalProperties": false,
@@ -9224,7 +9344,8 @@
                           "unit_price",
                           "line_total",
                           "sweepstakes_eligible",
-                          "refunded_quantity"
+                          "refunded_quantity",
+                          "product_kind"
                         ],
                         "type": "object"
                       },
@@ -9421,6 +9542,7 @@
                     "tax_total",
                     "shipping_address",
                     "fulfillment_method",
+                    "fulfillment",
                     "entry_calculation"
                   ],
                   "type": "object"
@@ -9559,6 +9681,747 @@
         "x-lsw-authorization": {
           "kind": "PERMISSION",
           "permission": "order.read",
+          "requires_step_up": false
+        }
+      }
+    },
+    "/api/v1/admin/orders/{order_id}/cancel": {
+      "post": {
+        "description": "DEC-085. Solo pedidos sin `paid_at` en DRAFT o PENDING_PAYMENT, en efectivo o con tarjeta: los saca de la cola de pendientes y quedan CANCELLED, con quien y por que en la auditoria. Con tarjeta, primero se cierra la sesion de pago; si el proveedor dice que el pago ya se completo o esta en curso, 409 `ORDER_PAYMENT_IN_PROGRESS` y no se cancela. 409 `ORDER_NOT_CANCELLABLE` si el pedido esta cobrado (eso se reembolsa). Cancelar uno ya cancelado responde la ficha sin hacer nada.",
+        "operationId": "cancelAdminOrder",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "order_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "notes": {
+                    "anyOf": [
+                      {
+                        "maxLength": 2000,
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "reason_code": {
+                    "pattern": "^[a-zA-Z][a-zA-Z0-9_.]{2,63}$",
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "entries_granted": {
+                      "anyOf": [
+                        {
+                          "maximum": 9007199254740991,
+                          "minimum": -9007199254740991,
+                          "type": "integer"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "entry_calculation": {
+                      "anyOf": [
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "engine_version": {
+                              "maximum": 9007199254740991,
+                              "minimum": -9007199254740991,
+                              "type": "integer"
+                            },
+                            "evaluated_at": {
+                              "type": "string"
+                            },
+                            "final_entries": {
+                              "maximum": 9007199254740991,
+                              "minimum": -9007199254740991,
+                              "type": "integer"
+                            },
+                            "rules_version_id": {
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                              "type": "string"
+                            },
+                            "trace": {
+                              "additionalProperties": {},
+                              "propertyNames": {
+                                "type": "string"
+                              },
+                              "type": "object"
+                            }
+                          },
+                          "required": [
+                            "rules_version_id",
+                            "engine_version",
+                            "evaluated_at",
+                            "final_entries",
+                            "trace"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "entry_state": {
+                      "enum": [
+                        "NOT_APPLICABLE",
+                        "PENDING_QUALIFICATION",
+                        "GRANTED",
+                        "PARTIALLY_REVERSED",
+                        "REVERSED"
+                      ],
+                      "type": "string"
+                    },
+                    "fulfillment": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "carrier": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "delivered_at": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "state": {
+                          "enum": [
+                            "NOT_APPLICABLE",
+                            "UNFULFILLED",
+                            "PARTIALLY_FULFILLED",
+                            "FULFILLED",
+                            "RETURNED"
+                          ],
+                          "type": "string"
+                        },
+                        "tracking_number": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "state",
+                        "delivered_at",
+                        "carrier",
+                        "tracking_number"
+                      ],
+                      "type": "object"
+                    },
+                    "fulfillment_method": {
+                      "enum": [
+                        "DELIVERY",
+                        "PICKUP"
+                      ],
+                      "type": "string"
+                    },
+                    "id": {
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                      "type": "string"
+                    },
+                    "item_count": {
+                      "maximum": 9007199254740991,
+                      "minimum": -9007199254740991,
+                      "type": "integer"
+                    },
+                    "items": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "line_id": {
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                            "type": "string"
+                          },
+                          "line_total": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "amount_minor": {
+                                "type": "string"
+                              },
+                              "currency": {
+                                "maxLength": 3,
+                                "minLength": 3,
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "amount_minor",
+                              "currency"
+                            ],
+                            "type": "object"
+                          },
+                          "product_kind": {
+                            "enum": [
+                              "MERCHANDISE",
+                              "ENTRY_PACKAGE"
+                            ],
+                            "type": "string"
+                          },
+                          "product_name": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "en-US": {
+                                "type": "string"
+                              },
+                              "es-US": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "en-US",
+                              "es-US"
+                            ],
+                            "type": "object"
+                          },
+                          "product_slug": {
+                            "type": "string"
+                          },
+                          "quantity": {
+                            "maximum": 9007199254740991,
+                            "minimum": -9007199254740991,
+                            "type": "integer"
+                          },
+                          "refunded_quantity": {
+                            "maximum": 9007199254740991,
+                            "minimum": -9007199254740991,
+                            "type": "integer"
+                          },
+                          "sku": {
+                            "type": "string"
+                          },
+                          "sweepstakes_eligible": {
+                            "type": "boolean"
+                          },
+                          "unit_price": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "amount_minor": {
+                                "type": "string"
+                              },
+                              "currency": {
+                                "maxLength": 3,
+                                "minLength": 3,
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "amount_minor",
+                              "currency"
+                            ],
+                            "type": "object"
+                          }
+                        },
+                        "required": [
+                          "line_id",
+                          "sku",
+                          "product_slug",
+                          "product_name",
+                          "quantity",
+                          "unit_price",
+                          "line_total",
+                          "sweepstakes_eligible",
+                          "refunded_quantity",
+                          "product_kind"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "order_number": {
+                      "type": "string"
+                    },
+                    "payment_method": {
+                      "enum": [
+                        "CARD",
+                        "CASH"
+                      ],
+                      "type": "string"
+                    },
+                    "placed_at": {
+                      "type": "string"
+                    },
+                    "promotion_id": {
+                      "anyOf": [
+                        {
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "shipping_address": {
+                      "anyOf": [
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "city": {
+                              "type": "string"
+                            },
+                            "country": {
+                              "type": "string"
+                            },
+                            "full_name": {
+                              "type": "string"
+                            },
+                            "line1": {
+                              "type": "string"
+                            },
+                            "line2": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "postal_code": {
+                              "type": "string"
+                            },
+                            "region": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "full_name",
+                            "line1",
+                            "line2",
+                            "city",
+                            "region",
+                            "postal_code",
+                            "country"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "shipping_total": {
+                      "anyOf": [
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "amount_minor": {
+                              "type": "string"
+                            },
+                            "currency": {
+                              "maxLength": 3,
+                              "minLength": 3,
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "amount_minor",
+                            "currency"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "status": {
+                      "enum": [
+                        "PENDING_PAYMENT",
+                        "PAID",
+                        "FULFILLED",
+                        "CANCELLED",
+                        "REFUNDED",
+                        "PARTIALLY_REFUNDED",
+                        "CHARGEBACK"
+                      ],
+                      "type": "string"
+                    },
+                    "subtotal": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "amount_minor": {
+                          "type": "string"
+                        },
+                        "currency": {
+                          "maxLength": 3,
+                          "minLength": 3,
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "amount_minor",
+                        "currency"
+                      ],
+                      "type": "object"
+                    },
+                    "tax_total": {
+                      "anyOf": [
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "amount_minor": {
+                              "type": "string"
+                            },
+                            "currency": {
+                              "maxLength": 3,
+                              "minLength": 3,
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "amount_minor",
+                            "currency"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "total": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "amount_minor": {
+                          "type": "string"
+                        },
+                        "currency": {
+                          "maxLength": 3,
+                          "minLength": 3,
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "amount_minor",
+                        "currency"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "order_number",
+                    "status",
+                    "placed_at",
+                    "total",
+                    "item_count",
+                    "promotion_id",
+                    "entry_state",
+                    "entries_granted",
+                    "payment_method",
+                    "items",
+                    "subtotal",
+                    "shipping_total",
+                    "tax_total",
+                    "shipping_address",
+                    "fulfillment_method",
+                    "fulfillment",
+                    "entry_calculation"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 200."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "additionalProperties": {},
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "request_id"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 401."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "additionalProperties": {},
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "request_id"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 403."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "additionalProperties": {},
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "request_id"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 404."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "additionalProperties": {},
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "request_id"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 409."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "additionalProperties": {},
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "request_id"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 422."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "additionalProperties": {},
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "request_id"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 503."
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Cancelar un pedido que nunca se cobro.",
+        "tags": [
+          "admin"
+        ],
+        "x-lsw-authorization": {
+          "kind": "PERMISSION",
+          "permission": "order.cancel",
           "requires_step_up": false
         }
       }
@@ -10853,6 +11716,723 @@
         "x-lsw-authorization": {
           "kind": "PERMISSION",
           "permission": "order.cash.confirm",
+          "requires_step_up": false
+        }
+      }
+    },
+    "/api/v1/admin/orders/{order_id}/fulfillment": {
+      "post": {
+        "description": "DEC-085. `delivered: true` la marca enviada -o entregada en mano si se recoge en el punto de venta- con `carrier` y `tracking_number` opcionales (solo si se envia); `false` la devuelve a pendiente y borra esos datos. Solo pedidos cobrados, no cancelados ni reembolsados enteros, y con mercancia. No toca importes, pago ni participaciones.",
+        "operationId": "setAdminOrderFulfillment",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "order_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "carrier": {
+                    "anyOf": [
+                      {
+                        "maxLength": 60,
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "delivered": {
+                    "type": "boolean"
+                  },
+                  "tracking_number": {
+                    "anyOf": [
+                      {
+                        "maxLength": 100,
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "delivered"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "entries_granted": {
+                      "anyOf": [
+                        {
+                          "maximum": 9007199254740991,
+                          "minimum": -9007199254740991,
+                          "type": "integer"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "entry_calculation": {
+                      "anyOf": [
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "engine_version": {
+                              "maximum": 9007199254740991,
+                              "minimum": -9007199254740991,
+                              "type": "integer"
+                            },
+                            "evaluated_at": {
+                              "type": "string"
+                            },
+                            "final_entries": {
+                              "maximum": 9007199254740991,
+                              "minimum": -9007199254740991,
+                              "type": "integer"
+                            },
+                            "rules_version_id": {
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                              "type": "string"
+                            },
+                            "trace": {
+                              "additionalProperties": {},
+                              "propertyNames": {
+                                "type": "string"
+                              },
+                              "type": "object"
+                            }
+                          },
+                          "required": [
+                            "rules_version_id",
+                            "engine_version",
+                            "evaluated_at",
+                            "final_entries",
+                            "trace"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "entry_state": {
+                      "enum": [
+                        "NOT_APPLICABLE",
+                        "PENDING_QUALIFICATION",
+                        "GRANTED",
+                        "PARTIALLY_REVERSED",
+                        "REVERSED"
+                      ],
+                      "type": "string"
+                    },
+                    "fulfillment": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "carrier": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "delivered_at": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "state": {
+                          "enum": [
+                            "NOT_APPLICABLE",
+                            "UNFULFILLED",
+                            "PARTIALLY_FULFILLED",
+                            "FULFILLED",
+                            "RETURNED"
+                          ],
+                          "type": "string"
+                        },
+                        "tracking_number": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "state",
+                        "delivered_at",
+                        "carrier",
+                        "tracking_number"
+                      ],
+                      "type": "object"
+                    },
+                    "fulfillment_method": {
+                      "enum": [
+                        "DELIVERY",
+                        "PICKUP"
+                      ],
+                      "type": "string"
+                    },
+                    "id": {
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                      "type": "string"
+                    },
+                    "item_count": {
+                      "maximum": 9007199254740991,
+                      "minimum": -9007199254740991,
+                      "type": "integer"
+                    },
+                    "items": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "line_id": {
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                            "type": "string"
+                          },
+                          "line_total": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "amount_minor": {
+                                "type": "string"
+                              },
+                              "currency": {
+                                "maxLength": 3,
+                                "minLength": 3,
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "amount_minor",
+                              "currency"
+                            ],
+                            "type": "object"
+                          },
+                          "product_kind": {
+                            "enum": [
+                              "MERCHANDISE",
+                              "ENTRY_PACKAGE"
+                            ],
+                            "type": "string"
+                          },
+                          "product_name": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "en-US": {
+                                "type": "string"
+                              },
+                              "es-US": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "en-US",
+                              "es-US"
+                            ],
+                            "type": "object"
+                          },
+                          "product_slug": {
+                            "type": "string"
+                          },
+                          "quantity": {
+                            "maximum": 9007199254740991,
+                            "minimum": -9007199254740991,
+                            "type": "integer"
+                          },
+                          "refunded_quantity": {
+                            "maximum": 9007199254740991,
+                            "minimum": -9007199254740991,
+                            "type": "integer"
+                          },
+                          "sku": {
+                            "type": "string"
+                          },
+                          "sweepstakes_eligible": {
+                            "type": "boolean"
+                          },
+                          "unit_price": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "amount_minor": {
+                                "type": "string"
+                              },
+                              "currency": {
+                                "maxLength": 3,
+                                "minLength": 3,
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "amount_minor",
+                              "currency"
+                            ],
+                            "type": "object"
+                          }
+                        },
+                        "required": [
+                          "line_id",
+                          "sku",
+                          "product_slug",
+                          "product_name",
+                          "quantity",
+                          "unit_price",
+                          "line_total",
+                          "sweepstakes_eligible",
+                          "refunded_quantity",
+                          "product_kind"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "order_number": {
+                      "type": "string"
+                    },
+                    "payment_method": {
+                      "enum": [
+                        "CARD",
+                        "CASH"
+                      ],
+                      "type": "string"
+                    },
+                    "placed_at": {
+                      "type": "string"
+                    },
+                    "promotion_id": {
+                      "anyOf": [
+                        {
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "shipping_address": {
+                      "anyOf": [
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "city": {
+                              "type": "string"
+                            },
+                            "country": {
+                              "type": "string"
+                            },
+                            "full_name": {
+                              "type": "string"
+                            },
+                            "line1": {
+                              "type": "string"
+                            },
+                            "line2": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "postal_code": {
+                              "type": "string"
+                            },
+                            "region": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "full_name",
+                            "line1",
+                            "line2",
+                            "city",
+                            "region",
+                            "postal_code",
+                            "country"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "shipping_total": {
+                      "anyOf": [
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "amount_minor": {
+                              "type": "string"
+                            },
+                            "currency": {
+                              "maxLength": 3,
+                              "minLength": 3,
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "amount_minor",
+                            "currency"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "status": {
+                      "enum": [
+                        "PENDING_PAYMENT",
+                        "PAID",
+                        "FULFILLED",
+                        "CANCELLED",
+                        "REFUNDED",
+                        "PARTIALLY_REFUNDED",
+                        "CHARGEBACK"
+                      ],
+                      "type": "string"
+                    },
+                    "subtotal": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "amount_minor": {
+                          "type": "string"
+                        },
+                        "currency": {
+                          "maxLength": 3,
+                          "minLength": 3,
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "amount_minor",
+                        "currency"
+                      ],
+                      "type": "object"
+                    },
+                    "tax_total": {
+                      "anyOf": [
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "amount_minor": {
+                              "type": "string"
+                            },
+                            "currency": {
+                              "maxLength": 3,
+                              "minLength": 3,
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "amount_minor",
+                            "currency"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "total": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "amount_minor": {
+                          "type": "string"
+                        },
+                        "currency": {
+                          "maxLength": 3,
+                          "minLength": 3,
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "amount_minor",
+                        "currency"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "order_number",
+                    "status",
+                    "placed_at",
+                    "total",
+                    "item_count",
+                    "promotion_id",
+                    "entry_state",
+                    "entries_granted",
+                    "payment_method",
+                    "items",
+                    "subtotal",
+                    "shipping_total",
+                    "tax_total",
+                    "shipping_address",
+                    "fulfillment_method",
+                    "fulfillment",
+                    "entry_calculation"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 200."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "additionalProperties": {},
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "request_id"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 401."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "additionalProperties": {},
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "request_id"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 403."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "additionalProperties": {},
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "request_id"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 404."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "additionalProperties": {},
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "request_id"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 409."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "additionalProperties": {},
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "request_id"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 422."
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Marcar la mercancia de un pedido como enviada, o devolverla a pendiente.",
+        "tags": [
+          "admin"
+        ],
+        "x-lsw-authorization": {
+          "kind": "PERMISSION",
+          "permission": "order.fulfillment.update",
           "requires_step_up": false
         }
       }
@@ -26213,6 +27793,574 @@
         "x-lsw-authorization": {
           "kind": "PERMISSION",
           "permission": "promotion.update",
+          "requires_step_up": false
+        }
+      }
+    },
+    "/api/v1/admin/reports/daily-cut": {
+      "get": {
+        "description": "DEC-085. De 12:00 a. m. a 11:59 p. m. en `America/Denver` (Nuevo Mexico). Totales en efectivo, con tarjeta y en conjunto, con el numero de pedidos cobrados ese dia (`paid_at`) por medio de pago; los reembolsos de ese dia, aparte. Sin desglose de paquetes ni de participaciones. `merchandise` lista la mercancia de esos pedidos con cliente, direccion o recogida, numero de pedido y estado de envio, y las unidades por producto. Sin `date`, hoy.",
+        "operationId": "getAdminDailyCut",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "date",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "card": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "amount": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "amount_minor": {
+                              "type": "string"
+                            },
+                            "currency": {
+                              "maxLength": 3,
+                              "minLength": 3,
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "amount_minor",
+                            "currency"
+                          ],
+                          "type": "object"
+                        },
+                        "orders": {
+                          "maximum": 9007199254740991,
+                          "minimum": -9007199254740991,
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "orders",
+                        "amount"
+                      ],
+                      "type": "object"
+                    },
+                    "cash": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "amount": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "amount_minor": {
+                              "type": "string"
+                            },
+                            "currency": {
+                              "maxLength": 3,
+                              "minLength": 3,
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "amount_minor",
+                            "currency"
+                          ],
+                          "type": "object"
+                        },
+                        "orders": {
+                          "maximum": 9007199254740991,
+                          "minimum": -9007199254740991,
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "orders",
+                        "amount"
+                      ],
+                      "type": "object"
+                    },
+                    "date": {
+                      "type": "string"
+                    },
+                    "from": {
+                      "type": "string"
+                    },
+                    "merchandise": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "lines": {
+                          "items": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "customer_email": {
+                                "type": "string"
+                              },
+                              "customer_name": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "fulfillment": {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "carrier": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string"
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  },
+                                  "delivered_at": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string"
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  },
+                                  "state": {
+                                    "enum": [
+                                      "NOT_APPLICABLE",
+                                      "UNFULFILLED",
+                                      "PARTIALLY_FULFILLED",
+                                      "FULFILLED",
+                                      "RETURNED"
+                                    ],
+                                    "type": "string"
+                                  },
+                                  "tracking_number": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string"
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "state",
+                                  "delivered_at",
+                                  "carrier",
+                                  "tracking_number"
+                                ],
+                                "type": "object"
+                              },
+                              "fulfillment_method": {
+                                "enum": [
+                                  "DELIVERY",
+                                  "PICKUP"
+                                ],
+                                "type": "string"
+                              },
+                              "order_id": {
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                                "type": "string"
+                              },
+                              "order_number": {
+                                "type": "string"
+                              },
+                              "order_status": {
+                                "type": "string"
+                              },
+                              "paid_at": {
+                                "type": "string"
+                              },
+                              "payment_method": {
+                                "enum": [
+                                  "CARD",
+                                  "CASH"
+                                ],
+                                "type": "string"
+                              },
+                              "product_name": {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "en-US": {
+                                    "type": "string"
+                                  },
+                                  "es-US": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "en-US",
+                                  "es-US"
+                                ],
+                                "type": "object"
+                              },
+                              "quantity": {
+                                "maximum": 9007199254740991,
+                                "minimum": -9007199254740991,
+                                "type": "integer"
+                              },
+                              "refunded_quantity": {
+                                "maximum": 9007199254740991,
+                                "minimum": -9007199254740991,
+                                "type": "integer"
+                              },
+                              "shipping_address": {
+                                "anyOf": [
+                                  {
+                                    "additionalProperties": false,
+                                    "properties": {
+                                      "city": {
+                                        "type": "string"
+                                      },
+                                      "country": {
+                                        "type": "string"
+                                      },
+                                      "full_name": {
+                                        "type": "string"
+                                      },
+                                      "line1": {
+                                        "type": "string"
+                                      },
+                                      "line2": {
+                                        "anyOf": [
+                                          {
+                                            "type": "string"
+                                          },
+                                          {
+                                            "type": "null"
+                                          }
+                                        ]
+                                      },
+                                      "postal_code": {
+                                        "type": "string"
+                                      },
+                                      "region": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "full_name",
+                                      "line1",
+                                      "line2",
+                                      "city",
+                                      "region",
+                                      "postal_code",
+                                      "country"
+                                    ],
+                                    "type": "object"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "sku": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "order_id",
+                              "order_number",
+                              "paid_at",
+                              "payment_method",
+                              "order_status",
+                              "customer_name",
+                              "customer_email",
+                              "fulfillment_method",
+                              "shipping_address",
+                              "fulfillment",
+                              "sku",
+                              "product_name",
+                              "quantity",
+                              "refunded_quantity"
+                            ],
+                            "type": "object"
+                          },
+                          "type": "array"
+                        },
+                        "products": {
+                          "items": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "product_name": {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "en-US": {
+                                    "type": "string"
+                                  },
+                                  "es-US": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "en-US",
+                                  "es-US"
+                                ],
+                                "type": "object"
+                              },
+                              "quantity": {
+                                "maximum": 9007199254740991,
+                                "minimum": -9007199254740991,
+                                "type": "integer"
+                              },
+                              "refunded_quantity": {
+                                "maximum": 9007199254740991,
+                                "minimum": -9007199254740991,
+                                "type": "integer"
+                              },
+                              "sku": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "sku",
+                              "product_name",
+                              "quantity",
+                              "refunded_quantity"
+                            ],
+                            "type": "object"
+                          },
+                          "type": "array"
+                        }
+                      },
+                      "required": [
+                        "products",
+                        "lines"
+                      ],
+                      "type": "object"
+                    },
+                    "refunds": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "amount": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "amount_minor": {
+                              "type": "string"
+                            },
+                            "currency": {
+                              "maxLength": 3,
+                              "minLength": 3,
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "amount_minor",
+                            "currency"
+                          ],
+                          "type": "object"
+                        },
+                        "refunds": {
+                          "maximum": 9007199254740991,
+                          "minimum": -9007199254740991,
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "refunds",
+                        "amount"
+                      ],
+                      "type": "object"
+                    },
+                    "time_zone": {
+                      "type": "string"
+                    },
+                    "to": {
+                      "type": "string"
+                    },
+                    "total": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "amount": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "amount_minor": {
+                              "type": "string"
+                            },
+                            "currency": {
+                              "maxLength": 3,
+                              "minLength": 3,
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "amount_minor",
+                            "currency"
+                          ],
+                          "type": "object"
+                        },
+                        "orders": {
+                          "maximum": 9007199254740991,
+                          "minimum": -9007199254740991,
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "orders",
+                        "amount"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "date",
+                    "time_zone",
+                    "from",
+                    "to",
+                    "cash",
+                    "card",
+                    "total",
+                    "refunds",
+                    "merchandise"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 200."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "additionalProperties": {},
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "request_id"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 401."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "additionalProperties": {},
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "request_id"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 403."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "additionalProperties": {},
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "request_id"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 422."
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Corte de caja de un dia, en la hora del punto de venta.",
+        "tags": [
+          "admin"
+        ],
+        "x-lsw-authorization": {
+          "kind": "PERMISSION",
+          "permission": "order.read",
           "requires_step_up": false
         }
       }

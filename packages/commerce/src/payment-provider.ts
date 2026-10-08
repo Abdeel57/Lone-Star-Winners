@@ -216,6 +216,16 @@ export interface RefundResult {
 }
 
 /**
+ * Desenlace de cerrar una sesion de pago (DEC-085).
+ *
+ * - `CLOSED`: la sesion ya no admite pago, porque la cerro esta llamada o
+ *   porque ya estaba caducada.
+ * - `COMPLETED`: el comprador llego a pagar, o el pago esta en curso. El pedido
+ *   NO se puede cancelar: el desenlace lo trae el webhook.
+ */
+export type CheckoutSessionCloseResult = "CLOSED" | "COMPLETED";
+
+/**
  * Puerto que debe implementar cualquier proveedor de pagos.
  *
  * Toda la logica de negocio depende de esta interfaz y de ningun SDK. Los
@@ -231,6 +241,13 @@ export interface PaymentProvider {
   getPayment(providerPaymentId: string): Promise<PaymentSnapshot>;
 
   refund(input: RefundInput): Promise<RefundResult>;
+
+  /**
+   * Cierra la sesion de pago de un pedido que se va a cancelar (DEC-085), para
+   * que nadie pueda pagarlo despues. Idempotente: cerrar una sesion ya cerrada
+   * devuelve `CLOSED`.
+   */
+  closeCheckoutSession(providerSessionId: string): Promise<CheckoutSessionCloseResult>;
 
   /**
    * Verifica la firma sobre el CUERPO CRUDO.

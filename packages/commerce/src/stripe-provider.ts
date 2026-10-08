@@ -47,6 +47,7 @@ import type { CurrencyCode, MinorAmount } from "@lsw/sweepstakes";
 
 import type {
   CheckoutSession,
+  CheckoutSessionCloseResult,
   CreateCheckoutSessionInput,
   Money,
   PaymentProvider,
@@ -350,6 +351,39 @@ export class StripePaymentProvider implements PaymentProvider {
       redirectUrl: url,
       expiresAt: new Date(expires * 1000),
     };
+  }
+
+  /**
+   * Caduca la sesion de Checkout (DEC-085): `POST /checkout/sessions/:id/expire`.
+   *
+   * Stripe solo caduca una sesion `open`. Si rechaza la llamada, se lee la
+   * sesion para saber por que: `expired` es que ya estaba cerrada (CLOSED) y
+   * `complete` es que el comprador pago o tiene el pago en curso (COMPLETED).
+   * Cualquier otra cosa se propaga: no se cancela un pedido a ciegas.
+   */
+  public async closeCheckoutSession(
+    providerSessionId: string,
+  ): Promise<CheckoutSessionCloseResult> {
+    const path = `/checkout/sessions/${encodeURIComponent(providerSessionId)}`;
+
+    try {
+      await this.request("POST", `${path}/expire`, { body: "" });
+      return "CLOSED";
+    } catch (error) {
+      if (!(error instanceof StripeApiError) || error.status === null || error.status >= 500) {
+        throw error;
+      }
+
+      const session = await this.request("GET", path);
+      switch (asString(session.status)) {
+        case "expired":
+          return "CLOSED";
+        case "complete":
+          return "COMPLETED";
+        default:
+          throw error;
+      }
+    }
   }
 
   // -------------------------------------------------------------------------

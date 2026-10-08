@@ -36,6 +36,8 @@ export const ADMIN_NAV = [
   // DEC-079: la tarifa de envio es un precio de la tienda, con la misma lectura.
   { key: "shipping", path: "/shipping", capabilities: ["product.read"] },
   { key: "orders", path: "/orders", capabilities: ["order.read"] },
+  // DEC-085: el corte de caja diario. Lee pedidos cobrados, con la misma lectura.
+  { key: "dailyCut", path: "/daily-cut", capabilities: ["order.read"] },
   { key: "participants", path: "/participants", capabilities: ["participant.list"] },
   { key: "amoe", path: "/amoe", capabilities: ["amoe.review.read"] },
   {

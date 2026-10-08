@@ -236,6 +236,11 @@ const TRANSLATED_REASONS = [
   /* DEC-078: cobro en efectivo en un punto de venta fisico. */
   "CASH_RECEIVED_AT_STORE",
   "RETRY_ENTRY_GENERATION",
+  /* DEC-085: cancelar un pedido que nunca se cobro. */
+  "DUPLICATE_ORDER",
+  "ABANDONED_CHECKOUT",
+  "CUSTOMER_REQUEST",
+  "TEST_ORDER",
   "OTHER",
 ] as const;
 
@@ -296,6 +301,14 @@ export async function reasonLabeller(locale: Locale): Promise<(key: string) => s
         return t("CASH_RECEIVED_AT_STORE");
       case "RETRY_ENTRY_GENERATION":
         return t("RETRY_ENTRY_GENERATION");
+      case "DUPLICATE_ORDER":
+        return t("DUPLICATE_ORDER");
+      case "ABANDONED_CHECKOUT":
+        return t("ABANDONED_CHECKOUT");
+      case "CUSTOMER_REQUEST":
+        return t("CUSTOMER_REQUEST");
+      case "TEST_ORDER":
+        return t("TEST_ORDER");
       case "OTHER":
         return t("OTHER");
     }

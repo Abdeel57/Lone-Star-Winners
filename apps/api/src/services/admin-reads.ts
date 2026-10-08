@@ -41,6 +41,7 @@ import {
   DrizzleAdminReadRepository,
   type AdminAuditEventRow,
   type AdminAuditListOptions,
+  type AdminDailyCut,
   type AdminDashboardCounts,
   type AdminEntryTotals,
   type AdminOrderListOptions,
@@ -69,6 +70,8 @@ export interface AdminReads {
   listParticipants(options: AdminParticipantListOptions): Promise<readonly AdminParticipantRow[]>;
   findParticipant(participantId: string): Promise<AdminParticipantRow | null>;
   listAuditEvents(options: AdminAuditListOptions): Promise<readonly AdminAuditEventRow[]>;
+  /** DEC-085: corte de caja de `[from, to)`. La ventana la calcula quien llama. */
+  dailyCut(window: { readonly from: Date; readonly to: Date }): Promise<AdminDailyCut>;
 }
 
 const cache = new WeakMap<AppDependencies, AdminReads>();

@@ -11,6 +11,7 @@ import type {
   AdminAmoeSubmission,
   AdminAmoeSubmissionPage,
   AdminAuditEventPage,
+  AdminDailyCut,
   AdminDashboard,
   AdminDrawAuthorizationPage,
   AdminExportSnapshotPage,
@@ -206,6 +207,8 @@ export const API_PATHS = {
   adminProducts: "/admin/products",
   adminParticipants: "/admin/participants",
   adminOrders: "/admin/orders",
+  /** DEC-085: corte de caja diario. */
+  adminDailyCut: "/admin/reports/daily-cut",
   adminEntryTransactions: "/admin/entry-transactions",
   adminAmoeSubmissions: "/admin/amoe-submissions",
   adminAdjustments: "/admin/entry-adjustments",
@@ -1646,6 +1649,56 @@ export function generateAdminOrderCashEntries(
   return apiRequest<AdminCashPayment>("POST", `${adminOrderCashPaymentPath(orderId)}/entries`, {
     locale,
     body: input,
+    ...sessionOptions(session),
+  });
+}
+
+/**
+ * DEC-085: cancelar un pedido que nunca se cobro. Con tarjeta, el backend
+ * cierra antes la sesion de pago; si el cliente ya pago, responde 409.
+ */
+export function cancelAdminOrder(
+  orderId: string,
+  input: { readonly reason_code: string; readonly notes?: string },
+  locale: Locale,
+  session: SessionContext,
+): Promise<ApiResult<OrderDetail>> {
+  return apiRequest<OrderDetail>("POST", `${adminOrderPath(orderId)}/cancel`, {
+    locale,
+    body: input,
+    ...sessionOptions(session),
+  });
+}
+
+/** DEC-085: mercancia enviada (con transportista y guia opcionales) o de vuelta a pendiente. */
+export function setAdminOrderFulfillment(
+  orderId: string,
+  input:
+    | {
+        readonly delivered: true;
+        readonly carrier: string | null;
+        readonly tracking_number: string | null;
+      }
+    | { readonly delivered: false },
+  locale: Locale,
+  session: SessionContext,
+): Promise<ApiResult<OrderDetail>> {
+  return apiRequest<OrderDetail>("POST", `${adminOrderPath(orderId)}/fulfillment`, {
+    locale,
+    body: input,
+    ...sessionOptions(session),
+  });
+}
+
+/** DEC-085: corte de caja de `date` (`YYYY-MM-DD`), o de hoy si es `null`. */
+export function fetchAdminDailyCut(
+  date: string | null,
+  locale: Locale,
+  session: SessionContext,
+): Promise<ApiResult<AdminDailyCut>> {
+  const search = date === null ? "" : `?date=${encodeURIComponent(date)}`;
+  return apiGet<AdminDailyCut>(`${API_PATHS.adminDailyCut}${search}`, {
+    locale,
     ...sessionOptions(session),
   });
 }

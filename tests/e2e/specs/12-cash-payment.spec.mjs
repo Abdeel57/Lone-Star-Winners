@@ -143,9 +143,14 @@ test.describe.serial("pago en efectivo en un punto de venta", () => {
       page.getByText("Se recoge en el punto de venta al pagar en efectivo. Sin envío."),
     ).toBeVisible();
 
-    await page.locator('textarea[name="reason_note"]').fill("Recibo E2E 0001");
-    await page.locator('input[name="confirmed"]').check();
-    await page.getByRole("button", { name: "Confirmar pago en efectivo" }).click();
+    // DEC-085: debajo esta tambien el formulario de CANCELAR, con su propio
+    // motivo y su propia casilla. Se trabaja dentro del de cobrar.
+    const confirmForm = page.locator("form", {
+      has: page.getByRole("button", { name: "Confirmar pago en efectivo" }),
+    });
+    await confirmForm.locator('textarea[name="reason_note"]').fill("Recibo E2E 0001");
+    await confirmForm.locator('input[name="confirmed"]').check();
+    await confirmForm.getByRole("button", { name: "Confirmar pago en efectivo" }).click();
 
     // Tras confirmar, el backend genera las participaciones y la ficha lo dice.
     await expect(page.getByText("Participaciones generadas").first()).toBeVisible({

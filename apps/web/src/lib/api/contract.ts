@@ -1588,6 +1588,8 @@ export interface OrderLine {
   readonly unit_price: MoneyMinor;
   /** Total de linea CALCULADO POR EL BACKEND. */
   readonly line_total: MoneyMinor;
+  /** DEC-085: OPCIONAL, una API anterior no lo manda. Solo la mercancia se envia. */
+  readonly product_kind?: ProductKind;
 }
 
 /**
@@ -1661,8 +1663,24 @@ export interface OrderDetail extends OrderSummary {
    * existia antes.
    */
   readonly fulfillment_method?: FulfillmentMethod;
+  /**
+   * DEC-085: si la mercancia ya salio, cuando y con que guia. OPCIONAL por la
+   * misma razon que `fulfillment_method`: una API anterior no lo manda.
+   */
+  readonly fulfillment?: OrderFulfillment;
   /** Traza del calculo, o `null` si el pedido no ha generado ninguna. */
   readonly entry_calculation: EntryCalculationSnapshot | null;
+}
+
+/** DEC-085: estado de la entrega de la mercancia de un pedido. */
+export interface OrderFulfillment {
+  readonly state:
+    "NOT_APPLICABLE" | "UNFULFILLED" | "PARTIALLY_FULFILLED" | "FULFILLED" | "RETURNED";
+  /** Cuando se envio, o se entrego en mano si se recoge. */
+  readonly delivered_at: string | null;
+  /** Texto que teclea la tienda; no hay integracion con paqueteria. */
+  readonly carrier: string | null;
+  readonly tracking_number: string | null;
 }
 
 export type OrderPage = CursorPage<OrderSummary>;
@@ -2071,6 +2089,10 @@ export type AdminCapability =
   | "order.refund.initiate"
   /** DEC-078: confirmar un cobro en efectivo y generar sus participaciones. */
   | "order.cash.confirm"
+  /** DEC-085: cancelar un pedido que nunca se cobro. */
+  | "order.cancel"
+  /** DEC-085: marcar la mercancia como enviada, o devolverla a pendiente. */
+  | "order.fulfillment.update"
   | "entry.ledger.read"
   | "entry.adjust.create"
   | "entry.adjust.approve"
@@ -2125,6 +2147,8 @@ export const ADMIN_CAPABILITIES: readonly AdminCapability[] = [
   "order.read",
   "order.refund.initiate",
   "order.cash.confirm",
+  "order.cancel",
+  "order.fulfillment.update",
   "entry.ledger.read",
   "entry.adjust.create",
   "entry.adjust.approve",
@@ -2400,6 +2424,58 @@ export interface AdminCashPayment {
   readonly confirmation_created: boolean | null;
   /** Solo en las respuestas de las acciones: el fallo del paso de participaciones. */
   readonly entries_error_code: string | null;
+}
+
+/**
+ * [CONTRATO] Corte de caja de un dia (DEC-085).
+ *
+ * El dia va de 12:00 a. m. a 11:59 p. m. en `time_zone` (Nuevo Mexico), y
+ * `from`/`to` son los dos instantes que lo delimitan. Todas las cifras las
+ * calcula el BACKEND; la pantalla solo las pinta (R13).
+ */
+export interface AdminDailyCutTotal {
+  /** Pedidos cobrados ese dia, no lineas ni unidades. */
+  readonly orders: number;
+  readonly amount: MoneyMinor;
+}
+
+export interface AdminDailyCutLine {
+  readonly order_id: string;
+  readonly order_number: string;
+  readonly paid_at: string;
+  readonly payment_method: "CARD" | "CASH";
+  readonly order_status: string;
+  readonly customer_name: string | null;
+  /** Enmascarado. */
+  readonly customer_email: string;
+  readonly fulfillment_method: FulfillmentMethod;
+  readonly shipping_address: PostalAddress | null;
+  readonly fulfillment: OrderFulfillment;
+  readonly sku: string;
+  readonly product_name: LocalizedText;
+  readonly quantity: number;
+  readonly refunded_quantity: number;
+}
+
+export interface AdminDailyCut {
+  readonly date: string;
+  readonly time_zone: string;
+  readonly from: string;
+  readonly to: string;
+  readonly cash: AdminDailyCutTotal;
+  readonly card: AdminDailyCutTotal;
+  readonly total: AdminDailyCutTotal;
+  /** Reembolsos con tarjeta hechos ese dia, de pedidos de cualquier dia. */
+  readonly refunds: { readonly refunds: number; readonly amount: MoneyMinor };
+  readonly merchandise: {
+    readonly products: readonly {
+      readonly sku: string;
+      readonly product_name: LocalizedText;
+      readonly quantity: number;
+      readonly refunded_quantity: number;
+    }[];
+    readonly lines: readonly AdminDailyCutLine[];
+  };
 }
 
 /**

@@ -7,13 +7,17 @@ import { AdminChrome } from "@/components/admin/admin-chrome";
 import { openAdminScreen } from "@/components/admin/admin-screen";
 import { AdminSectionError } from "@/components/admin/admin-section-error";
 import { CashPaymentPanel } from "@/components/admin/cash-payment-panel";
+import { OrderCancelPanel } from "@/components/admin/order-cancel-panel";
+import { OrderFulfillmentForm } from "@/components/admin/order-fulfillment-form";
 import { EntryCalculationTrace } from "@/components/entry-calculation-trace";
 import { OrderAddress } from "@/components/order-address";
 import { OrderLineList } from "@/components/order-line-list";
 import { adminHref } from "@/i18n/admin-routing";
 import { formatMoney, formatZonedDateTime } from "@/i18n/formatters";
 import { isLocale } from "@/i18n/locales";
+import { setOrderFulfillmentAction } from "@/lib/admin/actions";
 import { can } from "@/lib/admin/capabilities";
+import { DAILY_CUT_TIME_ZONE } from "@/lib/admin/daily-cut";
 import { fetchAdminOrder, fetchAdminOrderCashPayment } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
@@ -66,6 +70,15 @@ export default async function AdminOrderDetailPage({
    */
   const isCash = result.ok && result.data.payment_method === "CASH";
   const cash = isCash ? await fetchAdminOrderCashPayment(id, locale, screen.session) : null;
+
+  // DEC-085: hay algo que enviar si el pedido esta cobrado y lleva mercancia.
+  // Sin `product_kind` (API anterior) se supone que si: la ruta lo comprueba.
+  const fulfillment = result.ok ? result.data.fulfillment : undefined;
+  const pickup = result.ok && result.data.fulfillment_method === "PICKUP";
+  const shippable =
+    result.ok &&
+    ["PAID", "FULFILLED", "PARTIALLY_REFUNDED"].includes(result.data.status) &&
+    result.data.items.some((line) => line.product_kind !== "ENTRY_PACKAGE");
 
   return (
     <AdminChrome
@@ -156,6 +169,59 @@ export default async function AdminOrderDetailPage({
             address={result.data.shipping_address}
             fulfillmentMethod={result.data.fulfillment_method}
           />
+
+          {/*
+           * DEC-085: el envio. Solo con la mercancia cobrada; un pedido solo de
+           * paquetes de participaciones no tiene nada que mandar. Sin
+           * `fulfillment` (API anterior) no se pinta.
+           */}
+          {fulfillment === undefined || !shippable ? null : (
+            <Card elevation="raised" padding="lg">
+              <div className="flex flex-wrap items-center justify-between gap-s3">
+                <CardTitle as="h2" size="sm">
+                  {pickup ? t("fulfillmentPickupHeading") : t("fulfillmentHeading")}
+                </CardTitle>
+                <Badge tone={fulfillment.state === "FULFILLED" ? "success" : "warning"} size="sm">
+                  {fulfillment.state === "FULFILLED"
+                    ? pickup
+                      ? t("fulfillmentHandedOver")
+                      : t("fulfillmentShipped")
+                    : pickup
+                      ? t("fulfillmentPickupPending")
+                      : t("fulfillmentPending")}
+                </Badge>
+              </div>
+              <div className="mt-s4">
+                {can(screen.actor, "order.fulfillment.update") ? (
+                  <OrderFulfillmentForm
+                    locale={locale}
+                    action={setOrderFulfillmentAction}
+                    orderId={result.data.id}
+                    fulfillment={fulfillment}
+                    fulfillmentMethod={result.data.fulfillment_method ?? "DELIVERY"}
+                    deliveredAtText={
+                      fulfillment.delivered_at === null
+                        ? null
+                        : formatZonedDateTime(fulfillment.delivered_at, locale, {
+                            timeZone: DAILY_CUT_TIME_ZONE,
+                            showTimeZoneName: true,
+                          })
+                    }
+                  />
+                ) : (
+                  <p className="text-body-sm text-text-muted">{t("fulfillmentNoCapability")}</p>
+                )}
+              </div>
+            </Card>
+          )}
+
+          {/*
+           * DEC-085: cancelar lo que nunca se cobro. La ruta lo vuelve a
+           * comprobar todo; aqui solo no se ofrece donde no procede.
+           */}
+          {result.data.status === "PENDING_PAYMENT" && can(screen.actor, "order.cancel") ? (
+            <OrderCancelPanel order={result.data} locale={locale} />
+          ) : null}
 
           <section aria-labelledby="order-trace">
             <h2 id="order-trace" className="lsw-display text-heading-lg text-text">

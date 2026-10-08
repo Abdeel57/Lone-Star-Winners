@@ -132,7 +132,11 @@ const PAYMENT_TRANSITIONS = new Map<PaymentState, readonly PaymentState[]>([
   ["PARTIALLY_REFUNDED", ["PARTIALLY_REFUNDED", "REFUNDED", "DISPUTED"]],
   ["REFUNDED", ["DISPUTED"]],
   ["DISPUTED", ["PAID", "PARTIALLY_REFUNDED", "REFUNDED"]],
-  ["FAILED", ["PENDING", "AUTHORIZED", "PAID"]],
+  // `CANCELLED` (DEC-085): un pago fallido sigue reintentable mientras la
+  // sesion de pago viva; cuando caduca, o el panel cancela el pedido sin cobrar,
+  // ya no se va a pagar. Sin esta arista, ese pedido quedaba pendiente para
+  // siempre y el `expired` de Stripe se ignoraba.
+  ["FAILED", ["PENDING", "AUTHORIZED", "PAID", "CANCELLED"]],
   ["CANCELLED", []],
 ]);
 

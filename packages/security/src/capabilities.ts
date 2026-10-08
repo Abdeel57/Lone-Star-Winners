@@ -290,6 +290,37 @@ export const CAPABILITIES = Object.freeze({
     "Confirmar que se recibio en efectivo el pago de un pedido pendiente y generar sus participaciones con las mismas reglas que una compra con tarjeta.",
     { requiresReason: true },
   ),
+  /**
+   * Cancelar un pedido que NUNCA se cobro (DEC-085).
+   *
+   * Limpia la cola de pendientes: duplicados, carritos abandonados en la
+   * pasarela, pedidos en efectivo que nadie vino a pagar. No toca dinero ni
+   * participaciones: un pedido con `paid_at` se rechaza, y en tarjeta se cierra
+   * antes la sesion de pago para que nadie lo pueda pagar despues. El pedido no
+   * se borra: queda CANCELLED, con quien lo cancelo y por que.
+   *
+   * Motivo obligatorio y sin step-up, por la misma razon que el cobro en caja:
+   * es trabajo de volumen.
+   */
+  "order.cancel": define(
+    "order.cancel",
+    "order",
+    "SENSITIVE",
+    "Cancelar un pedido sin cobrar (duplicado, abandonado o que nadie pago) para sacarlo de la cola de pendientes. Nunca toca un pedido pagado.",
+    { requiresReason: true },
+  ),
+  /**
+   * Marcar un pedido como enviado o devolverlo a pendiente de envio (DEC-085).
+   *
+   * Solo logistica: no cambia importes, estado de pago ni participaciones.
+   * Queda en la auditoria quien lo marco, con transportista y guia si se dieron.
+   */
+  "order.fulfillment.update": define(
+    "order.fulfillment.update",
+    "order",
+    "SENSITIVE",
+    "Marcar la mercancia de un pedido como enviada, con transportista y numero de guia, o devolverla a pendiente de envio.",
+  ),
   "payment.webhook.read": define(
     "payment.webhook.read",
     "payment",

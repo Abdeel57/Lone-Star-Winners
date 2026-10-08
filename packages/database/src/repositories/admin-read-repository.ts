@@ -41,7 +41,7 @@
  *    nadie llego a ver.
  */
 
-import { and, desc, eq, gte, sql, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, gte, lt, sql, type SQL } from "drizzle-orm";
 
 import {
   adjustments,
@@ -49,6 +49,8 @@ import {
   auditEvents,
   disqualifications,
   identities,
+  orderItems,
+  orderRefunds,
   orders,
   participants,
 } from "../schema/index.js";
@@ -165,6 +167,48 @@ export interface AdminAuditListOptions {
   readonly limit: number;
   /** `sequence_no` de la ultima fila devuelta, como texto decimal. */
   readonly after: string | null;
+}
+
+/**
+ * DEC-085: corte de caja de un dia. Cobrado = pedido con `paid_at` dentro de
+ * la ventana, sea cual sea su estado despues; lo que se devolvio va aparte, en
+ * `refunds`, por el dia en que se devolvio.
+ */
+export interface AdminDailyCut {
+  readonly totals: readonly {
+    readonly method: "CASH" | "CARD";
+    readonly currency: string;
+    readonly orders: number;
+    readonly amountMinor: bigint;
+  }[];
+  readonly refunds: readonly {
+    readonly currency: string;
+    readonly refunds: number;
+    readonly amountMinor: bigint;
+  }[];
+  /** Una fila por LINEA de mercancia de los pedidos cobrados ese dia. */
+  readonly merchandise: readonly AdminDailyCutMerchandiseRow[];
+}
+
+export interface AdminDailyCutMerchandiseRow {
+  readonly orderId: string;
+  readonly orderNumber: string;
+  readonly paidAt: Date;
+  readonly method: "CASH" | "CARD";
+  readonly orderStatus: string;
+  /** Crudo, como todo el correo de este archivo (regla 2). */
+  readonly customerEmail: string | null;
+  readonly customerName: string | null;
+  readonly shippingAddress: unknown;
+  readonly fulfillmentMethod: "DELIVERY" | "PICKUP";
+  readonly fulfillmentState: string;
+  readonly fulfilledAt: Date | null;
+  readonly shippingCarrier: string | null;
+  readonly trackingNumber: string | null;
+  readonly sku: string;
+  readonly nameSnapshot: unknown;
+  readonly quantity: number;
+  readonly refundedQuantity: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -353,6 +397,122 @@ export class DrizzleAdminReadRepository {
       participantId: row.participantId,
       participantEmail: row.participantEmail,
     }));
+  }
+
+  /**
+   * DEC-085: el corte de caja de `[from, to)`.
+   *
+   * La ventana -el dia de calendario en la zona del punto de venta- la calcula
+   * quien llama: aqui solo hay instantes (DEC-011). Efectivo es
+   * `provider = 'cash'` y tarjeta todo lo demas, igual que en `listOrders`.
+   */
+  public async dailyCut(window: {
+    readonly from: Date;
+    readonly to: Date;
+  }): Promise<AdminDailyCut> {
+    const paidInWindow = and(gte(orders.paidAt, window.from), lt(orders.paidAt, window.to));
+    const method = sql<
+      "CASH" | "CARD"
+    >`CASE WHEN ${orders.provider} = 'cash' THEN 'CASH' ELSE 'CARD' END`;
+
+    const [totals, refunds, merchandise] = await Promise.all([
+      this.db
+        .select({
+          method,
+          currency: orders.currency,
+          orders: sql<string>`count(*)::text`,
+          amount: sql<string>`coalesce(sum(${orders.totalMinor}), 0)::text`,
+        })
+        .from(orders)
+        .where(paidInWindow)
+        .groupBy(sql`1`, sql`2`)
+        .orderBy(sql`1`, sql`2`),
+      this.db
+        .select({
+          currency: orderRefunds.currency,
+          refunds: sql<string>`count(*)::text`,
+          amount: sql<string>`coalesce(sum(${orderRefunds.amountMinor}), 0)::text`,
+        })
+        .from(orderRefunds)
+        .where(
+          and(gte(orderRefunds.occurredAt, window.from), lt(orderRefunds.occurredAt, window.to)),
+        )
+        .groupBy(orderRefunds.currency)
+        .orderBy(orderRefunds.currency),
+      this.db
+        .select({
+          orderId: orders.id,
+          orderNumber: orders.orderNumber,
+          paidAt: orders.paidAt,
+          method,
+          orderStatus: orders.status,
+          customerEmail: identities.email,
+          displayName: participants.displayName,
+          shippingAddress: orders.shippingAddress,
+          fulfillmentMethod: orders.fulfillmentMethod,
+          fulfillmentState: orders.fulfillmentState,
+          fulfilledAt: orders.fulfilledAt,
+          shippingCarrier: orders.shippingCarrier,
+          trackingNumber: orders.trackingNumber,
+          sku: orderItems.sku,
+          nameSnapshot: orderItems.nameSnapshot,
+          quantity: orderItems.quantity,
+          refundedQuantity: orderItems.refundedQuantity,
+        })
+        .from(orderItems)
+        .innerJoin(orders, eq(orders.id, orderItems.orderId))
+        .innerJoin(participants, eq(participants.id, orders.participantId))
+        .innerJoin(identities, eq(identities.id, participants.identityId))
+        .where(and(paidInWindow, eq(orderItems.productKind, "MERCHANDISE")))
+        .orderBy(asc(orders.paidAt), asc(orders.orderNumber), asc(orderItems.sku)),
+    ]);
+
+    return {
+      totals: totals.map((row) => ({
+        method: row.method,
+        currency: row.currency,
+        orders: toCount(row.orders),
+        amountMinor: BigInt(row.amount),
+      })),
+      refunds: refunds.map((row) => ({
+        currency: row.currency,
+        refunds: toCount(row.refunds),
+        amountMinor: BigInt(row.amount),
+      })),
+      merchandise: merchandise.flatMap((row) => {
+        // `paidInWindow` ya lo garantiza; el tipo de la columna no lo sabe.
+        if (row.paidAt === null) return [];
+        const addressName =
+          typeof row.shippingAddress === "object" &&
+          row.shippingAddress !== null &&
+          typeof (row.shippingAddress as { full_name?: unknown }).full_name === "string"
+            ? (row.shippingAddress as { full_name: string }).full_name
+            : null;
+        return [
+          {
+            orderId: row.orderId,
+            orderNumber: row.orderNumber,
+            paidAt: row.paidAt,
+            method: row.method,
+            orderStatus: row.orderStatus,
+            customerEmail: row.customerEmail,
+            // El nombre de la direccion es el de quien recibe; sin direccion
+            // (recoge en el punto de venta), el de la cuenta.
+            customerName: addressName ?? row.displayName,
+            shippingAddress: row.shippingAddress,
+            fulfillmentMethod: row.fulfillmentMethod,
+            fulfillmentState: row.fulfillmentState,
+            fulfilledAt: row.fulfilledAt,
+            shippingCarrier: row.shippingCarrier,
+            trackingNumber: row.trackingNumber,
+            sku: row.sku,
+            nameSnapshot: row.nameSnapshot,
+            quantity: row.quantity,
+            refundedQuantity: row.refundedQuantity,
+          },
+        ];
+      }),
+    };
   }
 
   /** Correo crudo del comprador de un pedido concreto. `null` si no lo hay. */

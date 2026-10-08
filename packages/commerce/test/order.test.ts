@@ -186,6 +186,15 @@ describe("maquina de estados del pago", () => {
     expect(paymentTransitionIsValid("FAILED", "PAID")).toBe(true);
   });
 
+  it("un pago fallido se puede dar por cancelado (DEC-085), y el pedido con el", () => {
+    expect(paymentTransitionIsValid("FAILED", "CANCELLED")).toBe(true);
+    const at = new Date("2026-10-08T12:00:00.000Z");
+    const failed = applyPaymentState(order(), "FAILED", at, "PAID").order;
+    const cancelled = applyPaymentState(failed, "CANCELLED", at, "PAID").order;
+    expect(cancelled.status).toBe("CANCELLED");
+    expect(cancelled.paidAt).toBeNull();
+  });
+
   it("no se puede saltar de REFUNDED a AUTHORIZED", () => {
     expect(paymentTransitionIsValid("REFUNDED", "AUTHORIZED")).toBe(false);
     expect(() => {

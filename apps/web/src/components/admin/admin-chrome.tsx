@@ -147,7 +147,9 @@ async function AdminHeader({
   const t = await getTranslations({ locale, namespace: "admin.chrome" });
 
   return (
-    <header className="border-b border-border bg-surface">
+    // `print:hidden`: un informe impreso del panel (el corte de caja, DEC-085) no
+    // lleva marca, idioma ni boton de salir.
+    <header className="border-b border-border bg-surface print:hidden">
       <div className="lsw-container flex flex-wrap items-center justify-between gap-s4 py-s4">
         <div className="flex min-w-0 items-baseline gap-s3">
           <Link
@@ -211,7 +213,7 @@ export async function AdminChrome({
       <AdminHeader locale={locale} actor={actor} />
 
       <div className="lsw-container flex flex-1 flex-col gap-s6 py-s6 lg:flex-row lg:gap-s8 lg:py-s8">
-        <div className="lg:w-56 lg:shrink-0">
+        <div className="lg:w-56 lg:shrink-0 print:hidden">
           <AdminNav actor={actor} locale={locale} current={current} />
         </div>
 

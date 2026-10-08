@@ -20,6 +20,7 @@
 import { PaymentProviderNotConfiguredError } from "./errors.js";
 import type {
   CheckoutSession,
+  CheckoutSessionCloseResult,
   CreateCheckoutSessionInput,
   PaymentProvider,
   PaymentSnapshot,
@@ -44,6 +45,10 @@ export class UnconfiguredPaymentProvider implements PaymentProvider {
   }
 
   public refund(_input: RefundInput): Promise<RefundResult> {
+    return Promise.reject(new PaymentProviderNotConfiguredError());
+  }
+
+  public closeCheckoutSession(_providerSessionId: string): Promise<CheckoutSessionCloseResult> {
     return Promise.reject(new PaymentProviderNotConfiguredError());
   }
 

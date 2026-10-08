@@ -48,6 +48,7 @@ import {
   orderDetailSchema,
   orderEntryStateSchema,
   orderStatusSchema,
+  postalAddressSchema,
 } from "../http/schemas-b5.js";
 import { moneySchema } from "../http/schemas.js";
 import { adminReadsFor } from "../services/admin-reads.js";
@@ -56,9 +57,13 @@ import {
   type CashActionResult,
   type CashPaymentView,
 } from "../services/cash-payments.js";
+import { DAILY_CUT_TIME_ZONE, dailyCutWindow, isCalendarDate } from "../services/daily-cut.js";
 import { domainServicesFor } from "../services/domain-registry.js";
+import { localDateIn } from "../services/eligibility.js";
+import { createOrderAdminActions } from "../services/order-admin-actions.js";
 import {
   entryStateForOrder,
+  presentAddressOrNull,
   presentOrderDetail,
   presentOrderSummary,
 } from "../services/order-presenter.js";
@@ -100,6 +105,81 @@ const generateEntriesBodySchema = z.object({
     .string()
     .regex(/^[a-zA-Z][a-zA-Z0-9_.]{2,63}$/u)
     .optional(),
+});
+
+/** DEC-085: mismo trato del motivo que la confirmacion del cobro. */
+const cancelOrderBodySchema = z.object({
+  reason_code: z
+    .string()
+    .regex(/^[a-zA-Z][a-zA-Z0-9_.]{2,63}$/u)
+    .optional(),
+  notes: z.string().trim().max(2000).nullable().optional(),
+});
+
+/** DEC-085: entregado (con transportista y guia opcionales) o de vuelta a pendiente. */
+const fulfillmentBodySchema = z.object({
+  delivered: z.boolean(),
+  carrier: z.string().trim().min(1).max(60).nullable().optional(),
+  tracking_number: z.string().trim().min(1).max(100).nullable().optional(),
+});
+
+const dailyCutQuerySchema = z.object({
+  /** Dia de calendario en la hora del punto de venta. Ausente = hoy. */
+  date: z.string().refine(isCalendarDate, { message: "YYYY-MM-DD" }).optional(),
+});
+
+const dailyCutTotalSchema = z.object({
+  /** Pedidos cobrados en el dia, no lineas ni unidades. */
+  orders: z.number().int(),
+  amount: moneySchema,
+});
+
+/**
+ * DEC-085: el corte de caja. Sin desglose de paquetes ni de participaciones:
+ * lo que cuadra es dinero. La mercancia va aparte, linea a linea, porque es
+ * lo que hay que preparar y enviar.
+ */
+const dailyCutSchema = z.object({
+  date: z.string(),
+  time_zone: z.string(),
+  /** `[from, to)`: de las 12:00 a. m. del dia a las 12:00 a. m. del siguiente. */
+  from: z.string(),
+  to: z.string(),
+  cash: dailyCutTotalSchema,
+  card: dailyCutTotalSchema,
+  total: dailyCutTotalSchema,
+  /** Reembolsos con tarjeta hechos ESE dia, de pedidos de cualquier dia. */
+  refunds: z.object({ refunds: z.number().int(), amount: moneySchema }),
+  merchandise: z.object({
+    /** Unidades por producto. `refunded_quantity` ya devueltas, aparte. */
+    products: z.array(
+      z.object({
+        sku: z.string(),
+        product_name: z.object({ "en-US": z.string(), "es-US": z.string() }),
+        quantity: z.number().int(),
+        refunded_quantity: z.number().int(),
+      }),
+    ),
+    lines: z.array(
+      z.object({
+        order_id: z.uuid(),
+        order_number: z.string(),
+        paid_at: z.string(),
+        payment_method: z.enum(["CARD", "CASH"]),
+        order_status: z.string(),
+        customer_name: z.string().nullable(),
+        /** Enmascarado, como en el listado. */
+        customer_email: z.string(),
+        fulfillment_method: z.enum(["DELIVERY", "PICKUP"]),
+        shipping_address: postalAddressSchema.nullable(),
+        fulfillment: orderDetailSchema.shape.fulfillment,
+        sku: z.string(),
+        product_name: z.object({ "en-US": z.string(), "es-US": z.string() }),
+        quantity: z.number().int(),
+        refunded_quantity: z.number().int(),
+      }),
+    ),
+  }),
 });
 
 /**
@@ -417,5 +497,239 @@ export function buildAdminOrdersRoutes(dependencies: AppDependencies): RouteDefi
         return await presentCashPayment(result.view, result);
       },
     },
+
+    // -----------------------------------------------------------------------
+    // DEC-085: cancelar sin cobrar, entregar, corte de caja
+    // -----------------------------------------------------------------------
+
+    {
+      method: "POST",
+      url: "/api/v1/admin/orders/:order_id/cancel",
+      operationId: "cancelAdminOrder",
+      summary: "Cancelar un pedido que nunca se cobro.",
+      description:
+        "DEC-085. Solo pedidos sin `paid_at` en DRAFT o PENDING_PAYMENT, en efectivo o con tarjeta: los saca de la cola de pendientes y quedan CANCELLED, con quien y por que en la auditoria. Con tarjeta, primero se cierra la sesion de pago; si el proveedor dice que el pago ya se completo o esta en curso, 409 `ORDER_PAYMENT_IN_PROGRESS` y no se cancela. 409 `ORDER_NOT_CANCELLABLE` si el pedido esta cobrado (eso se reembolsa). Cancelar uno ya cancelado responde la ficha sin hacer nada.",
+      tags: ["admin"],
+      authorization: { kind: "PERMISSION", permission: "order.cancel" },
+      schema: {
+        params: orderParamsSchema,
+        body: cancelOrderBodySchema,
+        response: {
+          200: orderDetailSchema,
+          401: errorEnvelopeSchema,
+          403: errorEnvelopeSchema,
+          404: errorEnvelopeSchema,
+          409: errorEnvelopeSchema,
+          422: errorEnvelopeSchema,
+          503: errorEnvelopeSchema,
+        },
+      },
+      handler: async (request) => {
+        const staff = await requireStaffContext(dependencies, request);
+        const params = request.params as z.infer<typeof orderParamsSchema>;
+        const body = request.body as z.infer<typeof cancelOrderBodySchema>;
+        const reasonCode = requireReasonCode(body.reason_code);
+        const notes = body.notes === undefined || body.notes === "" ? null : body.notes;
+
+        const domain = domainServicesFor(dependencies);
+        const result = await createOrderAdminActions(dependencies, domain).cancel(
+          params.order_id,
+          { adminUserId: staff.adminUserId },
+          { reasonCode, notes },
+        );
+
+        return await presentOrderDetail(domain, result.order);
+      },
+    },
+
+    {
+      method: "POST",
+      url: "/api/v1/admin/orders/:order_id/fulfillment",
+      operationId: "setAdminOrderFulfillment",
+      summary: "Marcar la mercancia de un pedido como enviada, o devolverla a pendiente.",
+      description:
+        "DEC-085. `delivered: true` la marca enviada -o entregada en mano si se recoge en el punto de venta- con `carrier` y `tracking_number` opcionales (solo si se envia); `false` la devuelve a pendiente y borra esos datos. Solo pedidos cobrados, no cancelados ni reembolsados enteros, y con mercancia. No toca importes, pago ni participaciones.",
+      tags: ["admin"],
+      authorization: { kind: "PERMISSION", permission: "order.fulfillment.update" },
+      schema: {
+        params: orderParamsSchema,
+        body: fulfillmentBodySchema,
+        response: {
+          200: orderDetailSchema,
+          401: errorEnvelopeSchema,
+          403: errorEnvelopeSchema,
+          404: errorEnvelopeSchema,
+          409: errorEnvelopeSchema,
+          422: errorEnvelopeSchema,
+        },
+      },
+      handler: async (request) => {
+        const staff = await requireStaffContext(dependencies, request);
+        const params = request.params as z.infer<typeof orderParamsSchema>;
+        const body = request.body as z.infer<typeof fulfillmentBodySchema>;
+
+        const domain = domainServicesFor(dependencies);
+        const order = await createOrderAdminActions(dependencies, domain).setFulfillment(
+          params.order_id,
+          { adminUserId: staff.adminUserId },
+          body.delivered
+            ? {
+                delivered: true,
+                carrier: body.carrier ?? null,
+                trackingNumber: body.tracking_number ?? null,
+              }
+            : { delivered: false },
+        );
+
+        return await presentOrderDetail(domain, order);
+      },
+    },
+
+    {
+      method: "GET",
+      url: "/api/v1/admin/reports/daily-cut",
+      operationId: "getAdminDailyCut",
+      summary: "Corte de caja de un dia, en la hora del punto de venta.",
+      description:
+        "DEC-085. De 12:00 a. m. a 11:59 p. m. en `America/Denver` (Nuevo Mexico). Totales en efectivo, con tarjeta y en conjunto, con el numero de pedidos cobrados ese dia (`paid_at`) por medio de pago; los reembolsos de ese dia, aparte. Sin desglose de paquetes ni de participaciones. `merchandise` lista la mercancia de esos pedidos con cliente, direccion o recogida, numero de pedido y estado de envio, y las unidades por producto. Sin `date`, hoy.",
+      tags: ["admin"],
+      authorization: { kind: "PERMISSION", permission: "order.read" },
+      schema: {
+        querystring: dailyCutQuerySchema,
+        response: {
+          200: dailyCutSchema,
+          401: errorEnvelopeSchema,
+          403: errorEnvelopeSchema,
+          422: errorEnvelopeSchema,
+        },
+      },
+      handler: async (request) => {
+        await requireStaff(dependencies, request);
+        const query = request.query as z.infer<typeof dailyCutQuerySchema>;
+
+        const domain = domainServicesFor(dependencies);
+        const date = query.date ?? localDateIn(domain.clock.now(), DAILY_CUT_TIME_ZONE);
+        const window = dailyCutWindow(date);
+        const cut = await adminReadsFor(dependencies).dailyCut(window);
+
+        // Una sola moneda, la de la tienda. Si apareciera otra, no se suma a
+        // ciegas con esta: se registra y queda fuera del corte.
+        const currency = dependencies.config.commerce.defaultCurrency;
+        const foreign = [...cut.totals, ...cut.refunds].filter((row) => row.currency !== currency);
+        if (foreign.length > 0) {
+          request.log.warn(
+            {
+              event: "daily_cut.foreign_currency",
+              date,
+              currencies: foreign.map((r) => r.currency),
+            },
+            "el corte de caja encontro cobros en otra moneda y no los suma",
+          );
+        }
+
+        const sumOf = (method: "CASH" | "CARD" | null) => {
+          const rows = cut.totals.filter(
+            (row) => row.currency === currency && (method === null || row.method === method),
+          );
+          return {
+            orders: rows.reduce((total, row) => total + row.orders, 0),
+            amount: {
+              amount_minor: rows.reduce((total, row) => total + row.amountMinor, 0n).toString(10),
+              currency,
+            },
+          };
+        };
+        const refunds = cut.refunds.filter((row) => row.currency === currency);
+
+        const lines = cut.merchandise.map((row) => ({
+          order_id: row.orderId,
+          order_number: row.orderNumber,
+          paid_at: row.paidAt.toISOString(),
+          payment_method: row.method,
+          order_status: row.orderStatus,
+          customer_name: row.customerName,
+          customer_email: maskEmail(row.customerEmail) ?? "",
+          fulfillment_method: row.fulfillmentMethod,
+          shipping_address: presentAddressOrNull(row.shippingAddress),
+          fulfillment: {
+            state: fulfillmentStateOf(row.fulfillmentState),
+            delivered_at: row.fulfilledAt?.toISOString() ?? null,
+            carrier: row.shippingCarrier,
+            tracking_number: row.trackingNumber,
+          },
+          sku: row.sku,
+          product_name: localizedName(row.nameSnapshot),
+          quantity: row.quantity,
+          refunded_quantity: row.refundedQuantity,
+        }));
+
+        const bySku = new Map<
+          string,
+          {
+            sku: string;
+            product_name: { "en-US": string; "es-US": string };
+            quantity: number;
+            refunded_quantity: number;
+          }
+        >();
+        for (const line of lines) {
+          const product = bySku.get(line.sku) ?? {
+            sku: line.sku,
+            product_name: line.product_name,
+            quantity: 0,
+            refunded_quantity: 0,
+          };
+          product.quantity += line.quantity;
+          product.refunded_quantity += line.refunded_quantity;
+          bySku.set(line.sku, product);
+        }
+
+        return {
+          date,
+          time_zone: DAILY_CUT_TIME_ZONE,
+          from: window.from.toISOString(),
+          to: window.to.toISOString(),
+          cash: sumOf("CASH"),
+          card: sumOf("CARD"),
+          total: sumOf(null),
+          refunds: {
+            refunds: refunds.reduce((total, row) => total + row.refunds, 0),
+            amount: {
+              amount_minor: refunds
+                .reduce((total, row) => total + row.amountMinor, 0n)
+                .toString(10),
+              currency,
+            },
+          },
+          merchandise: {
+            products: [...bySku.values()].sort((a, b) => a.sku.localeCompare(b.sku)),
+            lines,
+          },
+        };
+      },
+    },
   ];
+}
+
+const FULFILLMENT_STATES = [
+  "NOT_APPLICABLE",
+  "UNFULFILLED",
+  "PARTIALLY_FULFILLED",
+  "FULFILLED",
+  "RETURNED",
+] as const;
+
+function fulfillmentStateOf(value: string): (typeof FULFILLMENT_STATES)[number] {
+  return FULFILLMENT_STATES.find((state) => state === value) ?? "UNFULFILLED";
+}
+
+/** Nombre congelado en los dos idiomas (DEC-030), como en la ficha del pedido. */
+function localizedName(snapshot: unknown): { "en-US": string; "es-US": string } {
+  const record =
+    typeof snapshot === "object" && snapshot !== null ? (snapshot as Record<string, unknown>) : {};
+  const pick = (key: string): string => {
+    const value = Object.prototype.hasOwnProperty.call(record, key) ? record[key] : undefined;
+    return typeof value === "string" ? value : "";
+  };
+  return { "en-US": pick("en-US"), "es-US": pick("es-US") };
 }

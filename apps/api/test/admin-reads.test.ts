@@ -102,6 +102,7 @@ function orderFixture(overrides: Record<string, unknown> = {}): Record<string, u
         productVariantId: "14141414-1414-4141-8141-141414141414",
         sku: "SKU-1",
         nameSnapshot: { "en-US": "Cap", "es-US": "Gorra" },
+        productKind: "MERCHANDISE",
         quantity: 2,
         unitAmountMinor: 2500n,
         sweepstakesEligibleSnapshot: true,
@@ -134,6 +135,10 @@ function orderFixture(overrides: Record<string, unknown> = {}): Record<string, u
       country: "US",
     },
     fulfillmentMethod: "DELIVERY",
+    // DEC-085: todavia sin enviar.
+    fulfilledAt: null,
+    shippingCarrier: null,
+    trackingNumber: null,
     ...overrides,
   };
 }

@@ -100,6 +100,14 @@ export const orders = pgTable(
     fulfillmentMethod: text("fulfillment_method", { enum: ["DELIVERY", "PICKUP"] })
       .notNull()
       .default("DELIVERY"),
+    /**
+     * DEC-085 (0038): cuando se envio o se entrego en mano. Va con
+     * `fulfillment_state = FULFILLED`; una CHECK lo impone.
+     */
+    fulfilledAt: timestamp("fulfilled_at", { withTimezone: true, mode: "date" }),
+    /** Solo si se ENVIA y ya esta enviado. Texto libre: no hay integracion con paqueteria. */
+    shippingCarrier: text("shipping_carrier"),
+    trackingNumber: text("tracking_number"),
     createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
     paidAt: timestamp("paid_at", { withTimezone: true, mode: "date" }),

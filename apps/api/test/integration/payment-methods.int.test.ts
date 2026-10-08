@@ -84,7 +84,10 @@ interface Staff {
 interface Scenario {
   readonly promotionId: string;
   readonly variantId: string;
-  readonly participants: Record<"card" | "cash" | "retry" | "pending", string>;
+  readonly participants: Record<
+    "card" | "cash" | "retry" | "pending" | "cancelCash" | "cancelCard" | "stuckCard",
+    string
+  >;
   readonly manager: Staff;
   readonly support: Staff;
 }
@@ -195,6 +198,10 @@ async function seed(config: ApiConfig): Promise<Scenario> {
     cash: await insertParticipant("cash-buyer@example.invalid"),
     retry: await insertParticipant("retry-buyer@example.invalid"),
     pending: await insertParticipant("pending-buyer@example.invalid"),
+    // DEC-085: pedidos que se cancelan sin cobrar.
+    cancelCash: await insertParticipant("cancel-cash@example.invalid"),
+    cancelCard: await insertParticipant("cancel-card@example.invalid"),
+    stuckCard: await insertParticipant("stuck-card@example.invalid"),
   };
 
   // DEC-079: sin tarifa, un carrito con mercancia no se puede pagar (409).
@@ -434,9 +441,41 @@ async function count(query: ReturnType<typeof sql>): Promise<number> {
 // Montaje
 // ---------------------------------------------------------------------------
 
-/** Stripe, del lado de la red: abre la sesion de Checkout y nada mas. */
-const fakeStripeFetch: typeof fetch = (input) => {
+/** DEC-085: sesiones que el comprador "pago": Stripe ya no deja caducarlas. */
+const completedStripeSessions = new Set<string>();
+/** DEC-085: lo que se pidio a Stripe, para comprobar que se cerro la sesion. */
+const stripeCalls: { method: string; url: string }[] = [];
+
+function stripeJson(status: number, body: unknown): Promise<Response> {
+  return Promise.resolve(
+    new Response(JSON.stringify(body), {
+      status,
+      headers: { "content-type": "application/json" },
+    }),
+  );
+}
+
+/**
+ * Stripe, del lado de la red: abre la sesion de Checkout y, desde DEC-085, la
+ * caduca (`POST .../expire`) o dice en que estado esta (`GET`).
+ */
+const fakeStripeFetch: typeof fetch = (input, init) => {
   const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+  const method = init?.method ?? "GET";
+  stripeCalls.push({ method, url });
+
+  const session = /\/checkout\/sessions\/([^/]+)(\/expire)?$/u.exec(url);
+  if (session !== null) {
+    const id = decodeURIComponent(session[1] ?? "");
+    const completed = completedStripeSessions.has(id);
+    if (session[2] !== undefined) {
+      return completed
+        ? stripeJson(400, { error: { type: "invalid_request_error", message: "not open" } })
+        : stripeJson(200, { id, status: "expired" });
+    }
+    return stripeJson(200, { id, status: completed ? "complete" : "expired" });
+  }
+
   if (!url.endsWith("/checkout/sessions")) {
     return Promise.resolve(
       new Response(JSON.stringify({ error: { type: "fixture" } }), { status: 404 }),
@@ -1060,5 +1099,327 @@ describe("export: efectivo y tarjeta en el mismo universo, los pendientes fuera"
     }
     // Pedido en efectivo sin cobrar: ninguna participacion valida.
     expect(byParticipant.has(scenario.participants.pending)).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 8. Cancelar lo que nunca se cobro (DEC-085)
+// ---------------------------------------------------------------------------
+
+async function openCardCheckout(email: string): Promise<{ orderId: string; sessionId: string }> {
+  const buyer = await participantBrowser(email);
+  await fillCart(buyer);
+  const session = await buyer.request("POST", "/api/v1/checkout/session", {
+    shipping_address: SHIPPING,
+    return_url: "https://lonestarwinners.test/es/checkout/return",
+  });
+  expect(session.statusCode, session.body).toBe(201);
+  const orderId = session.json<{ order_draft_id: string }>().order_draft_id;
+  const sessionId = await one<string>(
+    sql`SELECT provider_order_id FROM orders WHERE id = ${orderId}`,
+  );
+  return { orderId, sessionId };
+}
+
+async function orderRow(
+  orderId: string,
+): Promise<{ status: string; payment_state: string; paid_at: unknown }> {
+  const result = await db.execute<{ status: string; payment_state: string; paid_at: unknown }>(
+    sql`SELECT status::text AS status, payment_state::text AS payment_state, paid_at
+          FROM orders WHERE id = ${orderId}`,
+  );
+  const row = result.rows[0];
+  if (row === undefined) throw new Error(`No existe el pedido ${orderId}.`);
+  return row;
+}
+
+describe("cancelar un pedido sin cobrar (DEC-085)", () => {
+  let cashPending = { id: "", order_number: "" };
+
+  it("efectivo pendiente: SUPPORT no puede, y sin motivo tampoco", async () => {
+    const buyer = await participantBrowser("cancel-cash@example.invalid");
+    cashPending = await placeCashOrder(buyer);
+
+    const support = await staffBrowser(scenario.support);
+    const denied = await support.request("POST", `/api/v1/admin/orders/${cashPending.id}/cancel`, {
+      reason_code: "DUPLICATE_ORDER",
+    });
+    expect(denied.statusCode).toBe(403);
+
+    const manager = await staffBrowser(scenario.manager);
+    const noReason = await manager.request(
+      "POST",
+      `/api/v1/admin/orders/${cashPending.id}/cancel`,
+      {},
+    );
+    expect(noReason.statusCode).toBe(403);
+    expect((await orderRow(cashPending.id)).status).toBe("PENDING_PAYMENT");
+  });
+
+  it("lo cancela, sale de la cola de caja y ya no se puede cobrar", async () => {
+    const manager = await staffBrowser(scenario.manager);
+    const cancelled = await manager.request(
+      "POST",
+      `/api/v1/admin/orders/${cashPending.id}/cancel`,
+      { reason_code: "DUPLICATE_ORDER", notes: "El cliente pidio dos veces." },
+    );
+    expect(cancelled.statusCode, cancelled.body).toBe(200);
+    expect(cancelled.json<{ status: string }>().status).toBe("CANCELLED");
+    expect(await orderRow(cashPending.id)).toMatchObject({
+      status: "CANCELLED",
+      payment_state: "CANCELLED",
+      paid_at: null,
+    });
+
+    const queue = (
+      await manager.request("GET", "/api/v1/admin/orders?payment_method=CASH&awaiting_payment=true")
+    ).json<{ items: { id: string }[] }>();
+    expect(queue.items.map((item) => item.id)).not.toContain(cashPending.id);
+
+    const confirm = await manager.request(
+      "POST",
+      `/api/v1/admin/orders/${cashPending.id}/cash-payment/confirm`,
+      { reason_code: "CASH_RECEIVED_AT_STORE" },
+    );
+    expect(confirm.statusCode).toBe(409);
+    expect(confirm.json<{ error: { code: string } }>().error.code).toBe("CASH_PAYMENT_NOT_PENDING");
+
+    expect(
+      await count(
+        sql`SELECT count(*)::text FROM audit_events
+             WHERE action = 'order.cancelled' AND target_entity_id = ${cashPending.id}
+               AND actor_id = ${scenario.manager.adminUserId}
+               AND reason_code = 'DUPLICATE_ORDER'`,
+      ),
+    ).toBe(1);
+  });
+
+  it("cancelarlo otra vez no hace nada ni deja otra traza", async () => {
+    const manager = await staffBrowser(scenario.manager);
+    const again = await manager.request("POST", `/api/v1/admin/orders/${cashPending.id}/cancel`, {
+      reason_code: "DUPLICATE_ORDER",
+    });
+    expect(again.statusCode).toBe(200);
+    expect(
+      await count(
+        sql`SELECT count(*)::text FROM audit_events
+             WHERE action = 'order.cancelled' AND target_entity_id = ${cashPending.id}`,
+      ),
+    ).toBe(1);
+  });
+
+  it("tarjeta: cierra antes la sesion de Stripe, y el expired tardio no rompe nada", async () => {
+    const { orderId, sessionId } = await openCardCheckout("cancel-card@example.invalid");
+
+    const manager = await staffBrowser(scenario.manager);
+    const cancelled = await manager.request("POST", `/api/v1/admin/orders/${orderId}/cancel`, {
+      reason_code: "ABANDONED_CHECKOUT",
+    });
+    expect(cancelled.statusCode, cancelled.body).toBe(200);
+
+    expect(stripeCalls).toContainEqual({
+      method: "POST",
+      url: `https://api.stripe.com/v1/checkout/sessions/${sessionId}/expire`,
+    });
+    expect(await orderRow(orderId)).toMatchObject({ status: "CANCELLED", paid_at: null });
+    expect(
+      await one<string>(
+        sql`SELECT status::text FROM checkout_sessions WHERE order_id = ${orderId}
+             ORDER BY created_at DESC LIMIT 1`,
+      ),
+    ).toBe("CANCELLED");
+
+    // Stripe avisa despues de que la sesion caduco: el pedido ya esta cancelado
+    // y el webhook lo da por procesado en vez de quedarse en 500.
+    const created = Math.floor(Date.now() / 1000);
+    const raw = JSON.stringify({
+      id: `evt_${randomUUID().replaceAll("-", "")}`,
+      type: "checkout.session.expired",
+      created,
+      data: {
+        object: {
+          id: sessionId,
+          client_reference_id: orderId,
+          payment_status: "unpaid",
+          amount_total: ORDER_TOTAL_MINOR,
+          currency: "usd",
+          metadata: { order_id: orderId },
+        },
+      },
+    });
+    const webhook = await app.inject({
+      method: "POST",
+      url: "/api/v1/webhooks/payments/stripe",
+      headers: {
+        "content-type": "application/json",
+        "stripe-signature": `t=${String(created)},v1=${provider.sign(Buffer.from(raw), created)}`,
+      },
+      payload: raw,
+    });
+    expect(webhook.statusCode, webhook.body).toBe(200);
+    expect((await orderRow(orderId)).status).toBe("CANCELLED");
+  });
+
+  it("tarjeta ya pagada en Stripe: no se cancela, lo resuelve el webhook", async () => {
+    const { orderId, sessionId } = await openCardCheckout("stuck-card@example.invalid");
+    completedStripeSessions.add(sessionId);
+
+    const manager = await staffBrowser(scenario.manager);
+    const refused = await manager.request("POST", `/api/v1/admin/orders/${orderId}/cancel`, {
+      reason_code: "ABANDONED_CHECKOUT",
+    });
+    expect(refused.statusCode).toBe(409);
+    expect(refused.json<{ error: { code: string } }>().error.code).toBe(
+      "ORDER_PAYMENT_IN_PROGRESS",
+    );
+    expect((await orderRow(orderId)).status).toBe("PENDING_PAYMENT");
+  });
+
+  it("un pedido cobrado no se cancela: eso es un reembolso", async () => {
+    const manager = await staffBrowser(scenario.manager);
+    const refused = await manager.request("POST", `/api/v1/admin/orders/${cashOrder.id}/cancel`, {
+      reason_code: "DUPLICATE_ORDER",
+    });
+    expect(refused.statusCode).toBe(409);
+    expect(refused.json<{ error: { code: string } }>().error.code).toBe("ORDER_NOT_CANCELLABLE");
+    expect(await purchaseAwards(cashOrder.id)).toHaveLength(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 9. Marcar la mercancia como enviada (DEC-085)
+// ---------------------------------------------------------------------------
+
+describe("marcar la mercancia como enviada (DEC-085)", () => {
+  it("SUPPORT la marca enviada con transportista y guia, y el comprador lo ve", async () => {
+    const support = await staffBrowser(scenario.support);
+    const shipped = await support.request(
+      "POST",
+      `/api/v1/admin/orders/${cashOrder.id}/fulfillment`,
+      { delivered: true, carrier: "USPS", tracking_number: "9400 1000 0000 0000 0000 00" },
+    );
+    expect(shipped.statusCode, shipped.body).toBe(200);
+    expect(shipped.json<Record<string, unknown>>()).toMatchObject({
+      status: "FULFILLED",
+      fulfillment: {
+        state: "FULFILLED",
+        carrier: "USPS",
+        tracking_number: "9400 1000 0000 0000 0000 00",
+      },
+    });
+
+    const buyer = await participantBrowser("cash-buyer@example.invalid");
+    const mine = (await buyer.request("GET", `/api/v1/account/orders/${cashOrder.id}`)).json<{
+      fulfillment: { state: string; carrier: string | null };
+    }>();
+    expect(mine.fulfillment).toMatchObject({ state: "FULFILLED", carrier: "USPS" });
+
+    expect(
+      await count(
+        sql`SELECT count(*)::text FROM audit_events
+             WHERE action = 'order.fulfillment.updated' AND target_entity_id = ${cashOrder.id}`,
+      ),
+    ).toBe(1);
+  });
+
+  it("volver a pendiente borra transportista y guia", async () => {
+    const manager = await staffBrowser(scenario.manager);
+    const reverted = await manager.request(
+      "POST",
+      `/api/v1/admin/orders/${cashOrder.id}/fulfillment`,
+      { delivered: false },
+    );
+    expect(reverted.statusCode, reverted.body).toBe(200);
+    expect(reverted.json<{ fulfillment: unknown }>().fulfillment).toEqual({
+      state: "UNFULFILLED",
+      delivered_at: null,
+      carrier: null,
+      tracking_number: null,
+    });
+  });
+
+  it("un pedido sin cobrar no se puede marcar enviado", async () => {
+    const support = await staffBrowser(scenario.support);
+    const pending = await one<string>(
+      sql`SELECT id FROM orders WHERE participant_id = ${scenario.participants.pending}`,
+    );
+    const refused = await support.request("POST", `/api/v1/admin/orders/${pending}/fulfillment`, {
+      delivered: true,
+    });
+    expect(refused.statusCode).toBe(409);
+    expect(refused.json<{ error: { code: string } }>().error.code).toBe("ORDER_NOT_FULFILLABLE");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 10. Corte de caja (DEC-085)
+// ---------------------------------------------------------------------------
+
+describe("corte de caja del dia, en hora de Nuevo Mexico (DEC-085)", () => {
+  it("efectivo, tarjeta y total, contando solo lo cobrado", async () => {
+    const manager = await staffBrowser(scenario.manager);
+    const response = await manager.request("GET", "/api/v1/admin/reports/daily-cut");
+    expect(response.statusCode, response.body).toBe(200);
+
+    const cut = response.json<{
+      time_zone: string;
+      cash: { orders: number; amount: { amount_minor: string } };
+      card: { orders: number; amount: { amount_minor: string } };
+      total: { orders: number; amount: { amount_minor: string } };
+      merchandise: {
+        products: { sku: string; quantity: number }[];
+        lines: {
+          order_number: string;
+          customer_name: string | null;
+          customer_email: string;
+          shipping_address: { full_name: string } | null;
+          fulfillment: { state: string };
+        }[];
+      };
+    }>();
+
+    expect(cut.time_zone).toBe("America/Denver");
+    // Cobrados: dos en efectivo (el normal y el del reintento) y uno con
+    // tarjeta. Los pendientes y los cancelados no cuentan.
+    expect(cut.cash).toMatchObject({
+      orders: 2,
+      amount: { amount_minor: String(2 * ORDER_TOTAL_MINOR) },
+    });
+    expect(cut.card).toMatchObject({
+      orders: 1,
+      amount: { amount_minor: String(ORDER_TOTAL_MINOR) },
+    });
+    expect(cut.total).toMatchObject({
+      orders: 3,
+      amount: { amount_minor: String(3 * ORDER_TOTAL_MINOR) },
+    });
+
+    expect(cut.merchandise.products).toEqual([
+      expect.objectContaining({ sku: "INT-CAP-STD", quantity: 3 * QUANTITY }),
+    ]);
+    const line = cut.merchandise.lines.find((row) => row.order_number === cashOrder.order_number);
+    expect(line).toMatchObject({
+      customer_name: SHIPPING.full_name,
+      shipping_address: { full_name: SHIPPING.full_name },
+      fulfillment: { state: "UNFULFILLED" },
+    });
+    expect(line?.customer_email).not.toBe("cash-buyer@example.invalid");
+  });
+
+  it("un dia sin cobros da ceros, y una fecha imposible se rechaza", async () => {
+    const manager = await staffBrowser(scenario.manager);
+    const empty = await manager.request("GET", "/api/v1/admin/reports/daily-cut?date=2020-01-01");
+    expect(empty.statusCode).toBe(200);
+    expect(empty.json<Record<string, unknown>>()).toMatchObject({
+      date: "2020-01-01",
+      // 2020-01-01 en Nuevo Mexico es MST (UTC-7).
+      from: "2020-01-01T07:00:00.000Z",
+      to: "2020-01-02T07:00:00.000Z",
+      total: { orders: 0, amount: { amount_minor: "0" } },
+      merchandise: { products: [], lines: [] },
+    });
+
+    const invalid = await manager.request("GET", "/api/v1/admin/reports/daily-cut?date=2026-02-30");
+    expect(invalid.statusCode).toBe(422);
   });
 });

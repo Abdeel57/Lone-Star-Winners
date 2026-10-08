@@ -13,6 +13,7 @@ import {
   approveAdjustment,
   approveAdminSettingChangeRequest,
   approveAmoeSubmission,
+  cancelAdminOrder,
   confirmAdminOrderCashPayment,
   createAdjustment,
   createAdminBonusPeriod,
@@ -27,6 +28,7 @@ import {
   putAdminRulesDocument,
   rejectAdminSettingChangeRequest,
   rejectAmoeSubmission,
+  setAdminOrderFulfillment,
   transcribeAmoeSubmission,
   updateAdminFeatureFlag,
   updateAdminProductVariant,
@@ -385,6 +387,80 @@ export async function generateCashEntriesAction(
   return result.data.entries_error_code === null
     ? SUCCEEDED
     : invalid("CASH_ENTRIES_GENERATION_FAILED");
+}
+
+/**
+ * DEC-085: cancelar un pedido que nunca se cobro. El backend lo vuelve a
+ * comprobar todo con el pedido bloqueado y, con tarjeta, cierra antes la sesion
+ * de pago: si el cliente ya pago, contesta 409 y aqui se ensena tal cual.
+ */
+export async function cancelOrderAction(
+  _previous: ActionResult,
+  formData: FormData,
+): Promise<ActionResult> {
+  const locale = localeFrom(formData);
+  if (locale === null) return invalid("VALIDATION_FAILED");
+
+  const orderId = textFrom(formData, "order_id");
+  if (orderId === null) return invalid("VALIDATION_FAILED");
+
+  const reason = reasonFrom(formData);
+  if (isActionResult(reason)) return reason;
+
+  const session = await mutableSession();
+  const result = await cancelAdminOrder(
+    orderId,
+    reason.note === null
+      ? { reason_code: reason.reason_key }
+      : { reason_code: reason.reason_key, notes: reason.note },
+    locale,
+    session,
+  );
+
+  if (!result.ok) return fromFailure(result.error);
+
+  revalidatePath("/admin", "layout");
+  return SUCCEEDED;
+}
+
+/**
+ * DEC-085: marcar la mercancia como enviada -con transportista y guia, si se
+ * dan- o devolverla a pendiente. Sin motivo: es logistica, no toca dinero.
+ */
+export async function setOrderFulfillmentAction(
+  _previous: ActionResult,
+  formData: FormData,
+): Promise<ActionResult> {
+  const locale = localeFrom(formData);
+  if (locale === null) return invalid("VALIDATION_FAILED");
+
+  const orderId = textFrom(formData, "order_id");
+  if (orderId === null) return invalid("VALIDATION_FAILED");
+
+  const delivered = textFrom(formData, "delivered");
+  if (delivered !== "true" && delivered !== "false") return invalid("VALIDATION_FAILED");
+
+  const carrier = textFrom(formData, "carrier");
+  const trackingNumber = textFrom(formData, "tracking_number");
+  if (carrier !== null && carrier.length > 60) return invalid("FIELD_TOO_LONG", "carrier");
+  if (trackingNumber !== null && trackingNumber.length > 100) {
+    return invalid("FIELD_TOO_LONG", "tracking_number");
+  }
+
+  const session = await mutableSession();
+  const result = await setAdminOrderFulfillment(
+    orderId,
+    delivered === "true"
+      ? { delivered: true, carrier, tracking_number: trackingNumber }
+      : { delivered: false },
+    locale,
+    session,
+  );
+
+  if (!result.ok) return fromFailure(result.error);
+
+  revalidatePath("/admin", "layout");
+  return SUCCEEDED;
 }
 
 /** Rechazo de un envio AMOE. */

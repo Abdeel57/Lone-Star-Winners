@@ -47,6 +47,7 @@ import type { CurrencyCode, MinorAmount } from "@lsw/sweepstakes";
 
 import type {
   CheckoutSession,
+  CheckoutSessionCloseResult,
   CreateCheckoutSessionInput,
   Money,
   PaymentProvider,
@@ -140,6 +141,7 @@ export class MockPaymentProvider implements PaymentProvider {
 
   private readonly options: MockPaymentProviderOptions;
   private readonly payments = new Map<string, PaymentSnapshot>();
+  private readonly completedSessions = new Set<string>();
 
   public constructor(options: MockPaymentProviderOptions) {
     if (options.signingSecret.length < 16) {
@@ -179,6 +181,18 @@ export class MockPaymentProvider implements PaymentProvider {
       redirectUrl: `${base}/session/${providerSessionId}`,
       expiresAt,
     });
+  }
+
+  /**
+   * Marca una sesion como pagada. Solo para tests y desarrollo, como
+   * `setPayment`: un proveedor real no expone nada parecido.
+   */
+  public completeSession(providerSessionId: string): void {
+    this.completedSessions.add(providerSessionId);
+  }
+
+  public closeCheckoutSession(providerSessionId: string): Promise<CheckoutSessionCloseResult> {
+    return Promise.resolve(this.completedSessions.has(providerSessionId) ? "COMPLETED" : "CLOSED");
   }
 
   // -------------------------------------------------------------------------

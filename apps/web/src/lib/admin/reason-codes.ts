@@ -148,3 +148,15 @@ export const CASH_CONFIRM_REASONS = ["CASH_RECEIVED_AT_STORE", "OTHER"] as const
 
 /** Motivos para reintentar la generacion de participaciones de un cobro ya confirmado. */
 export const CASH_RETRY_REASONS = ["RETRY_ENTRY_GENERATION", "OTHER"] as const;
+
+/**
+ * Motivos para cancelar un pedido que nunca se cobro (DEC-085). Operativos:
+ * dicen por que el pedido sobra, nada sobre quien puede participar.
+ */
+export const ORDER_CANCEL_REASONS = [
+  "DUPLICATE_ORDER",
+  "ABANDONED_CHECKOUT",
+  "CUSTOMER_REQUEST",
+  "TEST_ORDER",
+  "OTHER",
+] as const;

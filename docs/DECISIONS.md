@@ -4238,3 +4238,64 @@ route-manifest), `apps/web` (`promotion-hero.tsx`, `promotion-countdown.tsx`,
 
 Proposed by: sesión del usuario (2026-10-08, petición del cliente)
 Agreed by: frontend-ux, backend (petición directa del usuario)
+
+## DEC-085
+
+Status: Accepted
+
+Date: 2026-10-08
+
+Decision:
+**El panel cancela pedidos que nunca se cobraron, marca la mercancía como
+enviada o entregada y da un corte de caja diario en hora de Nuevo México.**
+El cliente lo pidió para cuadrar la caja y despachar la mercancía: los pedidos
+duplicados o abandonados se acumulaban como "pendientes" y no había forma de
+sacarlos, ni de saber qué se cobró cada día.
+
+1. **Cancelar** (`POST /admin/orders/:id/cancel`, capacidad nueva
+   `order.cancel`, SENSITIVE, motivo obligatorio y sin step-up, como el cobro
+   en caja). Solo pedidos **sin `paid_at`** en DRAFT o PENDING_PAYMENT, en
+   efectivo o con tarjeta, comprobado con el pedido bloqueado. El pedido queda
+   CANCELLED y no se borra; la auditoría (`order.cancelled`) guarda quién, por
+   qué, el estado anterior y el importe. Un pedido cobrado no se cancela: eso es
+   un reembolso, que revierte sus participaciones (DEC-007).
+2. **En tarjeta, primero se cierra la pasarela.** Se caduca la sesión de Stripe
+   Checkout (`closeCheckoutSession` en el puerto de pago) **antes** de tocar el
+   pedido y fuera de la transacción. Si Stripe dice que el pago ya se completó o
+   está en curso, 409 `ORDER_PAYMENT_IN_PROGRESS` y no se cancela: sin esto, un
+   cliente podía pagar un pedido ya cancelado y el cobro quedaba sin pedido. Para
+   que un pago con tarjeta fallido también se pueda cancelar, la máquina de
+   pagos admite ahora `FAILED -> CANCELLED`; el `checkout.session.expired` de un
+   pago fallido, que antes se ignoraba, ahora también lo cancela.
+3. **Entregar** (`POST /admin/orders/:id/fulfillment`, capacidad nueva
+   `order.fulfillment.update`, SENSITIVE y sin motivo; también la tiene
+   SUPPORT). `fulfillment_state` pasa a FULFILLED con `fulfilled_at` y, solo si
+   se envía, transportista y guía como texto libre (migración 0038, con CHECK).
+   No hay integración con paquetería. La ficha (`OrderDetail.fulfillment`) lo
+   publica también al comprador. Solo pedidos cobrados con mercancía.
+4. **Corte de caja** (`GET /admin/reports/daily-cut?date=`, `order.read`). Día
+   de 12:00 a. m. a 11:59 p. m. en `America/Denver` (con su horario de verano),
+   que es la hora del punto de venta y no la zona legal de la promoción.
+   Efectivo, tarjeta y total con el número de pedidos cobrados (`paid_at`), los
+   reembolsos del día aparte y sin restar, y la mercancía de esos pedidos con
+   cliente, dirección o recogida, número de pedido y estado de envío. Sin
+   paquetes ni participaciones. Pantalla `/admin/daily-cut` con selector de
+   fecha, impresión y CSV (con defensa contra fórmulas).
+
+Alternatives considered: A — Borrar los pedidos duplicados (descartada: el
+registro contable no se borra, DELETE sigue revocado). B — Cancelar con
+tarjeta sin cerrar la sesión de Stripe (descartada: el cliente aún podía
+pagar). C — Una tabla de envíos aparte con historial (descartada por ahora: un
+envío por pedido y la auditoría guarda cada cambio). D — El corte en la zona
+legal de la promoción (descartada: el cliente pidió la de Nuevo México).
+
+Affected areas: `packages/commerce` (puerto de pago, Stripe, mock, sin
+proveedor, máquina de pagos), `packages/security` (dos capacidades y roles),
+`packages/database` (0038, `orders` y repositorios), `apps/api`
+(`routes/admin-orders.ts`, `services/order-admin-actions.ts`,
+`services/daily-cut.ts`, presentador, integración), `apps/web` (ficha del
+pedido, `/admin/daily-cut`, mensajes), `tests/e2e` (spec 14),
+`docs/API_CONTRACT.md`.
+
+Proposed by: sesión del usuario (2026-10-08, petición del cliente)
+Agreed by: backend, frontend-ux, security (petición directa del usuario)

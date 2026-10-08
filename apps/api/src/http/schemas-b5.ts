@@ -74,6 +74,8 @@ export const orderLineSchema = z.object({
   /** Elegibilidad CONGELADA en el momento de la compra. No se recalcula. */
   sweepstakes_eligible: z.boolean(),
   refunded_quantity: z.number().int(),
+  /** DEC-085: el tipo CONGELADO en la compra. Solo `MERCHANDISE` se envia. */
+  product_kind: z.enum(["MERCHANDISE", "ENTRY_PACKAGE"]),
 });
 
 export const orderSummarySchema = z.object({
@@ -123,6 +125,24 @@ export const orderDetailSchema = orderSummarySchema.extend({
    * (`shipping_total = null`) y sin direccion.
    */
   fulfillment_method: z.enum(["DELIVERY", "PICKUP"]),
+  /**
+   * DEC-085: si la mercancia ya salio. `delivered_at` es cuando se envio, o
+   * cuando se entrego en mano si se recoge; `carrier` y `tracking_number` solo
+   * los hay si se envio y quien lo marco los escribio. Sin integracion con
+   * paqueteria: son texto que teclea la tienda.
+   */
+  fulfillment: z.object({
+    state: z.enum([
+      "NOT_APPLICABLE",
+      "UNFULFILLED",
+      "PARTIALLY_FULFILLED",
+      "FULFILLED",
+      "RETURNED",
+    ]),
+    delivered_at: z.string().nullable(),
+    carrier: z.string().nullable(),
+    tracking_number: z.string().nullable(),
+  }),
   /**
    * Traza del calculo que persistio el `EntryCalculationSnapshot`, o `null` si
    * el pedido no ha generado ninguna. Es lo que permite contestar "por que esta

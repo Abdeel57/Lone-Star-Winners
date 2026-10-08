@@ -124,6 +124,10 @@ export interface OrderRecord {
   readonly shippingAddress: JsonObject | null;
   /** DEC-079: como se entrega. Ver `FulfillmentMethodValue`. */
   readonly fulfillmentMethod: FulfillmentMethodValue;
+  /** DEC-085: cuando se envio o se entrego; `null` mientras este pendiente. */
+  readonly fulfilledAt: Date | null;
+  readonly shippingCarrier: string | null;
+  readonly trackingNumber: string | null;
 }
 
 /**
@@ -175,6 +179,14 @@ export interface CreateOrderInput {
   readonly provider?: string | null;
   /** DEC-079: ausente = `DELIVERY`. `PICKUP` solo en efectivo y sin envio (CHECK). */
   readonly fulfillmentMethod?: FulfillmentMethodValue;
+}
+
+/** DEC-085: ver `setFulfillment`. */
+export interface FulfillmentPatch {
+  readonly state: Extract<FulfillmentStateValue, "FULFILLED" | "UNFULFILLED">;
+  readonly fulfilledAt: Date | null;
+  readonly shippingCarrier: string | null;
+  readonly trackingNumber: string | null;
 }
 
 export interface ApplyPaymentStatePatch {
@@ -295,6 +307,9 @@ function toOrder(row: OrderRow, items: readonly ItemRow[]): OrderRecord {
     shippingAddress:
       row.shippingAddress === null ? null : toCanonicalJsonObject(row.shippingAddress),
     fulfillmentMethod: row.fulfillmentMethod,
+    fulfilledAt: row.fulfilledAt,
+    shippingCarrier: row.shippingCarrier,
+    trackingNumber: row.trackingNumber,
     createdAt: row.createdAt,
     paidAt: row.paidAt,
     qualifiedAt: row.qualifiedAt,
@@ -588,8 +603,21 @@ export class DrizzleOrderRepository {
       .where(eq(orders.id, orderId));
   }
 
-  public async setFulfillmentState(orderId: string, state: FulfillmentStateValue): Promise<void> {
-    await this.db.update(orders).set({ fulfillmentState: state }).where(eq(orders.id, orderId));
+  /**
+   * DEC-085: entregado (con instante y, si se envia, transportista y guia) o de
+   * vuelta a pendiente. Los cuatro campos van juntos: las CHECK de 0038
+   * rechazan cualquier combinacion a medias.
+   */
+  public async setFulfillment(orderId: string, patch: FulfillmentPatch): Promise<void> {
+    await this.db
+      .update(orders)
+      .set({
+        fulfillmentState: patch.state,
+        fulfilledAt: patch.fulfilledAt,
+        shippingCarrier: patch.shippingCarrier,
+        trackingNumber: patch.trackingNumber,
+      })
+      .where(eq(orders.id, orderId));
   }
 
   /**

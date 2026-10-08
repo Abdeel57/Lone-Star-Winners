@@ -77,6 +77,17 @@ function presentAddress(address: JsonObject): OrderDetail["shipping_address"] {
   };
 }
 
+/**
+ * DEC-085: la MISMA direccion que la ficha, para lecturas que la traen sin
+ * tipar (el corte de caja). Una etiqueta de envio impresa desde el corte tiene
+ * que decir lo mismo que la ficha del pedido.
+ */
+export function presentAddressOrNull(address: unknown): OrderDetail["shipping_address"] {
+  return typeof address === "object" && address !== null && !Array.isArray(address)
+    ? presentAddress(address as JsonObject)
+    : null;
+}
+
 function money(amountMinor: bigint, currency: string): { amount_minor: string; currency: string } {
   // DEC-010: cadena de digitos. Un entero grande no sobrevive a `JSON.parse`.
   return { amount_minor: amountMinor.toString(10), currency };
@@ -235,6 +246,7 @@ export async function presentOrderDetail(
       line_total: money(item.unitAmountMinor * BigInt(item.quantity), item.currency),
       sweepstakes_eligible: item.sweepstakesEligibleSnapshot,
       refunded_quantity: item.refundedQuantity,
+      product_kind: item.productKind,
     })),
     subtotal: money(order.subtotalMinor, order.currency),
     shipping_total:
@@ -242,6 +254,12 @@ export async function presentOrderDetail(
     tax_total: order.taxTotalMinor === null ? null : money(order.taxTotalMinor, order.currency),
     shipping_address: address === null ? null : presentAddress(address),
     fulfillment_method: order.fulfillmentMethod,
+    fulfillment: {
+      state: order.fulfillmentState,
+      delivered_at: order.fulfilledAt?.toISOString() ?? null,
+      carrier: order.shippingCarrier,
+      tracking_number: order.trackingNumber,
+    },
     entry_calculation:
       snapshot === null
         ? null

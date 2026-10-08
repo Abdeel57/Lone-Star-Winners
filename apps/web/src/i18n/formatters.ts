@@ -186,6 +186,23 @@ export function formatZonedDateTime(
 }
 
 /**
+ * Solo la hora de un instante en una zona: "2:35 p.m." (DEC-085).
+ *
+ * Para el corte de caja, donde el dia ya esta escrito arriba y repetirlo en
+ * cada fila no dice nada. La zona sigue siendo obligatoria (DEC-011).
+ */
+export function formatZonedTime(
+  isoInstant: string,
+  locale: Locale,
+  timeZone: string,
+): string | null {
+  const date = toDate(isoInstant);
+  if (date === null) return null;
+
+  return new Intl.DateTimeFormat(localeTag(locale), { timeStyle: "short", timeZone }).format(date);
+}
+
+/**
  * Un plazo en una linea corta: "8 nov 2026, 11:59 p.m. CST" (DEC-077).
  *
  * Mismo instante y misma zona legal que `formatZonedDateTime` (DEC-011), sin

@@ -452,3 +452,67 @@ describe("llamadas a la API", () => {
     expect(formOf(calls[0]).has("amount")).toBe(false);
   });
 });
+
+describe("cerrar la sesion de Checkout (DEC-085)", () => {
+  /** Responde por orden: cada llamada se lleva la siguiente respuesta. */
+  function scriptedFetch(responses: readonly { status: number; body: unknown }[]) {
+    const calls: Call[] = [];
+    const fetchImpl = ((url: string, init: RequestInit) => {
+      const next = responses[calls.length];
+      calls.push({ url, init });
+      if (next === undefined) throw new Error("llamada de mas a Stripe");
+      return Promise.resolve(new Response(JSON.stringify(next.body), { status: next.status }));
+    }) as unknown as typeof fetch;
+    return { calls, fetchImpl };
+  }
+
+  const ALREADY_CLOSED = {
+    status: 400,
+    body: {
+      error: { type: "invalid_request_error", message: "Only open sessions can be expired" },
+    },
+  };
+
+  it("una sesion abierta se caduca con POST .../expire", async () => {
+    const { calls, fetchImpl } = scriptedFetch([
+      { status: 200, body: { id: "cs_1", status: "expired" } },
+    ]);
+
+    await expect(provider(fetchImpl).closeCheckoutSession("cs_1")).resolves.toBe("CLOSED");
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.url).toBe("https://api.stripe.com/v1/checkout/sessions/cs_1/expire");
+    expect(calls[0]?.init.method).toBe("POST");
+  });
+
+  it("si ya estaba caducada, cuenta como cerrada", async () => {
+    const { calls, fetchImpl } = scriptedFetch([
+      ALREADY_CLOSED,
+      { status: 200, body: { id: "cs_1", status: "expired" } },
+    ]);
+
+    await expect(provider(fetchImpl).closeCheckoutSession("cs_1")).resolves.toBe("CLOSED");
+    expect(calls[1]?.url).toBe("https://api.stripe.com/v1/checkout/sessions/cs_1");
+    expect(calls[1]?.init.method).toBe("GET");
+  });
+
+  it("si el comprador ya pago, lo dice y el pedido no se cancela", async () => {
+    const { fetchImpl } = scriptedFetch([
+      ALREADY_CLOSED,
+      { status: 200, body: { id: "cs_1", status: "complete", payment_status: "unpaid" } },
+    ]);
+
+    await expect(provider(fetchImpl).closeCheckoutSession("cs_1")).resolves.toBe("COMPLETED");
+  });
+
+  it("un fallo de Stripe se propaga: no se cancela a ciegas", async () => {
+    const { calls, fetchImpl } = scriptedFetch([
+      { status: 500, body: { error: { type: "api_error" } } },
+    ]);
+
+    await expect(provider(fetchImpl).closeCheckoutSession("cs_1")).rejects.toBeInstanceOf(
+      StripeApiError,
+    );
+    // Con un 500 ni siquiera se pregunta por la sesion.
+    expect(calls).toHaveLength(1);
+  });
+});

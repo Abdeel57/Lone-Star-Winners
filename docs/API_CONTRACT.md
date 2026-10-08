@@ -1863,6 +1863,9 @@ que compara el test de contrato contra `apps/api/openapi/route-manifest.json`.
 | GET    | /api/v1/admin/orders/:order_id/cash-payment                                         | `order.read`                |
 | POST   | /api/v1/admin/orders/:order_id/cash-payment/confirm                                 | `order.cash.confirm`        |
 | POST   | /api/v1/admin/orders/:order_id/cash-payment/entries                                 | `order.cash.confirm`        |
+| POST   | /api/v1/admin/orders/:order_id/cancel                                               | `order.cancel`              |
+| POST   | /api/v1/admin/orders/:order_id/fulfillment                                          | `order.fulfillment.update`  |
+| GET    | /api/v1/admin/reports/daily-cut                                                     | `order.read`                |
 | GET    | /api/v1/admin/participants                                                          | `participant.list`          |
 | GET    | /api/v1/admin/participants/:participant_id                                          | `participant.read`          |
 | GET    | /api/v1/admin/participants/:participant_id/pii                                      | `pii.view.full`             |
@@ -2971,6 +2974,71 @@ Si el paso ya terminó, responde el estado actual sin hacer nada.
 
 200 `CashPayment` · 401 · 403 · 404 · 409 ORDER_NOT_CASH_PAYMENT ·
 409 CASH_PAYMENT_NOT_CONFIRMED (nadie lo ha cobrado) · 422.
+
+### POST /api/v1/admin/orders/:order_id/cancel
+
+    Authorization: order.cancel
+
+DEC-085. Cuerpo: `{ "reason_code": "DUPLICATE_ORDER", "notes": "..." }`.
+
+Cancela un pedido que **nunca se cobró** (sin `paid_at`, en DRAFT o
+PENDING_PAYMENT), en efectivo o con tarjeta, y lo saca de la cola de pendientes.
+No se borra: queda CANCELLED, con un `AuditEvent` `order.cancelled` que guarda
+quién, por qué, el estado anterior y el importe. Con tarjeta, **antes** se
+caduca la sesión de pago del proveedor para que nadie pueda pagarlo después; si
+el proveedor dice que el pago ya se completó o está en curso, no se cancela.
+Cancelar uno ya cancelado responde la ficha sin hacer nada.
+
+200 `OrderDetail` · 401 · 403 (sin la capacidad o sin motivo) · 404 ·
+409 ORDER_NOT_CANCELLABLE (`details.status`; cobrado: eso es un reembolso) ·
+409 ORDER_PAYMENT_IN_PROGRESS · 409 ORDER_PROVIDER_MISMATCH · 422 ·
+503 PAYMENT_PROVIDER_UNAVAILABLE / PAYMENT_PROVIDER_NOT_CONFIGURED.
+
+### POST /api/v1/admin/orders/:order_id/fulfillment
+
+    Authorization: order.fulfillment.update
+
+DEC-085. Cuerpo: `{ "delivered": true, "carrier": "USPS", "tracking_number": "9400…" }`
+o `{ "delivered": false }`.
+
+`true` marca la mercancía como enviada (o entregada en mano si se recoge en el
+punto de venta): `fulfillment.state = FULFILLED`, `delivered_at` y, solo si se
+envía, transportista y guía, que son texto libre (no hay integración con
+paquetería). Corregir la guía de un pedido ya enviado no mueve la fecha.
+`false` lo devuelve a pendiente y borra los tres datos. `AuditEvent`
+`order.fulfillment.updated`. No toca importes, pago ni participaciones.
+
+200 `OrderDetail` · 401 · 403 · 404 · 409 ORDER_NOT_FULFILLABLE (sin cobrar,
+cancelado o reembolsado entero) · 409 ORDER_HAS_NO_MERCHANDISE · 422
+(`pickup_is_not_shipped`: transportista o guía en un pedido que se recoge).
+
+`OrderDetail` lleva desde DEC-085 `fulfillment: { state, delivered_at, carrier,
+tracking_number }`, también en `GET /account/orders/:order_id`: quien compró ve
+si su pedido salió y con qué guía. Cada línea lleva además `product_kind`
+(`MERCHANDISE` o `ENTRY_PACKAGE`, congelado en la compra): solo la mercancía se
+envía.
+
+### GET /api/v1/admin/reports/daily-cut
+
+    Authorization: order.read
+
+DEC-085. `?date=YYYY-MM-DD` (sin él, hoy). Corte de caja de ese día de
+**12:00 a. m. a 11:59 p. m. en `America/Denver`** (Nuevo México), que es la
+hora del punto de venta y no la zona legal de la promoción.
+
+- `cash`, `card`, `total`: `{ orders, amount }`, pedidos con `paid_at` dentro
+  del día por medio de pago (efectivo = `provider = 'cash'`). Lo cobrado ese
+  día, aunque después se haya reembolsado.
+- `refunds`: reembolsos con tarjeta hechos ese día, de pedidos de cualquier día.
+- `merchandise.lines`: una fila por línea de mercancía de esos pedidos, con
+  número de pedido, cliente (nombre y correo enmascarado), dirección o recogida
+  en el punto de venta, estado de envío, producto y cantidad.
+- `merchandise.products`: unidades por producto.
+
+Sin desglose de paquetes ni de participaciones. Una moneda distinta de la de la
+tienda no se suma: se registra en el log y queda fuera.
+
+200 · 401 · 403 · 422 (fecha imposible).
 
 ### GET /api/v1/admin/participants
 
