@@ -52,6 +52,7 @@ import type {
 import type {
   AdminAmoeTranscriptionInput,
   AdminAmoeTranscriptionResponse,
+  AdminBonusPeriodExtendInput,
   AdminBonusPeriodInput,
   AdminBonusPeriodResponse,
   AdminFeatureFlagPatch,
@@ -2070,6 +2071,24 @@ export function createAdminBonusPeriod(
   return apiRequest<AdminRulesVersion & AdminBonusPeriodResponse>(
     "POST",
     adminBonusPeriodsPath(promotionId),
+    { locale, body: input, ...sessionOptions(session) },
+  );
+}
+
+/**
+ * DEC-084: alarga el fin de un periodo bonus. Como crearlo, publica una version
+ * de reglas nueva; el `id` del periodo se conserva.
+ */
+export function extendAdminBonusPeriod(
+  promotionId: string,
+  periodId: string,
+  input: AdminBonusPeriodExtendInput,
+  locale: Locale,
+  session: SessionContext,
+): Promise<ApiResult<AdminRulesVersion & AdminBonusPeriodResponse>> {
+  return apiRequest<AdminRulesVersion & AdminBonusPeriodResponse>(
+    "POST",
+    `${adminBonusPeriodsPath(promotionId)}/${encodeURIComponent(periodId)}/extend`,
     { locale, body: input, ...sessionOptions(session) },
   );
 }

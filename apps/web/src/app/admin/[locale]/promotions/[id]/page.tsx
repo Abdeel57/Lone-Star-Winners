@@ -6,7 +6,9 @@ import { getTranslations, setRequestLocale } from "next-intl/server";
 import { AdminChrome } from "@/components/admin/admin-chrome";
 import { openAdminScreen } from "@/components/admin/admin-screen";
 import { AdminSectionError } from "@/components/admin/admin-section-error";
+import { BonusPeriodExtendForm } from "@/components/admin/bonus-period-extend-form";
 import { BonusPeriodForm } from "@/components/admin/bonus-period-form";
+import { fractionText } from "@/components/entry-rate-lines";
 import { PromotionForm } from "@/components/admin/promotion-form";
 import {
   PromotionTransitionForm,
@@ -22,10 +24,12 @@ import {
   activatePromotionAction,
   closePromotionAction,
   createBonusPeriodAction,
+  extendBonusPeriodAction,
   schedulePromotionAction,
   unschedulePromotionAction,
   updatePromotionAction,
 } from "@/lib/admin/actions";
+import { bonusPeriodPhase, bonusPeriodsOf } from "@/lib/admin/bonus-periods";
 import { can } from "@/lib/admin/capabilities";
 import { isoToZonedWallTime } from "@/lib/admin/catalog-input";
 import {
@@ -90,6 +94,14 @@ export default async function AdminPromotionDetailPage({
     fetchAdminPromotion(id, locale, screen.session),
     canReadRules ? fetchAdminRulesVersions(id, {}, locale, screen.session) : Promise.resolve(null),
   ]);
+
+  // DEC-084: los periodos bonus de la version ACTIVA, para poder extenderlos.
+  const activeVersion =
+    rulesVersions?.ok === true
+      ? rulesVersions.data.items.find((version) => version.status === "ACTIVE")
+      : undefined;
+  const activeBonusPeriods = bonusPeriodsOf(activeVersion?.config);
+  const nowMs = Date.now();
 
   return (
     <AdminChrome
@@ -241,6 +253,99 @@ export default async function AdminPromotionDetailPage({
             <CardTitle as="h2" size="sm">
               {tBonus("heading")}
             </CardTitle>
+
+            {/*
+             * LOS PERIODOS DE LA VERSION ACTIVA, CON "EXTENDER" (DEC-084).
+             *
+             * Alargar el fin de un bonus que ya esta corriendo era imposible
+             * desde aqui: crear otro periodo encima dejaba dos solapados y la
+             * cuenta atras del sitio seguia al primero. Se lee de la version
+             * activa que esta pantalla ya pide; sin `rules.version.read` no hay
+             * lista, solo el formulario de crear.
+             */}
+            {activeBonusPeriods.length === 0 ? null : (
+              <ul className="mt-s4 flex list-none flex-col gap-s4">
+                {activeBonusPeriods.map((period) => {
+                  const phase = bonusPeriodPhase(period, nowMs);
+                  const endWall = isoToZonedWallTime(period.endsAt, promotion.data.legal_timezone);
+                  return (
+                    <li key={period.id}>
+                      <Card elevation="flat" padding="md">
+                        <div className="flex flex-wrap items-center justify-between gap-s3">
+                          <p className="text-body-md font-medium text-text">
+                            {tBonus("periodLine", {
+                              multiplier: fractionText(period.multiplier, locale),
+                              scope:
+                                period.productKindScope === null ||
+                                period.productKindScope.length > 1
+                                  ? tBonus("scopeAll")
+                                  : period.productKindScope[0] === "ENTRY_PACKAGE"
+                                    ? tBonus("scopePackages")
+                                    : tBonus("scopeMerchandise"),
+                            })}
+                          </p>
+                          <Badge
+                            tone={
+                              phase === "ACTIVE"
+                                ? "success"
+                                : phase === "UPCOMING"
+                                  ? "brand"
+                                  : "neutral"
+                            }
+                            size="sm"
+                          >
+                            {phase === "ACTIVE"
+                              ? tBonus("phaseActive")
+                              : phase === "UPCOMING"
+                                ? tBonus("phaseUpcoming")
+                                : tBonus("phaseEnded")}
+                          </Badge>
+                        </div>
+                        <p className="mt-s2 text-body-sm text-text-muted">
+                          {tBonus("periodWindow", {
+                            from:
+                              formatZonedDateTime(period.startsAt, locale, {
+                                timeZone: promotion.data.legal_timezone,
+                                showTimeZoneName: true,
+                              }) ?? period.startsAt,
+                            to:
+                              formatZonedDateTime(period.endsAt, locale, {
+                                timeZone: promotion.data.legal_timezone,
+                                showTimeZoneName: true,
+                              }) ?? period.endsAt,
+                          })}
+                        </p>
+
+                        {phase === "ENDED" ||
+                        endWall === null ||
+                        !can(screen.actor, "rules.version.activate") ? null : (
+                          <div className="mt-s4 border-t border-border pt-s4">
+                            <BonusPeriodExtendForm
+                              locale={locale}
+                              action={extendBonusPeriodAction}
+                              promotionId={promotion.data.id}
+                              periodId={period.id}
+                              timeZone={promotion.data.legal_timezone}
+                              currentEndWall={endWall}
+                              reasons={BONUS_PERIOD_REASONS.map((value) => ({
+                                value,
+                                label: bonusReasonLabel(value),
+                              }))}
+                            />
+                          </div>
+                        )}
+                      </Card>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+
+            {activeBonusPeriods.length === 0 ? null : (
+              <h3 className="mt-s6 text-label font-semibold text-text">
+                {tBonus("newPeriodHeading")}
+              </h3>
+            )}
 
             <div className="mt-s4">
               {promotion.data.active_rules_version_id === null ? (

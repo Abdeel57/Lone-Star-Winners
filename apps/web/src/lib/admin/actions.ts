@@ -19,6 +19,7 @@ import {
   createAdminProductVariant,
   createAdminRulesVersion,
   createAdminSettingChangeRequest,
+  extendAdminBonusPeriod,
   generateAdminOrderCashEntries,
   login,
   logout,
@@ -1601,6 +1602,59 @@ export async function createBonusPeriodAction(
    * gesto. Viajan en `detail` porque es el unico canal de texto libre que tiene
    * `ActionResult`, y la pantalla las pinta como aviso y no como error.
    */
+  const warnings = result.data.warnings ?? [];
+  if (warnings.length === 0) return SUCCEEDED;
+
+  return { ...SUCCEEDED, detail: warnings.join(" · ") };
+}
+
+/**
+ * Alargar un periodo bonus (DEC-084).
+ *
+ * El fin nuevo se escribe en HORA DE PARED de la zona legal de la promocion y
+ * se convierte aqui, en el servidor, igual que las fechas de la promocion: quien
+ * lo pide piensa "el 15 de octubre a las 11:59 p.m. de Texas", no en UTC. Que el
+ * instante sea posterior al fin actual y no pase del cierre lo comprueba la API.
+ */
+export async function extendBonusPeriodAction(
+  _previous: ActionResult,
+  formData: FormData,
+): Promise<ActionResult> {
+  const locale = localeFrom(formData);
+  if (locale === null) return invalid("VALIDATION_FAILED");
+
+  const promotionId = textFrom(formData, "promotion_id");
+  const periodId = textFrom(formData, "period_id");
+  const timeZone = textFrom(formData, "time_zone");
+  if (promotionId === null || periodId === null || timeZone === null || !isIanaTimeZone(timeZone)) {
+    return invalid("VALIDATION_FAILED");
+  }
+
+  if (!checkboxFrom(formData, "confirmed")) return invalid("CONFIRMATION_REQUIRED", "confirmed");
+
+  const endsAt = windowFieldFrom(formData, "ends_at", timeZone);
+  if (!endsAt.ok) return endsAt.result;
+  if (endsAt.value === null) return invalid("FIELD_REQUIRED", "ends_at");
+
+  const reason = transitionReasonFrom(formData, BONUS_PERIOD_REASONS);
+  if (!reason.ok) return reason.result;
+
+  const session = await mutableSession();
+  const result = await extendAdminBonusPeriod(
+    promotionId,
+    periodId,
+    { ends_at: endsAt.value, reason_code: reason.reasonCode, reason_text: reason.reasonText },
+    locale,
+    session,
+  );
+
+  if (!result.ok) return fromFailure(result.error);
+
+  revalidatePath("/admin", "layout");
+  // La portada y la banda leen el bonus en cada render, pero se revalida igual
+  // para que nadie vea durante un minuto el fin antiguo.
+  revalidatePath("/", "layout");
+
   const warnings = result.data.warnings ?? [];
   if (warnings.length === 0) return SUCCEEDED;
 

@@ -124,6 +124,7 @@ export type {
 export type {
   AdminAmoeTranscriptionInput,
   AdminAmoeTranscriptionResponse,
+  AdminBonusPeriodExtendInput,
   AdminBonusPeriodInput,
   AdminBonusPeriodResponse,
   AdminFeatureFlagPatch,
@@ -232,6 +233,7 @@ export {
   checkoutSessionPath,
   createAdjustment,
   createAdminBonusPeriod,
+  extendAdminBonusPeriod,
   createAdminProductCategory,
   createAdminProductVariant,
   createAdminRulesVersion,

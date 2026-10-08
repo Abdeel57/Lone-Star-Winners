@@ -31,6 +31,8 @@ export function PromotionCountdown({
   size = "inline",
   period,
   withClockNote = true,
+  heading,
+  deadlinePrefix,
 }: {
   readonly targetIso: string;
   readonly nowIso: string;
@@ -60,6 +62,13 @@ export function PromotionCountdown({
    * fecha, hora y zona, y la nota era una tercera linea para decir lo mismo.
    */
   readonly withClockNote?: boolean;
+  /**
+   * Titulo propio en vez de "Cierra en"/"Abre en" (DEC-084): con un bonus
+   * vigente, el marcador del hero cuenta hasta el fin del bonus y lo dice.
+   */
+  readonly heading?: string;
+  /** Prefijo de lo que oye el lector de pantalla. Por defecto, "Tiempo restante". */
+  readonly deadlinePrefix?: string;
 }) {
   const t = useTranslations("countdown");
   const tA11y = useTranslations("a11y");
@@ -86,7 +95,7 @@ export function PromotionCountdown({
             : "text-label font-medium text-text-muted"
         }
       >
-        {variant === "opens" ? t("opensIn") : t("closesIn")}
+        {heading ?? (variant === "opens" ? t("opensIn") : t("closesIn"))}
       </p>
 
       <Countdown
@@ -98,7 +107,7 @@ export function PromotionCountdown({
           minutes: t("minutes"),
           seconds: t("seconds"),
         }}
-        deadlineLabel={`${tA11y("promotionCountdown")}: ${absolute}`}
+        deadlineLabel={`${deadlinePrefix ?? tA11y("promotionCountdown")}: ${absolute}`}
         completedLabel={t("elapsed")}
         size={size}
       />

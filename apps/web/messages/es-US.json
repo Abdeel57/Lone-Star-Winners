@@ -342,7 +342,10 @@
       "legalRules": "Sujeto a las Reglas Oficiales",
       "capNote": "+ máximo {entries} participaciones por persona",
       "opensOn": "Abre el {date}",
-      "closesOn": "Cierra el {date}"
+      "closesOn": "Cierra el {date}",
+      "bonusClosesIn": "Promoción {multiplier}x1 en {scope} cierra en:",
+      "bonusEndsOn": "La promoción {multiplier}x1 termina el {date}",
+      "drawClosesOn": "El sorteo cierra el {date}"
     },
     "featured": {
       "title": "Mercancía destacada",
@@ -1801,7 +1804,17 @@
       "reasonTextLabel": "Nota",
       "reasonTextHint": "Opcional, salvo cuando el motivo es Otro.",
       "confirm": "Entiendo que esto publica una versión de reglas nueva.",
-      "submit": "Crear periodo de bonificación"
+      "submit": "Crear periodo de bonificación",
+      "periodLine": "{multiplier}× en {scope}",
+      "periodWindow": "Del {from} al {to}",
+      "phaseActive": "Vigente",
+      "phaseUpcoming": "Anunciado",
+      "phaseEnded": "Terminado",
+      "extendEndsAtLabel": "Nuevo fin (hora de {zone})",
+      "extendHint": "Solo se puede alargar, y no más allá del cierre de la promoción. El contador del sitio pasa a contar hasta el nuevo fin.",
+      "extendSubmit": "Extender el periodo",
+      "extended": "El periodo se extendió y la versión nueva está activa.",
+      "newPeriodHeading": "Crear un periodo nuevo"
     },
     "rules": {
       "title": "Versiones de las Reglas Oficiales",

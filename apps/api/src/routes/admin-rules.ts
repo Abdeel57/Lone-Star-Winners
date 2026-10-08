@@ -200,6 +200,20 @@ const reasonBodySchema = z.object({
   reason_text: z.string().max(2000).nullable().default(null),
 });
 
+/**
+ * Extender un periodo bonus ya publicado (DEC-084): solo el fin, y solo hacia
+ * delante. Acortar un bonus anunciado es retirar algo que se prometio; si
+ * alguna vez hace falta, es una version de reglas redactada a mano.
+ */
+const bonusPeriodExtendBodySchema = reasonBodySchema.extend({
+  ends_at: z.iso.datetime(),
+});
+
+const bonusPeriodParamsSchema = z.object({
+  promotion_id: z.uuid(),
+  period_id: z.string().min(1).max(100),
+});
+
 const bonusPeriodBodySchema = reasonBodySchema.extend({
   multiplier: z.object({
     numerator: z.number().int().min(0),
@@ -1206,6 +1220,138 @@ export function buildAdminRulesRoutes(dependencies: AppDependencies): RouteDefin
             ...presentRulesVersion(created),
             // El bonus EXISTE y no se aplica. Callarlo dejaria a alguien
             // esperando un 5X que el motor no va a conceder.
+            warnings: multipliersOn ? [] : ["entry_multipliers_enabled is off"],
+          };
+        } catch (error) {
+          if (error instanceof ApiError) throw error;
+          return translateLifecycleError(error);
+        }
+      },
+    },
+
+    {
+      method: "POST",
+      url: "/api/v1/admin/promotions/:promotion_id/bonus-periods/:period_id/extend",
+      operationId: "extendBonusPeriod",
+      summary: "Atajo: alargar el fin de un periodo bonus vigente o anunciado (DEC-084).",
+      description:
+        "Clona la version activa con el MISMO periodo y un `ends_at` posterior, y la activa: es una version de reglas nueva, igual que crear el bonus, con su motivo y su traza. Solo se alarga -nunca se acorta un bonus anunciado- y nunca mas alla del cierre de la promocion. Mismo `id` de periodo: la cuenta atras del sitio sigue al mismo bonus, ahora con otro fin, en vez de saltar a un segundo periodo solapado.",
+      tags: ["admin"],
+      authorization: { kind: "PERMISSION", permission: "rules.version.activate" },
+      schema: {
+        params: bonusPeriodParamsSchema,
+        body: bonusPeriodExtendBodySchema,
+        response: {
+          201: bonusPeriodResultSchema,
+          401: errorEnvelopeSchema,
+          403: errorEnvelopeSchema,
+          404: errorEnvelopeSchema,
+          409: errorEnvelopeSchema,
+          422: errorEnvelopeSchema,
+        },
+      },
+      handler: async (request, reply) => {
+        const staff = await requireStaffContext(dependencies, request);
+        const params = request.params as z.infer<typeof bonusPeriodParamsSchema>;
+        const body = request.body as z.infer<typeof bonusPeriodExtendBodySchema>;
+        const domain = domainServicesFor(dependencies);
+        const now = new Date();
+        // ANTES de clonar y activar, como al crear el bonus.
+        const reasonCode = requireReasonCode(body.reason_code);
+
+        const versions = await repo().listRulesVersions(params.promotion_id);
+        const active = versions.find((version) => version.status === "ACTIVE");
+        if (active === undefined) {
+          throw ApiErrors.rulesVersionNotActive(params.promotion_id);
+        }
+
+        const config = (
+          typeof active.config === "object" && active.config !== null
+            ? { ...(active.config as Record<string, unknown>) }
+            : {}
+        ) as Record<string, unknown>;
+
+        const existing = multiplierConfigSchema.safeParse(config.multipliers);
+        const period = existing.success
+          ? existing.data.periods.find((candidate) => candidate.id === params.period_id)
+          : undefined;
+        if (!existing.success || period === undefined) {
+          throw ApiErrors.notFound();
+        }
+
+        const endsAt = Date.parse(body.ends_at);
+        // Solo hacia delante, y a un instante que todavia no ha pasado.
+        if (endsAt <= Date.parse(period.ends_at) || endsAt <= now.getTime()) {
+          throw ApiErrors.validationFailed([{ path: ["ends_at"], code: "must_extend_the_period" }]);
+        }
+
+        // Un bonus mas alla del cierre no lo aplicaria nadie: la compra ya no
+        // calificaria. Se rechaza en vez de anunciar un plazo que no existe.
+        const promotion = await dependencies.repositories.promotions.findActive();
+        if (
+          promotion !== null &&
+          promotion.id === params.promotion_id &&
+          promotion.endsAt !== null &&
+          endsAt > promotion.endsAt.getTime()
+        ) {
+          throw ApiErrors.validationFailed([{ path: ["ends_at"], code: "after_promotion_closes" }]);
+        }
+
+        const extendedEndsAt = new Date(endsAt).toISOString();
+        config.multipliers = {
+          ...existing.data,
+          periods: existing.data.periods.map((candidate) =>
+            candidate.id === period.id ? { ...candidate, ends_at: extendedEndsAt } : candidate,
+          ),
+        };
+
+        assertOrderQualificationResolved(config);
+
+        try {
+          const extended = await domain.repositories.unitOfWork.withTransaction(async () => {
+            const draft = await repo().createRulesVersion({
+              promotionId: params.promotion_id,
+              cloneFromRulesVersionId: active.id,
+              config,
+              attorneyApprovalReference: active.attorneyApprovalReference,
+              createdByAdminUserId: staff.adminUserId,
+            });
+
+            const activated = await repo().activateRulesVersion(
+              params.promotion_id,
+              draft.id,
+              staff.adminUserId,
+              now,
+            );
+            if (activated === null) throw ApiErrors.notFound();
+
+            await domain.audit.emit({
+              action: "bonus.period.extended",
+              actor: { type: "ADMIN", adminUserId: staff.adminUserId },
+              promotionId: params.promotion_id,
+              targetEntityType: "PromotionRulesVersion",
+              targetEntityId: activated.id,
+              reasonKey: reasonCode,
+              reasonDetail: body.reason_text,
+              occurredAt: now,
+              metadata: {
+                version: activated.version,
+                period_id: period.id,
+                previous_ends_at: period.ends_at,
+                ends_at: extendedEndsAt,
+              },
+            });
+
+            return activated;
+          });
+
+          const flags = await repo().listFlags();
+          const multipliersOn =
+            flags.items.find((flag) => flag.key === "entry_multipliers_enabled")?.enabled ?? false;
+
+          void reply.code(201);
+          return {
+            ...presentRulesVersion(extended),
             warnings: multipliersOn ? [] : ["entry_multipliers_enabled is off"],
           };
         } catch (error) {

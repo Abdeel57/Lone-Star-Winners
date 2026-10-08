@@ -314,6 +314,142 @@ test.describe("el compliance officer crea un bonus 5X sobre paquetes", () => {
   });
 });
 
+/** Crea un bonus 5X de doce horas y devuelve su periodo, para extenderlo. */
+async function createTwelveHourBonus(page, officer, reasonCode) {
+  const window = bonusWindow();
+  const created = await page.request.post(
+    `${API_BASE_URL}/admin/promotions/${fixture.promotion.id}/bonus-periods`,
+    {
+      headers: cookieHeader(officer),
+      data: {
+        multiplier: { numerator: BONUS_MULTIPLIER, denominator: 1 },
+        starts_at: window.startsAt,
+        ends_at: window.endsAt,
+        product_kind_scope: ["ENTRY_PACKAGE"],
+        sku_scope: null,
+        conflict_strategy: null,
+        reason_code: reasonCode,
+        reason_text: null,
+      },
+    },
+  );
+  expect(created.status()).toBe(201);
+
+  const periods = (await created.json()).config.multipliers.periods;
+  // El atajo anade el suyo al final; los de pruebas anteriores siguen delante.
+  return periods[periods.length - 1];
+}
+
+/** Un instante en hora de pared de `timeZone`, como lo escribe un `datetime-local`. */
+function wallTime(iso, timeZone) {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-CA", {
+      timeZone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
+    })
+      .formatToParts(new Date(iso))
+      .map((part) => [part.type, part.value]),
+  );
+  return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
+}
+
+test.describe("extender un bonus que ya esta corriendo (DEC-084)", () => {
+  /*
+   * El cliente queria que el 2X durase hasta el 15. Crear otro periodo encima
+   * dejaba dos solapados y la cuenta atras del sitio seguia al primero; lo que
+   * hace falta es alargar EL MISMO periodo, con su id, en una version nueva.
+   */
+  test("alarga el mismo periodo, y el sitio publica el fin nuevo", async ({ page, request }) => {
+    test.slow();
+    await waitForNextTotpWindow();
+    const officer = await loginStaff(page, fixture.staff.complianceOfficer);
+
+    const period = await createTwelveHourBonus(page, officer, "bonus_5x_paquetes");
+    const newEnd = new Date(Date.parse(period.ends_at) + 12 * 60 * 60 * 1000).toISOString();
+
+    const extended = await page.request.post(
+      `${API_BASE_URL}/admin/promotions/${fixture.promotion.id}/bonus-periods/${encodeURIComponent(period.id)}/extend`,
+      {
+        headers: cookieHeader(officer),
+        data: { ends_at: newEnd, reason_code: "bonus_5x_paquetes", reason_text: null },
+      },
+    );
+    expect(extended.status()).toBe(201);
+
+    const version = await extended.json();
+    expect(version.status).toBe("ACTIVE");
+    const same = version.config.multipliers.periods.find((item) => item.id === period.id);
+    expect(Date.parse(same.ends_at)).toBe(Date.parse(newEnd));
+    // Solo cambia el fin: ni el inicio, ni el multiplicador, ni el ambito.
+    expect(same.starts_at).toBe(period.starts_at);
+    expect(same.multiplier).toStrictEqual(period.multiplier);
+    expect(same.product_kind_scope).toStrictEqual(period.product_kind_scope);
+
+    const detail = await (await request.get(`${API_BASE_URL}/promotions/${PROMOTION_SLUG}`)).json();
+    const published = detail.entry_offer.bonus_periods.find((item) => item.id === period.id);
+    expect(Date.parse(published.ends_at)).toBe(Date.parse(newEnd));
+  });
+
+  test("no acorta, ni pasa del cierre de la promocion", async ({ page }) => {
+    test.slow();
+    await waitForNextTotpWindow();
+    const officer = await loginStaff(page, fixture.staff.complianceOfficer);
+
+    const period = await createTwelveHourBonus(page, officer, "bonus_5x_paquetes");
+    const extendTo = (endsAt) =>
+      page.request.post(
+        `${API_BASE_URL}/admin/promotions/${fixture.promotion.id}/bonus-periods/${encodeURIComponent(period.id)}/extend`,
+        {
+          headers: cookieHeader(officer),
+          data: { ends_at: endsAt, reason_code: "bonus_5x_paquetes", reason_text: null },
+          failOnStatusCode: false,
+        },
+      );
+
+    const shorter = new Date(Date.parse(period.ends_at) - 60 * 60 * 1000).toISOString();
+    expect((await extendTo(shorter)).status()).toBe(422);
+
+    const afterClose = new Date(Date.parse(fixture.promotion.endsAt) + 60_000).toISOString();
+    expect((await extendTo(afterClose)).status()).toBe(422);
+  });
+
+  test("desde la ficha de la promocion, con la hora de pared de la zona legal", async ({
+    page,
+    request,
+  }) => {
+    test.slow();
+    await waitForNextTotpWindow();
+    const officer = await loginStaff(page, fixture.staff.complianceOfficer);
+
+    const period = await createTwelveHourBonus(page, officer, "bonus_5x_paquetes");
+    // Minuto exacto: el selector del navegador no tiene segundos.
+    const newEnd = new Date(
+      Math.ceil((Date.parse(period.ends_at) + 24 * 60 * 60 * 1000) / 60_000) * 60_000,
+    ).toISOString();
+
+    await page.goto(`/admin/es/promotions/${fixture.promotion.id}`);
+
+    const form = page.locator(`form:has(input[name="period_id"][value="${period.id}"])`);
+    await form.locator('[name="ends_at"]').fill(wallTime(newEnd, fixture.legalTimezone));
+    await form.locator('[name="confirmed"]').check();
+    await form.getByRole("button", { name: "Extender el periodo" }).click();
+
+    await expect(
+      page.getByText("El periodo se extendió y la versión nueva está activa."),
+    ).toBeVisible();
+
+    // Confirmado contra el servidor, no en la pantalla.
+    const detail = await (await request.get(`${API_BASE_URL}/promotions/${PROMOTION_SLUG}`)).json();
+    const published = detail.entry_offer.bonus_periods.find((item) => item.id === period.id);
+    expect(Date.parse(published.ends_at)).toBe(Date.parse(newEnd));
+  });
+});
+
 test.describe("el bonus se crea desde el panel, no con curl", () => {
   test.fixme(
     SECTION_13_ADMIN_SCREENS_MISSING,
@@ -333,11 +469,15 @@ test.describe("el bonus se crea desde el panel, no con curl", () => {
     // precisamente lo que el propio formulario explica antes de dejar enviarlo.
     await page.goto(`/admin/es/promotions/${fixture.promotion.id}`);
 
-    await page.locator('[name="multiplier_numerator"]').fill("5");
+    // DEC-084: encima estan los periodos ya creados, cada uno con su formulario
+    // de extender y su propia casilla. Se trabaja dentro del de CREAR.
+    const create = page.locator('form:has([name="multiplier_numerator"])');
+
+    await create.locator('[name="multiplier_numerator"]').fill("5");
     // El ambito ya viene por defecto en paquetes; se fija a proposito para que
     // la prueba no dependa de ese valor por defecto.
-    await page.locator('[name="product_kind_scope"]').selectOption("ENTRY_PACKAGE");
-    await page.locator('[name="duration_preset"]').selectOption("12h");
+    await create.locator('[name="product_kind_scope"]').selectOption("ENTRY_PACKAGE");
+    await create.locator('[name="duration_preset"]').selectOption("12h");
 
     /*
      * LA CASILLA NO ES UN TRAMITE. El formulario no deja enviar sin marcarla y
@@ -346,9 +486,9 @@ test.describe("el bonus se crea desde el panel, no con curl", () => {
      * el motivo y el step-up que exige el backend-, y por eso la prueba la
      * marca explicitamente en vez de esquivarla.
      */
-    await page.locator('[name="confirmed"]').check();
+    await create.locator('[name="confirmed"]').check();
 
-    await page.getByRole("button", { name: "Crear periodo de bonificación" }).click();
+    await create.getByRole("button", { name: "Crear periodo de bonificación" }).click();
 
     await expect(
       page.getByText("El periodo de bonificación se creó y la versión nueva está activa."),

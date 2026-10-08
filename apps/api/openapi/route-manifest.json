@@ -535,6 +535,15 @@
     },
     {
       "method": "POST",
+      "path": "/api/v1/admin/promotions/:promotion_id/bonus-periods/:period_id/extend",
+      "operation_id": "extendBonusPeriod",
+      "authorization": "rules.version.activate",
+      "requires_step_up": true,
+      "tags": ["admin"],
+      "summary": "Atajo: alargar el fin de un periodo bonus vigente o anunciado (DEC-084)."
+    },
+    {
+      "method": "POST",
       "path": "/api/v1/admin/promotions/:promotion_id/close",
       "operation_id": "closeAdminPromotion",
       "authorization": "promotion.close",

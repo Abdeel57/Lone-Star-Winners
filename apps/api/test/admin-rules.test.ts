@@ -692,6 +692,109 @@ describe("atajo bonus (13.8)", () => {
 });
 
 // ---------------------------------------------------------------------------
+// DEC-084: extender un periodo bonus
+// ---------------------------------------------------------------------------
+
+describe("extender un periodo bonus (DEC-084)", () => {
+  const PERIOD = {
+    id: "bonus-1-2026-10-07",
+    multiplier: { numerator: 2, denominator: 1 },
+    starts_at: "2026-10-07T00:00:00.000Z",
+    ends_at: "2026-10-14T00:00:00.000Z",
+    priority: 0,
+    sku_scope: null,
+    product_kind_scope: ["MERCHANDISE"],
+  };
+  const OPEN_PROMOTION = {
+    ...FIXTURE_PROMOTION,
+    id: PROMOTION_ID,
+    endsAt: new Date("2026-11-09T05:59:00.000Z"),
+  };
+
+  function withBonus(created: unknown[] = []): Record<string, unknown> {
+    return {
+      listRulesVersions: () =>
+        Promise.resolve([
+          rulesVersionRow({
+            config: draftV2Config({
+              multipliers: { conflict_strategy: "HIGHEST_WINS", periods: [PERIOD] },
+            }),
+          }),
+        ]),
+      createRulesVersion: (input: { config: unknown }) => {
+        created.push(input.config);
+        return Promise.resolve(rulesVersionRow({ status: "DRAFT", version: 2 }));
+      },
+      activateRulesVersion: () => Promise.resolve(rulesVersionRow({ version: 2 })),
+      listFlags: () =>
+        Promise.resolve({
+          items: [flagRow("entry_multipliers_enabled", true, true)],
+          amoeMode: null,
+        }),
+    };
+  }
+
+  function extend(app: FastifyInstance, endsAt: string, periodId = PERIOD.id) {
+    return app.inject({
+      method: "POST",
+      url: `/api/v1/admin/promotions/${PROMOTION_ID}/bonus-periods/${periodId}/extend`,
+      payload: { ends_at: endsAt, reason_code: "PROMOTIONAL_CAMPAIGN", reason_text: null },
+    });
+  }
+
+  it("clona la version con el MISMO periodo y el fin nuevo, y la activa", async () => {
+    const created: unknown[] = [];
+    shared.rules = withBonus(created);
+
+    const app = await openApp({ activePromotion: OPEN_PROMOTION });
+    const response = await extend(app, "2026-10-16T04:59:59.000Z");
+
+    expect(response.statusCode, response.body).toBe(201);
+    const periods = (created[0] as { multipliers: { periods: (typeof PERIOD)[] } }).multipliers
+      .periods;
+    expect(periods).toHaveLength(1);
+    expect(periods[0]).toMatchObject({
+      id: PERIOD.id,
+      starts_at: PERIOD.starts_at,
+      ends_at: "2026-10-16T04:59:59.000Z",
+      multiplier: PERIOD.multiplier,
+    });
+    expect(auditEvents.map((event) => event.action)).toContain("bonus.period.extended");
+    await app.close();
+  });
+
+  it("acortar es 422: un bonus anunciado no se recorta", async () => {
+    shared.rules = withBonus();
+    const app = await openApp({ activePromotion: OPEN_PROMOTION });
+
+    const response = await extend(app, "2026-10-13T00:00:00.000Z");
+
+    expect(response.statusCode).toBe(422);
+    await app.close();
+  });
+
+  it("mas alla del cierre de la promocion es 422", async () => {
+    shared.rules = withBonus();
+    const app = await openApp({ activePromotion: OPEN_PROMOTION });
+
+    const response = await extend(app, "2026-11-20T00:00:00.000Z");
+
+    expect(response.statusCode).toBe(422);
+    await app.close();
+  });
+
+  it("un periodo que no existe en la version activa es 404", async () => {
+    shared.rules = withBonus();
+    const app = await openApp({ activePromotion: OPEN_PROMOTION });
+
+    const response = await extend(app, "2026-10-16T04:59:59.000Z", "bonus-que-no-existe");
+
+    expect(response.statusCode).toBe(404);
+    await app.close();
+  });
+});
+
+// ---------------------------------------------------------------------------
 // 13.9: flags y control dual
 // ---------------------------------------------------------------------------
 

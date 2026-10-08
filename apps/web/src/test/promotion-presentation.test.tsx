@@ -44,8 +44,10 @@ import {
   fractionalBonusPeriod,
   partialEntryOffer,
   uncappedEntryOffer,
+  promotionDetailWithMultiplier,
   promotionInStatus,
   promotionsByStatus,
+  promotionWithMultiplier,
   promotionWithoutRules,
 } from "@/mocks/fixtures/promotions";
 
@@ -725,6 +727,59 @@ describe("PromotionHero sin Reglas Oficiales publicadas (DEC-044)", () => {
       "/shop",
     );
     expect(screen.queryByText(esMessages.home.rulesNotPublished)).toBeNull();
+  });
+});
+
+describe("PromotionHero con un bonus vigente (DEC-084)", () => {
+  // Dentro del 5X de paquetes del fixture (28 de agosto a 13 de septiembre).
+  const DURING_BONUS = "2026-09-01T12:00:00.000Z";
+
+  function renderHero(multipliersEnabled: boolean) {
+    return renderIn(
+      "es",
+      <PromotionHero
+        promotion={promotionWithMultiplier}
+        detail={promotionDetailWithMultiplier}
+        locale="es"
+        nowIso={DURING_BONUS}
+        amoeEnabled={false}
+        multipliersEnabled={multipliersEnabled}
+      />,
+    );
+  }
+
+  it("un solo contador: el marcador grande cuenta hasta el fin del bonus y lo dice", () => {
+    renderHero(true);
+
+    expect(
+      screen.getByText("Promoción 5x1 en paquetes de participaciones cierra en:"),
+    ).toBeInTheDocument();
+    // El "Cierra en" del sorteo y el "Termina en" del recuadro ya no se pintan:
+    // eran el segundo contador que el cliente leia como otra promocion.
+    expect(screen.queryByText(esMessages.countdown.closesIn)).toBeNull();
+    expect(screen.queryByText(esMessages.entryOffer.bonusEndsIn)).toBeNull();
+    expect(screen.queryByText(/Periodo de bonificación 5×/)).toBeNull();
+  });
+
+  it("el cierre del sorteo no desaparece: queda escrito debajo, con fecha", () => {
+    renderHero(true);
+
+    expect(screen.getByText(/^La promoción 5x1 termina el /)).toBeInTheDocument();
+    expect(screen.getByText(/^El sorteo cierra el /)).toBeInTheDocument();
+  });
+
+  it("los periodos anunciados se siguen anunciando", () => {
+    renderHero(true);
+
+    expect(screen.getByText(esMessages.entryOffer.bonusUpcomingHeading)).toBeInTheDocument();
+  });
+
+  it("con los multiplicadores apagados el hero es el de siempre", () => {
+    renderHero(false);
+
+    expect(screen.getByText(esMessages.countdown.closesIn)).toBeInTheDocument();
+    expect(screen.queryByText(/cierra en:$/)).toBeNull();
+    expect(screen.queryByText(/^El sorteo cierra el /)).toBeNull();
   });
 });
 

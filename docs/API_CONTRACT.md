@@ -3796,6 +3796,18 @@ Rechazos (422): `multiplier` > `bonus_rules.max_multiplier`;
 `ends_at <= starts_at`; `conflict_strategy` nula cuando la versión activa no
 declara `multipliers` (hay que decirla; no se asume).
 
+**Extender un periodo (DEC-084).**
+`POST /api/v1/admin/promotions/:promotion_id/bonus-periods/:period_id/extend`
+(`rules.version.activate`, motivo + step-up), cuerpo
+`{ ends_at, reason_code, reason_text }`. Clona la versión `ACTIVE`, cambia
+**solo** el `ends_at` del periodo `period_id` (conserva su `id`, `priority`,
+multiplicador y alcance) y activa la versión nueva en la misma transacción,
+auditando `bonus.period.extended` con el fin anterior y el nuevo. Respuesta 201
+igual que el alta. 404 si el periodo no existe en la versión activa; 422
+`must_extend_the_period` si `ends_at` no es posterior al fin actual y a ahora, y
+`after_promotion_closes` si pasa del cierre de la promoción. Solo alarga: para
+acortar o quitar un periodo sigue haciendo falta una versión de reglas nueva.
+
 ### 13.9 Admin: feature flags y control dual de ajustes materiales (DEC-032, DEC-054 punto 3)
 
 > **Reescrito por la resolución del Team Lead a los hallazgos de security
@@ -4009,6 +4021,7 @@ emitidas en `apps/api/openapi/route-manifest.json` y con test en
 | PUT    | `/api/v1/admin/promotions/{promotion_id}/rules-versions/{rules_version_id}/documents/{locale}` | `rules.version.create`                                                           | `IMPLEMENTED` |
 | POST   | `/api/v1/admin/promotions/{promotion_id}/rules-versions/{rules_version_id}/activate`           | `rules.version.activate` (+ motivo, step-up)                                     | `IMPLEMENTED` |
 | POST   | `/api/v1/admin/promotions/{promotion_id}/bonus-periods`                                        | `rules.version.activate` (+ motivo, step-up)                                     | `IMPLEMENTED` |
+| POST   | `/api/v1/admin/promotions/{promotion_id}/bonus-periods/{period_id}/extend`                     | `rules.version.activate` (+ motivo, step-up)                                     | `IMPLEMENTED` |
 | GET    | `/api/v1/admin/feature-flags`                                                                  | `flag.read`                                                                      | `IMPLEMENTED` |
 | PATCH  | `/api/v1/admin/feature-flags/{key}`                                                            | `flag.update` (motivo; 409 `FLAG_REQUIRES_CHANGE_REQUEST` si exige control dual) | `IMPLEMENTED` |
 | POST   | `/api/v1/admin/settings/change-requests`                                                       | `flag.update.legally_material` (+ motivo, step-up, `secondApprovalEnforcedBy`)   | `IMPLEMENTED` |

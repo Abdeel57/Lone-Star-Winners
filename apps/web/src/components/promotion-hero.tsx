@@ -13,6 +13,7 @@ import { safeImageUrl } from "@/lib/media-url";
 import { presentPromotion } from "@/lib/promotion-state";
 
 import { BonusAnnouncement } from "./bonus-announcement";
+import { fractionText, useBonusScopeLabel } from "./entry-rate-lines";
 import { HeroCarousel, type HeroSlide } from "./hero-carousel";
 import { PromotionCountdown } from "./promotion-countdown";
 import { PromotionStatusBadge } from "./promotion-status-badge";
@@ -195,6 +196,8 @@ export function PromotionHero({
   readonly buyHref?: string;
 }) {
   const t = useTranslations("home");
+  const tA11y = useTranslations("a11y");
+  const bonusScopeLabel = useBonusScopeLabel();
   const noticeText = usePromotionNoticeText();
   const presentation = presentPromotion(promotion.status);
   const stateNotice = noticeText(presentation.noticeKey);
@@ -366,6 +369,21 @@ export function PromotionHero({
 
   const activeBonus = bonusAllowed ? (offer?.activeBonus ?? null) : null;
   const upcomingBonuses = bonusAllowed ? (offer?.upcomingBonuses ?? []) : [];
+
+  /*
+   * UN SOLO MARCADOR (DEC-084, peticion del cliente).
+   *
+   * Con un bonus vigente, el marcador grande del hero cuenta hasta el FIN DEL
+   * BONUS y lo dice ("Promocion 2x1 en mercancia cierra en:"), y el recuadro
+   * del bonus deja de pintar su propia cuenta atras: dos contadores a la vez,
+   * uno a 31 dias y otro a 6, se leian como dos promociones. El cierre del
+   * sorteo no desaparece: queda ESCRITO debajo, con fecha, hora y zona.
+   */
+  const heroBonus = countdownTarget === "ends_at" ? activeBonus : null;
+  const heroBonusEnd =
+    heroBonus === null
+      ? null
+      : formatZonedDeadline(heroBonus.ends_at, locale, promotion.legal_timezone);
 
   return (
     <>
@@ -775,7 +793,26 @@ export function PromotionHero({
              * siendo parte de la invitacion: con el estado contenido no hay
              * marcador (DEC-044).
              */}
-            {countdownTarget === null ? null : (
+            {countdownTarget === null ? null : heroBonus !== null ? (
+              <div className="lsw-enter mt-s6 sm:mt-s8" style={enter(360)}>
+                <PromotionCountdown
+                  targetIso={heroBonus.ends_at}
+                  nowIso={nowIso}
+                  locale={locale}
+                  timeZone={promotion.legal_timezone}
+                  variant="closes"
+                  size="scoreboard"
+                  heading={t("hero.bonusClosesIn", {
+                    multiplier: fractionText(heroBonus.multiplier, locale),
+                    scope: bonusScopeLabel(heroBonus.product_kind_scope),
+                  })}
+                  deadlinePrefix={tA11y("bonusCountdown")}
+                  // La barra mide el tramo DEL BONUS, no el de la promocion.
+                  period={{ startIso: heroBonus.starts_at, endIso: heroBonus.ends_at }}
+                  withClockNote={false}
+                />
+              </div>
+            ) : (
               <div className="lsw-enter mt-s6 sm:mt-s8" style={enter(360)}>
                 <PromotionCountdown
                   targetIso={
@@ -799,17 +836,30 @@ export function PromotionHero({
                 marcador con fecha, hora y zona legal (DEC-011), para quien
                 quiere apuntarla. Se queda tambien en el estado contenido, sin
                 marcador: es fecha, no urgencia (DEC-044). */}
+            {heroBonus === null || heroBonusEnd === null ? null : (
+              <p className="mt-s3 text-body-sm font-medium text-text">
+                <time dateTime={heroBonus.ends_at}>
+                  {t("hero.bonusEndsOn", {
+                    multiplier: fractionText(heroBonus.multiplier, locale),
+                    date: heroBonusEnd,
+                  })}
+                </time>
+              </p>
+            )}
+
             {deadline === null ? null : (
               <p
                 className={cn(
                   "text-body-sm font-medium text-text-muted",
-                  countdownTarget === null ? "mt-s5" : "mt-s3",
+                  countdownTarget === null ? "mt-s5" : heroBonus === null ? "mt-s3" : "mt-s1",
                 )}
               >
                 <time dateTime={deadline.iso}>
                   {deadline.kind === "opens"
                     ? t("hero.opensOn", { date: deadline.text })
-                    : t("hero.closesOn", { date: deadline.text })}
+                    : heroBonus === null
+                      ? t("hero.closesOn", { date: deadline.text })
+                      : t("hero.drawClosesOn", { date: deadline.text })}
                 </time>
               </p>
             )}
@@ -877,7 +927,9 @@ export function PromotionHero({
              */}
             <div className="mt-s6 max-w-narrow">
               <BonusAnnouncement
-                activeBonus={activeBonus}
+                // Con el bonus ya en el marcador grande, el recuadro no repite
+                // su cuenta atras (DEC-084); sigue anunciando los que vienen.
+                activeBonus={heroBonus === null ? activeBonus : null}
                 upcomingBonuses={upcomingBonuses}
                 locale={locale}
                 timeZone={promotion.legal_timezone}

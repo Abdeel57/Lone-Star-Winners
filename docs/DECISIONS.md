@@ -4191,3 +4191,50 @@ mensajes `product.merchandise*`, `shop.merchandiseEntries` y
 
 Proposed by: sesión del usuario (2026-10-07)
 Agreed by: frontend-ux (petición directa del usuario); pendiente: abogado
+
+## DEC-084
+
+Status: Accepted
+
+Date: 2026-10-08
+
+Decision:
+**Con un bonus vigente, el hero muestra un solo contador, el del bonus, y el
+panel puede alargar un periodo bonus sin rehacer las reglas a mano.** El
+cliente veía dos contadores en la portada ("Cierra en 31 días" y el del 2X,
+unos 6 días) y los leía como dos promociones. Pidió dejar uno, con el texto
+"Promoción 2x1 en mercancía cierra en:", y que el 2X llegue al 15 de octubre.
+
+1. **Un solo marcador.** Si hay un bonus vigente y el marcador apunta al
+   cierre, el marcador grande cuenta hasta el `ends_at` del bonus, con el
+   título `home.hero.bonusClosesIn` y la barra del tramo del bonus. El recuadro
+   `BonusAnnouncement` deja de pintar su propia cuenta atrás, pero sigue
+   anunciando los periodos que vienen. Debajo quedan escritos el fin del bonus y
+   el cierre del sorteo, con fecha, hora y zona (DEC-011): el cierre deja de
+   tener contador, pero no desaparece. Sin bonus, el hero es el de siempre. La
+   banda roja de DEC-082 no cambia.
+2. **Extender.** `POST /admin/promotions/:id/bonus-periods/:period_id/extend`
+   (`rules.version.activate`, motivo y step-up, como el alta de DEC-054)
+   clona la versión activa, cambia solo el `ends_at` de ese periodo y la
+   activa en la misma transacción, con el evento de auditoría
+   `bonus.period.extended`. Solo alarga, y nunca más allá del cierre de la
+   promoción. Acortar o quitar sigue exigiendo una versión nueva, porque recorta
+   algo ya anunciado al público.
+3. **Panel.** La ficha de la promoción lista los periodos de la versión activa
+   con su fase (vigente, anunciado o terminado) y, en los que no han terminado,
+   un formulario con la nueva fecha de fin en la hora legal de la promoción.
+
+Alternatives considered: A — Crear un segundo periodo pegado al primero
+(descartada: el público vería dos bonus y el contador saltaría). B — Dejar los
+dos contadores con otro texto (descartada por el cliente). C — Contar hasta el
+bonus solo en la banda roja (descartada: el cliente señaló el marcador
+grande).
+
+Affected areas: `apps/api` (`routes/admin-rules.ts`, pruebas, openapi y
+route-manifest), `apps/web` (`promotion-hero.tsx`, `promotion-countdown.tsx`,
+`admin/bonus-period-extend-form.tsx`, `lib/admin/bonus-periods.ts`,
+`lib/admin/actions.ts`, `promotions/[id]/page.tsx`, mensajes `home.hero.*` y
+`admin.bonus.*`), `docs/API_CONTRACT.md` §13.8.
+
+Proposed by: sesión del usuario (2026-10-08, petición del cliente)
+Agreed by: frontend-ux, backend (petición directa del usuario)

@@ -350,6 +350,12 @@ export interface AdminBonusPeriodInput extends AdminReasonInput {
   readonly conflict_strategy: string | null;
 }
 
+/** DEC-084: alargar el fin de un periodo bonus ya publicado. */
+export interface AdminBonusPeriodExtendInput extends AdminReasonInput {
+  /** ISO-8601 UTC, posterior al fin actual y no despues del cierre. */
+  readonly ends_at: string;
+}
+
 /**
  * Respuesta del atajo bonus (§13.8).
  *

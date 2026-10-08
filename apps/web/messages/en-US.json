@@ -342,7 +342,10 @@
       "legalRules": "Subject to the Official Rules",
       "capNote": "+ up to {entries} entries per person",
       "opensOn": "Opens {date}",
-      "closesOn": "Closes {date}"
+      "closesOn": "Closes {date}",
+      "bonusClosesIn": "{multiplier}x1 promotion on {scope} ends in:",
+      "bonusEndsOn": "The {multiplier}x1 promotion ends {date}",
+      "drawClosesOn": "The sweepstakes closes {date}"
     },
     "featured": {
       "title": "Featured merchandise",
@@ -1801,7 +1804,17 @@
       "reasonTextLabel": "Note",
       "reasonTextHint": "Optional, except when the reason is Other.",
       "confirm": "I understand this publishes a new rules version.",
-      "submit": "Create bonus period"
+      "submit": "Create bonus period",
+      "periodLine": "{multiplier}× on {scope}",
+      "periodWindow": "From {from} to {to}",
+      "phaseActive": "Active",
+      "phaseUpcoming": "Announced",
+      "phaseEnded": "Ended",
+      "extendEndsAtLabel": "New end ({zone} time)",
+      "extendHint": "It can only be extended, and not past the promotion's close. The site countdown switches to the new end.",
+      "extendSubmit": "Extend the period",
+      "extended": "The period was extended and the new version is active.",
+      "newPeriodHeading": "Create a new period"
     },
     "rules": {
       "title": "Official Rules versions",
