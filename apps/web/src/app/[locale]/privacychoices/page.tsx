@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { hasLocale } from "next-intl";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 
+import { AdSharingChoice } from "@/components/ad-sharing-choice";
 import { PrivacyRequestForm } from "@/components/privacy-request-form";
 import { SectionHeading } from "@/components/section-heading";
 import { routing } from "@/i18n/routing";
@@ -55,6 +56,11 @@ export default async function PrivacyChoicesPage({
               {t("readPolicy")}
             </Link>
           </p>
+        </div>
+
+        {/* DEC-086: la exclusion del pixel de publicidad, en este navegador. */}
+        <div className="mt-s8 rounded-lg border border-border bg-surface p-s6 sm:p-s8">
+          <AdSharingChoice />
         </div>
 
         <div className="mt-s8 rounded-lg border border-border bg-surface p-s6 sm:p-s8">

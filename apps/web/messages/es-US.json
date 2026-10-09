@@ -420,6 +420,12 @@
       "intro": "Envía tu solicitud con este formulario. Para proteger tu información, verificaremos tu identidad comparando lo que envíes con nuestros registros, y te responderemos en el plazo que indica nuestra Política de Privacidad.",
       "emailAlternative": "Si lo prefieres, también puedes escribirnos a",
       "readPolicy": "Leer la Política de privacidad",
+      "adSharingTitle": "Publicidad en este navegador",
+      "adSharingBody": "Usamos el píxel de Meta para medir las visitas a la tienda y mostrar nuestros anuncios en Facebook e Instagram. Puedes pedir que no se comparta tu actividad en este navegador; si el tuyo envía la señal Global Privacy Control, ya no se comparte.",
+      "adSharingOptOut": "No compartir mi actividad para publicidad",
+      "adSharingOptedOut": "Hecho: en este navegador no se comparte tu actividad para publicidad.",
+      "adSharingOptIn": "Volver a permitirlo",
+      "adSharingGpc": "Tu navegador envía la señal Global Privacy Control, así que en él no se comparte tu actividad para publicidad.",
       "requestType": "¿Qué quieres solicitar?",
       "requestTypePlaceholder": "Elige una opción",
       "types": {

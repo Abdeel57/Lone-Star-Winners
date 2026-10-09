@@ -9,6 +9,7 @@ import {
   negotiateAdminLocale,
 } from "./i18n/admin-routing";
 import { routing } from "./i18n/routing";
+import { resolveMetaPixelId } from "./lib/meta-pixel";
 import { apiConnectOrigins, contentSecurityPolicy, createNonce } from "./lib/security-headers";
 
 /**
@@ -77,6 +78,9 @@ function policyFor(request: NextRequest): { nonce: string; csp: string } {
       nonce,
       isDevelopment,
       connectOrigins: apiConnectOrigins(process.env, request.nextUrl.origin),
+      // DEC-086: el pixel de Meta solo existe en la tienda. El panel, donde se
+      // ven datos de clientes, sigue sin ningun origen de publicidad.
+      metaPixel: !isAdminPath(request.nextUrl.pathname) && resolveMetaPixelId(process.env) !== null,
     }),
   };
 }

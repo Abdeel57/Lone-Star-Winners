@@ -637,3 +637,29 @@ y la cuenta se pide solo al pagar. Lo que no puede decidir el código:
     pedido se calcula sobre el total) y nunca se pinta como insignia sobre la
     foto. Confirmar con el abogado que mostrarla en la mercancía es compatible
     con la vía gratuita y con la forma en que las Reglas describen la Opción 1.
+
+## Píxel de Meta en la tienda (DEC-086, 2026-10-09)
+
+22. **La Política de Privacidad y el Aviso de California dicen que no hay
+    píxeles ni publicidad de terceros.** El cliente pidió instalar el píxel de
+    Meta (ID 1794885734825835). Con él, estas frases del texto publicado
+    (`apps/web/src/legal/privacy-policy.ts` y `california-notice.ts`, del Word
+    del 2026-09-30) dejan de ser ciertas:
+    - "We use only essential cookies required for sessions and operation of the
+      Site." (Cookies and Web Beacons)
+    - "We don't currently use third-party analytics or advertising technologies
+      on the Site." (Analytics and Advertising)
+    - "We do not currently use advertising networks or disclose personal
+      information for targeted advertising." (Advertising Partners)
+    - "We do not sell personal information or share it for cross-context
+      behavioral advertising." (varias secciones, también en el Aviso de
+      California)
+    - "No third-party analytics or advertising technology is currently installed
+      on the Site."
+
+    Bajo la CCPA, un píxel de publicidad suele contar como "compartir para
+    publicidad comportamental entre contextos". La tienda ya respeta Global
+    Privacy Control y ofrece "No compartir mi actividad para publicidad" en
+    `/privacychoices`. El píxel solo envía `PageView`, sin datos personales.
+    Falta que el abogado actualice esas secciones para declarar el uso del píxel
+    de Meta, la exclusión y la señal GPC.

@@ -183,6 +183,37 @@ describe("connect-src y el origen de la API", () => {
   });
 });
 
+describe("pixel de Meta en la CSP (DEC-086)", () => {
+  it("sin pixel, la politica no nombra ningun origen de Meta", () => {
+    const policy = contentSecurityPolicy({
+      nonce: NONCE,
+      isDevelopment: false,
+      connectOrigins: [],
+    });
+    expect(policy).not.toContain("facebook");
+  });
+
+  it("con pixel abre DOS origenes concretos, cada uno donde hace falta", () => {
+    const directives = directivesOf(
+      contentSecurityPolicy({
+        nonce: NONCE,
+        isDevelopment: false,
+        connectOrigins: [],
+        metaPixel: true,
+      }),
+    );
+
+    expect(directives.get("script-src")).toContain("https://connect.facebook.net");
+    expect(directives.get("img-src")).toContain("https://www.facebook.com");
+    expect(directives.get("connect-src")).toContain("https://www.facebook.com");
+    // Ni comodines ni 'unsafe-inline': el pixel se carga como fichero.
+    expect([...directives.values()].flat().some((source) => source.includes("*"))).toBe(false);
+    expect(directives.get("script-src")).not.toContain("'unsafe-inline'");
+    // Nada de iframes de Meta: el sitio sigue sin meterse en ninguno.
+    expect(directives.get("frame-src")).toEqual(["https://challenges.cloudflare.com"]);
+  });
+});
+
 /**
  * Las cabeceras estaticas, leidas de la CONFIGURACION REAL.
  *

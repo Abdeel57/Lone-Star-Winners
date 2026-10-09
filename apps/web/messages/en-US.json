@@ -420,6 +420,12 @@
       "intro": "Send your request with this form. To protect your information, we will verify your identity by comparing what you send with our records, and we will respond within the time stated in our Privacy Policy.",
       "emailAlternative": "If you prefer, you can also write to us at",
       "readPolicy": "Read the Privacy Policy",
+      "adSharingTitle": "Advertising on this browser",
+      "adSharingBody": "We use the Meta pixel to measure store visits and show our ads on Facebook and Instagram. You can ask that your activity on this browser not be shared; if your browser sends the Global Privacy Control signal, it already isn't.",
+      "adSharingOptOut": "Don't share my activity for advertising",
+      "adSharingOptedOut": "Done: your activity on this browser is not shared for advertising.",
+      "adSharingOptIn": "Allow it again",
+      "adSharingGpc": "Your browser sends the Global Privacy Control signal, so your activity on it is not shared for advertising.",
       "requestType": "What would you like to request?",
       "requestTypePlaceholder": "Choose an option",
       "types": {

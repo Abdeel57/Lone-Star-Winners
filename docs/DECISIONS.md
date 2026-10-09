@@ -4299,3 +4299,50 @@ pedido, `/admin/daily-cut`, mensajes), `tests/e2e` (spec 14),
 
 Proposed by: sesión del usuario (2026-10-08, petición del cliente)
 Agreed by: backend, frontend-ux, security (petición directa del usuario)
+
+## DEC-086
+
+Status: Accepted
+
+Date: 2026-10-09
+
+Decision:
+**La tienda carga el píxel de Meta del cliente (1794885734825835) para medir
+visitas, con cuatro límites.** Es la primera decisión de analítica o
+publicidad del proyecto (CLAUDE.md §7 la dejaba abierta) y la pide el cliente
+para sus anuncios de Facebook e Instagram.
+
+1. **Solo la tienda.** El layout de `[locale]` monta `MetaPixel`; el panel no,
+   y su CSP no abre ningún origen de Meta.
+2. **Solo el dominio real** (`lonestarwinners.com` y `www.`). En local, CI o
+   un despliegue de prueba no se carga, para no ensuciar las audiencias.
+3. **Respeta la exclusión.** No se carga con Global Privacy Control ni con la
+   cookie `lsw_ad_sharing_opt_out`, que pone el nuevo bloque "Publicidad en este
+   navegador" de `/privacychoices`. Al excluirse se llama a
+   `fbq('consent','revoke')` para lo que quede de la visita.
+4. **Solo `PageView`**, al entrar y en cada cambio de ruta o idioma. Sin
+   "advanced matching", sin correo ni teléfono ni importes.
+
+El código de Meta se carga como fichero de `connect.facebook.net`, no como
+script en línea, así que la CSP con nonce no cambia: `script-src` y
+`connect-src` añaden `https://connect.facebook.net`, e `img-src` y
+`connect-src` añaden `https://www.facebook.com`, sin comodines.
+`NEXT_PUBLIC_META_PIXEL_ID` cambia el ID u `off` lo apaga.
+
+**Pendiente legal (pregunta 22):** la Política de Privacidad y el Aviso de
+California publicados dicen que no hay píxeles ni publicidad de terceros. Hay
+que actualizarlos.
+
+Alternatives considered: A — El fragmento oficial en línea (descartada: obliga
+a repartir el nonce o a abrir `'unsafe-inline'`). B — Google Tag Manager
+(descartada: abre la puerta a cualquier script sin pasar por el código). C —
+Cargarlo también en el panel (descartada: datos de clientes).
+
+Affected areas: `apps/web` (`lib/meta-pixel.ts`, `components/meta-pixel.tsx`,
+`components/ad-sharing-choice.tsx`, `lib/security-headers.ts`,
+`middleware.ts`, layout de `[locale]`, `/privacychoices`, mensajes, pruebas),
+`docs/LEGAL_PENDING.md`.
+
+Proposed by: sesión del usuario (2026-10-09, petición del cliente)
+Agreed by: frontend-ux, security (petición directa del usuario); pendiente:
+abogado (pregunta 22)

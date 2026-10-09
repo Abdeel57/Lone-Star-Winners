@@ -9,11 +9,13 @@ import type { ReactNode } from "react";
 
 import { AnnouncementBar } from "@/components/announcement-bar";
 import { LanguageBar } from "@/components/language-bar";
+import { MetaPixel } from "@/components/meta-pixel";
 import { ScrollReveal } from "@/components/scroll-reveal";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { localeTag } from "@/i18n/locales";
 import { routing } from "@/i18n/routing";
+import { resolveMetaPixelId } from "@/lib/meta-pixel";
 
 import { bodyFont, displayFont, headlineFont } from "../fonts";
 
@@ -87,6 +89,7 @@ export default async function LocaleLayout({
   const messages = await getMessages();
   const t = await getTranslations({ locale, namespace: "a11y" });
   const showMockNotice = process.env.NODE_ENV !== "production";
+  const metaPixelId = resolveMetaPixelId(process.env);
 
   return (
     /*
@@ -141,6 +144,10 @@ export default async function LocaleLayout({
 
           {/* DEC-075: aparicion al desplazarse. No pinta nada. */}
           <ScrollReveal />
+
+          {/* DEC-086: pixel de Meta, solo en la tienda (el panel tiene su
+              propio layout y no lo carga). Tampoco pinta nada. */}
+          {metaPixelId === null ? null : <MetaPixel pixelId={metaPixelId} />}
         </NextIntlClientProvider>
       </body>
     </html>

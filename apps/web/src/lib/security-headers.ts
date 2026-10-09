@@ -41,6 +41,8 @@
  * cargarse es la politica del documento que los pide, que si la lleva.
  */
 
+import { META_BEACON_ORIGIN, META_SCRIPT_ORIGIN } from "./meta-pixel";
+
 /** Origenes adicionales admitidos en `connect-src`. */
 export interface CspOptions {
   readonly nonce: string;
@@ -52,6 +54,11 @@ export interface CspOptions {
   readonly isDevelopment: boolean;
   /** Origenes de `connect-src`, ya normalizados. Ver `apiConnectOrigins`. */
   readonly connectOrigins: readonly string[];
+  /**
+   * DEC-086: abrir los origenes del pixel de Meta. Solo en la TIENDA y solo si
+   * hay pixel configurado; el panel no lo carga y su politica sigue cerrada.
+   */
+  readonly metaPixel?: boolean;
 }
 
 /**
@@ -165,20 +172,36 @@ export function createNonce(): string {
  */
 export const TURNSTILE_ORIGIN = "https://challenges.cloudflare.com";
 
+/**
+ * Pixel de Meta (DEC-086): `fbevents.js` y su configuracion salen de
+ * `connect.facebook.net` (`script-src`), y los eventos van a
+ * `www.facebook.com/tr` como imagen o como peticion (`img-src` y
+ * `connect-src`). Dos origenes concretos, nada de comodines `*.facebook.com`.
+ */
+export const META_PIXEL_CSP = {
+  script: META_SCRIPT_ORIGIN,
+  beacon: META_BEACON_ORIGIN,
+} as const;
+
 export function contentSecurityPolicy(options: CspOptions): string {
-  const { nonce, isDevelopment, connectOrigins } = options;
+  const { nonce, isDevelopment, connectOrigins, metaPixel = false } = options;
 
   const scriptSrc = ["'self'", `'nonce-${nonce}'`, TURNSTILE_ORIGIN];
+  if (metaPixel) scriptSrc.push(META_PIXEL_CSP.script);
   if (isDevelopment) scriptSrc.push("'unsafe-eval'");
 
   const connectSrc = ["'self'", ...connectOrigins];
+  if (metaPixel) connectSrc.push(META_PIXEL_CSP.beacon, META_PIXEL_CSP.script);
   if (isDevelopment) connectSrc.push("ws:");
+
+  const imgSrc = ["'self'", "data:", "blob:"];
+  if (metaPixel) imgSrc.push(META_PIXEL_CSP.beacon);
 
   const directives: readonly string[] = [
     "default-src 'self'",
     `script-src ${scriptSrc.join(" ")}`,
     "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data: blob:",
+    `img-src ${imgSrc.join(" ")}`,
     "font-src 'self'",
     `connect-src ${connectSrc.join(" ")}`,
     `frame-src ${TURNSTILE_ORIGIN}`,
