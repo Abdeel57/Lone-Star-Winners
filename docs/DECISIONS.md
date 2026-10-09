@@ -4329,9 +4329,12 @@ script en línea, así que la CSP con nonce no cambia: `script-src` y
 `connect-src` añaden `https://www.facebook.com`, sin comodines.
 `NEXT_PUBLIC_META_PIXEL_ID` cambia el ID u `off` lo apaga.
 
-**Pendiente legal (pregunta 22):** la Política de Privacidad y el Aviso de
-California publicados dicen que no hay píxeles ni publicidad de terceros. Hay
-que actualizarlos.
+**Política corregida, pendiente del abogado (pregunta 22).** La Política de
+Privacidad y el Aviso de California decían que no había píxeles ni publicidad
+de terceros. Por instrucción del usuario se corrigieron a mano en la misma
+entrega (versión del 9 de octubre de 2026): declaran el píxel, el compartir
+con Meta para publicidad y la exclusión. Falta la revisión del abogado y que
+la incorpore a su Word.
 
 Alternatives considered: A — El fragmento oficial en línea (descartada: obliga
 a repartir el nonce o a abrir `'unsafe-inline'`). B — Google Tag Manager
@@ -4340,7 +4343,8 @@ Cargarlo también en el panel (descartada: datos de clientes).
 
 Affected areas: `apps/web` (`lib/meta-pixel.ts`, `components/meta-pixel.tsx`,
 `components/ad-sharing-choice.tsx`, `lib/security-headers.ts`,
-`middleware.ts`, layout de `[locale]`, `/privacychoices`, mensajes, pruebas),
+`middleware.ts`, layout de `[locale]`, `/privacychoices`, mensajes, pruebas,
+`legal/privacy-policy.ts` y `legal/california-notice.ts`),
 `docs/LEGAL_PENDING.md`.
 
 Proposed by: sesión del usuario (2026-10-09, petición del cliente)

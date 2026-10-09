@@ -661,5 +661,14 @@ y la cuenta se pide solo al pagar. Lo que no puede decidir el código:
     publicidad comportamental entre contextos". La tienda ya respeta Global
     Privacy Control y ofrece "No compartir mi actividad para publicidad" en
     `/privacychoices`. El píxel solo envía `PageView`, sin datos personales.
-    Falta que el abogado actualice esas secciones para declarar el uso del píxel
-    de Meta, la exclusión y la señal GPC.
+
+    **Corregido el 2026-10-09 por instrucción del usuario, SIN revisión del
+    abogado.** La Política y el Aviso (versión del 9 de octubre de 2026) ya
+    declaran el píxel de Meta, que se comparte información de actividad e
+    identificadores de cookie con Meta para publicidad comportamental, cómo
+    excluirse (botón de `/privacychoices` y GPC) y que no se responde a Do Not
+    Track. El texto lo redactó la sesión de desarrollo. Pendiente: que el
+    abogado lo revise y lo incorpore a su Word, porque regenerar desde el
+    `.docx` del 2026-09-30 lo desharía. La propia Política promete avisar de un
+    cambio material por correo o con un aviso visible en el sitio; decidir con
+    el abogado si hace falta ese aviso.

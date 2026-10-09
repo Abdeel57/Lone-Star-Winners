@@ -2,16 +2,21 @@
  * GENERADO por scripts/legal/blocks-to-ts.mjs desde "CA Notice at Collection.docx".
  * No se edita a mano: el texto es el del abogado del cliente, tal cual. Para
  * actualizarlo, se regenera con scripts/legal/docx-to-blocks.ps1 y este script.
+ *
+ * EXCEPCION (DEC-086, 2026-10-09): por instruccion del usuario se editaron a
+ * mano la categoria de actividad en internet, un proposito y el apartado de
+ * venta y compartir, para declarar el pixel de Meta. Regenerar desde el .docx
+ * del 2026-09-30 DESHARIA ese cambio (LEGAL_PENDING 22).
  */
 
 import type { LegalDocument } from "./types";
 
 export const CALIFORNIA_NOTICE = {
   key: "california-notice",
-  version: "2026-09-30",
+  version: "2026-10-09",
   language: "en-US",
   title: "California Notice at Collection",
-  lastUpdated: "Last updated and effective: September 30, 2026",
+  lastUpdated: "Last updated and effective: October 9, 2026",
   source: "CA Notice at Collection.docx",
   blocks: [
     {
@@ -49,7 +54,7 @@ export const CALIFORNIA_NOTICE = {
         ],
         [
           {
-            x: "Internet or other network activity, such as your IP address, browser or device type, essential session cookies, and security logs",
+            x: "Internet or other network activity, such as your IP address, browser or device type, essential session cookies, security logs, and the pages you visit on the Site’s store collected through the Meta Pixel, including cookie identifiers",
           },
         ],
         [
@@ -104,6 +109,11 @@ export const CALIFORNIA_NOTICE = {
         ],
         [
           {
+            x: "measure visits to the Site and show and measure our advertisements on Facebook and Instagram through the Meta Pixel",
+          },
+        ],
+        [
+          {
             x: "comply with legal obligations and enforce our terms",
           },
         ],
@@ -144,7 +154,7 @@ export const CALIFORNIA_NOTICE = {
       items: [
         [
           {
-            x: "We do not sell any category of personal information or share it for cross-context behavioral advertising. We do not use personal information for targeted advertising. You can submit privacy requests through our privacy choices page at https://LoneStarWinners.com/privacychoices or by contacting us using the information below.",
+            x: "We do not sell personal information for money. We share internet or network activity information and identifiers such as cookie identifiers with Meta Platforms, Inc. through the Meta Pixel for cross-context behavioral advertising. You can opt out of this sharing by selecting “Don’t share my activity for advertising” on our privacy choices page at https://LoneStarWinners.com/privacychoices or by enabling Global Privacy Control in your browser. You can also submit privacy requests through that page or by contacting us using the information below.",
           },
         ],
       ],

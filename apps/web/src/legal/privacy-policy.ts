@@ -2,16 +2,21 @@
  * GENERADO por scripts/legal/blocks-to-ts.mjs desde "Privacy Policy.docx".
  * No se edita a mano: el texto es el del abogado del cliente, tal cual. Para
  * actualizarlo, se regenera con scripts/legal/docx-to-blocks.ps1 y este script.
+ *
+ * EXCEPCION (DEC-086, 2026-10-09): por instruccion del usuario se editaron a
+ * mano los parrafos que negaban pixeles y publicidad de terceros, para declarar
+ * el pixel de Meta. Regenerar desde el .docx del 2026-09-30 DESHARIA ese cambio:
+ * el Word del abogado tiene que incorporarlo primero (LEGAL_PENDING 22).
  */
 
 import type { LegalDocument } from "./types";
 
 export const PRIVACY_POLICY = {
   key: "privacy",
-  version: "2026-09-30",
+  version: "2026-10-09",
   language: "en-US",
   title: "Privacy Policy",
-  lastUpdated: "Last updated and effective: September 30, 2026",
+  lastUpdated: "Last updated and effective: October 9, 2026",
   source: "Privacy Policy.docx",
   blocks: [
     {
@@ -194,7 +199,7 @@ export const PRIVACY_POLICY = {
       t: "p",
       runs: [
         {
-          x: "Our servers automatically record your IP address and browser or device type for security purposes. We also use essential cookies for sessions and operation of the Site.",
+          x: "Our servers automatically record your IP address and browser or device type for security purposes. We also use essential cookies for sessions and operation of the Site. On the Site’s store pages, the Meta Pixel, a technology provided by Meta Platforms, Inc., collects the pages you visit together with your IP address, browser and device information, and cookie identifiers, as described under “Analytics and Advertising.”",
         },
       ],
     },
@@ -307,6 +312,11 @@ export const PRIVACY_POLICY = {
         ],
         [
           {
+            x: "Measure visits to the Site and show and measure our advertisements on Facebook and Instagram through the Meta Pixel. ",
+          },
+        ],
+        [
+          {
             x: "Detect suspicious activity and protect the security of the Site. ",
           },
         ],
@@ -401,7 +411,7 @@ export const PRIVACY_POLICY = {
       t: "p",
       runs: [
         {
-          x: "We do not currently use advertising networks or disclose personal information for targeted advertising.",
+          x: "We use the Meta Pixel, provided by Meta Platforms, Inc., to measure visits to the Site and to show and measure our advertisements on Facebook and Instagram. Through the Meta Pixel, Meta receives the pages you visit on the Site, your IP address, browser and device information, and cookie identifiers, and Meta may combine this information with other information it holds about you under its own privacy policy. We do not send Meta your name, email address, telephone number, or purchase details. You can opt out as described under “Analytics and Advertising.”",
         },
       ],
     },
@@ -449,7 +459,7 @@ export const PRIVACY_POLICY = {
       t: "p",
       runs: [
         {
-          x: "We use only essential cookies required for sessions and operation of the Site. You can manage cookies through your browser settings. Disabling essential cookies may prevent login, checkout, or other Site functions from operating properly.",
+          x: "We use essential cookies required for sessions and operation of the Site. On the Site’s store pages we also use the Meta Pixel, a web beacon that may set or read cookies of Meta Platforms, Inc. for advertising measurement, as described under “Analytics and Advertising.” You can manage cookies through your browser settings. Disabling essential cookies may prevent login, checkout, or other Site functions from operating properly.",
         },
       ],
     },
@@ -461,7 +471,7 @@ export const PRIVACY_POLICY = {
       t: "p",
       runs: [
         {
-          x: "We don’t currently use third-party analytics or advertising technologies on the Site. The following links provide general information about privacy and advertising choices:",
+          x: "We use the Meta Pixel on the Site’s store pages to count page visits and to show and measure our advertisements on Facebook and Instagram. It is not used in the Site’s administration area and does not receive your name, email address, telephone number, or purchase details. You can stop the Meta Pixel from loading in your browser by selecting “Don’t share my activity for advertising” on our Privacy Choices page at https://LoneStarWinners.com/privacychoices; that choice is stored in your browser. If your browser sends a Global Privacy Control signal, we treat it as a request to opt out and the Meta Pixel does not load. The following links provide general information about privacy and advertising choices:",
         },
       ],
     },
@@ -472,6 +482,12 @@ export const PRIVACY_POLICY = {
         [
           {
             x: "Our Privacy Choices page ",
+          },
+        ],
+        [
+          {
+            x: "Meta Privacy Policy",
+            href: "https://www.facebook.com/privacy/policy/",
           },
         ],
         [
@@ -552,7 +568,7 @@ export const PRIVACY_POLICY = {
       t: "p",
       runs: [
         {
-          x: "We do not sell personal information or share it for cross-context behavioral advertising. Our current practices apply whether or not your browser sends Global Privacy Control or another opt-out signal. We do not use third-party advertising or analytics technologies to collect information about your activity across websites.",
+          x: "We do not sell personal information for money. Our use of the Meta Pixel may be considered “sharing” personal information for cross-context behavioral advertising. We honor Global Privacy Control: when your browser sends that signal, the Meta Pixel does not load and we treat the signal as a request to opt out of sale and sharing for that browser. You can also opt out on our Privacy Choices page at https://LoneStarWinners.com/privacychoices.",
         },
       ],
     },
@@ -917,7 +933,7 @@ export const PRIVACY_POLICY = {
           [
             [
               {
-                x: "IP address, browser or device type, essential session cookies, and security logs.",
+                x: "IP address, browser or device type, essential session cookies, security logs, and the pages you visit on the Site’s store collected through the Meta Pixel.",
               },
             ],
           ],
@@ -1077,7 +1093,7 @@ export const PRIVACY_POLICY = {
       t: "p",
       runs: [
         {
-          x: "We do not sell personal information or share it for cross-context behavioral advertising. We may disclose identifiers, customer records, and commercial information to hosting, payment, email, shipping, and sweepstakes providers for business purposes. Age information may be disclosed to a sweepstakes administrator for eligibility verification. Internet or network activity information may be disclosed to hosting and security providers. General location information in shipping addresses may be disclosed to hosting, payment, shipping, and sweepstakes providers as needed. Account credentials are processed through our hosting and database services for authentication. Required winner tax information may be disclosed to tax advisers and tax authorities. The purposes and recipients are described above under Use of Your Information and Third-Party Service Providers.",
+          x: "We do not sell personal information for money. Through the Meta Pixel, we share internet or network activity information (the pages you visit on the Site, your IP address, and browser and device information) and identifiers such as cookie identifiers with Meta Platforms, Inc. for cross-context behavioral advertising. We may disclose identifiers, customer records, and commercial information to hosting, payment, email, shipping, and sweepstakes providers for business purposes. Age information may be disclosed to a sweepstakes administrator for eligibility verification. Internet or network activity information may be disclosed to hosting and security providers. General location information in shipping addresses may be disclosed to hosting, payment, shipping, and sweepstakes providers as needed. Account credentials are processed through our hosting and database services for authentication. Required winner tax information may be disclosed to tax advisers and tax authorities. The purposes and recipients are described above under Use of Your Information and Third-Party Service Providers.",
         },
       ],
     },
@@ -1182,7 +1198,7 @@ export const PRIVACY_POLICY = {
       t: "p",
       runs: [
         {
-          x: "We don’t sell personal information for money or other valuable consideration. We don’t share personal information for cross-context behavioral advertising or use it for targeted advertising. You can contact us about these practices using the privacy request methods described in this Policy.",
+          x: "We don’t sell personal information for money or other valuable consideration. We share internet or network activity information with Meta Platforms, Inc. through the Meta Pixel for cross-context behavioral advertising. You can opt out of this sharing by selecting “Don’t share my activity for advertising” on our Privacy Choices page at https://LoneStarWinners.com/privacychoices, by enabling Global Privacy Control in your browser, or by contacting us using the privacy request methods described in this Policy.",
         },
       ],
     },
@@ -1198,7 +1214,7 @@ export const PRIVACY_POLICY = {
       t: "p",
       runs: [
         {
-          x: "Our current practices concerning sale, sharing, and targeted advertising apply across devices and browsers.",
+          x: "An opt-out made on our Privacy Choices page or through Global Privacy Control applies to the browser where you make it. If you use other browsers or devices, you need to opt out on each of them.",
         },
       ],
     },
@@ -1210,7 +1226,7 @@ export const PRIVACY_POLICY = {
       t: "p",
       runs: [
         {
-          x: "You can manage essential cookies through your browser settings. Our privacy choices page is at https://LoneStarWinners.com/privacychoices. ",
+          x: "You can manage cookies through your browser settings. You can stop the Meta Pixel from loading in your browser on our privacy choices page at https://LoneStarWinners.com/privacychoices. ",
         },
       ],
     },
@@ -1230,7 +1246,7 @@ export const PRIVACY_POLICY = {
       t: "p",
       runs: [
         {
-          x: "We do not use third-party advertising or analytics technologies to collect information about your activity across websites. Our current practices concerning sale, sharing, and targeted advertising apply whether or not your browser sends an opt-out signal.",
+          x: "We use the Meta Pixel on the Site’s store pages, which allows Meta Platforms, Inc. to collect information about your activity on the Site and use it with information about your activity on other websites. We honor Global Privacy Control: when your browser sends that signal, the Meta Pixel does not load.",
         },
       ],
     },
@@ -1307,7 +1323,7 @@ export const PRIVACY_POLICY = {
       t: "p",
       runs: [
         {
-          x: "We do not sell personal information or share it for cross-context behavioral advertising. We do not use personal information for targeted advertising. Our current practices apply whether or not your browser sends a Do Not Track signal or Global Privacy Control.",
+          x: "We do not sell personal information for money. We use the Meta Pixel for advertising as described under “Analytics and Advertising.” The Site does not respond to Do Not Track signals, but it honors Global Privacy Control by not loading the Meta Pixel.",
         },
       ],
     },
@@ -1315,7 +1331,7 @@ export const PRIVACY_POLICY = {
       t: "p",
       runs: [
         {
-          x: "No third-party analytics or advertising technology is currently installed on the Site. Essential cookies are used for sessions and Site operation.",
+          x: "The Meta Pixel, provided by Meta Platforms, Inc., is installed on the Site’s store pages and may collect information about your online activity over time and across websites. Essential cookies are used for sessions and Site operation.",
         },
       ],
     },
@@ -1327,7 +1343,7 @@ export const PRIVACY_POLICY = {
       t: "p",
       runs: [
         {
-          x: "We do not use third-party analytics or advertising technologies to collect information about your activity over time and across websites. We use essential cookies for sessions and Site operation.",
+          x: "Through the Meta Pixel, Meta Platforms, Inc. may collect information about your activity on the Site over time and across websites. We use essential cookies for sessions and Site operation.",
         },
       ],
     },
@@ -1371,7 +1387,7 @@ export const PRIVACY_POLICY = {
       t: "p",
       runs: [
         {
-          x: "We do not sell covered information as defined by Nevada law. No third-party advertising or analytics technology is currently installed on the Site.",
+          x: "We do not sell covered information as defined by Nevada law. The Meta Pixel, provided by Meta Platforms, Inc., is installed on the Site’s store pages as described under “Analytics and Advertising.”",
         },
       ],
     },
@@ -1419,7 +1435,7 @@ export const PRIVACY_POLICY = {
       t: "p",
       runs: [
         {
-          x: "We don’t sell or share personal information for targeted advertising. You may submit privacy requests through our privacy choices page at https://LoneStarWinners.com/privacychoices or by contacting us using the information below.",
+          x: "We don’t sell personal information for money. We use the Meta Pixel for targeted advertising, which may be considered sharing personal information or processing it for targeted advertising under applicable state law. You can opt out by selecting “Don’t share my activity for advertising” on our privacy choices page at https://LoneStarWinners.com/privacychoices or by enabling Global Privacy Control in your browser. You may also submit privacy requests through that page or by contacting us using the information below.",
         },
       ],
     },
