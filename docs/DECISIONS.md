@@ -4313,7 +4313,11 @@ publicidad del proyecto (CLAUDE.md §7 la dejaba abierta) y la pide el cliente
 para sus anuncios de Facebook e Instagram.
 
 1. **Solo la tienda.** El layout de `[locale]` monta `MetaPixel`; el panel no,
-   y su CSP no abre ningún origen de Meta.
+   y su CSP no abre ningún origen de Meta. Tampoco en `/account`, `/checkout`
+   ni `/orders`: Meta recibe la URL entera, y ahí van tokens
+   (`reset-password?token=…`, `verify-email?token=…`) e identificadores de
+   pedido. Con los eventos automáticos de Meta apagados (`autoConfig`,
+   `disablePushState`), lo único que sale son los `PageView` del componente.
 2. **Solo el dominio real** (`lonestarwinners.com` y `www.`). En local, CI o
    un despliegue de prueba no se carga, para no ensuciar las audiencias.
 3. **Respeta la exclusión.** No se carga con Global Privacy Control ni con la

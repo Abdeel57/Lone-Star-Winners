@@ -471,7 +471,7 @@ export const PRIVACY_POLICY = {
       t: "p",
       runs: [
         {
-          x: "We use the Meta Pixel on the Site’s store pages to count page visits and to show and measure our advertisements on Facebook and Instagram. It is not used in the Site’s administration area and does not receive your name, email address, telephone number, or purchase details. You can stop the Meta Pixel from loading in your browser by selecting “Don’t share my activity for advertising” on our Privacy Choices page at https://LoneStarWinners.com/privacychoices; that choice is stored in your browser. If your browser sends a Global Privacy Control signal, we treat it as a request to opt out and the Meta Pixel does not load. The following links provide general information about privacy and advertising choices:",
+          x: "We use the Meta Pixel on the Site’s store pages to count page visits and to show and measure our advertisements on Facebook and Instagram. It is not used on account, checkout, or order confirmation pages or in the Site’s administration area, and it does not receive your name, email address, telephone number, or purchase details. We have turned off Meta’s automatic event collection, so the Meta Pixel reports only the store pages you view. You can stop the Meta Pixel from loading in your browser by selecting “Don’t share my activity for advertising” on our Privacy Choices page at https://LoneStarWinners.com/privacychoices; that choice is stored in your browser. If your browser sends a Global Privacy Control signal, we treat it as a request to opt out and the Meta Pixel does not load. The following links provide general information about privacy and advertising choices:",
         },
       ],
     },

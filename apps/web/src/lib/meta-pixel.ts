@@ -61,6 +61,24 @@ export function resolveMetaPixelId(
   return /^\d{8,20}$/u.test(value) ? value : null;
 }
 
+/**
+ * Rutas (sin idioma) donde el pixel NI se carga NI registra nada.
+ *
+ * Meta recibe la URL completa de cada pagina vista. En la cuenta van tokens en
+ * la URL (`/account/reset-password?token=…`, `/account/verify-email?token=…`) e
+ * identificadores de pedido (`/account/orders/<id>`, `/orders/<id>/confirmation`),
+ * y el checkout vuelve de la pasarela con datos del pago. Nada de eso es una
+ * visita de la tienda que medir para anuncios.
+ */
+export const META_PIXEL_EXCLUDED_PATHS: readonly string[] = ["/account", "/checkout", "/orders"];
+
+/** Si `pathname` (sin prefijo de idioma) queda fuera del pixel. */
+export function isMetaPixelExcludedPath(pathname: string): boolean {
+  return META_PIXEL_EXCLUDED_PATHS.some(
+    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+  );
+}
+
 /** Si la cookie de exclusion esta puesta en `cookieHeader` (`document.cookie`). */
 export function hasAdSharingOptOut(cookieHeader: string): boolean {
   return cookieHeader.split(";").some((part) => part.trim() === `${AD_SHARING_OPT_OUT_COOKIE}=1`);

@@ -4,7 +4,7 @@ import { useLocale } from "next-intl";
 import { useEffect, useRef } from "react";
 
 import { usePathname } from "@/i18n/navigation";
-import { META_SCRIPT_URL, metaPixelAllowed } from "@/lib/meta-pixel";
+import { isMetaPixelExcludedPath, META_SCRIPT_URL, metaPixelAllowed } from "@/lib/meta-pixel";
 
 /** La funcion global que publica `fbevents.js`, con su cola previa a la carga. */
 type Fbq = ((...args: unknown[]) => void) & {
@@ -13,6 +13,10 @@ type Fbq = ((...args: unknown[]) => void) & {
   push: Fbq;
   loaded: boolean;
   version: string;
+  /** Apaga el `PageView` automatico de Meta en cada `pushState`. */
+  disablePushState?: boolean;
+  /** Sin esto, Meta descarta el segundo `PageView` del mismo documento. */
+  allowDuplicatePageViews?: boolean;
 };
 
 declare global {
@@ -41,6 +45,13 @@ function installFbq(): Fbq {
   fbq.loaded = true;
   fbq.version = "2.0";
   fbq.queue = [];
+  // Los `PageView` los decide ESTE componente, ruta a ruta: el automatico de
+  // Meta en cada cambio de URL se los mandaria tambien desde la cuenta o el
+  // checkout, que estan excluidos (`META_PIXEL_EXCLUDED_PATHS`).
+  fbq.disablePushState = true;
+  // Y como la tienda navega sin recargar, cada ruta es un `PageView` aunque el
+  // documento sea el mismo; sin esto Meta se queda solo con el primero.
+  fbq.allowDuplicatePageViews = true;
 
   window.fbq = fbq;
   window._fbq ??= fbq;
@@ -63,11 +74,17 @@ function installFbq(): Fbq {
 export function MetaPixel({ pixelId }: { readonly pixelId: string }) {
   // La ruta de next-intl llega SIN el idioma: cambiar de idioma tambien es
   // una pagina nueva, asi que la clave lleva los dos.
-  const page = `${useLocale()}:${usePathname()}`;
+  const pathname = usePathname();
+  const page = `${useLocale()}:${pathname}`;
   const lastTracked = useRef<string | null>(null);
 
   useEffect(() => {
     if (lastTracked.current === page) return;
+
+    // Cuenta, checkout y confirmacion de pedido: ni se carga ni se registra.
+    // Llegar a la tienda desde un enlace con token deja el token fuera, porque
+    // el pixel no existe todavia en esa pagina.
+    if (isMetaPixelExcludedPath(pathname)) return;
 
     const allowed = metaPixelAllowed({
       hostname: window.location.hostname,
@@ -78,10 +95,15 @@ export function MetaPixel({ pixelId }: { readonly pixelId: string }) {
 
     const firstTime = window.fbq === undefined;
     const fbq = installFbq();
-    if (firstTime) fbq("init", pixelId);
+    if (firstTime) {
+      // Sin eventos automaticos (clics en botones, metadatos de la pagina):
+      // solo los `PageView` que manda este componente.
+      fbq("set", "autoConfig", false, pixelId);
+      fbq("init", pixelId);
+    }
     fbq("track", "PageView");
     lastTracked.current = page;
-  }, [page, pixelId]);
+  }, [page, pathname, pixelId]);
 
   return null;
 }
