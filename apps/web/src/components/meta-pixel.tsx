@@ -4,7 +4,13 @@ import { useLocale } from "next-intl";
 import { useEffect, useRef } from "react";
 
 import { usePathname } from "@/i18n/navigation";
-import { isMetaPixelExcludedPath, META_SCRIPT_URL, metaPixelAllowed } from "@/lib/meta-pixel";
+import {
+  isMetaPixelExcludedPath,
+  META_CLICK_EVENTS,
+  META_EVENT_ATTRIBUTE,
+  META_SCRIPT_URL,
+  metaPixelAllowed,
+} from "@/lib/meta-pixel";
 
 /** La funcion global que publica `fbevents.js`, con su cola previa a la carga. */
 type Fbq = ((...args: unknown[]) => void) & {
@@ -104,6 +110,31 @@ export function MetaPixel({ pixelId }: { readonly pixelId: string }) {
     fbq("track", "PageView");
     lastTracked.current = page;
   }, [page, pathname, pixelId]);
+
+  // Eventos al pulsar (DEC-086): los botones marcados con `data-meta-event` no
+  // necesitan ser componentes de cliente; este componente escucha los clics.
+  // Solo envia si el pixel ya esta cargado en esta pagina -es decir, si se
+  // permitio- y si la persona no se excluyo despues.
+  useEffect(() => {
+    function onClick(event: MouseEvent): void {
+      const marked =
+        event.target instanceof Element ? event.target.closest(`[${META_EVENT_ATTRIBUTE}]`) : null;
+      const name = marked?.getAttribute(META_EVENT_ATTRIBUTE) ?? null;
+      if (name === null || !META_CLICK_EVENTS.includes(name)) return;
+      if (window.fbq === undefined) return;
+
+      const allowed = metaPixelAllowed({
+        hostname: window.location.hostname,
+        globalPrivacyControl: navigator.globalPrivacyControl === true,
+        cookieHeader: document.cookie,
+      });
+      if (allowed) window.fbq("track", name);
+    }
+
+    // En captura: sale antes de que el enlace navegue.
+    document.addEventListener("click", onClick, true);
+    return () => document.removeEventListener("click", onClick, true);
+  }, []);
 
   return null;
 }

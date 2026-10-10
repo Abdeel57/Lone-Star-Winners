@@ -1,4 +1,4 @@
-import { render } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const route = vi.hoisted(() => ({ pathname: "/" }));
@@ -115,6 +115,42 @@ describe("MetaPixel en el navegador", () => {
     ]);
     expect(window.fbq?.disablePushState).toBe(true);
     expect(window.fbq?.allowDuplicatePageViews).toBe(true);
+  });
+
+  it("al pulsar un boton marcado envia su evento, y solo los de la lista", () => {
+    vi.stubGlobal("location", { ...window.location, hostname: "lonestarwinners.com" });
+
+    render(
+      <>
+        <MetaPixel pixelId="1794885734825835" />
+        <a href="#packages" data-meta-event="CompleteRegistration">
+          Comprar ahora
+        </a>
+        <a href="#otro" data-meta-event="Purchase">
+          Otro
+        </a>
+      </>,
+    );
+
+    fireEvent.click(screen.getByText("Comprar ahora"));
+    fireEvent.click(screen.getByText("Otro"));
+
+    expect(window.fbq?.queue.at(-1)).toEqual(["track", "CompleteRegistration"]);
+    expect(window.fbq?.queue.filter((call) => call[1] === "Purchase")).toEqual([]);
+  });
+
+  it("si el pixel no se cargo (otro dominio, GPC, exclusion), el clic no envia nada", () => {
+    render(
+      <>
+        <MetaPixel pixelId="1794885734825835" />
+        <a href="#packages" data-meta-event="CompleteRegistration">
+          Comprar ahora
+        </a>
+      </>,
+    );
+
+    fireEvent.click(screen.getByText("Comprar ahora"));
+    expect(window.fbq).toBeUndefined();
   });
 
   it("al entrar por un enlace de la cuenta (con token), ni se carga", () => {

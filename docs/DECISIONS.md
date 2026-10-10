@@ -4324,8 +4324,12 @@ para sus anuncios de Facebook e Instagram.
    cookie `lsw_ad_sharing_opt_out`, que pone el nuevo bloque "Publicidad en este
    navegador" de `/privacychoices`. Al excluirse se llama a
    `fbq('consent','revoke')` para lo que quede de la visita.
-4. **Solo `PageView`**, al entrar y en cada cambio de ruta o idioma. Sin
-   "advanced matching", sin correo ni teléfono ni importes.
+4. **`PageView`**, al entrar y en cada cambio de ruta o idioma, y
+   **`CompleteRegistration` al pulsar "Comprar ahora"** en la portada (lo pidió
+   el cliente el 2026-10-09 como conversión de sus anuncios). El botón lleva
+   `data-meta-event` y `MetaPixel` escucha los clics, con una lista cerrada de
+   eventos. Sin parámetros, sin "advanced matching", sin correo ni teléfono ni
+   importes.
 
 El código de Meta se carga como fichero de `connect.facebook.net`, no como
 script en línea, así que la CSP con nonce no cambia: `script-src` y

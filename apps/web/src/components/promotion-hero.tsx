@@ -749,6 +749,9 @@ export function PromotionHero({
               >
                 <HeroLink
                   href={presentation.showsShopCta ? buyLink : `/promotions/${promotion.slug}`}
+                  // DEC-086: el cliente pidio `CompleteRegistration` al pulsar
+                  // "Comprar ahora", como conversion de sus anuncios.
+                  {...(presentation.showsShopCta ? { metaEvent: "CompleteRegistration" } : {})}
                   // Ancho completo en telefono -es la unica accion de la
                   // pantalla, y la referencia la pinta de lado a lado- y ancho
                   // natural en cuanto caben dos botones en la misma linea. No se
@@ -958,18 +961,22 @@ export function PromotionHero({
 function HeroLink({
   href,
   className,
+  metaEvent,
   children,
 }: {
   readonly href: string;
   readonly className: string;
+  /** DEC-086: evento del pixel de Meta al pulsarlo (lo envia `MetaPixel`). */
+  readonly metaEvent?: string;
   readonly children: ReactNode;
 }) {
+  const eventAttribute = metaEvent === undefined ? {} : { "data-meta-event": metaEvent };
   return href.startsWith("#") ? (
-    <a href={href} className={className}>
+    <a href={href} className={className} {...eventAttribute}>
       {children}
     </a>
   ) : (
-    <Link href={href} className={className}>
+    <Link href={href} className={className} {...eventAttribute}>
       {children}
     </Link>
   );

@@ -62,6 +62,20 @@ export function resolveMetaPixelId(
 }
 
 /**
+ * Eventos que se envian al PULSAR un elemento marcado con
+ * `data-meta-event="<evento>"` (DEC-086). Lista cerrada: un atributo con otro
+ * nombre no envia nada.
+ *
+ * `CompleteRegistration` lo pidio el cliente para el boton "Comprar ahora" de la
+ * portada, como conversion de sus anuncios. Va sin parametros: ni importes ni
+ * datos de la persona.
+ */
+export const META_CLICK_EVENTS: readonly string[] = ["CompleteRegistration"];
+
+/** Atributo que marca un elemento cuyo clic envia un evento. */
+export const META_EVENT_ATTRIBUTE = "data-meta-event";
+
+/**
  * Rutas (sin idioma) donde el pixel NI se carga NI registra nada.
  *
  * Meta recibe la URL completa de cada pagina vista. En la cuenta van tokens en

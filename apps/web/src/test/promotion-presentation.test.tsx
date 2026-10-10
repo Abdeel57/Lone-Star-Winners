@@ -410,6 +410,8 @@ describe("PromotionHero, composicion de DEC-042", () => {
 
       const cta = screen.getByRole("link", { name: messages.home.hero.shopNow });
       expect(cta).toHaveAttribute("href", "/shop");
+      // DEC-086: al pulsarlo, el pixel envia la conversion que pidio el cliente.
+      expect(cta).toHaveAttribute("data-meta-event", "CompleteRegistration");
       // Es el rojo del sistema y no el oro de marca: el reparto de DEC-042 es
       // que rojo = accion de compra.
       expect(cta.className).toContain("bg-accent");
