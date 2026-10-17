@@ -22,7 +22,7 @@
  */
 
 import type { FastifyInstance } from "fastify";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { SweepstakesError } from "@lsw/sweepstakes";
 
@@ -696,6 +696,18 @@ describe("atajo bonus (13.8)", () => {
 // ---------------------------------------------------------------------------
 
 describe("extender un periodo bonus (DEC-084)", () => {
+  // La ruta solo acepta un fin que todavia no ha pasado, asi que el reloj se
+  // fija dentro del periodo. Con el reloj real, el caso feliz caduco el
+  // 2026-10-16 y el CI se puso en rojo sin que cambiara el codigo.
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-10T12:00:00.000Z"));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   const PERIOD = {
     id: "bonus-1-2026-10-07",
     multiplier: { numerator: 2, denominator: 1 },
