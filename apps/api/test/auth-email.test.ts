@@ -396,7 +396,7 @@ describe("POST /auth/password/reset", () => {
     const response = await app.inject({
       method: "POST",
       url: "/api/v1/auth/password/reset",
-      payload: { token, password: "corta-2026" },
+      payload: { token, password: "corta26" },
     });
 
     expect(response.statusCode).toBe(422);

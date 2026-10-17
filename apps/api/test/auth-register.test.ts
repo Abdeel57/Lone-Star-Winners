@@ -39,7 +39,7 @@ const STAFF_COOKIE = cookieNameFor(COOKIE_BASE, "STAFF");
 const NEW_IDENTITY = "33333333-3333-4333-8333-333333333333";
 const TAKEN_EMAIL = "ya.existe@example.invalid";
 
-/** Doce caracteres o mas: el suelo de `MINIMUM_PASSWORD_LENGTH`. */
+/** Por encima de `MINIMUM_PASSWORD_LENGTH` (ocho, DEC-087) con holgura. */
 const FAKE_PASSWORD = "FAKE-registro-prueba-2026";
 
 /** DEC-067: los documentos de `GET /config`, con su version vigente. */
@@ -313,13 +313,13 @@ describe("contrasena que no cumple la politica", () => {
   it("es 422 WEAK_PASSWORD con los limites en `details`, y no se crea nada", async () => {
     const { response, registrations, sessions } = await register({
       ...VALID_BODY,
-      password: "corta-2026",
+      password: "corta26",
     });
 
     expect(response.statusCode).toBe(422);
     expect(errorCode(response)).toBe("WEAK_PASSWORD");
     expect(response.json()).toMatchObject({
-      error: { details: { reason: "too_short", minimum_length: 12 } },
+      error: { details: { reason: "too_short", minimum_length: 8 } },
     });
 
     expect(registrations).toHaveLength(0);

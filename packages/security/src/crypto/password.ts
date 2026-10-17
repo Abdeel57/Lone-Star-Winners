@@ -56,8 +56,12 @@ export const ARGON2_PARAMETERS = Object.freeze({
  * Longitud minima. No es una politica de complejidad -esas empujan a la gente
  * hacia `Password1!`- sino un suelo de entropia. Una politica completa la
  * fijaran las Official Rules si tienen algo que decir al respecto.
+ *
+ * Ocho y no doce (DEC-087): lo pidio el cliente para dar de alta cuentas con
+ * mas comodidad. Lo que sostiene ese suelo mas bajo es lo que hay alrededor:
+ * Argon2id, el bloqueo tras cinco fallos y, en el panel, el TOTP obligatorio.
  */
-export const MINIMUM_PASSWORD_LENGTH = 12;
+export const MINIMUM_PASSWORD_LENGTH = 8;
 
 /**
  * Tope de longitud. Argon2 no tiene el limite de 72 bytes de bcrypt, pero sin

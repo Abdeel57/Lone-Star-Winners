@@ -38,7 +38,7 @@ export const API_BASE_URL = process.env.API_BASE_URL ?? "http://127.0.0.1:4310/a
 /**
  * Contrasenas del escenario. FALSAS y evidentes.
  *
- * `MINIMUM_PASSWORD_LENGTH` de `@lsw/security` son 12 caracteres; estas los
+ * `MINIMUM_PASSWORD_LENGTH` de `@lsw/security` son 8 caracteres; estas los
  * superan con holgura para que la politica no sea lo que falle.
  */
 export const FAKE_PARTICIPANT_PASSWORD = "FAKE-e2e-participant-2026";

@@ -364,7 +364,7 @@ describe("POST /auth/register con celular", () => {
     const response = await app.inject({
       method: "POST",
       url: "/api/v1/auth/register",
-      payload: { ...body, password: "corta-2026" },
+      payload: { ...body, password: "corta26" },
     });
     expect(response.statusCode).toBe(422);
     expect(errorCode(response)).toBe("WEAK_PASSWORD");
@@ -496,7 +496,7 @@ describe("POST /auth/password/reset-sms", () => {
     const response = await app.inject({
       method: "POST",
       url: "/api/v1/auth/password/reset-sms",
-      payload: { ...body, password: "corta-2026" },
+      payload: { ...body, password: "corta26" },
     });
     expect(response.statusCode).toBe(422);
     expect(errorCode(response)).toBe("WEAK_PASSWORD");

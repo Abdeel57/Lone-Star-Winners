@@ -544,7 +544,7 @@ const FORBIDDEN: MockOutcome = {
  * `Path=/admin` ES EL PUNTO ENTERO. La seccion 10 del contrato lo publica:
  * participante y personal usan las mismas rutas de identidad, y lo que cambia
  * es la politica -nombre de cookie con sufijo `_staff`, `SameSite=Strict`,
- * `Path=/admin`, TTL de 8 horas, inactividad de 15 minutos y MFA obligatorio-.
+ * `Path=/admin`, TTL de 12 horas, inactividad de 60 minutos y MFA obligatorio-.
  * Ese `Path` es la razon de que el panel viva en `/admin/[locale]` y no en
  * `/[locale]/admin` (DEC-048): desde `/es/admin` el navegador no enviaria esta
  * cookie y el panel quedaria permanentemente deslogueado.
@@ -568,7 +568,7 @@ const DEV_STAFF_COOKIE = "lsw_dev_session_staff";
 const STAFF_PENDING_TOKEN = "Qw7pN2vRt5YbL0xJ8mHc3sD6gK1fA4eU-zTiO_qXn9W"; // gitleaks:allow — token FICTICIO de desarrollo, no es un secreto
 const STAFF_ACTIVE_TOKEN = "Bd4kM9tXr6ZaP1wQ7nJc2sF5hL8gV3eY-uRiO_pCz0T"; // gitleaks:allow — token FICTICIO de desarrollo, no es un secreto
 
-const STAFF_COOKIE_ATTRIBUTES = "Path=/admin; Max-Age=28800; HttpOnly; SameSite=Strict";
+const STAFF_COOKIE_ATTRIBUTES = "Path=/admin; Max-Age=43200; HttpOnly; SameSite=Strict";
 
 const STAFF_PENDING_COOKIE_SET = `${DEV_STAFF_COOKIE}=${STAFF_PENDING_TOKEN}; ${STAFF_COOKIE_ATTRIBUTES}`;
 const STAFF_ACTIVE_COOKIE_SET = `${DEV_STAFF_COOKIE}=${STAFF_ACTIVE_TOKEN}; ${STAFF_COOKIE_ATTRIBUTES}`;

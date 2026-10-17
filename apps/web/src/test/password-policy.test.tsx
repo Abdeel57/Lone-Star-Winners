@@ -40,7 +40,7 @@ function ok(data: SiteConfigResponse): ApiResult<SiteConfigResponse> {
 
 describe("passwordMinimumFrom", () => {
   it("lee el minimo publicado", () => {
-    expect(passwordMinimumFrom(ok(defaultConfig))).toBe(12);
+    expect(passwordMinimumFrom(ok(defaultConfig))).toBe(8);
   });
 
   it("sin politica publicada devuelve null", () => {

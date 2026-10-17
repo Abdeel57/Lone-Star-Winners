@@ -38,8 +38,8 @@ export const CONTRACT_GENERATION_CONFIG: ApiConfig = {
     cookieDomain: "localhost",
     cookieSecure: false,
     ttlMinutes: 720,
-    adminTtlMinutes: 60,
-    adminIdleTimeoutMinutes: 15,
+    adminTtlMinutes: 720,
+    adminIdleTimeoutMinutes: 60,
     stepUpMaxAgeSeconds: 300,
   },
   mfa: {

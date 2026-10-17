@@ -161,7 +161,8 @@ describe("estado de la sesion", () => {
   });
 
   it("la inactividad mata la sesion de personal antes que el TTL absoluto", () => {
-    const idleMs = 15 * MINUTE;
+    // DEC-087: una hora. Era un cuarto de hora y echaba a quien trabajaba.
+    const idleMs = 60 * MINUTE;
     expect(evaluateSession(facts({ lastSeenAt: T0 }), T0 + idleMs)).toBe("EXPIRED_IDLE");
     expect(evaluateSession(facts({ lastSeenAt: T0 }), T0 + idleMs - 1)).toBe("ACTIVE");
   });

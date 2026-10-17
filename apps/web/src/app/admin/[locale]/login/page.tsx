@@ -19,7 +19,7 @@ export const dynamic = "force-dynamic";
  * la misma ruta que usa el escaparate: `CLAUDE.md` seccion 4 prohibe dos
  * sistemas de autenticacion. Lo que cambia es la POLITICA que el backend aplica
  * segun los roles -cookie `<base>_staff`, `SameSite=Strict`, `Path=/admin`, TTL
- * de 8 horas, inactividad de 15 minutos y MFA obligatorio- y el frontend no
+ * de 12 horas, inactividad de 60 minutos y MFA obligatorio- y el frontend no
  * rellena ni uno de esos atributos.
  *
  * QUIEN YA TIENE SESION NO VE ESTE FORMULARIO

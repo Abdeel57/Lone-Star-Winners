@@ -4358,3 +4358,58 @@ Affected areas: `apps/web` (`lib/meta-pixel.ts`, `components/meta-pixel.tsx`,
 Proposed by: sesión del usuario (2026-10-09, petición del cliente)
 Agreed by: frontend-ux, security (petición directa del usuario); pendiente:
 abogado (pregunta 22)
+
+## DEC-087
+
+Status: Accepted
+
+Date: 2026-10-16
+
+Decision:
+**Contraseña de 8 caracteres como mínimo, y la sesión del panel dura una
+jornada con una hora de margen sin actividad.** Lo pidió el cliente: el mínimo
+de 12 le resultaba incómodo para dar de alta cuentas, y el panel lo echaba
+cada 15 minutos mientras trabajaba.
+
+1. **`MINIMUM_PASSWORD_LENGTH` pasa de 12 a 8**, para todas las cuentas
+   (participantes y personal). Sigue sin reglas de complejidad. La web lee el
+   número de `GET /config` y del 422 `WEAK_PASSWORD`, así que no cambia nada en
+   los formularios. Las contraseñas ya creadas siguen valiendo. Lo que sostiene
+   un mínimo más bajo: Argon2id, el bloqueo de 15 minutos tras cinco fallos y,
+   en el panel, el TOTP obligatorio, que cumple NIST SP 800-63B-4 (8 caracteres
+   cuando la contraseña va con un segundo factor). Para los clientes, que
+   entran solo con contraseña, esa misma norma pide 15; tampoco los cumplían
+   los 12 de antes, y 8 es el mínimo habitual de una tienda en línea.
+2. **Sesión de personal: 12 horas de vida (antes 8) y 60 minutos de
+   inactividad (antes 15).** El tope duro de inactividad sube de 30 a 60; el de
+   vida ya era 12 horas. Son los límites de NIST SP 800-63B-4 para AAL2 (como
+   mucho 24 horas y 1 hora sin actividad). Los 15 minutos de antes son los de
+   AAL3, un nivel que no se pide para el panel de una tienda.
+3. **Cualquier petición del panel cuenta como actividad.** Antes solo renovaba
+   `last_seen_at` `GET /auth/session`, es decir, abrir una pantalla. Quien
+   pasaba un rato en la misma pantalla (un formulario largo, la caja) encontraba
+   la sesión caducada al enviar. Ahora el autorizador renueva `last_seen_at` de
+   las sesiones con timeout de inactividad, como mucho una vez por minuto, y
+   **después** de evaluar la sesión: una sesión ya caducada no revive.
+4. Las variables `ADMIN_SESSION_TTL_MINUTES` y
+   `ADMIN_SESSION_IDLE_TIMEOUT_MINUTES` no se leían para la política (manda
+   `SESSION_POLICIES`). Se dejan, con los valores nuevos en `.env.example` y
+   `scripts/railway-env.mjs` para que no engañen. No hace falta tocar Railway.
+
+Alternatives considered: A — Quitar el timeout de inactividad del panel
+(descartada: un panel abierto en un equipo desatendido llega a PII, al ledger y
+a los cobros). B — Un "recordar este dispositivo" que salte el TOTP
+(descartada: es otra superficie de sesión). C — Mínimo de 8 solo para el
+personal y 12 para los clientes (descartada: el cliente lo pidió para crear
+cuentas en general, y una sola constante evita dos políticas). D — Renovar
+`last_seen_at` en cada petición (descartada: una escritura por petición para
+una precisión de segundos que no hace falta).
+
+Affected areas: `packages/security` (`crypto/password.ts`, `session.ts`),
+`apps/api` (`http/session-authorizer.ts`, `config/contract-config.ts`,
+pruebas), `apps/web` (mock y su prueba, comentarios), `tests/security`,
+`tests/e2e` (comentario), `scripts/staff-create.mjs`,
+`scripts/railway-env.mjs`, `.env.example`, `docs/API_CONTRACT.md`.
+
+Proposed by: sesión del usuario (2026-10-16, petición del cliente)
+Agreed by: security, backend, frontend-ux (petición directa del usuario)

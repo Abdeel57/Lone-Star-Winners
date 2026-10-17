@@ -36,8 +36,15 @@ function sessionRow(overrides: Partial<SessionRecord> = {}): SessionRecord {
  * Repositorios falsos. Solo se implementa lo que el autorizador usa; el resto
  * lanza, para que un cambio que empiece a llamarlos se note en vez de recibir
  * un `undefined` silencioso.
+ *
+ * `touch` tambien lanza salvo que el caso pase `touches`: asi un caso que no
+ * espera renovar la actividad falla si la renueva.
  */
-function fakeIdentity(session: SessionRecord | null, adminRoles: readonly string[]) {
+function fakeIdentity(
+  session: SessionRecord | null,
+  adminRoles: readonly string[],
+  touches?: string[],
+) {
   const unused = (): never => {
     throw new Error("no deberia llamarse desde el autorizador");
   };
@@ -57,7 +64,13 @@ function fakeIdentity(session: SessionRecord | null, adminRoles: readonly string
     sessions: {
       findByTokenHash: () => Promise.resolve(session),
       create: unused,
-      touch: unused,
+      touch:
+        touches === undefined
+          ? unused
+          : (sessionId: string) => {
+              touches.push(sessionId);
+              return Promise.resolve();
+            },
       markMfaVerified: unused,
       revoke: unused,
       revokeAllForIdentity: unused,
@@ -87,9 +100,11 @@ async function decide(options: {
   readonly flag?: boolean | null;
   readonly body?: unknown;
   readonly headers?: Record<string, string>;
+  /** Donde apuntar cada `touch`; sin el, un `touch` hace fallar el caso. */
+  readonly touches?: string[];
 }) {
   const authorizer = createSessionAuthorizer({
-    identity: fakeIdentity(options.session, options.adminRoles ?? []),
+    identity: fakeIdentity(options.session, options.adminRoles ?? [], options.touches),
     config: CONTRACT_GENERATION_CONFIG,
     flags: {
       isEnabled: () => Promise.resolve(options.flag === undefined ? null : options.flag),
@@ -196,6 +211,85 @@ describe("sesiones que no valen", () => {
     await expect(
       decide({ authorization: SELF_ENTRIES, session: sessionRow({ revokedAt: new Date() }) }),
     ).resolves.toStrictEqual({ allowed: false, reason: "UNAUTHENTICATED" });
+  });
+});
+
+/**
+ * DEC-087: trabajar en el panel cuenta como actividad, no solo abrir pantallas.
+ *
+ * Antes solo `GET /auth/session` renovaba `last_seen_at`, y quien pasaba un
+ * rato en la misma pantalla encontraba la sesion caducada al enviar.
+ */
+describe("actividad del panel", () => {
+  const SIGNED_IN: RouteAuthorization = { kind: "PARTICIPANT", selfOnly: false };
+  const STAFF_ROLES = ["PROMOTION_MANAGER"] as const;
+  const MINUTE = 60_000;
+
+  it("una peticion de personal renueva la actividad", async () => {
+    const touches: string[] = [];
+    const session = sessionRow({
+      scope: "STAFF",
+      mfaVerifiedAt: new Date(),
+      lastSeenAt: new Date(Date.now() - 20 * MINUTE),
+    });
+
+    const outcome = await decide({
+      authorization: SIGNED_IN,
+      session,
+      adminRoles: STAFF_ROLES,
+      cookie: "staff",
+      touches,
+    });
+
+    expect(outcome).toStrictEqual({ allowed: true });
+    expect(touches).toStrictEqual([session.id]);
+  });
+
+  it("no escribe en cada peticion: una vez por minuto basta", async () => {
+    const touches: string[] = [];
+
+    await decide({
+      authorization: SIGNED_IN,
+      session: sessionRow({ scope: "STAFF", mfaVerifiedAt: new Date() }),
+      adminRoles: STAFF_ROLES,
+      cookie: "staff",
+      touches,
+    });
+
+    expect(touches).toStrictEqual([]);
+  });
+
+  it("una sesion ya caducada por inactividad no se resucita", async () => {
+    // El orden importa: si se renovara antes de evaluar, una sesion muerta
+    // volveria a la vida con solo presentar la cookie.
+    const touches: string[] = [];
+
+    const outcome = await decide({
+      authorization: SIGNED_IN,
+      session: sessionRow({
+        scope: "STAFF",
+        mfaVerifiedAt: new Date(),
+        lastSeenAt: new Date(Date.now() - 61 * MINUTE),
+      }),
+      adminRoles: STAFF_ROLES,
+      cookie: "staff",
+      touches,
+    });
+
+    expect(outcome).toStrictEqual({ allowed: false, reason: "UNAUTHENTICATED" });
+    expect(touches).toStrictEqual([]);
+  });
+
+  it("la sesion de participante, sin timeout de inactividad, no escribe", async () => {
+    const touches: string[] = [];
+
+    await decide({
+      authorization: SELF_ENTRIES,
+      session: sessionRow({ lastSeenAt: new Date(Date.now() - 20 * MINUTE) }),
+      touches,
+    });
+
+    expect(touches).toStrictEqual([]);
   });
 });
 

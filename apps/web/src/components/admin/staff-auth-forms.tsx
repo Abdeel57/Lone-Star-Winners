@@ -79,9 +79,9 @@ export function StaffLoginForm({
  * Segundo factor del panel.
  *
  * OBLIGATORIO PARA TODO ROL ADMINISTRATIVO (DEC-006). No hay forma de saltarlo
- * y no hay "recordar este dispositivo": una sesion de personal dura ocho horas
- * y caduca por inactividad a los quince minutos, asi que el segundo factor se
- * pide a menudo por diseno.
+ * y no hay "recordar este dispositivo": una sesion de personal dura doce horas
+ * y caduca tras una hora sin actividad (DEC-087), asi que el segundo factor se
+ * pide al menos una vez por jornada.
  *
  * `inputMode="numeric"` y `autoComplete="one-time-code"`: en un telefono, el
  * primero abre el teclado numerico y el segundo ofrece el codigo recien

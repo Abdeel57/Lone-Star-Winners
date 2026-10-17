@@ -79,6 +79,10 @@ export interface SessionPolicy {
  * Los valores no salen de ninguna norma legal -no la hay para esto- sino de la
  * asimetria de consecuencias: una sesion de personal robada llega a PII, al
  * ledger y a los exports.
+ *
+ * El del personal es el techo de NIST SP 800-63B-4 para AAL2 (contrasena mas
+ * TOTP): una hora sin actividad (DEC-087). Por encima de eso deja de ser una
+ * sesion de trabajo y pasa a ser un panel abierto en un equipo desatendido.
  */
 export const SESSION_LIMITS = Object.freeze({
   PARTICIPANT: Object.freeze({
@@ -87,7 +91,7 @@ export const SESSION_LIMITS = Object.freeze({
   }),
   STAFF: Object.freeze({
     maxAbsoluteTtlMinutes: 60 * 12,
-    maxIdleTimeoutMinutes: 30,
+    maxIdleTimeoutMinutes: 60,
   }),
 } as const);
 
@@ -100,11 +104,14 @@ export const SESSION_POLICIES: Readonly<Record<SessionAudience, SessionPolicy>> 
     requiresMfa: false,
     rotateOnPrivilegeChange: true,
   }),
+  // DEC-087: una jornada entera con un solo inicio de sesion, y una hora de
+  // margen sin actividad. Con quince minutos el panel echaba a quien estaba
+  // rellenando un formulario largo o atendiendo la caja.
   STAFF: Object.freeze({
     audience: "STAFF",
     cookie: Object.freeze({ httpOnly: true, secure: true, sameSite: "strict", path: "/admin" }),
-    absoluteTtlMinutes: 60 * 8,
-    idleTimeoutMinutes: 15,
+    absoluteTtlMinutes: 60 * 12,
+    idleTimeoutMinutes: 60,
     requiresMfa: true,
     rotateOnPrivilegeChange: true,
   }),

@@ -354,7 +354,7 @@ Response: 200
   },
   "amoe_mode": null,
   "supported_locales": ["en-US", "es-US"],
-  "password_policy": { "minimum_length": 12, "maximum_length": 1024 },
+  "password_policy": { "minimum_length": 8, "maximum_length": 1024 },
   "required_consents": [
     { "key": "OFFICIAL_RULES", "version": "2026-10-04", "text_key": "OFFICIAL_RULES", "required": true },
     { "key": "TERMS", "version": "2026-09-30", "text_key": "TERMS", "required": true },
@@ -1446,8 +1446,8 @@ que cambia es la política que decide `audienceForRoles` a partir de los roles:
 | Cookie       | `<base>`      | `<base>_staff`  |
 | `SameSite`   | `Lax`         | `Strict`        |
 | `Path`       | `/`           | `/admin`        |
-| TTL absoluto | 14 días       | 8 horas         |
-| Inactividad  | —             | 15 min          |
+| TTL absoluto | 14 días       | 12 horas        |
+| Inactividad  | —             | 60 min          |
 | MFA          | no            | **obligatorio** |
 
 Los nombres llevan sufijo distinto para que una sesión de escaparate y una de
@@ -1457,6 +1457,13 @@ difícil de atribuir.
 
 La fuente de esta tabla es `SESSION_POLICIES` en `packages/security`; aquí solo
 se refleja. Si divergen, manda el código.
+
+**Qué cuenta como actividad (DEC-087).** Cualquier petición autenticada de una
+sesión de personal, no solo abrir una pantalla: `GET /auth/session` renueva
+`last_seen_at` siempre, y el autorizador lo renueva como mucho una vez por
+minuto. Las variables `ADMIN_SESSION_TTL_MINUTES` y
+`ADMIN_SESSION_IDLE_TIMEOUT_MINUTES` se validan al arrancar pero **no cambian
+la política**: la fijan `SESSION_POLICIES` y sus topes (`SESSION_LIMITS`).
 
 ### El token es opaco
 
@@ -1523,8 +1530,9 @@ Cuerpo:
 
 - `email` — se recorta; máximo 254 caracteres. La unicidad **no distingue
   mayúsculas** (la decide el índice sobre `email_normalized`).
-- `password` — la política es de `packages/security`: mínimo 12 caracteres,
-  máximo 1024, **sin reglas de complejidad**. El frontend no la duplica.
+- `password` — la política es de `packages/security`: mínimo 8 caracteres
+  (DEC-087; antes 12), máximo 1024, **sin reglas de complejidad**. El frontend
+  no la duplica.
 - `display_name` — opcional (`null` o ausente); 1 a 120 caracteres.
 - `language_preference` — etiqueta completa, `en-US` o `es-US` (DEC-029).
   Obligatoria y sin valor por defecto (DEC-021).

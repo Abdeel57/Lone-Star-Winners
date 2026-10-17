@@ -64,6 +64,7 @@ import {
   looksLikeSessionToken,
   requiresMfa,
   secondsSinceMfa,
+  SESSION_POLICIES,
   type RoleId,
   type SessionAudience,
 } from "@lsw/security";
@@ -122,6 +123,17 @@ export interface SessionResolverDeps {
  * es del handler, no de aqui.
  */
 const PROMOTION_SCOPE = null;
+
+/**
+ * Cada cuanto se renueva `last_seen_at` desde la puerta (DEC-087).
+ *
+ * Antes solo lo renovaba `GET /auth/session`, es decir, abrir una pantalla del
+ * panel. Quien pasaba un rato largo en la misma pantalla -un formulario, la
+ * caja- y luego enviaba algo encontraba la sesion caducada por inactividad
+ * aunque no hubiera dejado de trabajar. Una vez por minuto basta: el timeout
+ * se mide en decenas de minutos, y asi no hay una escritura por peticion.
+ */
+const ACTIVITY_TOUCH_INTERVAL_MS = 60_000;
 
 export interface SessionAuthorizerDeps extends SessionResolverDeps {
   /**
@@ -220,6 +232,15 @@ export async function resolveSession(
 
   if (state !== "ACTIVE") {
     return null;
+  }
+
+  // Solo donde hay timeout de inactividad, que es donde `last_seen_at` decide
+  // algo: hoy, las sesiones de personal.
+  if (
+    SESSION_POLICIES[session.scope].idleTimeoutMinutes !== null &&
+    now - session.lastSeenAt.getTime() >= ACTIVITY_TOUCH_INTERVAL_MS
+  ) {
+    await deps.identity.sessions.touch(session.id, new Date(now));
   }
 
   return {
