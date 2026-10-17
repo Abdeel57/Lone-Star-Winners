@@ -211,6 +211,13 @@
       "when": 1787616038000,
       "tag": "0038_order_cancel_and_fulfillment",
       "breakpoints": false
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1787616039000,
+      "tag": "0039_product_display_position",
+      "breakpoints": false
     }
   ]
 }

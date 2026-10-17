@@ -6,14 +6,28 @@
  * -Bronce, Plata, Gold, Diamante-. Antes el orden era alfabetico por slug, que
  * no es un orden que nadie haya elegido.
  *
+ * DESDE DEC-088 EL ORDEN LO PONE EL CLIENTE. Desde Panel -> Catalogo -> Ordenar
+ * tienda coloca cada producto dentro de su grupo (`products.display_position`).
+ * La regla de arriba sigue viva para lo que NO ha colocado: un grupo que nunca
+ * se ordeno se ve como siempre, y un producto recien publicado cae detras de los
+ * colocados sin descolocar a nadie. Los destacados de la portada son los
+ * primeros de esta misma lista, asi que ordenar la tienda tambien elige la
+ * portada.
+ *
  * LA CLAVE, CAMPO A CAMPO
- *   1. tipo: mercancia antes que paquetes;
- *   2. foto: con imagen antes que sin ella, dentro de cada tipo;
- *   3. posicion de la categoria, la misma que ordena los filtros de la tienda
+ *   1. tipo: mercancia antes que paquetes; el cliente ordena DENTRO de cada uno;
+ *   2. colocado o no: los que tienen lugar van antes que los que no;
+ *   3. el lugar que eligio el cliente (vacio para los no colocados);
+ *   4. foto: con imagen antes que sin ella, dentro de cada tipo;
+ *   5. posicion de la categoria, la misma que ordena los filtros de la tienda
  *      y que el panel deja cambiar; sin categoria, al final;
- *   4. precio "desde" (la variante activa mas barata): es lo que pone a los
+ *   6. precio "desde" (la variante activa mas barata): es lo que pone a los
  *      paquetes en su escalera sin inventar un rango de calidad;
- *   5. slug, que es unico y deja el orden total.
+ *   7. slug, que es unico y deja el orden total.
+ *
+ *   Un producto colocado conserva su lugar aunque no tenga foto: si el cliente
+ *   lo puso el primero, es porque lo quiere el primero. Los tramos 4 a 7 solo
+ *   desempatan entre los colocados, cosa que la ruta del panel no deja ocurrir.
  *
  * POR QUE UNA CADENA Y NO UN COMPARADOR
  *   La paginacion es por cursor (`http/pagination.ts`) y el cursor guarda UNA
@@ -37,7 +51,8 @@ function hasImage(product: ProductRecord): boolean {
   return product.imageUrl !== null || product.variants.some((variant) => variant.imageUrl !== null);
 }
 
-function lowestActivePrice(product: ProductRecord): bigint | null {
+/** Precio "desde": la variante activa mas barata. Lo ensena tambien el panel al ordenar. */
+export function lowestActivePrice(product: ProductRecord): bigint | null {
   let lowest: bigint | null = null;
   for (const variant of product.variants) {
     if (variant.status !== "ACTIVE") continue;
@@ -48,6 +63,13 @@ function lowestActivePrice(product: ProductRecord): bigint | null {
 
 export function catalogSortKey(product: ProductRecord): string {
   const kind = product.kind === "ENTRY_PACKAGE" ? "1" : "0";
+  // DEC-088. Mismo ancho fijo que el resto de tramos: sin el, el lugar 10
+  // quedaria antes que el 9 al comparar cadenas.
+  const placed = product.displayPosition === null ? "1" : "0";
+  const place =
+    product.displayPosition === null
+      ? "9".repeat(POSITION_WIDTH)
+      : String(product.displayPosition).padStart(POSITION_WIDTH, "0");
   const image = hasImage(product) ? "0" : "1";
   const position =
     product.category === null
@@ -57,7 +79,7 @@ export function catalogSortKey(product: ProductRecord): string {
   const priceKey =
     price === null ? "9".repeat(PRICE_WIDTH) : price.toString().padStart(PRICE_WIDTH, "0");
 
-  return `${kind}${image}|${position}|${priceKey}|${product.slug}`;
+  return `${kind}${placed}|${place}|${image}|${position}|${priceKey}|${product.slug}`;
 }
 
 /**

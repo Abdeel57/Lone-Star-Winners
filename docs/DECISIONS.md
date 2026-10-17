@@ -4413,3 +4413,65 @@ pruebas), `apps/web` (mock y su prueba, comentarios), `tests/security`,
 
 Proposed by: sesión del usuario (2026-10-16, petición del cliente)
 Agreed by: security, backend, frontend-ux (petición directa del usuario)
+
+## DEC-088
+
+Status: Accepted
+
+Date: 2026-10-16
+
+Decision:
+**El cliente decide desde el panel en qué orden salen los productos en la
+tienda.** Hasta ahora el orden era una regla fija de código (DEC-064): el
+cliente solo podía mover categorías, nunca un producto concreto, y los cuatro
+destacados de la portada salían de esa misma regla. El usuario lo pidió el
+2026-10-16 y confirmó tres puntos: lo decide el dueño desde el panel (no el
+comprador con un selector "Ordenar por"); mercancía y paquetes se ordenan por
+separado; y los cuatro primeros de la mercancía son los destacados de la
+portada.
+
+1. **Una columna, `products.display_position`** (migración `0039`): el lugar
+   dentro de su grupo, 1 el primero. La mercancía sigue antes que los paquetes;
+   dentro de cada grupo manda este número.
+2. **`null` = sin colocar.** Es el estado de todo al aplicar `0039` (la tienda
+   se ve igual que antes) y el de un producto recién publicado: va detrás de los
+   colocados, por la regla de DEC-064. Un producto colocado conserva su lugar
+   aunque no tenga foto. Cambiar el `kind` de un producto le quita el lugar.
+3. **Un `PUT` del grupo entero** (`/admin/catalog-order`, `product.write`): lo
+   guardado es exactamente lo que se veía. La lista vacía devuelve el grupo al
+   orden automático. Si algún producto ya no está publicado en ese grupo,
+   `409 CATALOG_ORDER_STALE` y no se guarda nada. Las filas del grupo se
+   bloquean (`FOR UPDATE`) para que dos guardados a la vez no mezclen lugares.
+4. **Auditado** como `catalog.display_order.updated` (orden nuevo y anterior),
+   en la misma transacción que el cambio, con roles y `request_id` de la
+   petición. Es el primer cambio de catálogo que deja traza en `audit_events`.
+5. **Pantalla Panel → Catálogo → Ordenar tienda**, pensada para el teléfono:
+   subir, bajar y "poner el primero" con área táctil completa (sin arrastrar),
+   se guarda una vez, avisa de los cambios sin guardar, deja deshacer, marca
+   "En portada" y "Nuevo: sin colocar", y enseña una vista previa del celular
+   con el orden de la pantalla. Volver al automático pide confirmación.
+
+La clave de orden sigue siendo una cadena de ancho fijo que guarda el cursor
+(`catalog-order.ts`); se le añaden dos tramos delante (colocado o no, y lugar).
+**No toca participaciones.**
+
+Alternatives considered: A — Selector "Ordenar por" para el comprador
+(descartada por el usuario: lo decide el dueño). B — Una sola lista mezclando
+mercancía y paquetes (descartada por el usuario). C — Arrastrar y soltar
+(descartada: en el teléfono choca con el scroll y es poco accesible). D — Un
+`PATCH` por producto con su posición (descartada: dos personas moviendo a la vez
+dejarían un orden que ninguna vio). E — `UNIQUE (kind, display_position)`
+(descartada: obligaría a reescribir el grupo en dos pasadas; el cerrojo y el
+desempate por slug ya dan un orden total).
+
+Affected areas: `packages/database` (`0039`, `schema/catalog.ts`), `apps/api`
+(`routes/admin-catalog-order.ts`, `services/catalog-order.ts`,
+`services/drizzle-repositories.ts`, `services/admin-catalog.ts`,
+`services/ports.ts`, `app.ts`, OpenAPI, pruebas unitarias y de integración),
+`apps/web` (pantalla `/admin/[locale]/catalog/order`,
+`components/admin/catalog-order-editor.tsx`,
+`lib/admin/catalog-order-actions.ts`, cliente de la API, mensajes, pruebas),
+`docs/API_CONTRACT.md` (§4 y §17).
+
+Proposed by: sesión del usuario (2026-10-16, petición del usuario)
+Agreed by: backend, frontend-ux (petición directa del usuario)

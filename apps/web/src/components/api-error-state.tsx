@@ -82,6 +82,8 @@ const TRANSLATED_CODES = [
   "SHIPPING_NOT_CONFIGURED",
   // DEC-079: la tarifa de envio nunca es cero (lo anticipa el panel).
   "SHIPPING_RATE_ZERO",
+  // DEC-088: la tienda cambio mientras se ordenaba; no se guardo nada.
+  "CATALOG_ORDER_STALE",
   /*
    * Identidad (DEC-006). Estos codigos los publicara `packages/security`, no
    * `docs/API_CONTRACT.md`, y por eso son la parte mas provisional de esta
@@ -220,6 +222,8 @@ export function useApiErrorMessage(): (code: string | null) => string {
         return t("SHIPPING_NOT_CONFIGURED");
       case "SHIPPING_RATE_ZERO":
         return t("SHIPPING_RATE_ZERO");
+      case "CATALOG_ORDER_STALE":
+        return t("CATALOG_ORDER_STALE");
       case "INVALID_CREDENTIALS":
         return t("INVALID_CREDENTIALS");
       case "EMAIL_ALREADY_REGISTERED":

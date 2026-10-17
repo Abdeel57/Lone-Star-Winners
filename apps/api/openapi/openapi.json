@@ -3668,6 +3668,570 @@
         }
       }
     },
+    "/api/v1/admin/catalog-order": {
+      "get": {
+        "description": "DEC-088. Solo lo publicado, en el orden exacto de `GET /products`. `display_position: null` es un producto sin colocar, que va detras de los colocados por la regla automatica.",
+        "operationId": "getAdminCatalogOrder",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "groups": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "items": {
+                            "items": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "display_position": {
+                                  "anyOf": [
+                                    {
+                                      "maximum": 9007199254740991,
+                                      "minimum": -9007199254740991,
+                                      "type": "integer"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "id": {
+                                  "format": "uuid",
+                                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                                  "type": "string"
+                                },
+                                "image_url": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "name": {
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "en-US": {
+                                      "type": "string"
+                                    },
+                                    "es-US": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "es-US",
+                                    "en-US"
+                                  ],
+                                  "type": "object"
+                                },
+                                "price_from": {
+                                  "anyOf": [
+                                    {
+                                      "additionalProperties": false,
+                                      "properties": {
+                                        "amount_minor": {
+                                          "type": "string"
+                                        },
+                                        "currency": {
+                                          "maxLength": 3,
+                                          "minLength": 3,
+                                          "type": "string"
+                                        }
+                                      },
+                                      "required": [
+                                        "amount_minor",
+                                        "currency"
+                                      ],
+                                      "type": "object"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "slug": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "slug",
+                                "name",
+                                "image_url",
+                                "price_from",
+                                "display_position"
+                              ],
+                              "type": "object"
+                            },
+                            "type": "array"
+                          },
+                          "kind": {
+                            "enum": [
+                              "MERCHANDISE",
+                              "ENTRY_PACKAGE"
+                            ],
+                            "type": "string"
+                          },
+                          "manual": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "manual",
+                          "items"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "groups"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 200."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "additionalProperties": {},
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "request_id"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 401."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "additionalProperties": {},
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "request_id"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 403."
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Orden de la tienda: mercancia y paquetes, tal como se ensenan.",
+        "tags": [
+          "admin"
+        ],
+        "x-lsw-authorization": {
+          "kind": "PERMISSION",
+          "permission": "product.read",
+          "requires_step_up": false
+        }
+      },
+      "put": {
+        "description": "DEC-088. Reescribe el grupo entero: el primero de `product_ids` va en el lugar 1, y los productos del grupo que no esten quedan sin colocar (detras, en automatico). 409 `CATALOG_ORDER_STALE` si algun identificador ya no es un producto publicado de ese grupo; no se guarda nada. Auditado como `catalog.display_order.updated`. No toca participaciones.",
+        "operationId": "setAdminCatalogOrder",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "kind": {
+                    "enum": [
+                      "MERCHANDISE",
+                      "ENTRY_PACKAGE"
+                    ],
+                    "type": "string"
+                  },
+                  "product_ids": {
+                    "items": {
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                      "type": "string"
+                    },
+                    "maxItems": 200,
+                    "type": "array"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "product_ids"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "groups": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "items": {
+                            "items": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "display_position": {
+                                  "anyOf": [
+                                    {
+                                      "maximum": 9007199254740991,
+                                      "minimum": -9007199254740991,
+                                      "type": "integer"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "id": {
+                                  "format": "uuid",
+                                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                                  "type": "string"
+                                },
+                                "image_url": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "name": {
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "en-US": {
+                                      "type": "string"
+                                    },
+                                    "es-US": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "es-US",
+                                    "en-US"
+                                  ],
+                                  "type": "object"
+                                },
+                                "price_from": {
+                                  "anyOf": [
+                                    {
+                                      "additionalProperties": false,
+                                      "properties": {
+                                        "amount_minor": {
+                                          "type": "string"
+                                        },
+                                        "currency": {
+                                          "maxLength": 3,
+                                          "minLength": 3,
+                                          "type": "string"
+                                        }
+                                      },
+                                      "required": [
+                                        "amount_minor",
+                                        "currency"
+                                      ],
+                                      "type": "object"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "slug": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "slug",
+                                "name",
+                                "image_url",
+                                "price_from",
+                                "display_position"
+                              ],
+                              "type": "object"
+                            },
+                            "type": "array"
+                          },
+                          "kind": {
+                            "enum": [
+                              "MERCHANDISE",
+                              "ENTRY_PACKAGE"
+                            ],
+                            "type": "string"
+                          },
+                          "manual": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "manual",
+                          "items"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "groups"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 200."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "additionalProperties": {},
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "request_id"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 401."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "additionalProperties": {},
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "request_id"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 403."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "additionalProperties": {},
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "request_id"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 409."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "additionalProperties": {},
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "request_id"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 422."
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Poner el orden de un grupo de la tienda. Lista vacia = automatico.",
+        "tags": [
+          "admin"
+        ],
+        "x-lsw-authorization": {
+          "kind": "PERMISSION",
+          "permission": "product.write",
+          "requires_step_up": false
+        }
+      }
+    },
     "/api/v1/admin/dashboard": {
       "get": {
         "description": "Solo lectura agregada. `active_entries` y `participants` son cifras del ledger y llegan `null` si el actor no tiene ademas `entry.ledger.read`, tal y como describe `dashboard.read` en el catalogo de DEC-027.",

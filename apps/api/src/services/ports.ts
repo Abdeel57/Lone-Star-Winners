@@ -174,7 +174,29 @@ export interface ProductRecord {
   readonly description: LocalizedText | null;
   readonly imageUrl: string | null;
   readonly variants: readonly VariantRecord[];
+  /**
+   * DEC-088: lugar dentro de su grupo que puso el panel, 1 el primero. `null` =
+   * sin colocar; va detras de los colocados por la regla automatica. NO sale en
+   * la API publica: el orden ya se ve en el orden de la lista.
+   */
+  readonly displayPosition: number | null;
 }
+
+/**
+ * Resultado de reordenar un grupo de la tienda (DEC-088).
+ *
+ * `STALE`: algun identificador ya no es un producto publicado de ese grupo -se
+ * archivo, cambio de tipo o no existio nunca- desde que el panel cargo la
+ * lista. No se escribe nada: guardar "lo que se pueda" pondria la tienda en un
+ * orden que nadie eligio.
+ */
+export type DisplayOrderResult =
+  | {
+      readonly kind: "SAVED";
+      /** Los colocados ANTES, en su orden. Vacio = el grupo iba en automatico. */
+      readonly previousProductIds: readonly string[];
+    }
+  | { readonly kind: "STALE"; readonly unknownProductIds: readonly string[] };
 
 /**
  * Filtros del catalogo publico (contrato 13.4).
@@ -207,6 +229,16 @@ export interface CatalogRepository {
   listCategoriesWithActiveProducts(): Promise<readonly ProductCategoryRecord[]>;
   /** Existe la categoria, sin mirar si tiene productos. Para distinguir 422 de lista vacia. */
   categoryExists(key: string): Promise<boolean>;
+  /**
+   * DEC-088: el orden del grupo `kind` en la tienda pasa a ser `productIds`, el
+   * primero en el lugar 1. Los productos del grupo que no esten en la lista
+   * quedan SIN colocar (van detras, por la regla automatica); con la lista
+   * vacia el grupo entero vuelve al orden automatico.
+   *
+   * Reescribe el grupo entero con sus filas BLOQUEADAS y corre dentro de la
+   * transaccion viva si la hay, para que la ruta audite en la misma.
+   */
+  setDisplayOrder(kind: ProductKind, productIds: readonly string[]): Promise<DisplayOrderResult>;
 }
 
 // ---------------------------------------------------------------------------

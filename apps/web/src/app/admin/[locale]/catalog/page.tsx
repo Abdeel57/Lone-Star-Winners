@@ -73,18 +73,25 @@ export default async function AdminCatalogPage({
       current="catalog"
       title={t("title")}
       description={t("description")}
-      {...(canWrite
-        ? {
-            actions: (
-              <Link
-                href={adminHref(locale, "/catalog/new")}
-                className={buttonVariants({ variant: "primary", size: "md" })}
-              >
-                {t("newCta")}
-              </Link>
-            ),
-          }
-        : {})}
+      actions={
+        <>
+          {/* DEC-088: el orden de la tienda. Verlo basta con `product.read`. */}
+          <Link
+            href={adminHref(locale, "/catalog/order")}
+            className={buttonVariants({ variant: "secondary", size: "md" })}
+          >
+            {t("orderCta")}
+          </Link>
+          {canWrite ? (
+            <Link
+              href={adminHref(locale, "/catalog/new")}
+              className={buttonVariants({ variant: "primary", size: "md" })}
+            >
+              {t("newCta")}
+            </Link>
+          ) : null}
+        </>
+      }
     >
       {!result.ok ? (
         <AdminSectionError failure={result.error} headingLevel="h2" />

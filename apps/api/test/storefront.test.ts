@@ -707,3 +707,100 @@ describe("orden del catalogo (DEC-064)", () => {
     await app.close();
   });
 });
+
+/** El mismo catalogo con lugares puestos desde el panel (DEC-088). */
+function placed(slugs: Readonly<Record<string, number>>): ProductRecord[] {
+  return ORDER_CATALOG.map((product) => ({
+    ...product,
+    displayPosition: slugs[product.slug] ?? null,
+  }));
+}
+
+describe("orden elegido por el cliente (DEC-088)", () => {
+  it("lo colocado va primero en su grupo, aunque no tenga foto; lo demas, detras y en automatico", async () => {
+    const app = await createApp(
+      buildDependencies({
+        products: placed({ "sin-foto": 1, termo: 2, "paquete-diamante": 1 }),
+      }),
+    );
+    const body = (await app.inject({ method: "GET", url: "/api/v1/products" })).json<{
+      items: { slug: string }[];
+    }>();
+
+    expect(body.items.map((item) => item.slug)).toEqual([
+      // Mercancia colocada, en el lugar elegido: el cliente puso primero la
+      // que no tiene foto, y manda el.
+      "sin-foto",
+      "termo",
+      // Mercancia sin colocar, con la regla de DEC-064.
+      "llavero",
+      "sin-categoria",
+      // Los paquetes siguen detras de la mercancia, cada grupo con su orden.
+      "paquete-diamante",
+      "paquete-bronce",
+      "paquete-plata",
+      "paquete-gold",
+    ]);
+    await app.close();
+  });
+
+  it("el lugar 10 va despues del 9: la clave compara numeros, no letras", async () => {
+    const app = await createApp(
+      buildDependencies({ products: placed({ termo: 10, llavero: 9, "sin-categoria": 2 }) }),
+    );
+    const body = (
+      await app.inject({ method: "GET", url: "/api/v1/products?kind=MERCHANDISE" })
+    ).json<{ items: { slug: string }[] }>();
+
+    expect(body.items.map((item) => item.slug)).toEqual([
+      "sin-categoria",
+      "llavero",
+      "termo",
+      "sin-foto",
+    ]);
+    await app.close();
+  });
+
+  it("el cursor sigue el orden elegido pagina a pagina, sin repetir ni saltar", async () => {
+    const products = placed({ "sin-foto": 1, termo: 2, "paquete-gold": 1 });
+    const app = await createApp(buildDependencies({ products }));
+    const seen: string[] = [];
+    let cursor: string | null = null;
+
+    for (let page = 0; page < 5; page += 1) {
+      const url: string =
+        cursor === null
+          ? "/api/v1/products?limit=3"
+          : `/api/v1/products?limit=3&cursor=${encodeURIComponent(cursor)}`;
+      const body = (await app.inject({ method: "GET", url })).json<{
+        items: { slug: string }[];
+        next_cursor: string | null;
+      }>();
+      seen.push(...body.items.map((item) => item.slug));
+      cursor = body.next_cursor;
+      if (cursor === null) break;
+    }
+
+    expect(seen).toEqual([
+      "sin-foto",
+      "termo",
+      "llavero",
+      "sin-categoria",
+      "paquete-gold",
+      "paquete-bronce",
+      "paquete-plata",
+      "paquete-diamante",
+    ]);
+    await app.close();
+  });
+
+  it("el lugar no sale en la API publica: el orden ya es el de la lista", async () => {
+    const app = await createApp(buildDependencies({ products: placed({ termo: 1 }) }));
+    const response = await app.inject({ method: "GET", url: "/api/v1/products" });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).not.toContain("display_position");
+    expect(response.body).not.toContain("displayPosition");
+    await app.close();
+  });
+});

@@ -1020,6 +1020,7 @@ describe("cotizacion con tasa por tipo de producto (DEC-052)", () => {
         position: 0,
       },
     ],
+    displayPosition: null,
   };
 
   it("un paquete de $10 a 2 por dolar cotiza 20 participaciones", async () => {

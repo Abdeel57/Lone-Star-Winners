@@ -55,6 +55,8 @@ import { buildAdjustmentRoutes } from "./routes/adjustments.js";
 // existian (dashboard, pedidos, participantes y traza de auditoria).
 import { buildAdminAuditRoutes } from "./routes/admin-audit.js";
 import { buildAdminCatalogRoutes } from "./routes/admin-catalog.js";
+// DEC-088: el orden de la tienda lo decide el cliente desde el panel.
+import { buildAdminCatalogOrderRoutes } from "./routes/admin-catalog-order.js";
 import { buildAdminRulesRoutes } from "./routes/admin-rules.js";
 import { buildAdminDashboardRoutes } from "./routes/admin-dashboard.js";
 import { buildAdminOrdersRoutes } from "./routes/admin-orders.js";
@@ -158,6 +160,7 @@ export function collectRouteDefinitions(dependencies: AppDependencies): RouteDef
     ...buildMediaRoutes(dependencies),
     ...buildPrivacyRequestRoutes(dependencies),
     ...buildAdminShippingRoutes(dependencies),
+    ...buildAdminCatalogOrderRoutes(dependencies),
   ];
 
   const metaRoutes = buildMetaRoutes({
@@ -198,6 +201,7 @@ export function collectContractRouteDefinitions(dependencies: AppDependencies): 
     ...buildMediaRoutes(dependencies),
     ...buildPrivacyRequestRoutes(dependencies),
     ...buildAdminShippingRoutes(dependencies),
+    ...buildAdminCatalogOrderRoutes(dependencies),
   ];
   routes.push(
     ...buildMetaRoutes({ serverUrl: dependencies.config.http.publicUrl, allRoutes: () => routes }),

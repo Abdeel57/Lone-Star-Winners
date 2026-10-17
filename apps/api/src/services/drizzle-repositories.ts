@@ -20,11 +20,13 @@
  *      violaria el principio 4.
  */
 
-import { and, asc, desc, eq, gt, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import type { Database } from "@lsw/database";
 import {
+  DrizzleUnitOfWork,
   cartItems,
   carts,
+  currentExecutor,
   featureFlagSettings,
   featureFlags,
   orders,
@@ -51,6 +53,7 @@ import type {
   CartRecord,
   CatalogRepository,
   ConfigRepository,
+  DisplayOrderResult,
   EntryBalanceRepository,
   LocalizedText,
   ProductCategoryRecord,
@@ -381,6 +384,7 @@ function createCatalogRepository(db: Database): CatalogRepository {
               position: variant.position,
             };
           }),
+        displayPosition: row.displayPosition,
       };
     });
   }
@@ -437,6 +441,66 @@ function createCatalogRepository(db: Database): CatalogRepository {
         .limit(1);
       return row !== undefined;
     },
+
+    /**
+     * DEC-088. Dentro de la transaccion viva -la de la ruta, que audita en la
+     * misma- o de una propia si no la hay: `DrizzleUnitOfWork` reutiliza la que
+     * encuentra.
+     *
+     * Las filas del grupo se BLOQUEAN antes de mirar nada. Con dos personas
+     * guardando a la vez, la segunda espera a la primera y reescribe sobre lo
+     * que esta dejo; sin el cerrojo, cada una limpiaria el grupo que ve en su
+     * instantanea y podrian quedar lugares de las dos mezclados.
+     */
+    setDisplayOrder: (kind, productIds) =>
+      new DrizzleUnitOfWork(db).withTransaction(async (): Promise<DisplayOrderResult> => {
+        const executor = currentExecutor(db);
+
+        const group = await executor
+          .select({
+            id: products.id,
+            status: products.status,
+            archivedAt: products.archivedAt,
+            displayPosition: products.displayPosition,
+          })
+          .from(products)
+          .where(eq(products.kind, kind))
+          .for("update");
+
+        // Solo se coloca lo que la tienda ensena: publicado y sin archivar. Lo
+        // demas es una lista vieja, y se dice en vez de guardarla a medias.
+        const published = new Set(
+          group
+            .filter((row) => row.status === "ACTIVE" && row.archivedAt === null)
+            .map((row) => row.id),
+        );
+        const unknownProductIds = productIds.filter((id) => !published.has(id));
+        if (unknownProductIds.length > 0) {
+          return { kind: "STALE", unknownProductIds };
+        }
+
+        const previousProductIds = group
+          .filter((row) => row.displayPosition !== null)
+          .sort((a, b) => (a.displayPosition ?? 0) - (b.displayPosition ?? 0))
+          .map((row) => row.id);
+
+        // `updated_at` no se toca: el lugar en la tienda no es una edicion del
+        // producto, y la columna "Actualizado" del panel mentiria. Quien y
+        // cuando lo guarda la auditoria de la ruta.
+        await executor
+          .update(products)
+          .set({ displayPosition: null })
+          .where(and(eq(products.kind, kind), isNotNull(products.displayPosition)));
+
+        for (const [index, id] of productIds.entries()) {
+          await executor
+            .update(products)
+            .set({ displayPosition: index + 1 })
+            .where(eq(products.id, id));
+        }
+
+        return { kind: "SAVED", previousProductIds };
+      }),
 
     findBySlug: async (slug) => {
       const rows = await db

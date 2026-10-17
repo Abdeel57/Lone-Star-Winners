@@ -728,11 +728,13 @@ figuraba en la propuesta **no está implementado**: la elegibilidad no vive en e
 catálogo (DEC-012), así que filtrar por promoción exigiría que el listado
 aplicase reglas legales, que es justo lo que este endpoint no debe hacer.
 
-Orden (DEC-064): mercancía antes que paquetes; dentro de cada tipo, con imagen
-antes que sin ella; después la `position` de la categoría (sin categoría, al
-final), el precio "desde" de menor a mayor y, por último, el `slug`. Así los
-paquetes salen Bronce, Plata, Gold, Diamante sin un campo de "rango". El cursor
-sigue siendo opaco y guarda esa clave de orden.
+Orden (DEC-064, DEC-088): mercancía antes que paquetes. Dentro de cada tipo van
+primero los productos que el panel colocó (§17), en el lugar elegido; después
+los no colocados, con imagen antes que sin ella, la `position` de la categoría
+(sin categoría, al final), el precio "desde" de menor a mayor y, por último, el
+`slug`. Así, sin nada colocado, los paquetes salen Bronce, Plata, Gold, Diamante
+sin un campo de "rango". El lugar no se publica en esta respuesta: el orden ya es
+el de la lista. El cursor sigue siendo opaco y guarda esa clave de orden.
 
 ---
 
@@ -4514,6 +4516,108 @@ Errors: 401, 403, 422 VALIDATION_FAILED
 
 Authorization: product.write (la tiene PROMOTION_MANAGER: la tarifa es un precio
 de la tienda y la pone quien pone los precios)
+
+Owner: backend
+
+Status: IMPLEMENTED
+```
+
+---
+
+## 17. Orden de la tienda elegido desde el panel (DEC-088)
+
+**Qué se ordena.** Dos grupos por separado: la mercancía entre sí y los
+paquetes entre sí. La mercancía sigue antes que los paquetes (§4). Dentro de
+cada grupo manda `products.display_position` (migración `0039`), 1 el primero.
+La portada pide `GET /products?kind=MERCHANDISE&limit=4` y la banda de paquetes
+`?kind=ENTRY_PACKAGE`, así que el orden elegido decide también los destacados
+de la portada.
+
+**Sin colocar.** `display_position = null` es un producto sin lugar: todos al
+aplicar `0039` (la tienda se ve igual que antes) y cualquiera recién publicado.
+Va detrás de los colocados, con la regla automática de §4. Un producto que
+cambia de tipo (`PATCH /admin/products/:product_id` con otro `kind`) pierde su
+lugar. Nada de esto puede esconder un producto.
+
+**Auditoría.** Cada `PUT` deja `catalog.display_order.updated` en
+`audit_events` (cadena `global`, `target_entity_type = ProductCatalog`,
+`target_entity_id` = el grupo), con `product_ids` y `previous_product_ids`, en
+la misma transacción que escribe el orden. **No toca participaciones.**
+
+### GET /api/v1/admin/catalog-order
+
+```text
+Method: GET
+Endpoint: /api/v1/admin/catalog-order
+
+Purpose:
+Lo que enseña la tienda, grupo a grupo, con la misma consulta y el mismo orden
+que GET /products: solo lo publicado (ACTIVE y sin archivar).
+
+Response: 200
+{
+  "groups": [
+    {
+      "kind": "MERCHANDISE",
+      "manual": true,              // al menos un producto colocado
+      "items": [
+        {
+          "id": "uuid",
+          "slug": "gorra-lone-star",
+          "name": { "es-US": "Gorra", "en-US": "Cap" },
+          "image_url": "/media/…" | null,   // la del producto, o la de su primera variante con foto
+          "price_from": { "amount_minor": "2500", "currency": "USD" } | null,
+          "display_position": 1 | null      // null = sin colocar
+        }
+      ]
+    },
+    { "kind": "ENTRY_PACKAGE", "manual": false, "items": [ … ] }
+  ]
+}
+
+Hasta 200 productos por grupo; por encima, los demás siguen en la tienda detrás
+de los colocados.
+
+Errors: 401, 403
+
+Authorization: product.read
+
+Owner: backend
+
+Status: IMPLEMENTED
+```
+
+### PUT /api/v1/admin/catalog-order
+
+```text
+Method: PUT
+Endpoint: /api/v1/admin/catalog-order
+
+Purpose:
+Poner el orden de UN grupo. Reescribe el grupo entero: el primero de
+`product_ids` va en el lugar 1; los productos del grupo que no estén quedan sin
+colocar. La lista vacía devuelve el grupo al orden automático.
+
+Request:
+{ "kind": "MERCHANDISE", "product_ids": ["uuid", "uuid", …] }
+
+`product_ids`: de 0 a 200, sin repetidos (422 `duplicate_product_id`). Cada uno
+tiene que ser un producto publicado de ese grupo.
+
+Response: 200, misma forma que GET (ya con el orden nuevo).
+
+Errors: 401, 403, 409 CATALOG_ORDER_STALE, 422 VALIDATION_FAILED
+
+409 CATALOG_ORDER_STALE: algún identificador ya no es un producto publicado de
+ese grupo (se archivó, cambió de tipo o nunca lo fue) desde que el panel cargó la
+lista. `details.unknown_product_ids` los nombra. No se escribe nada: el panel
+recarga y se vuelve a ordenar.
+
+Las filas del grupo se bloquean (`SELECT … FOR UPDATE`) antes de escribir: dos
+guardados simultáneos se aplican uno detrás de otro.
+
+Authorization: product.write (la que ya cambia nombre, foto y precio; ordenar no
+cambia lo que se puede comprar, que es product.publish)
 
 Owner: backend
 

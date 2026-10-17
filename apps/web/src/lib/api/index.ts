@@ -165,6 +165,10 @@ export type {
   AdminShippingRateInput,
   AdminShippingRateResponse,
   AdminShippingRateRow,
+  AdminCatalogOrderGroup,
+  AdminCatalogOrderInput,
+  AdminCatalogOrderItem,
+  AdminCatalogOrderResponse,
 } from "./admin-contract";
 export {
   ADMIN_MEDIA_CONTENT_TYPES,
@@ -265,6 +269,8 @@ export {
   fetchAdminProducts,
   fetchAdminShippingRate,
   setAdminShippingRate,
+  fetchAdminCatalogOrder,
+  setAdminCatalogOrder,
   fetchAdminPromotion,
   fetchAdminPromotions,
   fetchAdminRulesVersion,

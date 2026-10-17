@@ -243,6 +243,7 @@ describe("escaparate: la oferta la calcula el motor (13.4, 13.5)", () => {
               position: 0,
             },
           ],
+          displayPosition: null,
         },
       ],
     });
@@ -403,6 +404,7 @@ describe("escaparate: la oferta la calcula el motor (13.4, 13.5)", () => {
               position: 0,
             },
           ],
+          displayPosition: null,
         },
       ],
     });
@@ -454,6 +456,7 @@ function packageProduct(): FakeProduct {
         position: 0,
       },
     ],
+    displayPosition: null,
   };
 }
 

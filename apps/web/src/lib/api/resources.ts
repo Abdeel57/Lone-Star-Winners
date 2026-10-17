@@ -85,6 +85,8 @@ import type {
   AdminSettingChangeRequestPage,
   AdminShippingRateInput,
   AdminShippingRateResponse,
+  AdminCatalogOrderInput,
+  AdminCatalogOrderResponse,
 } from "./admin-contract";
 import { apiGet, apiRequest, queryString, type ApiRequestOptions } from "./http";
 import { ok, type ApiResult } from "./result";
@@ -216,6 +218,8 @@ export const API_PATHS = {
   adminProductCategories: "/admin/product-categories",
   /** DEC-079: tarifa fija de envio (§16). */
   adminShippingRate: "/admin/shipping-rate",
+  /** DEC-088: orden de la tienda elegido desde el panel (§17). */
+  adminCatalogOrder: "/admin/catalog-order",
   /** Subida de imagenes de catalogo (§14, DEC-056). */
   adminMedia: "/admin/media",
   /** Feature flags con su materialidad legal (§13.9). */
@@ -1969,6 +1973,33 @@ export function setAdminShippingRate(
   session: SessionContext,
 ): Promise<ApiResult<AdminShippingRateResponse>> {
   return apiRequest<AdminShippingRateResponse>("PUT", API_PATHS.adminShippingRate, {
+    locale,
+    body: input,
+    ...sessionOptions(session),
+  });
+}
+
+/** DEC-088: lo que ensena la tienda, grupo a grupo y en su orden. */
+export function fetchAdminCatalogOrder(
+  locale: Locale,
+  session: SessionContext,
+): Promise<ApiResult<AdminCatalogOrderResponse>> {
+  return apiGet<AdminCatalogOrderResponse>(API_PATHS.adminCatalogOrder, {
+    locale,
+    ...sessionOptions(session),
+  });
+}
+
+/**
+ * DEC-088: pone el orden de UN grupo. Lista vacia = automatico. 409
+ * `CATALOG_ORDER_STALE` si la lista ya no corresponde a la tienda.
+ */
+export function setAdminCatalogOrder(
+  input: AdminCatalogOrderInput,
+  locale: Locale,
+  session: SessionContext,
+): Promise<ApiResult<AdminCatalogOrderResponse>> {
+  return apiRequest<AdminCatalogOrderResponse>("PUT", API_PATHS.adminCatalogOrder, {
     locale,
     body: input,
     ...sessionOptions(session),

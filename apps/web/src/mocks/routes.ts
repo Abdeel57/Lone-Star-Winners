@@ -47,6 +47,7 @@ import {
   adminAdjustmentPage,
   adminAmoeSubmissionPage,
   adminAuditEventPage,
+  adminCatalogOrder,
   adminDashboard,
   adminDrawAuthorizationPage,
   adminExportSnapshotPage,
@@ -344,6 +345,10 @@ export const mockRoutes: readonly MockRoute[] = [
     path: API_PATHS.adminProductCategories,
     body: adminProductCategories.items[0],
   },
+  // Orden de la tienda (§17, DEC-088). El PUT responde el mismo orden: el doble
+  // no guarda, solo deja recorrer la pantalla.
+  { method: "GET", path: API_PATHS.adminCatalogOrder, body: adminCatalogOrder },
+  { method: "PUT", path: API_PATHS.adminCatalogOrder, body: adminCatalogOrder },
   ...adminProducts.flatMap((product): readonly MockRoute[] => {
     const variants = product.variants ?? [];
     const first = variants[0];

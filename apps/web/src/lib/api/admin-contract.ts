@@ -563,3 +563,38 @@ export interface AdminShippingRateInput {
   readonly amount_minor: number;
   readonly currency: string;
 }
+
+/**
+ * [CONTRATO] Orden de la tienda elegido desde el panel (§17, DEC-088).
+ *
+ * Un producto tal como lo ensena la tienda. `display_position: null` es "sin
+ * colocar": va detras de los colocados, por la regla automatica.
+ */
+export interface AdminCatalogOrderItem {
+  readonly id: string;
+  readonly slug: string;
+  readonly name: LocalizedText;
+  /** La foto del producto o la de su primera variante con foto. */
+  readonly image_url: string | null;
+  readonly price_from: MoneyMinor | null;
+  readonly display_position: number | null;
+}
+
+export interface AdminCatalogOrderGroup {
+  readonly kind: ProductKind;
+  /** `true` si al menos un producto del grupo esta colocado. */
+  readonly manual: boolean;
+  /** En el orden exacto en que los ensena la tienda. */
+  readonly items: readonly AdminCatalogOrderItem[];
+}
+
+/** Mercancia primero y paquetes despues, que es como los ensena la tienda. */
+export interface AdminCatalogOrderResponse {
+  readonly groups: readonly AdminCatalogOrderGroup[];
+}
+
+/** El grupo entero, el primero en el lugar 1. Vacio = volver al orden automatico. */
+export interface AdminCatalogOrderInput {
+  readonly kind: ProductKind;
+  readonly product_ids: readonly string[];
+}

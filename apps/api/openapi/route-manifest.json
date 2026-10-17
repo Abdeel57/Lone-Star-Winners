@@ -112,6 +112,24 @@
     },
     {
       "method": "GET",
+      "path": "/api/v1/admin/catalog-order",
+      "operation_id": "getAdminCatalogOrder",
+      "authorization": "product.read",
+      "requires_step_up": false,
+      "tags": ["admin"],
+      "summary": "Orden de la tienda: mercancia y paquetes, tal como se ensenan."
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/admin/catalog-order",
+      "operation_id": "setAdminCatalogOrder",
+      "authorization": "product.write",
+      "requires_step_up": false,
+      "tags": ["admin"],
+      "summary": "Poner el orden de un grupo de la tienda. Lista vacia = automatico."
+    },
+    {
+      "method": "GET",
       "path": "/api/v1/admin/dashboard",
       "operation_id": "getAdminDashboard",
       "authorization": "dashboard.read",

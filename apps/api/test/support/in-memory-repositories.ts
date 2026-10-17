@@ -149,6 +149,8 @@ export const FIXTURE_PRODUCT: ProductRecord = {
       position: 1,
     },
   ],
+  // DEC-088: sin colocar, que es como esta todo antes de que nadie ordene.
+  displayPosition: null,
 };
 
 const DRAFT_VARIANT_ID = "88888888-8888-4888-8888-888888888888";
@@ -239,7 +241,9 @@ function ownerKey(owner: CartOwnerRef): string {
 export function createFakeRepositories(options: FakeOptions = {}): FakeRepositories {
   const activePromotion =
     options.activePromotion === undefined ? FIXTURE_PROMOTION : options.activePromotion;
-  const products = options.products ?? [FIXTURE_PRODUCT];
+  // `let` y no `const`: `setDisplayOrder` (DEC-088) cambia el lugar de los
+  // productos y las lecturas siguientes tienen que verlo.
+  let products = options.products ?? [FIXTURE_PRODUCT];
   const rulesVersion =
     options.rulesVersion === undefined ? FIXTURE_RULES_VERSION : options.rulesVersion;
 
@@ -378,6 +382,33 @@ export function createFakeRepositories(options: FakeOptions = {}): FakeRepositor
     },
     categoryExists: (key) =>
       Promise.resolve(products.some((product) => product.category?.key === key)),
+    setDisplayOrder: (kind, productIds) => {
+      // Las mismas reglas que el adaptador real: solo lo publicado del grupo, y
+      // una lista vieja no escribe nada. El cerrojo de filas no se simula: se
+      // prueba contra PostgreSQL (DEC-018).
+      const published = new Set(
+        products
+          .filter((product) => product.kind === kind && product.status === "ACTIVE")
+          .map((product) => product.id),
+      );
+      const unknownProductIds = productIds.filter((id) => !published.has(id));
+      if (unknownProductIds.length > 0) {
+        return Promise.resolve({ kind: "STALE" as const, unknownProductIds });
+      }
+
+      const previousProductIds = products
+        .filter((product) => product.kind === kind && product.displayPosition !== null)
+        .sort((a, b) => (a.displayPosition ?? 0) - (b.displayPosition ?? 0))
+        .map((product) => product.id);
+
+      products = products.map((product) => {
+        if (product.kind !== kind) return product;
+        const index = productIds.indexOf(product.id);
+        return { ...product, displayPosition: index === -1 ? null : index + 1 };
+      });
+
+      return Promise.resolve({ kind: "SAVED" as const, previousProductIds });
+    },
     findBySlug: (slug) =>
       Promise.resolve(
         products.find((product) => product.slug === slug && product.status === "ACTIVE") ?? null,

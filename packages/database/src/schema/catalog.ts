@@ -79,6 +79,13 @@ export const products = pgTable(
     imageUrl: text("image_url"),
     /** DEC-010: la moneda siempre viaja explicita junto al importe. */
     currency: char("currency", { length: 3 }).notNull(),
+    /**
+     * DEC-088. Lugar del producto DENTRO DE SU GRUPO (mercancia o paquetes) en
+     * la tienda, 1 el primero, puesto desde el panel. `null` = todavia sin
+     * colocar: va despues de los colocados, por la regla automatica de
+     * `catalog-order.ts`. Espejo de `drizzle/0039`.
+     */
+    displayPosition: integer("display_position"),
     createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
     archivedAt: timestamp("archived_at", { withTimezone: true, mode: "date" }),

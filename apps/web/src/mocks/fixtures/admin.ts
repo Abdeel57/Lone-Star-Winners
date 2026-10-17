@@ -7,6 +7,8 @@ import type {
   AdminAuditEvent,
   AdminAuditEventPage,
   AdminCashPayment,
+  AdminCatalogOrderItem,
+  AdminCatalogOrderResponse,
   AdminDashboard,
   AdminDrawAuthorization,
   AdminDrawAuthorizationPage,
@@ -29,6 +31,18 @@ import type {
 } from "@/lib/api";
 
 import { participant } from "./account";
+import {
+  airtagHolderProduct,
+  capProduct,
+  neckLightProduct,
+  notebookProduct,
+  package10,
+  package100,
+  package20,
+  package50,
+  powerBankProduct,
+  tumblerProduct,
+} from "./catalog";
 import { activePromotion, publicPromotions } from "./promotions";
 
 /**
@@ -824,6 +838,117 @@ export const adminSettingChangeRequests: AdminSettingChangeRequestPage = {
 export const adminProductPage: AdminProductPage = {
   items: adminProducts,
   next_cursor: null,
+};
+
+function orderItem(
+  id: string,
+  product: { readonly slug: string; readonly name: AdminCatalogOrderItem["name"] },
+  imageUrl: string | null | undefined,
+  priceMinor: string,
+  position: number | null,
+): AdminCatalogOrderItem {
+  return {
+    id,
+    slug: product.slug,
+    name: product.name,
+    image_url: imageUrl ?? null,
+    price_from: { amount_minor: priceMinor, currency: "USD" },
+    display_position: position,
+  };
+}
+
+/**
+ * Orden de la tienda (§17, DEC-088).
+ *
+ * La mercancia ya esta ordenada a mano y tiene UNA recien publicada sin
+ * colocar, que es el caso que la pantalla tiene que saber ensenar. Los paquetes
+ * siguen en automatico. Precios tecleados, como el resto de este fichero.
+ */
+export const adminCatalogOrder: AdminCatalogOrderResponse = {
+  groups: [
+    {
+      kind: "MERCHANDISE",
+      manual: true,
+      items: [
+        orderItem(
+          "0c0c0c0c-0000-4000-8000-000000000001",
+          tumblerProduct,
+          tumblerProduct.image_url,
+          "3499",
+          1,
+        ),
+        orderItem(
+          "0c0c0c0c-0000-4000-8000-000000000002",
+          capProduct,
+          capProduct.image_url,
+          "3500",
+          2,
+        ),
+        orderItem(
+          "0c0c0c0c-0000-4000-8000-000000000003",
+          powerBankProduct,
+          powerBankProduct.image_url,
+          "4999",
+          3,
+        ),
+        orderItem(
+          "0c0c0c0c-0000-4000-8000-000000000004",
+          neckLightProduct,
+          neckLightProduct.image_url,
+          "1999",
+          4,
+        ),
+        orderItem(
+          "0c0c0c0c-0000-4000-8000-000000000005",
+          airtagHolderProduct,
+          airtagHolderProduct.image_url,
+          "1299",
+          5,
+        ),
+        orderItem(
+          "0c0c0c0c-0000-4000-8000-000000000006",
+          notebookProduct,
+          notebookProduct.image_url,
+          "1499",
+          null,
+        ),
+      ],
+    },
+    {
+      kind: "ENTRY_PACKAGE",
+      manual: false,
+      items: [
+        orderItem(
+          "0c0c0c0c-0000-4000-8000-000000000011",
+          package10,
+          package10.image_url,
+          "1000",
+          null,
+        ),
+        orderItem(
+          "0c0c0c0c-0000-4000-8000-000000000012",
+          package20,
+          package20.image_url,
+          "2000",
+          null,
+        ),
+        orderItem(
+          "0c0c0c0c-0000-4000-8000-000000000013",
+          package50,
+          package50.image_url,
+          "5000",
+          null,
+        ),
+        orderItem(
+          "0c0c0c0c-0000-4000-8000-000000000014",
+          package100,
+          package100.image_url,
+          "10000",
+          null,
+        ),
+      ],
+    },
+  ],
 };
 
 /**

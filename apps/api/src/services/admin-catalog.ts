@@ -590,7 +590,7 @@ export function createAdminCatalogRepository(db: Database): AdminCatalogReposito
     async updateProduct(productId, input) {
       return await db.transaction(async (tx) => {
         const [existing] = await tx
-          .select({ id: products.id })
+          .select({ id: products.id, kind: products.kind })
           .from(products)
           .where(eq(products.id, productId))
           .limit(1);
@@ -603,10 +603,15 @@ export function createAdminCatalogRepository(db: Database): AdminCatalogReposito
           input.categoryKey !== undefined ||
           input.imageUrl !== undefined
         ) {
+          // DEC-088: el lugar en la tienda es DENTRO del grupo. Un producto que
+          // cambia de grupo llegaria al otro con un numero que alli significa
+          // otra cosa; entra sin colocar, detras de los colocados.
+          const changesGroup = input.kind !== undefined && input.kind !== existing.kind;
           await tx
             .update(products)
             .set({
               ...(input.kind === undefined ? {} : { kind: input.kind }),
+              ...(changesGroup ? { displayPosition: null } : {}),
               ...(input.categoryKey === undefined ? {} : { categoryKey: input.categoryKey }),
               ...(input.imageUrl === undefined ? {} : { imageUrl: input.imageUrl }),
               updatedAt: now,
