@@ -46,7 +46,8 @@ import { z } from "zod";
 
 import type { AppDependencies } from "../app.js";
 import {
-  assertDeclaration,
+  assertConsents,
+  assertDateOfBirth,
   consentsInputSchema,
   dateOfBirthSchema,
   residenceStateSchema,
@@ -123,17 +124,46 @@ function readEntryNumberCursor(
 
 /** DEC-067: si la cuenta declaro, y cuando. Nunca lo declarado. */
 const eligibilityStatusSchema = z.object({
+  /** Las dos mitades declaradas: estado Y fecha de nacimiento. */
   declared: z.boolean(),
+  /** Instante en que se declaro el estado, o `null`. */
   declared_at: z.string().nullable(),
+  /** DEC-089: el alta sin contrasena declara el estado y no la fecha. */
+  residence_state_declared: z.boolean(),
+  date_of_birth_declared: z.boolean(),
 });
 
-const eligibilityDeclarationBodySchema = z.object({
-  date_of_birth: dateOfBirthSchema,
-  residence_state: residenceStateSchema,
-  consents: consentsInputSchema,
-  /** Idioma en el que se mostraron los documentos. */
-  language: z.enum(["en-US", "es-US"]),
-});
+/**
+ * DEC-089: cada mitad es opcional, porque una cuenta nueva ya declaro el estado
+ * y solo le falta la fecha. Hace falta al menos una. Los consentimientos se
+ * exigen al declarar el estado por primera vez, que es cuando una cuenta
+ * anterior a DEC-067 los acepta; una cuenta nueva ya los acepto en el alta.
+ */
+const eligibilityDeclarationBodySchema = z
+  .object({
+    date_of_birth: dateOfBirthSchema.optional(),
+    residence_state: residenceStateSchema.optional(),
+    consents: consentsInputSchema.optional(),
+    /** Idioma en el que se mostraron los documentos. */
+    language: z.enum(["en-US", "es-US"]),
+  })
+  .refine((body) => body.date_of_birth !== undefined || body.residence_state !== undefined, {
+    error: "date_of_birth_or_residence_state_required",
+    path: ["date_of_birth"],
+  });
+
+/** Lo que se publica de una declaracion: si existe cada mitad, nunca su valor. */
+function eligibilityStatusOf(
+  declaration: { readonly dateOfBirth: string | null; readonly declaredAt: Date } | null,
+): z.infer<typeof eligibilityStatusSchema> {
+  const dateOfBirthDeclared = declaration !== null && declaration.dateOfBirth !== null;
+  return {
+    declared: dateOfBirthDeclared,
+    declared_at: declaration?.declaredAt.toISOString() ?? null,
+    residence_state_declared: declaration !== null,
+    date_of_birth_declared: dateOfBirthDeclared,
+  };
+}
 
 async function requireParticipant(request: FastifyRequest): Promise<ParticipantPrincipal> {
   const principal = await request.server.lswPrincipalResolver(request);
@@ -496,9 +526,10 @@ export function buildPortalRoutes(dependencies: AppDependencies): RouteDefinitio
       method: "GET",
       url: "/api/v1/me/eligibility",
       operationId: "getParticipantEligibility",
-      summary: "Si el participante ya declaro su fecha de nacimiento y su estado (DEC-067).",
+      summary:
+        "Si el participante ya declaro su estado y su fecha de nacimiento (DEC-067, DEC-089).",
       description:
-        "Solo dice SI declaro y cuando, no lo declarado: la web lo necesita para pedir la declaracion antes de pagar, y no hace falta devolver la fecha de nacimiento para eso. Si es elegible no se responde aqui: depende de las reglas de cada promocion y se evalua al otorgar.",
+        "Solo dice SI declaro cada mitad y cuando, no lo declarado: la web lo necesita para pedir lo que falte antes de pagar, y no hace falta devolver la fecha de nacimiento para eso. `declared` es `true` solo con las dos mitades. Si es elegible no se responde aqui: depende de las reglas de cada promocion y se evalua al otorgar.",
       tags: ["portal"],
       authorization: { kind: "PERMISSION", permission: "participant.self.read" },
       schema: {
@@ -512,10 +543,7 @@ export function buildPortalRoutes(dependencies: AppDependencies): RouteDefinitio
         const declaration = await dependencies.identity.identities.findEligibilityDeclaration(
           principal.participantId,
         );
-        return {
-          declared: declaration !== null,
-          declared_at: declaration?.declaredAt.toISOString() ?? null,
-        };
+        return eligibilityStatusOf(declaration);
       },
     },
 
@@ -523,9 +551,10 @@ export function buildPortalRoutes(dependencies: AppDependencies): RouteDefinitio
       method: "PUT",
       url: "/api/v1/me/eligibility",
       operationId: "declareParticipantEligibility",
-      summary: "Declarar fecha de nacimiento y estado en una cuenta anterior a DEC-067.",
+      summary:
+        "Declarar lo que falte: el estado, la fecha de nacimiento o las dos (DEC-067, DEC-089).",
       description:
-        "Una sola vez: una declaracion existente no se reescribe (409 ELIGIBILITY_ALREADY_DECLARED), porque cambiar la fecha o el estado despues de comprar seria volverse elegible a posteriori. Exige los mismos consentimientos que el alta (`required_consents` de GET /config).",
+        "No reescribe: una mitad ya declarada con otro valor, o un envio que no anade nada, es 409 ELIGIBILITY_ALREADY_DECLARED, porque cambiar la fecha o el estado despues de comprar seria volverse elegible a posteriori. Al declarar el estado exige los consentimientos de `required_consents` (GET /config). Una fecha sin estado, en una cuenta que no lo declaro, es 422 ELIGIBILITY_STATE_REQUIRED.",
       tags: ["portal"],
       authorization: { kind: "PERMISSION", permission: "participant.self.update" },
       schema: {
@@ -541,22 +570,28 @@ export function buildPortalRoutes(dependencies: AppDependencies): RouteDefinitio
         const principal = await requireParticipant(request);
         const body = request.body as z.infer<typeof eligibilityDeclarationBodySchema>;
         const now = new Date();
-        const consents = assertDeclaration(body, now);
 
-        const outcome = await dependencies.identity.identities.declareEligibility({
+        if (body.date_of_birth !== undefined) assertDateOfBirth(body.date_of_birth, now);
+        const consents =
+          body.residence_state === undefined ? [] : assertConsents(body.consents ?? []);
+
+        const { identities } = dependencies.identity;
+        const outcome = await identities.declareEligibility({
           participantId: principal.participantId,
-          eligibility: {
-            dateOfBirth: body.date_of_birth,
-            residenceState: body.residence_state,
-            declaredAt: now,
-          },
+          residenceState: body.residence_state ?? null,
+          dateOfBirth: body.date_of_birth ?? null,
+          declaredAt: now,
           consents,
           locale: body.language,
         });
 
         if (outcome === "NOT_FOUND") throw ApiErrors.unauthenticated();
         if (outcome === "ALREADY_DECLARED") throw ApiErrors.eligibilityAlreadyDeclared();
-        return { declared: true, declared_at: now.toISOString() };
+        if (outcome === "STATE_REQUIRED") throw ApiErrors.eligibilityStateRequired();
+
+        return eligibilityStatusOf(
+          await identities.findEligibilityDeclaration(principal.participantId),
+        );
       },
     },
   ];

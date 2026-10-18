@@ -94,8 +94,10 @@ export const WEB_EMITS_NO_SECURITY_HEADERS = false;
  * El participante del escenario se siembra por SQL, con su credencial Argon2id,
  * porque no hay otra via.
  */
-export const NO_PARTICIPANT_REGISTRATION_ENDPOINT =
-  process.env.E2E_REGISTRATION_ENDPOINT !== "true";
+// RESUELTO: el alta existe (DEC-057) y desde DEC-089 se hace con codigo por
+// `POST /auth/code/*`; `specs/03-participant-auth.spec.mjs` la recorre por la
+// pantalla. Se deja en `false` en vez de borrarse, como el resto.
+export const NO_PARTICIPANT_REGISTRATION_ENDPOINT = false;
 
 /**
  * Buena parte del panel llama a endpoints que `apps/api` no sirve:

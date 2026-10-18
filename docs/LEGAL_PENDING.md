@@ -146,6 +146,57 @@ reglas de los operadores) regula el consentimiento. El texto lo decide el
 abogado, no el código. Mientras no lo apruebe, el registro con celular debe
 seguir apagado (`SMS_PROVIDER=none`) en producción.
 
+**DEC-089 (2026-10-18):** desde que la tienda entra con código, el SMS se envía
+también para INICIAR SESIÓN, cada vez que la persona lo pide. El aviso de la
+pantalla de entrada es ahora "Si escribes un celular, te enviaremos un mensaje
+de texto con un código. Pueden aplicar tarifas de mensajes y datos." / "If you
+enter a mobile number, we'll send you a text message with a code. Message and
+data rates may apply." Sigue sin haber SMS de marketing.
+
+## Single consent checkbox at sign-up (DEC-089)
+
+TBD
+
+El alta muestra UNA casilla en lugar de una por documento: "He leído y acepto
+las Reglas Oficiales, los Términos y condiciones y la Política de privacidad." /
+"I have read and accept the Official Rules, the Terms and Conditions and the
+Privacy Policy.", con enlaces a los tres. Se guarda una aceptación por documento
+y versión, como antes. ¿Basta una casilla conjunta? ¿Es correcto "acepto" para
+la Política de privacidad, o debe decir "he leído"?
+
+**Por qué importa:** lo pidió el cliente para que el alta sea más rápida. El
+texto de las casillas ya estaba pendiente del abogado; esto cambia su forma.
+
+## Date of birth deferred to checkout (DEC-089)
+
+TBD
+
+Las Official Rules definen al "Entrant" por edad y estado. Desde DEC-089 el alta
+pide el estado pero NO la fecha de nacimiento: la fecha se pide una sola vez en
+el checkout, antes de cobrar, y solo si `age_gate_enabled` está encendido. Con
+la puerta de edad apagada -como está hoy en producción- no se pregunta la edad a
+nadie y las compras otorgan participaciones sin comprobarla.
+
+¿Es suficiente pedir la fecha en la primera compra con la puerta encendida? ¿Hay
+que encender la puerta de edad (y la de estados) antes de seguir otorgando, o
+basta la declaración jurada del ganador? Encender los interruptores exige dos
+cuentas de Cumplimiento distintas (DEC-032).
+
+**Por qué importa:** una compra de alguien que no es "Entrant" no constituye una
+participación según las Reglas. El cliente pidió un alta sin la fecha.
+
+## Retention of sign-in codes (DEC-089)
+
+TBD
+
+`sign_in_codes` guarda el contacto (correo o celular) de cada código que se pide,
+también el de quien nunca termina de crear la cuenta, junto con cuándo se pidió y
+cuándo se usó. No guarda el código. ¿Cuánto tiempo se conservan esas filas, y
+hay que declararlo en la Política de privacidad?
+
+**Por qué importa:** son datos personales de personas que quizá no son clientes.
+Hoy no se purgan; la purga periódica espera a esta respuesta.
+
 ## Payment processor acceptance of the promotion model (DEC-059)
 
 TBD

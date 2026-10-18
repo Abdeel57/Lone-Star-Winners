@@ -67,6 +67,25 @@ export const COMPLIANCE_OFFICER_EMAIL = "e2e.compliance.officer@example.invalid"
  */
 export const CAP_PARTICIPANT_EMAIL = "e2e.tope@example.invalid";
 
+/**
+ * DEC-089: los participantes entran con un codigo, sin contrasena. El e2e no
+ * tiene buzon de correo, asi que entra por celular con `SMS_PROVIDER=console`,
+ * que no envia nada y acepta siempre `000000` (`apps/api/src/services/sms.ts`;
+ * el esquema de entorno lo impide en produccion). Los numeros son de la serie
+ * 555-01XX, reservada para ficcion: no pertenecen a nadie.
+ */
+export const PARTICIPANT_PHONE = "+15125550111";
+export const CAP_PARTICIPANT_PHONE = "+15125550112";
+/** Celular sin cuenta, para recorrer el alta desde la pantalla. */
+export const NEW_PARTICIPANT_PHONE = "+15125550113";
+export const CONSOLE_SMS_CODE = "000000";
+
+/** Celular verificado con el que entra cada participante sembrado. */
+export const PHONE_FOR_EMAIL = new Map([
+  [PARTICIPANT_EMAIL, PARTICIPANT_PHONE],
+  [CAP_PARTICIPANT_EMAIL, CAP_PARTICIPANT_PHONE],
+]);
+
 /** Catalogo y promocion sembrados. */
 export const PROMOTION_SLUG = "e2e-promocion";
 export const PRODUCT_SLUG = "e2e-camiseta";

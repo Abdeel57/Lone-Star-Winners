@@ -76,13 +76,19 @@ export const participants = pgTable(
     pseudonymRef: text("pseudonym_ref").unique(),
     anonymizedAt: timestamp("anonymized_at", { withTimezone: true, mode: "date" }),
     /**
-     * DEC-067 (0034): lo DECLARADO para evaluar la elegibilidad. O las tres
-     * columnas o ninguna (`participants_eligibility_declaration_complete`).
+     * DEC-067 (0034) y DEC-089 (0040): lo DECLARADO para evaluar la
+     * elegibilidad, en dos mitades con su instante: el estado
+     * (`eligibilityDeclaredAt`) y, despues, la fecha de nacimiento
+     * (`dateOfBirthDeclaredAt`). Una fecha sin estado no se admite.
      * `YYYY-MM-DD` como cadena: una fecha de nacimiento no tiene hora ni zona.
      */
     dateOfBirth: date("date_of_birth", { mode: "string" }),
     residenceState: text("residence_state"),
     eligibilityDeclaredAt: timestamp("eligibility_declared_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
+    dateOfBirthDeclaredAt: timestamp("date_of_birth_declared_at", {
       withTimezone: true,
       mode: "date",
     }),

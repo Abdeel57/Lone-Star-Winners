@@ -3,9 +3,10 @@ import { hasLocale } from "next-intl";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 
 import { AuthPanel } from "@/components/auth-panel";
-import { LoginForm } from "@/components/login-form";
-import { Link, redirect } from "@/i18n/navigation";
+import { SignInFlow } from "@/components/sign-in-flow";
+import { redirect } from "@/i18n/navigation";
 import { routing } from "@/i18n/routing";
+import { fetchSiteConfig, type ConsentRequirement } from "@/lib/api";
 import { returnPathFrom } from "@/lib/form-input";
 import { loadSession } from "@/lib/participant-server";
 
@@ -15,6 +16,12 @@ import { loadSession } from "@/lib/participant-server";
  * La pagina consulta la sesion para no ensenar un formulario de inicio de
  * sesion a quien ya la tiene. Prerenderizarla serviria la decision de la
  * primera persona que la cargo a todas las demas.
+ *
+ * DEC-089: entrar y crear la cuenta son el MISMO flujo con codigo, asi que
+ * esta pagina tambien lee los documentos que el alta exige aceptar, por si el
+ * contacto resulta no tener cuenta. Si la lectura falla no se pinta ninguna
+ * casilla y el backend rechaza el alta: es la direccion segura (ver
+ * `register/page.tsx`).
  */
 export const dynamic = "force-dynamic";
 
@@ -41,7 +48,10 @@ export default async function LoginPage({
    */
   const returnPath = returnPathFrom(query.next);
 
-  const { state } = await loadSession(locale);
+  const [{ state }, configResult] = await Promise.all([
+    loadSession(locale),
+    fetchSiteConfig(locale),
+  ]);
 
   /*
    * Quien ya tiene sesion no ve esta pantalla: va a donde queria ir.
@@ -61,31 +71,17 @@ export default async function LoginPage({
     redirect({ href: `/account/mfa?next=${encodeURIComponent(returnPath ?? "/account")}`, locale });
   }
 
+  const consents: readonly ConsentRequirement[] = configResult.ok
+    ? (configResult.data.required_consents ?? [])
+    : [];
+
   return (
-    <AuthPanel
-      title={t("login.title")}
-      intro={t("login.intro")}
-      footer={
-        <p>
-          {t("login.noAccount")}{" "}
-          <Link
-            href={
-              returnPath === null
-                ? "/account/register"
-                : `/account/register?next=${encodeURIComponent(returnPath)}`
-            }
-            className="font-medium text-brand underline underline-offset-4"
-          >
-            {t("login.registerLink")}
-          </Link>
-        </p>
-      }
-    >
+    <AuthPanel title={t("code.loginTitle")} intro={t("code.loginIntro")}>
       {returnPath === null ? null : (
         <p className="mb-s4 text-body-sm text-text-muted">{t("login.returnNotice")}</p>
       )}
 
-      <LoginForm locale={locale} returnPath={returnPath} />
+      <SignInFlow locale={locale} consents={consents} returnPath={returnPath} />
     </AuthPanel>
   );
 }

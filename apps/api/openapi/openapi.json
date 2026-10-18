@@ -30942,6 +30942,825 @@
         }
       }
     },
+    "/api/v1/auth/code/register": {
+      "post": {
+        "description": "Gasta la cookie `<base>_signup` que deja `POST /auth/code/verify` y crea la cuenta SIN contrasena con el contacto ya verificado: identidad ACTIVE, perfil con nombre y estado (DEC-067) y consentimientos. La fecha de nacimiento no se pide aqui: se declara en el checkout con la puerta de edad encendida (`PUT /me/eligibility`). Abre sesion de escaparate y adopta el carrito sin cuenta. 410 SIGNUP_EXPIRED si la cookie falta, caduco o ya se uso.",
+        "operationId": "registerWithSignInCode",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "consents": {
+                    "items": {
+                      "properties": {
+                        "key": {
+                          "maxLength": 100,
+                          "minLength": 1,
+                          "type": "string"
+                        },
+                        "version": {
+                          "maxLength": 100,
+                          "minLength": 1,
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "key",
+                        "version"
+                      ],
+                      "type": "object"
+                    },
+                    "maxItems": 20,
+                    "type": "array"
+                  },
+                  "display_name": {
+                    "maxLength": 120,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "language_preference": {
+                    "enum": [
+                      "en-US",
+                      "es-US"
+                    ],
+                    "type": "string"
+                  },
+                  "residence_state": {
+                    "enum": [
+                      "AL",
+                      "AK",
+                      "AZ",
+                      "AR",
+                      "CA",
+                      "CO",
+                      "CT",
+                      "DE",
+                      "DC",
+                      "FL",
+                      "GA",
+                      "HI",
+                      "ID",
+                      "IL",
+                      "IN",
+                      "IA",
+                      "KS",
+                      "KY",
+                      "LA",
+                      "ME",
+                      "MD",
+                      "MA",
+                      "MI",
+                      "MN",
+                      "MS",
+                      "MO",
+                      "MT",
+                      "NE",
+                      "NV",
+                      "NH",
+                      "NJ",
+                      "NM",
+                      "NY",
+                      "NC",
+                      "ND",
+                      "OH",
+                      "OK",
+                      "OR",
+                      "PA",
+                      "RI",
+                      "SC",
+                      "SD",
+                      "TN",
+                      "TX",
+                      "UT",
+                      "VT",
+                      "VA",
+                      "WA",
+                      "WV",
+                      "WI",
+                      "WY"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "display_name",
+                  "residence_state",
+                  "consents",
+                  "language_preference"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "authenticated": {
+                      "type": "boolean"
+                    },
+                    "capabilities": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "email": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "email_verified": {
+                      "type": "boolean"
+                    },
+                    "phone": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "roles": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "scope": {
+                      "anyOf": [
+                        {
+                          "enum": [
+                            "PARTICIPANT",
+                            "STAFF"
+                          ],
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "state": {
+                      "enum": [
+                        "ANONYMOUS",
+                        "ACTIVE",
+                        "MFA_PENDING"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "authenticated",
+                    "state",
+                    "scope",
+                    "email",
+                    "email_verified",
+                    "phone",
+                    "roles",
+                    "capabilities"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 201."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "additionalProperties": {},
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "request_id"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 409."
+          },
+          "410": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "additionalProperties": {},
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "request_id"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 410."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "additionalProperties": {},
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "request_id"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 422."
+          }
+        },
+        "summary": "Crear la cuenta tras acertar el codigo: nombre, estado y documentos.",
+        "tags": [
+          "auth"
+        ],
+        "x-lsw-authorization": {
+          "justification": "Se usa antes de tener cuenta. La prueba es la cookie de alta: un token de 256 bits que solo existe tras acertar el codigo de ese contacto, valido 30 minutos y de un solo uso. Solo crea participantes, sin roles.",
+          "kind": "PUBLIC",
+          "requires_step_up": false
+        }
+      }
+    },
+    "/api/v1/auth/code/start": {
+      "post": {
+        "description": "La arroba decide el canal: correo (codigo de 6 digitos de la API, 10 minutos, 5 intentos) o celular de EE. UU. (Twilio Verify). Se envia EXISTA O NO una cuenta con ese contacto, y la respuesta no lo dice: que pasa despues solo lo ve quien acierta el codigo. Tope de 3 codigos SIN ACERTAR cada 15 minutos por destinatario (429): entrar y salir varias veces no lo agota. Si hay comprobacion anti-bots configurada, `bot_check_token` es obligatorio.",
+        "operationId": "startSignInCode",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "bot_check_token": {
+                    "maxLength": 2048,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "contact": {
+                    "maxLength": 320,
+                    "minLength": 3,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "contact"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "acknowledged": {
+                      "const": true,
+                      "type": "boolean"
+                    },
+                    "channel": {
+                      "enum": [
+                        "EMAIL",
+                        "SMS"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "acknowledged",
+                    "channel"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 200."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "additionalProperties": {},
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "request_id"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 422."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "additionalProperties": {},
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "request_id"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 429."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "additionalProperties": {},
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "request_id"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 503."
+          }
+        },
+        "summary": "Enviar un codigo para entrar o crear la cuenta, al correo o al celular.",
+        "tags": [
+          "auth"
+        ],
+        "x-lsw-authorization": {
+          "justification": "Se usa sin cuenta o sin poder entrar: es la puerta de entrada. No consulta si el contacto tiene cuenta, asi que no revela nada. Lo protegen la comprobacion anti-bots, el tope por destinatario y, en el celular, los limites y la deteccion de fraude de Twilio Verify.",
+          "kind": "PUBLIC",
+          "requires_step_up": false
+        }
+      }
+    },
+    "/api/v1/auth/code/verify": {
+      "post": {
+        "description": "Con cuenta: abre una sesion de PARTICIPANTE (`SIGNED_IN`), adopta el carrito sin cuenta (DEC-079) y, si era el correo, lo da por verificado. Sin cuenta: `PROFILE_REQUIRED` y una cookie `httpOnly` `<base>_signup`, valida 30 minutos y de un solo uso, para `POST /auth/code/register`. 422 SIGN_IN_CODE_INVALID (codigo incorrecto), 410 SIGN_IN_CODE_EXPIRED (caducado, agotado o sin pedir: pedir otro), 403 STAFF_ACCOUNT_USE_PANEL (el personal entra por el panel con contrasena y segundo factor) y 403 ACCOUNT_UNAVAILABLE (cuenta no activa).",
+        "operationId": "verifySignInCode",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "code": {
+                    "maxLength": 32,
+                    "minLength": 4,
+                    "type": "string"
+                  },
+                  "contact": {
+                    "maxLength": 320,
+                    "minLength": 3,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "contact",
+                  "code"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "session": {
+                      "anyOf": [
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "authenticated": {
+                              "type": "boolean"
+                            },
+                            "capabilities": {
+                              "items": {
+                                "type": "string"
+                              },
+                              "type": "array"
+                            },
+                            "email": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "email_verified": {
+                              "type": "boolean"
+                            },
+                            "phone": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "roles": {
+                              "items": {
+                                "type": "string"
+                              },
+                              "type": "array"
+                            },
+                            "scope": {
+                              "anyOf": [
+                                {
+                                  "enum": [
+                                    "PARTICIPANT",
+                                    "STAFF"
+                                  ],
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "state": {
+                              "enum": [
+                                "ANONYMOUS",
+                                "ACTIVE",
+                                "MFA_PENDING"
+                              ],
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "authenticated",
+                            "state",
+                            "scope",
+                            "email",
+                            "email_verified",
+                            "phone",
+                            "roles",
+                            "capabilities"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "status": {
+                      "enum": [
+                        "SIGNED_IN",
+                        "PROFILE_REQUIRED"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "status",
+                    "session"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 200."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "additionalProperties": {},
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "request_id"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 403."
+          },
+          "410": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "additionalProperties": {},
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "request_id"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 410."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "additionalProperties": {},
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "request_id"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 422."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "additionalProperties": {},
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "request_id"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 503."
+          }
+        },
+        "summary": "Comprobar el codigo: entra si hay cuenta o deja abierta el alta si no.",
+        "tags": [
+          "auth"
+        ],
+        "x-lsw-authorization": {
+          "justification": "Se usa sin sesion: es la que la abre. El codigo es la prueba de control del contacto: de un solo uso, 10 minutos y 5 intentos en el correo; lo genera y lo caduca Twilio Verify en el celular. Si la cuenta existe solo se sabe despues de acertarlo, y un codigo nunca abre una sesion de personal.",
+          "kind": "PUBLIC",
+          "requires_step_up": false
+        }
+      }
+    },
     "/api/v1/auth/login": {
       "post": {
         "description": "Crea una sesion opaca. Para roles administrativos la sesion nace en MFA_PENDING y no sirve hasta completar el segundo factor (DEC-006).",
@@ -36705,7 +37524,7 @@
     },
     "/api/v1/me/eligibility": {
       "get": {
-        "description": "Solo dice SI declaro y cuando, no lo declarado: la web lo necesita para pedir la declaracion antes de pagar, y no hace falta devolver la fecha de nacimiento para eso. Si es elegible no se responde aqui: depende de las reglas de cada promocion y se evalua al otorgar.",
+        "description": "Solo dice SI declaro cada mitad y cuando, no lo declarado: la web lo necesita para pedir lo que falte antes de pagar, y no hace falta devolver la fecha de nacimiento para eso. `declared` es `true` solo con las dos mitades. Si es elegible no se responde aqui: depende de las reglas de cada promocion y se evalua al otorgar.",
         "operationId": "getParticipantEligibility",
         "responses": {
           "200": {
@@ -36714,6 +37533,9 @@
                 "schema": {
                   "additionalProperties": false,
                   "properties": {
+                    "date_of_birth_declared": {
+                      "type": "boolean"
+                    },
                     "declared": {
                       "type": "boolean"
                     },
@@ -36726,11 +37548,16 @@
                           "type": "null"
                         }
                       ]
+                    },
+                    "residence_state_declared": {
+                      "type": "boolean"
                     }
                   },
                   "required": [
                     "declared",
-                    "declared_at"
+                    "declared_at",
+                    "residence_state_declared",
+                    "date_of_birth_declared"
                   ],
                   "type": "object"
                 }
@@ -36783,7 +37610,7 @@
             "sessionCookie": []
           }
         ],
-        "summary": "Si el participante ya declaro su fecha de nacimiento y su estado (DEC-067).",
+        "summary": "Si el participante ya declaro su estado y su fecha de nacimiento (DEC-067, DEC-089).",
         "tags": [
           "portal"
         ],
@@ -36794,7 +37621,7 @@
         }
       },
       "put": {
-        "description": "Una sola vez: una declaracion existente no se reescribe (409 ELIGIBILITY_ALREADY_DECLARED), porque cambiar la fecha o el estado despues de comprar seria volverse elegible a posteriori. Exige los mismos consentimientos que el alta (`required_consents` de GET /config).",
+        "description": "No reescribe: una mitad ya declarada con otro valor, o un envio que no anade nada, es 409 ELIGIBILITY_ALREADY_DECLARED, porque cambiar la fecha o el estado despues de comprar seria volverse elegible a posteriori. Al declarar el estado exige los consentimientos de `required_consents` (GET /config). Una fecha sin estado, en una cuenta que no lo declaro, es 422 ELIGIBILITY_STATE_REQUIRED.",
         "operationId": "declareParticipantEligibility",
         "requestBody": {
           "content": {
@@ -36894,9 +37721,6 @@
                   }
                 },
                 "required": [
-                  "date_of_birth",
-                  "residence_state",
-                  "consents",
                   "language"
                 ],
                 "type": "object"
@@ -36912,6 +37736,9 @@
                 "schema": {
                   "additionalProperties": false,
                   "properties": {
+                    "date_of_birth_declared": {
+                      "type": "boolean"
+                    },
                     "declared": {
                       "type": "boolean"
                     },
@@ -36924,11 +37751,16 @@
                           "type": "null"
                         }
                       ]
+                    },
+                    "residence_state_declared": {
+                      "type": "boolean"
                     }
                   },
                   "required": [
                     "declared",
-                    "declared_at"
+                    "declared_at",
+                    "residence_state_declared",
+                    "date_of_birth_declared"
                   ],
                   "type": "object"
                 }
@@ -37059,7 +37891,7 @@
             "sessionCookie": []
           }
         ],
-        "summary": "Declarar fecha de nacimiento y estado en una cuenta anterior a DEC-067.",
+        "summary": "Declarar lo que falte: el estado, la fecha de nacimiento o las dos (DEC-067, DEC-089).",
         "tags": [
           "portal"
         ],

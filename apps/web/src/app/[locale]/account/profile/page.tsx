@@ -8,7 +8,6 @@ import { ApiErrorState } from "@/components/api-error-state";
 import { UnverifiedEmailNotice } from "@/components/email-verification";
 import { ProfileForm } from "@/components/profile-form";
 import { formatZonedDate } from "@/i18n/formatters";
-import { Link } from "@/i18n/navigation";
 import { routing } from "@/i18n/routing";
 import { loadParticipant } from "@/lib/participant-server";
 
@@ -81,21 +80,13 @@ export default async function AccountProfilePage({
 
         <ProfileForm participant={participant} locale={locale} />
 
+        {/* DEC-089: la tienda entra con codigo; no hay contrasena que cambiar. */}
         <Card elevation="raised" padding="lg" className="max-w-[32rem]">
           <CardTitle as="h2" size="sm">
             {t("securityHeading")}
           </CardTitle>
 
           <p className="mt-s3 text-body-sm text-text-muted">{t("securityBody")}</p>
-
-          <div className="mt-s4">
-            <Link
-              href="/account/forgot-password"
-              className="text-body-sm font-medium text-brand underline underline-offset-4"
-            >
-              {t("changePassword")}
-            </Link>
-          </div>
         </Card>
 
         {createdAt === null ? null : (

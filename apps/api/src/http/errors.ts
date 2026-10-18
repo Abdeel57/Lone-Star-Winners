@@ -163,6 +163,32 @@ export const ApiErrors = {
   smsCodeInvalid: (): ApiError => new ApiError({ statusCode: 422, code: "SMS_CODE_INVALID" }),
   botCheckFailed: (): ApiError => new ApiError({ statusCode: 422, code: "BOT_CHECK_FAILED" }),
 
+  /**
+   * Entrar sin contrasena (DEC-089).
+   *
+   * Ninguno revela si una cuenta existe: el codigo se envia exista o no, y lo
+   * que pasa despues de acertarlo solo lo ve quien demostro controlar el
+   * contacto. `SIGN_IN_CODE_EXPIRED` se separa de `SIGN_IN_CODE_INVALID` porque
+   * la pantalla aconseja otra cosa ("pide uno nuevo" frente a "revisalo"), y
+   * quien teclea el codigo ya lo tiene: no se le revela nada.
+   */
+  contactInvalid: (): ApiError => new ApiError({ statusCode: 422, code: "CONTACT_INVALID" }),
+  signInCodeInvalid: (): ApiError =>
+    new ApiError({ statusCode: 422, code: "SIGN_IN_CODE_INVALID" }),
+  signInCodeExpired: (): ApiError =>
+    new ApiError({ statusCode: 410, code: "SIGN_IN_CODE_EXPIRED" }),
+  /** El permiso de alta caduco, ya se uso o no llego. Se vuelve a empezar. */
+  signupExpired: (): ApiError => new ApiError({ statusCode: 410, code: "SIGNUP_EXPIRED" }),
+  /**
+   * El contacto es de una cuenta de PERSONAL. El personal entra por el panel,
+   * con contrasena y segundo factor (DEC-006): un codigo no le abre nada.
+   */
+  staffMustUsePanel: (): ApiError =>
+    new ApiError({ statusCode: 403, code: "STAFF_ACCOUNT_USE_PANEL" }),
+  /** La cuenta existe pero no puede entrar (suspendida, cerrada o expediente postal). */
+  accountUnavailable: (): ApiError =>
+    new ApiError({ statusCode: 403, code: "ACCOUNT_UNAVAILABLE" }),
+
   /** DEC-067: falta aceptar un documento, o se acepto una version que ya no es la vigente. */
   consentRequired: (missing: readonly string[]): ApiError =>
     new ApiError({ statusCode: 422, code: "CONSENT_REQUIRED", details: { missing } }),
@@ -170,6 +196,10 @@ export const ApiErrors = {
   /** DEC-067: la declaracion de elegibilidad ya existe y no se reescribe. */
   eligibilityAlreadyDeclared: (): ApiError =>
     new ApiError({ statusCode: 409, code: "ELIGIBILITY_ALREADY_DECLARED" }),
+
+  /** DEC-089: una fecha de nacimiento sin estado, en una cuenta que no lo declaro. */
+  eligibilityStateRequired: (): ApiError =>
+    new ApiError({ statusCode: 422, code: "ELIGIBILITY_STATE_REQUIRED" }),
 
   notFound: (): ApiError => new ApiError({ statusCode: 404, code: "NOT_FOUND" }),
 

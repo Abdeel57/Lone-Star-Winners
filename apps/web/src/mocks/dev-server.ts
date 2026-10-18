@@ -613,6 +613,31 @@ function emailFrom(rawBody: string): string | null {
   return typeof value === "string" && value.length > 0 ? value.toLowerCase() : null;
 }
 
+/** DEC-089: contacto del cuerpo de `code/start` o `code/verify`, o `null`. */
+function contactFrom(rawBody: string): string | null {
+  if (rawBody.length === 0) return null;
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(rawBody);
+  } catch {
+    return null;
+  }
+
+  if (typeof parsed !== "object" || parsed === null) return null;
+  if (!("contact" in parsed)) return null;
+
+  const { contact: value } = parsed;
+  return typeof value === "string" && value.trim().length > 0 ? value.trim().toLowerCase() : null;
+}
+
+/**
+ * DEC-089: cookie del permiso de alta. Su valor no significa nada aqui: el
+ * servidor de pruebas no comprueba codigos, solo recorre el flujo.
+ */
+const SIGNUP_COOKIE_SET = `${DEV_SESSION_COOKIE}_signup=1; Path=/; Max-Age=1800; HttpOnly; SameSite=Lax`;
+const SIGNUP_COOKIE_CLEAR = `${DEV_SESSION_COOKIE}_signup=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax`;
+
 function staffSessionForEmail(email: string | null): SessionState | null {
   if (email === null) return null;
   return STAFF_SESSIONS.get(email) ?? null;
@@ -899,6 +924,31 @@ function resolveIdentity(
     // El alta es de participante siempre. No existe alta de personal por aqui:
     // el primer administrador se crea por CLI (DEC-045).
     return { body: activeSession, setCookie: SESSION_COOKIE_SET };
+  }
+
+  /*
+   * DEC-089: entrar sin contrasena. Cualquier codigo vale -aqui no se envia
+   * nada-, y un contacto que empiece por `nuevo` o `new` hace de "sin cuenta"
+   * para poder ver el paso de nombre y estado.
+   */
+  if (method === "POST" && pathname === API_PATHS.authCodeStart) {
+    const contact = contactFrom(rawBody) ?? "";
+    return { body: { acknowledged: true, channel: contact.includes("@") ? "EMAIL" : "SMS" } };
+  }
+
+  if (method === "POST" && pathname === API_PATHS.authCodeVerify) {
+    const contact = contactFrom(rawBody) ?? "";
+    if (contact.startsWith("nuevo") || contact.startsWith("new")) {
+      return { body: { status: "PROFILE_REQUIRED", session: null }, setCookie: SIGNUP_COOKIE_SET };
+    }
+    return {
+      body: { status: "SIGNED_IN", session: activeSession },
+      setCookie: SESSION_COOKIE_SET,
+    };
+  }
+
+  if (method === "POST" && pathname === API_PATHS.authCodeRegister) {
+    return { body: activeSession, setCookie: [SESSION_COOKIE_SET, SIGNUP_COOKIE_CLEAR] };
   }
 
   if (method === "POST" && pathname === API_PATHS.authLogout) {

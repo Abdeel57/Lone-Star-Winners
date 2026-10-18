@@ -84,8 +84,11 @@ export const US_RESIDENCE_CODES = [
 export type UsResidenceCode = (typeof US_RESIDENCE_CODES)[number];
 
 export interface EligibilityDeclaration {
-  /** `YYYY-MM-DD`. */
-  readonly dateOfBirth: string;
+  /**
+   * `YYYY-MM-DD`, o `null` si todavia no se declaro. DEC-089: el alta solo pide
+   * el estado, y la fecha se pide en el checkout con la puerta de edad encendida.
+   */
+  readonly dateOfBirth: string | null;
   readonly residenceState: string;
 }
 
@@ -189,6 +192,9 @@ export function evaluateEligibility(input: {
 
   if (switches.ageGate) {
     if (rules.minimumAge === null) throw new EligibilityConfigError("minimum_age");
+    // DEC-089: sin fecha de nacimiento no se puede comprobar la edad, igual que
+    // sin declaracion. No es un fallo: la compra queda sin participaciones.
+    if (declaration.dateOfBirth === null) return { eligible: false, reason: "UNDECLARED" };
     const required = Math.max(rules.minimumAge, rules.ageOfMajorityByState[state] ?? 0);
     const age = ageOn(declaration.dateOfBirth, localDateIn(input.at, input.timeZone));
     if (age < required) return { eligible: false, reason: "UNDER_AGE" };

@@ -12,8 +12,9 @@
  * SIN DATOS DEL USUARIO DENTRO
  *
  *   Ni el nombre ni nada que haya tecleado la persona: lo unico variable es el
- *   enlace, que construye la API. Asi no hay nada que escapar y no hay forma de
- *   meter HTML en un correo que sale con el remitente del negocio.
+ *   enlace o el codigo (DEC-089), que construye la API. Asi no hay nada que
+ *   escapar y no hay forma de meter HTML en un correo que sale con el remitente
+ *   del negocio.
  */
 
 export type EmailLocale = "en-US" | "es-US";
@@ -174,4 +175,85 @@ export function renderVerificationEmail(locale: EmailLocale, link: string): Rend
 
 export function renderPasswordResetEmail(locale: EmailLocale, link: string): RenderedEmail {
   return render(PASSWORD_RESET[locale], link, locale === "es-US" ? "es" : "en");
+}
+
+// ---------------------------------------------------------------------------
+// DEC-089: codigo para entrar sin contrasena
+// ---------------------------------------------------------------------------
+
+interface CodeCopy {
+  readonly subject: (code: string) => string;
+  readonly heading: string;
+  readonly body: string;
+  readonly expiry: string;
+  readonly ignore: string;
+}
+
+/**
+ * El codigo va tambien en el asunto: en el telefono se lee en la notificacion
+ * sin abrir el correo, que es la mitad de lo que hace rapida la entrada. Es lo
+ * mismo que ensena un SMS.
+ */
+const SIGN_IN_CODE: Readonly<Record<EmailLocale, CodeCopy>> = {
+  "en-US": {
+    subject: (code) => `${code} is your Lone Star Winners code`,
+    heading: "Your sign-in code",
+    body: "Enter this code on Lone Star Winners to sign in or create your account.",
+    expiry: "It expires in 10 minutes and can be used once. Never share it with anyone.",
+    ignore:
+      "If you didn't ask for it, you can ignore this email. Nobody can sign in without the code.",
+  },
+  "es-US": {
+    subject: (code) => `${code} es tu código de Lone Star Winners`,
+    heading: "Tu código para entrar",
+    body: "Escribe este código en Lone Star Winners para entrar o crear tu cuenta.",
+    expiry: "Vence en 10 minutos y solo se puede usar una vez. No se lo des a nadie.",
+    ignore: "Si no lo pediste, puedes ignorar este correo. Nadie puede entrar sin el código.",
+  },
+};
+
+/** El codigo son seis digitos que genera la API: no lleva nada que escapar, pero se escapa. */
+export function renderSignInCodeEmail(locale: EmailLocale, code: string): RenderedEmail {
+  const copy = SIGN_IN_CODE[locale];
+  const lang = locale === "es-US" ? "es" : "en";
+  const shown = escapeHtml(code);
+
+  const html = `<!doctype html>
+<html lang="${lang}">
+  <body style="margin:0;padding:0;background:#f6f4ef;font-family:'Segoe UI',Helvetica,Arial,sans-serif;color:#14120e;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f6f4ef;padding:24px 12px;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#ffffff;border-top:4px solid #b8860b;">
+            <tr>
+              <td style="padding:28px;">
+                <p style="margin:0 0 4px;font-size:12px;letter-spacing:2px;text-transform:uppercase;color:#b8860b;font-weight:700;">Lone Star Winners</p>
+                <h1 style="margin:0 0 16px;font-size:22px;line-height:1.25;">${copy.heading}</h1>
+                <p style="margin:0 0 20px;font-size:16px;line-height:1.5;">${copy.body}</p>
+                <p style="margin:0 0 20px;font-size:34px;line-height:1.2;font-weight:700;letter-spacing:8px;font-family:Menlo,Consolas,monospace;">${shown}</p>
+                <p style="margin:0 0 8px;font-size:14px;line-height:1.5;color:#5d574b;">${copy.expiry}</p>
+                <p style="margin:0;font-size:14px;line-height:1.5;color:#5d574b;">${copy.ignore}</p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`;
+
+  const text = [
+    copy.heading,
+    "",
+    copy.body,
+    "",
+    code,
+    "",
+    copy.expiry,
+    copy.ignore,
+    "",
+    "Lone Star Winners",
+  ].join("\n");
+
+  return { subject: copy.subject(code), html, text };
 }

@@ -64,6 +64,26 @@ describe("evaluateEligibility (DEC-067)", () => {
     });
   });
 
+  it("DEC-089: con el estado y sin fecha, la puerta de edad no deja pasar", () => {
+    const stateOnly = { dateOfBirth: null, residenceState: "TX" };
+    const day = noonChicago("2026-10-10");
+
+    expect(verdict(stateOnly, day)).toEqual({ eligible: false, reason: "UNDECLARED" });
+    expect(verdict(stateOnly, day, { ageGate: true, stateEnforcement: false })).toEqual({
+      eligible: false,
+      reason: "UNDECLARED",
+    });
+    // Sin la puerta de edad, el estado basta.
+    expect(verdict(stateOnly, day, { ageGate: false, stateEnforcement: true })).toEqual({
+      eligible: true,
+    });
+    // Y un estado excluido se rechaza por el estado, haya fecha o no.
+    expect(verdict({ dateOfBirth: null, residenceState: "NY" }, day)).toEqual({
+      eligible: false,
+      reason: "EXCLUDED_STATE",
+    });
+  });
+
   it("un estado excluido por las reglas no participa", () => {
     for (const state of ["AK", "FL", "HI", "NY", "ny"]) {
       expect(

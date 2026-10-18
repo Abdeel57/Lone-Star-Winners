@@ -1345,6 +1345,27 @@ export interface AcknowledgedResponse {
   readonly acknowledged: boolean;
 }
 
+/**
+ * Copia literal. `POST /auth/code/start` (DEC-089): por donde salio el codigo.
+ * No dice si el contacto tiene cuenta.
+ */
+export interface SignInCodeSent {
+  readonly acknowledged: true;
+  readonly channel: "EMAIL" | "SMS";
+}
+
+/**
+ * Copia literal. `POST /auth/code/verify` (DEC-089).
+ *
+ * `SIGNED_IN` trae la sesion ya abierta. `PROFILE_REQUIRED` trae `null`: el
+ * contacto no tenia cuenta y falta el alta (`POST /auth/code/register`), con la
+ * prueba en una cookie `httpOnly` que esta capa no lee.
+ */
+export interface SignInCodeVerified {
+  readonly status: "SIGNED_IN" | "PROFILE_REQUIRED";
+  readonly session: SessionState | null;
+}
+
 // ---------------------------------------------------------------------------
 // Portal del participante (seccion 6 de docs/API_CONTRACT.md)
 // ---------------------------------------------------------------------------

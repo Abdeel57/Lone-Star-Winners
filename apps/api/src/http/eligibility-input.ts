@@ -1,7 +1,7 @@
 /**
  * Validacion de la declaracion de elegibilidad y de los consentimientos
- * (DEC-067). La comparten el alta (`POST /auth/register`) y la declaracion de
- * una cuenta anterior (`PUT /me/eligibility`).
+ * (DEC-067). La comparten las altas (`POST /auth/register` y, sin contrasena,
+ * `POST /auth/code/register`, DEC-089) y la declaracion de `PUT /me/eligibility`.
  */
 
 import { z } from "zod";
@@ -20,26 +20,36 @@ export const dateOfBirthSchema = z.iso.date();
 
 export const residenceStateSchema = z.enum(US_RESIDENCE_CODES);
 
+type ConsentsInput = readonly { readonly key: string; readonly version: string }[];
+
 /**
- * Comprueba lo que el esquema no puede: que la fecha no sea futura -ni anterior
- * a la que admite la CHECK de 0034- y que lleguen TODOS los consentimientos con
- * la version vigente. Devuelve los que se guardan: los de `REQUIRED_CONSENTS`,
- * nunca una clave que haya inventado el cliente.
+ * Lo que el esquema no puede comprobar de la fecha: que no sea futura ni
+ * anterior a la que admite la CHECK de 0034.
  */
-export function assertDeclaration(
-  body: {
-    readonly date_of_birth: string;
-    readonly consents: readonly { readonly key: string; readonly version: string }[];
-  },
-  now: Date,
-): ConsentAcceptanceInput[] {
+export function assertDateOfBirth(dateOfBirth: string, now: Date): void {
   const today = now.toISOString().slice(0, 10);
-  if (body.date_of_birth > today || body.date_of_birth <= "1900-01-01") {
+  if (dateOfBirth > today || dateOfBirth <= "1900-01-01") {
     throw ApiErrors.validationFailed([{ path: "date_of_birth", code: "out_of_range" }]);
   }
+}
 
-  const missing = missingConsents(body.consents);
+/**
+ * Que lleguen TODOS los consentimientos con la version vigente. Devuelve los que
+ * se guardan: los de `REQUIRED_CONSENTS`, nunca una clave que haya inventado el
+ * cliente.
+ */
+export function assertConsents(consents: ConsentsInput): ConsentAcceptanceInput[] {
+  const missing = missingConsents(consents);
   if (missing.length > 0) throw ApiErrors.consentRequired(missing);
 
   return REQUIRED_CONSENTS.map((consent) => ({ key: consent.key, version: consent.version }));
+}
+
+/** La fecha y los consentimientos del alta con contrasena (DEC-067). */
+export function assertDeclaration(
+  body: { readonly date_of_birth: string; readonly consents: ConsentsInput },
+  now: Date,
+): ConsentAcceptanceInput[] {
+  assertDateOfBirth(body.date_of_birth, now);
+  return assertConsents(body.consents);
 }

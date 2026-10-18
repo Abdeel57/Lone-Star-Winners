@@ -152,7 +152,7 @@
     "VERIFICATION_TOKEN_INVALID": "This verification link is not valid. Please ask for a new one.",
     "VERIFICATION_TOKEN_EXPIRED": "This verification link has expired. Please ask for a new one.",
     "MFA_CODE_INVALID": "That code is not valid. Codes expire quickly and each one works only once.",
-    "SMS_NOT_CONFIGURED": "Signing up with a mobile number isn't available yet. Please use your email for now.",
+    "SMS_NOT_CONFIGURED": "We can't send text messages right now. Please use your email.",
     "PHONE_INVALID": "That number isn't valid. Enter a 10-digit US mobile number.",
     "PHONE_ALREADY_REGISTERED": "There's already an account with that mobile number. Sign in or reset your password.",
     "SMS_CODE_INVALID": "That code isn't valid or has expired. Ask for a new one.",
@@ -176,7 +176,14 @@
     "RULES_VERSION_NOT_ACTIVE": "This promotion has no active rules version.",
     "CONFIG_JSON_INVALID": "This JSON does not parse. Check the highlighted field.",
     "MULTIPLIER_INVALID": "The multiplier has to be a whole number greater than zero.",
-    "ELIGIBILITY_ALREADY_DECLARED": "You already confirmed your date of birth and state. If they are wrong, write to us at info@LoneStarWinners.com."
+    "ELIGIBILITY_ALREADY_DECLARED": "You already confirmed your date of birth and state. If they are wrong, write to us at info@LoneStarWinners.com.",
+    "ELIGIBILITY_STATE_REQUIRED": "Before your date of birth, we need to know which state you live in.",
+    "CONTACT_INVALID": "Enter a valid email or a 10-digit US mobile number.",
+    "SIGN_IN_CODE_INVALID": "That code isn't right. Check it and try again.",
+    "SIGN_IN_CODE_EXPIRED": "That code no longer works. Ask for a new one.",
+    "SIGNUP_EXPIRED": "Too much time has passed since you entered the code. Start again with your email or mobile number.",
+    "STAFF_ACCOUNT_USE_PANEL": "This is a staff account. Sign in from the admin panel.",
+    "ACCOUNT_UNAVAILABLE": "This account can't sign in right now. Write to us at info@LoneStarWinners.com."
   },
   "availability": {
     "IN_STOCK": "In stock",
@@ -708,6 +715,28 @@
       "returnNotice": "You will come back to the page you were on once you are signed in.",
       "lockedRetry": "You can try again in about {minutes} minutes."
     },
+    "code": {
+      "loginTitle": "Sign in or create your account",
+      "loginIntro": "We'll send you a code to sign in. No password needed.",
+      "registerIntro": "Just your email or mobile number, your name and your state. We send you a code and you're in.",
+      "contactHint": "If you use your mobile number, it must be a US number, for example (512) 555-0100.",
+      "smsDisclosure": "If you enter a mobile number, we'll send you a text message with a code. Message and data rates may apply.",
+      "send": "Continue",
+      "sentEmailTitle": "Check your email",
+      "sentEmailBody": "We sent a 6-digit code to {contact}. If you don't see it, check your spam folder.",
+      "sentSmsTitle": "Check your messages",
+      "sentSmsBody": "We sent a code by text message to {contact}.",
+      "codeLabel": "Code",
+      "codeHint": "It expires in 10 minutes.",
+      "verify": "Sign in",
+      "resend": "Send another code",
+      "resent": "We sent you a new code. Use the most recent one.",
+      "changeContact": "Use a different email or mobile number",
+      "profileTitle": "Almost done",
+      "profileIntro": "It's your first time. Tell us your name and your state to create your account.",
+      "nameHint": "Your first and last name.",
+      "create": "Create my account"
+    },
     "forgot": {
       "title": "Reset your password",
       "intro": "Enter the email address on your account. If it matches an account, we send a link to set a new password.",
@@ -781,7 +810,14 @@
       "TERMS": "I accept the Terms & Conditions.",
       "PRIVACY": "I have read the Privacy Policy.",
       "readDocuments": "You can read them here:",
-      "officialRulesLink": "Official Rules"
+      "officialRulesLink": "Official Rules",
+      "agreeAll": "I have read and accept {documents}.",
+      "documents": {
+        "OFFICIAL_RULES": "the Official Rules",
+        "TERMS": "the Terms and Conditions",
+        "PRIVACY": "the Privacy Policy",
+        "fallback": "the other conditions in the Official Rules"
+      }
     },
     "unverified": {
       "title": "Your email is not verified yet",
@@ -931,9 +967,8 @@
       "save": "Save changes",
       "saved": "Your changes are saved.",
       "memberSince": "Account created on {date}",
-      "securityHeading": "Password",
-      "securityBody": "To change your password, use the same link we send for a forgotten password.",
-      "changePassword": "Send me a link"
+      "securityHeading": "How you sign in",
+      "securityBody": "You sign in with a code we send to your email or mobile number. No password needed."
     }
   },
   "entryType": {
@@ -2097,6 +2132,7 @@
   "eligibility": {
     "title": "Before you pay, confirm your details",
     "body": "To check whether you can take part in the sweepstakes under the Official Rules, we need your date of birth and your state. We only ask once.",
+    "bodyDateOfBirth": "To check whether you can take part in the sweepstakes under the Official Rules, we need your date of birth. We only ask once.",
     "submit": "Save and continue"
   },
   "usStates": {

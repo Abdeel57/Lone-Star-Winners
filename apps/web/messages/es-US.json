@@ -152,7 +152,7 @@
     "VERIFICATION_TOKEN_INVALID": "Este enlace de verificación no es válido. Pide uno nuevo.",
     "VERIFICATION_TOKEN_EXPIRED": "Este enlace de verificación ha caducado. Pide uno nuevo.",
     "MFA_CODE_INVALID": "Ese código no es válido. Los códigos caducan enseguida y cada uno sirve una sola vez.",
-    "SMS_NOT_CONFIGURED": "El registro con celular todavía no está disponible. Usa tu correo por ahora.",
+    "SMS_NOT_CONFIGURED": "Por ahora no podemos enviar mensajes de texto. Usa tu correo.",
     "PHONE_INVALID": "Ese número no es válido. Escribe un celular de EE. UU. de 10 dígitos.",
     "PHONE_ALREADY_REGISTERED": "Ya existe una cuenta con ese celular. Inicia sesión o recupera tu contraseña.",
     "SMS_CODE_INVALID": "Ese código no es válido o ya caducó. Pide uno nuevo.",
@@ -176,7 +176,14 @@
     "RULES_VERSION_NOT_ACTIVE": "Esta promoción no tiene versión de reglas activa.",
     "CONFIG_JSON_INVALID": "Este JSON no se puede leer. Revisa el campo señalado.",
     "MULTIPLIER_INVALID": "El multiplicador tiene que ser un entero mayor que cero.",
-    "ELIGIBILITY_ALREADY_DECLARED": "Ya habías confirmado tu fecha de nacimiento y tu estado. Si hay un error en esos datos, escríbenos a info@LoneStarWinners.com."
+    "ELIGIBILITY_ALREADY_DECLARED": "Ya habías confirmado tu fecha de nacimiento y tu estado. Si hay un error en esos datos, escríbenos a info@LoneStarWinners.com.",
+    "ELIGIBILITY_STATE_REQUIRED": "Antes de tu fecha de nacimiento necesitamos saber en qué estado vives.",
+    "CONTACT_INVALID": "Escribe un correo válido o un celular de EE. UU. de 10 dígitos.",
+    "SIGN_IN_CODE_INVALID": "Ese código no es correcto. Revísalo e inténtalo de nuevo.",
+    "SIGN_IN_CODE_EXPIRED": "Ese código ya no sirve. Pide uno nuevo.",
+    "SIGNUP_EXPIRED": "Pasó demasiado tiempo desde que escribiste el código. Vuelve a empezar con tu correo o tu celular.",
+    "STAFF_ACCOUNT_USE_PANEL": "Esta cuenta es del personal. Entra desde el panel de administración.",
+    "ACCOUNT_UNAVAILABLE": "Esta cuenta no puede entrar ahora. Escríbenos a info@LoneStarWinners.com."
   },
   "availability": {
     "IN_STOCK": "Disponible",
@@ -708,6 +715,28 @@
       "returnNotice": "Volverás a la página en la que estabas en cuanto inicies sesión.",
       "lockedRetry": "Puedes volver a intentarlo dentro de unos {minutes} minutos."
     },
+    "code": {
+      "loginTitle": "Entra o crea tu cuenta",
+      "loginIntro": "Te enviamos un código para entrar. No necesitas contraseña.",
+      "registerIntro": "Solo tu correo o tu celular, tu nombre y tu estado. Te enviamos un código y listo.",
+      "contactHint": "Si usas tu celular, que sea de EE. UU., por ejemplo (512) 555-0100.",
+      "smsDisclosure": "Si escribes un celular, te enviaremos un mensaje de texto con un código. Pueden aplicar tarifas de mensajes y datos.",
+      "send": "Continuar",
+      "sentEmailTitle": "Revisa tu correo",
+      "sentEmailBody": "Enviamos un código de 6 dígitos a {contact}. Si no lo ves, mira en la carpeta de correo no deseado.",
+      "sentSmsTitle": "Revisa tus mensajes",
+      "sentSmsBody": "Enviamos un código por mensaje de texto a {contact}.",
+      "codeLabel": "Código",
+      "codeHint": "Vence en 10 minutos.",
+      "verify": "Entrar",
+      "resend": "Enviar otro código",
+      "resent": "Te enviamos un código nuevo. Usa el más reciente.",
+      "changeContact": "Usar otro correo o celular",
+      "profileTitle": "Ya casi está",
+      "profileIntro": "Es tu primera vez. Dinos tu nombre y tu estado para crear tu cuenta.",
+      "nameHint": "Tu nombre y apellido.",
+      "create": "Crear mi cuenta"
+    },
     "forgot": {
       "title": "Restablecer la contraseña",
       "intro": "Escribe el correo de tu cuenta. Si corresponde a una cuenta, enviamos un enlace para fijar una contraseña nueva.",
@@ -781,7 +810,14 @@
       "TERMS": "Acepto los Términos y condiciones.",
       "PRIVACY": "He leído la Política de privacidad.",
       "readDocuments": "Puedes leerlos aquí:",
-      "officialRulesLink": "Reglas Oficiales"
+      "officialRulesLink": "Reglas Oficiales",
+      "agreeAll": "He leído y acepto {documents}.",
+      "documents": {
+        "OFFICIAL_RULES": "las Reglas Oficiales",
+        "TERMS": "los Términos y condiciones",
+        "PRIVACY": "la Política de privacidad",
+        "fallback": "las demás condiciones de las Reglas Oficiales"
+      }
     },
     "unverified": {
       "title": "Tu correo todavía no está verificado",
@@ -931,9 +967,8 @@
       "save": "Guardar los cambios",
       "saved": "Tus cambios están guardados.",
       "memberSince": "Cuenta creada el {date}",
-      "securityHeading": "Contraseña",
-      "securityBody": "Para cambiar tu contraseña, usa el mismo enlace que enviamos cuando se olvida.",
-      "changePassword": "Enviarme un enlace"
+      "securityHeading": "Cómo entras",
+      "securityBody": "Entras con un código que te enviamos a tu correo o a tu celular. No necesitas contraseña."
     }
   },
   "entryType": {
@@ -2097,6 +2132,7 @@
   "eligibility": {
     "title": "Antes de pagar, confirma tus datos",
     "body": "Para saber si puedes participar en el sorteo según las Reglas Oficiales necesitamos tu fecha de nacimiento y tu estado. Solo te lo pedimos una vez.",
+    "bodyDateOfBirth": "Para saber si puedes participar en el sorteo según las Reglas Oficiales necesitamos tu fecha de nacimiento. Solo te la pedimos una vez.",
     "submit": "Guardar y continuar"
   },
   "usStates": {

@@ -401,6 +401,10 @@ jobs:
       STEP_UP_MAX_AGE_SECONDS: "300"
       PAYMENT_PROVIDER: none
       DEFAULT_CURRENCY: USD
+      # DEC-089: los participantes entran con un codigo. `console` no envia nada
+      # y acepta siempre 000000; el esquema de entorno lo prohibe en produccion.
+      # El e2e no tiene buzon de correo, asi que entra por celular.
+      SMS_PROVIDER: console
       # Obligatoria en el esquema de arranque de apps/api (enum trace..fatal).
       # Sin ella la API no levanta y Playwright falla con "Process from
       # config.webServer was not able to start" sin mas pista que ese texto.

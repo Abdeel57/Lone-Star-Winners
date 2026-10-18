@@ -3,18 +3,20 @@ import { hasLocale } from "next-intl";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 
 import { AuthPanel } from "@/components/auth-panel";
-import { RegisterForm } from "@/components/register-form";
-import { Link, redirect } from "@/i18n/navigation";
+import { SignInFlow } from "@/components/sign-in-flow";
+import { redirect } from "@/i18n/navigation";
 import { routing } from "@/i18n/routing";
 import { fetchSiteConfig, type ConsentRequirement } from "@/lib/api";
 import { returnPathFrom } from "@/lib/form-input";
 import { loadSession } from "@/lib/participant-server";
-import { passwordMinimumFrom } from "@/lib/password-policy";
 
 export const dynamic = "force-dynamic";
 
 /**
  * Alta de participante.
+ *
+ * DEC-089: es el mismo flujo con codigo que `/account/login`, con otro titulo.
+ * Si el contacto ya tenia cuenta, la persona entra en ella en vez de crear otra.
  *
  * LOS CONSENTIMIENTOS SE LEEN EN SERVIDOR, en la misma peticion que el render.
  * Es el mismo criterio que DEC-013 impone a los feature flags y por la misma
@@ -61,31 +63,8 @@ export default async function RegisterPage({
     : [];
 
   return (
-    <AuthPanel
-      title={t("register.title")}
-      intro={t("register.intro")}
-      footer={
-        <p>
-          {t("register.alreadyHaveAccount")}{" "}
-          <Link
-            href={
-              returnPath === null
-                ? "/account/login"
-                : `/account/login?next=${encodeURIComponent(returnPath)}`
-            }
-            className="font-medium text-brand underline underline-offset-4"
-          >
-            {t("register.signInLink")}
-          </Link>
-        </p>
-      }
-    >
-      <RegisterForm
-        locale={locale}
-        consents={consents}
-        returnPath={returnPath}
-        passwordMinimum={passwordMinimumFrom(configResult)}
-      />
+    <AuthPanel title={t("register.title")} intro={t("code.registerIntro")}>
+      <SignInFlow locale={locale} consents={consents} returnPath={returnPath} />
     </AuthPanel>
   );
 }

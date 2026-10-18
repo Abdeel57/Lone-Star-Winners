@@ -5,16 +5,17 @@ import { revalidatePath } from "next/cache";
 import { FALLBACK_LOCALE, localeTag, type Locale } from "@/i18n/locales";
 import { redirect } from "@/i18n/navigation";
 import {
-  login,
   logout,
-  register,
+  registerWithSignInCode,
   requestPasswordReset,
   resendEmailVerification,
   resetPassword,
   resetPasswordWithSms,
   startPhoneVerification,
+  startSignInCode,
   verifyEmail,
   verifyMfa,
+  verifySignInCode,
 } from "@/lib/api";
 
 import {
@@ -25,8 +26,8 @@ import {
   type ActionResult,
 } from "./action-result";
 import {
+  agreementFrom,
   botCheckTokenFrom,
-  consentsFrom,
   localeFrom,
   returnPathFrom,
   secretFrom,
@@ -58,6 +59,15 @@ import { mutableSession } from "./session-server";
  * Official Rules, y duplicarlas aqui garantizaria que un dia digan cosas
  * distintas. El backend revalida todo y es quien decide.
  *
+ * LA TIENDA ENTRA CON CODIGO (DEC-089)
+ * ------------------------------------
+ * Un participante entra o se da de alta con un codigo que le llega al correo o
+ * al celular: `sendSignInCodeAction`, `verifySignInCodeAction` y
+ * `completeSignupAction`. Ya no hay formulario de contrasena en la tienda. Las
+ * acciones de contrasena que quedan son las de restablecerla, que usa el
+ * personal; el panel inicia sesion con sus propias acciones
+ * (`lib/admin/actions.ts`).
+ *
  * POR QUE SERVER ACTIONS Y NO `fetch` DESDE EL NAVEGADOR
  * ------------------------------------------------------
  * El mismo razonamiento que en el carrito, y con una razon mas: una contrasena
@@ -71,111 +81,125 @@ function destinationFrom(formData: FormData): string {
 }
 
 /**
- * Correo o celular, a partir de lo que se tecleo en un unico campo (DEC-060).
+ * Paso 1 del acceso sin contrasena (DEC-089): enviar el codigo.
  *
- * La arroba decide, y nada mas: un correo sin arroba no existe y un telefono
- * con arroba tampoco. La FORMA del celular no se valida aqui; la decide la API
- * (`PHONE_INVALID`), para que no haya dos reglas de que es un numero valido.
+ * Un solo campo, correo o celular; la arroba la mira la API, que es la unica
+ * que decide que es un correo o un numero valido. El contacto vuelve al
+ * formulario por el estado del cliente, no por esta accion: el resultado no
+ * lleva datos (ver `ActionResult`).
  */
-function identifierFrom(value: string): { readonly email: string } | { readonly phone: string } {
-  return value.includes("@") ? { email: value } : { phone: value };
-}
-
-/** Alta de participante. */
-export async function registerAction(
+export async function sendSignInCodeAction(
   _previous: ActionResult,
   formData: FormData,
 ): Promise<ActionResult> {
   const locale = localeFrom(formData);
   if (locale === null) return invalid("VALIDATION_FAILED");
 
-  // DEC-060: el alta es con correo o con celular + codigo SMS.
-  const byPhone = textFrom(formData, "method") === "phone";
+  const contact = textFrom(formData, "contact");
+  if (contact === null) return invalid("FIELD_REQUIRED", "contact");
 
-  const email = byPhone ? null : textFrom(formData, "email");
-  if (!byPhone && email === null) return invalid("FIELD_REQUIRED", "email");
+  const token = botCheckTokenFrom(formData);
+  const result = await startSignInCode(
+    { contact, ...(token === undefined ? {} : { bot_check_token: token }) },
+    locale,
+  );
 
-  const phone = byPhone ? textFrom(formData, "phone") : null;
-  if (byPhone && phone === null) return invalid("FIELD_REQUIRED", "phone");
-
-  const smsCode = byPhone ? textFrom(formData, "sms_code") : null;
-  if (byPhone && smsCode === null) return invalid("FIELD_REQUIRED", "sms_code");
-
-  /*
-   * `chosen` y `repeated`, y no `password` y `confirmation`.
-   *
-   * No es cosmetica. `security/detect-possible-timing-attacks` marca cualquier
-   * comparacion contra un identificador llamado `password` o `token`, y el
-   * aviso es correcto EN GENERAL: comparar un secreto con `===` filtra por el
-   * tiempo cuanto coincide. Aqui no aplica -las dos mitades las acaba de
-   * teclear la misma persona en el mismo formulario, y no hay ningun secreto
-   * del servidor en la comparacion-, pero se evita el nombre en vez de
-   * silenciar la regla con un `eslint-disable`, para que la regla siga
-   * vigilando el dia que aparezca una comparacion que si importe.
-   *
-   * El mismo criterio en el resto del archivo: `credential`, `resetToken`,
-   * `verificationToken`.
-   */
-  const chosen = secretFrom(formData, "password");
-  if (chosen === null) return invalid("FIELD_REQUIRED", "password");
-
-  const repeated = secretFrom(formData, "password_confirmation");
-  if (repeated === null) return invalid("FIELD_REQUIRED", "password_confirmation");
-
-  if (chosen !== repeated) {
-    return invalid("PASSWORD_CONFIRMATION_MISMATCH", "password_confirmation");
+  if (!result.ok) {
+    const code = result.error.kind === "http" ? result.error.code : null;
+    const field = code === "CONTACT_INVALID" || code === "PHONE_INVALID" ? "contact" : null;
+    return fromFailure(result.error, field);
   }
 
-  // DEC-067: se piden y se mandan; si con ellos se participa lo decide el backend.
-  const dateOfBirth = textFrom(formData, "date_of_birth");
-  if (dateOfBirth === null) return invalid("FIELD_REQUIRED", "date_of_birth");
+  return SUCCEEDED;
+}
 
+/**
+ * Paso 2 (DEC-089): comprobar el codigo.
+ *
+ * Si el contacto ya tenia cuenta, la sesion llega en la `Set-Cookie` y se sale
+ * de la pantalla. Si no la tenia, la API deja una cookie `httpOnly` de alta
+ * -que esta accion propaga sin leer- y el resultado `ok` le dice al formulario
+ * que pase a pedir nombre y estado.
+ *
+ * Escrita EN POSITIVO (HO-027): dice que hace falta para entrar.
+ */
+export async function verifySignInCodeAction(
+  _previous: ActionResult,
+  formData: FormData,
+): Promise<ActionResult> {
+  const locale = localeFrom(formData);
+  if (locale === null) return invalid("VALIDATION_FAILED");
+
+  const contact = textFrom(formData, "contact");
+  if (contact === null) return invalid("FIELD_REQUIRED", "contact");
+
+  const typed = textFrom(formData, "code");
+  if (typed === null) return invalid("FIELD_REQUIRED", "code");
+
+  const session = await mutableSession();
+  const result = await verifySignInCode(
+    { contact, code: typed.replace(/\s+/g, "") },
+    locale,
+    session,
+  );
+
+  if (!result.ok) {
+    const code = result.error.kind === "http" ? result.error.code : null;
+    return fromFailure(result.error, code === "SIGN_IN_CODE_INVALID" ? "code" : null);
+  }
+
+  const { status, session: opened } = result.data;
+  const signedIn =
+    status === "SIGNED_IN" && opened !== null && opened.authenticated && opened.state === "ACTIVE";
+  if (signedIn) return afterAuthentication(locale, destinationFrom(formData));
+
+  if (status === "PROFILE_REQUIRED") return SUCCEEDED;
+
+  return invalid("MALFORMED_RESPONSE");
+}
+
+/**
+ * Paso 3, solo la primera vez (DEC-089): nombre, estado y la casilla de los
+ * documentos. El contacto ya esta demostrado y viaja en la cookie de alta.
+ */
+export async function completeSignupAction(
+  _previous: ActionResult,
+  formData: FormData,
+): Promise<ActionResult> {
+  const locale = localeFrom(formData);
+  if (locale === null) return invalid("VALIDATION_FAILED");
+
+  const displayName = textFrom(formData, "display_name");
+  if (displayName === null) return invalid("FIELD_REQUIRED", "display_name");
+
+  // DEC-067: se pide y se manda; si con el se participa lo decide el backend.
   const residenceState = textFrom(formData, "residence_state");
   if (residenceState === null) return invalid("FIELD_REQUIRED", "residence_state");
 
-  const consents = consentsFrom(formData);
-  if (consents.missing) return invalid("CONSENT_REQUIRED", "consent");
+  const agreement = agreementFrom(formData);
+  if (agreement.missing) return invalid("CONSENT_REQUIRED", "consent");
 
   const session = await mutableSession();
-  const result = await register(
+  const result = await registerWithSignInCode(
     {
-      ...(phone === null
-        ? { email: email ?? "" }
-        : { phone, sms_code: (smsCode ?? "").replace(/\s+/g, "") }),
-      password: chosen,
-      display_name: textFrom(formData, "display_name"),
-      // El idioma de la cuenta se fija con el que la persona esta usando ahora
-      // mismo, en ETIQUETA BCP-47 (DEC-029). No se pregunta en el alta: ya se
-      // ha respondido eligiendo en que idioma leer la pagina.
-      language_preference: localeTag(locale),
-      consents: consents.accepted,
-      date_of_birth: dateOfBirth,
+      display_name: displayName,
       residence_state: residenceState,
+      consents: agreement.accepted,
+      // El idioma de la cuenta es el que la persona esta usando ahora mismo, en
+      // ETIQUETA BCP-47 (DEC-029). No se pregunta: ya se ha respondido eligiendo
+      // en que idioma leer la pagina.
+      language_preference: localeTag(locale),
     },
     locale,
     session,
   );
 
-  if (!result.ok) return fromFailure(result.error, registerFieldFor(result.error.code));
+  if (!result.ok) {
+    const code = result.error.kind === "http" ? result.error.code : null;
+    return fromFailure(result.error, code === "CONSENT_REQUIRED" ? "consent" : null);
+  }
 
   return afterAuthentication(locale, destinationFrom(formData));
-}
-
-/**
- * Campo al que pertenece un rechazo del alta (seccion 10 del contrato).
- *
- * Los dos codigos hablan de UN campo concreto, y el error se pinta junto a el
- * en vez de en la cabecera del formulario: "esa contrasena es corta" arriba del
- * todo obliga a adivinar cual de los cuatro campos hay que corregir. Cualquier
- * otro fallo -red, servicio, validacion generica- es del formulario entero.
- */
-function registerFieldFor(code: string | null): string | null {
-  if (code === "WEAK_PASSWORD") return "password";
-  if (code === "EMAIL_ALREADY_REGISTERED") return "email";
-  if (code === "SMS_CODE_INVALID") return "sms_code";
-  // DEC-067: el backend revalida los documentos; su rechazo va junto a las casillas.
-  if (code === "CONSENT_REQUIRED") return "consent";
-  return null;
 }
 
 /**
@@ -251,52 +275,6 @@ export async function resetPasswordSmsAction(
   }
 
   return SUCCEEDED;
-}
-
-/** Inicio de sesion. */
-export async function loginAction(
-  _previous: ActionResult,
-  formData: FormData,
-): Promise<ActionResult> {
-  const locale = localeFrom(formData);
-  if (locale === null) return invalid("VALIDATION_FAILED");
-
-  // DEC-060: un solo campo, "correo o celular". `email` se sigue aceptando
-  // para no romper un formulario servido antes de este cambio.
-  const typedIdentifier = textFrom(formData, "identifier") ?? textFrom(formData, "email");
-  if (typedIdentifier === null) return invalid("FIELD_REQUIRED", "identifier");
-
-  const credential = secretFrom(formData, "password");
-  if (credential === null) return invalid("FIELD_REQUIRED", "password");
-
-  const session = await mutableSession();
-  const result = await login(
-    { ...identifierFrom(typedIdentifier), password: credential },
-    locale,
-    session,
-  );
-
-  if (!result.ok) return fromCredentialFailure(result.error, "INVALID_CREDENTIALS");
-
-  /*
-   * UN 200 AQUI NO SIGNIFICA ESTAR DENTRO.
-   *
-   * La seccion 10 publica `MFA_PENDING`: la contrasena era correcta y la sesion
-   * "todavia no vale para nada" salvo para completar el segundo factor. Mandar
-   * a esa persona al portal la llevaria a una pantalla que le dice que inicie
-   * sesion, justo despues de haberla iniciado.
-   *
-   * El destino que pedia se conserva a traves del segundo paso, para no
-   * perderlo por el camino.
-   */
-  if (result.data.state === "MFA_PENDING") {
-    return afterAuthentication(
-      locale,
-      `/account/mfa?next=${encodeURIComponent(destinationFrom(formData))}`,
-    );
-  }
-
-  return afterAuthentication(locale, destinationFrom(formData));
 }
 
 /**

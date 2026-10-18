@@ -98,6 +98,36 @@ export function consentsFrom(formData: FormData): {
 }
 
 /**
+ * DEC-089: UNA casilla para todos los documentos (la pinta `ConsentAgreement`).
+ *
+ * Los pares clave/version viajan igual que en `consentsFrom`, en campos ocultos
+ * `consent` con su `consent_required:<clave>`; la casilla `consents_agreed` los
+ * acepta todos a la vez. Sin marcarla, falta cualquiera que sea obligatorio.
+ */
+export function agreementFrom(formData: FormData): {
+  readonly accepted: readonly ConsentAcceptance[];
+  readonly missing: boolean;
+} {
+  const offered: ConsentAcceptance[] = [];
+  let anyRequired = false;
+
+  for (const raw of formData.getAll("consent")) {
+    if (typeof raw !== "string") continue;
+
+    const separator = raw.indexOf(":");
+    if (separator <= 0) continue;
+
+    const key = raw.slice(0, separator);
+    offered.push({ key, version: raw.slice(separator + 1) });
+    if (formData.get(`consent_required:${key}`) === "true") anyRequired = true;
+  }
+
+  return checkboxFrom(formData, "consents_agreed")
+    ? { accepted: offered, missing: false }
+    : { accepted: [], missing: anyRequired };
+}
+
+/**
  * Token del widget de Cloudflare Turnstile.
  *
  * El widget lo deja en un campo oculto con el nombre que fija Cloudflare

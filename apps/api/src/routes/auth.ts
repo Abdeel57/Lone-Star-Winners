@@ -26,7 +26,18 @@
  *   tiempo de respuesta. Si difirieran, esta ruta seria un oraculo para
  *   enumerar direcciones de correo registradas, que en un sweepstakes es una
  *   lista de participantes.
+ *
+ * LOS PARTICIPANTES ENTRAN CON CODIGO (DEC-089)
+ *   `code/start`, `code/verify` y `code/register` sustituyen, para la tienda, a
+ *   la contrasena: un codigo al correo o al celular que sirve tanto para entrar
+ *   como para darse de alta. El codigo se envia exista o no la cuenta, y si
+ *   existe solo se sabe despues de acertarlo, asi que este camino no enumera
+ *   nada. El personal sigue con `login` + `mfa/verify`: un codigo nunca abre
+ *   una sesion de personal. `register` y `login` con contrasena se conservan
+ *   para el panel y para las cuentas que ya la tienen.
  */
+
+import { randomUUID } from "node:crypto";
 
 import {
   assertPasswordAcceptable,
@@ -36,15 +47,21 @@ import {
   decryptSecret,
   evaluateSession,
   generateSessionToken,
+  generateSignInCode,
   hashPassword,
   hashSessionToken,
+  hashSignInCode,
   looksLikeSessionToken,
+  looksLikeSignInCode,
   MAXIMUM_PASSWORD_LENGTH,
   MINIMUM_PASSWORD_LENGTH,
   needsRehash,
   PasswordPolicyError,
   requiresMfa,
   SESSION_POLICIES,
+  SIGN_IN_CODE_POLICY,
+  signInCodeMatches,
+  SIGNUP_TICKET_POLICY,
   verifyPassword,
   verifyTotp,
   type RoleId,
@@ -56,6 +73,7 @@ import { z } from "zod";
 import type { AppDependencies } from "../app.js";
 import { clearCartSessionCookie, resolveCartSession } from "../http/cart-session.js";
 import {
+  assertConsents,
   assertDeclaration,
   consentsInputSchema,
   dateOfBirthSchema,
@@ -67,6 +85,8 @@ import {
   clearCookieOptionsFor,
   cookieNameFor,
   cookieOptionsFor,
+  signupCookieNameFor,
+  signupCookieOptions,
   type SessionCookieConfig,
 } from "../http/session-cookie.js";
 import { maskEmail } from "../services/email.js";
@@ -75,11 +95,16 @@ import type { SmsVerifier } from "../services/sms.js";
 import {
   emailLocaleFrom,
   renderPasswordResetEmail,
+  renderSignInCodeEmail,
   renderVerificationEmail,
   webLink,
   type EmailLocale,
 } from "../services/email-templates.js";
-import type { EmailTokenPurpose } from "../services/identity-ports.js";
+import type {
+  EmailTokenPurpose,
+  IdentityRecord,
+  SignInChannel,
+} from "../services/identity-ports.js";
 
 /**
  * Umbral de bloqueo por intentos fallidos y duracion.
@@ -267,6 +292,65 @@ const sessionResponseSchema = z.object({
 });
 
 type SessionResponse = z.infer<typeof sessionResponseSchema>;
+
+// ---------------------------------------------------------------------------
+// DEC-089: entrar sin contrasena
+// ---------------------------------------------------------------------------
+
+/**
+ * Correo O celular en un solo campo, como lo teclea la persona. La arroba
+ * decide el canal y `contactFrom` comprueba la forma, cada una con su codigo.
+ */
+const contactInputSchema = z.string().trim().min(3).max(320);
+
+const codeStartBodySchema = z.object({
+  contact: contactInputSchema,
+  /** Token del widget de Cloudflare Turnstile. Obligatorio si esta configurado. */
+  bot_check_token: z.string().min(1).max(2048).optional(),
+});
+
+const codeStartResponseSchema = z.object({
+  acknowledged: z.literal(true),
+  /** Por donde salio el codigo: la pantalla dice "revisa tu correo" o "tu celular". */
+  channel: z.enum(["EMAIL", "SMS"]),
+});
+
+/**
+ * Seis digitos en el correo; Twilio Verify admite de 4 a 10 en el celular. Los
+ * espacios se quitan antes de comprobarlo: quien copia "123 456" no se equivoca.
+ */
+const codeVerifyBodySchema = z.object({
+  contact: contactInputSchema,
+  code: z.string().trim().min(4).max(32),
+});
+
+const codeVerifyResponseSchema = z.object({
+  /**
+   * `SIGNED_IN`: el contacto ya tenia cuenta y la sesion esta abierta.
+   * `PROFILE_REQUIRED`: no la tenia; queda una cookie de alta para
+   * `POST /auth/code/register`.
+   */
+  status: z.enum(["SIGNED_IN", "PROFILE_REQUIRED"]),
+  /** La sesion abierta con `SIGNED_IN`; `null` con `PROFILE_REQUIRED`. */
+  session: sessionResponseSchema.nullable(),
+});
+
+/**
+ * Lo unico que pide el alta: nombre, estado y los documentos aceptados. El
+ * contacto ya esta demostrado y viaja en la cookie de alta, no en el cuerpo.
+ */
+const codeRegisterBodySchema = z.object({
+  /** Mismos limites que `participants_display_name_length`. Obligatorio aqui. */
+  display_name: z.string().trim().min(1).max(120),
+  residence_state: residenceStateSchema,
+  /** DEC-067: todos los de `required_consents` (GET /config), con su version. */
+  consents: consentsInputSchema,
+  /** Etiqueta BCP-47 completa (DEC-029). */
+  language_preference: z.enum(["en-US", "es-US"]),
+});
+
+/** La forma de correo de `registerBodySchema` y de la CHECK de `identities`. */
+const EMAIL_SHAPE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/u;
 
 /**
  * Las capacidades que se publican, calculadas como las ve el AUTORIZADOR.
@@ -519,6 +603,113 @@ export function buildAuthRoutes(dependencies: AppDependencies): RouteDefinition[
     void task().catch((error: unknown) => {
       request.log.error({ event, err: error }, "envio en segundo plano fallido");
     });
+  }
+
+  // -------------------------------------------------------------------------
+  // DEC-089: entrar sin contrasena
+  // -------------------------------------------------------------------------
+
+  /**
+   * Canal y contacto normalizado a partir de lo tecleado.
+   *
+   * El correo se guarda en minusculas porque es la clave del tope y de la
+   * busqueda del codigo; la identidad lo compara igual (`email_normalized`). El
+   * celular, en E.164 de EE. UU. o 422 PHONE_INVALID.
+   */
+  function contactFrom(input: string): { channel: SignInChannel; contact: string } {
+    const typed = input.trim();
+
+    if (typed.includes("@")) {
+      const address = typed.toLowerCase();
+      if (address.length > 254 || !EMAIL_SHAPE.test(address)) throw ApiErrors.contactInvalid();
+      return { channel: "EMAIL", contact: address };
+    }
+
+    return { channel: "SMS", contact: requirePhone(typed) };
+  }
+
+  /** Comprobacion anti-bots de Turnstile, si esta configurada (DEC-060). */
+  async function requireHuman(token: string | undefined): Promise<void> {
+    const checker = botCheck ?? null;
+    if (checker === null) return;
+
+    // Sin IP: la que ve la API es la del servidor de `apps/web` (DEC-057).
+    const human = token !== undefined && (await checker.verify(token, null));
+    if (!human) throw ApiErrors.botCheckFailed();
+  }
+
+  /** La sesion de escaparate que se publica tras entrar o darse de alta. */
+  function participantSessionOf(record: IdentityRecord): SessionResponse {
+    return {
+      authenticated: true,
+      state: "ACTIVE",
+      scope: "PARTICIPANT",
+      email: record.email,
+      email_verified: record.emailVerifiedAt !== null,
+      phone: record.phoneE164,
+      roles: [],
+      capabilities: publishedCapabilities("ACTIVE", "PARTICIPANT", []),
+    };
+  }
+
+  /**
+   * Comprueba un codigo de correo y devuelve su fila.
+   *
+   * El intento se cuenta ANTES de comparar, en el motor: dos intentos a la vez
+   * no se saltan el tope. Agotado el ultimo intento, la respuesta es "caducado":
+   * ese codigo ya no sirve y hay que pedir otro.
+   */
+  async function verifyEmailCode(contact: string, code: string, now: Date): Promise<string> {
+    if (!looksLikeSignInCode(code)) throw ApiErrors.signInCodeInvalid();
+
+    const { maxAttempts } = SIGN_IN_CODE_POLICY;
+    const open = await identity.signInCodes.findLatestOpen("EMAIL", contact);
+    if (open?.codeHash == null || open.expiresAt <= now || open.attempts >= maxAttempts) {
+      throw ApiErrors.signInCodeExpired();
+    }
+
+    const attempts = await identity.signInCodes.registerAttempt(open.id, maxAttempts);
+    if (attempts === null) throw ApiErrors.signInCodeExpired();
+
+    if (!signInCodeMatches(code, open.id, config.session.secret, open.codeHash)) {
+      throw attempts >= maxAttempts ? ApiErrors.signInCodeExpired() : ApiErrors.signInCodeInvalid();
+    }
+
+    return open.id;
+  }
+
+  /**
+   * Comprueba un codigo de SMS con Twilio Verify y devuelve la fila del envio.
+   *
+   * Twilio cuenta los intentos y caduca el codigo; esta fila solo deja
+   * constancia. Si no la hubiera -el codigo se pidio por `phone/start`-, se
+   * crea una: lo que demuestra el celular es la aprobacion de Twilio.
+   */
+  async function verifySmsCode(contact: string, code: string, now: Date): Promise<string> {
+    const verifier = requireSms();
+    if (!/^\d{4,10}$/u.test(code)) throw ApiErrors.signInCodeInvalid();
+
+    let approved: boolean;
+    try {
+      approved = await verifier.check(contact, code);
+    } catch {
+      // El detalle ya lo registro el adaptador; aqui solo se traduce.
+      throw ApiErrors.serviceUnavailable();
+    }
+    if (!approved) throw ApiErrors.signInCodeInvalid();
+
+    const open = await identity.signInCodes.findLatestOpen("SMS", contact);
+    if (open !== null) return open.id;
+
+    const id = randomUUID();
+    await identity.signInCodes.issue({
+      id,
+      channel: "SMS",
+      contact,
+      codeHash: null,
+      expiresAt: new Date(now.getTime() + SIGN_IN_CODE_POLICY.ttlMinutes * 60_000),
+    });
+    return id;
   }
 
   return [
@@ -1384,6 +1575,265 @@ export function buildAuthRoutes(dependencies: AppDependencies): RouteDefinition[
         await identity.sessions.revokeAllForIdentity(found.id, "password_reset", now);
 
         return ACKNOWLEDGED;
+      },
+    },
+
+    // -----------------------------------------------------------------------
+    // DEC-089: entrar o darse de alta con un codigo, sin contrasena.
+    // -----------------------------------------------------------------------
+
+    {
+      method: "POST",
+      url: "/api/v1/auth/code/start",
+      operationId: "startSignInCode",
+      summary: "Enviar un codigo para entrar o crear la cuenta, al correo o al celular.",
+      description:
+        "La arroba decide el canal: correo (codigo de 6 digitos de la API, 10 minutos, 5 intentos) o celular de EE. UU. (Twilio Verify). Se envia EXISTA O NO una cuenta con ese contacto, y la respuesta no lo dice: que pasa despues solo lo ve quien acierta el codigo. Tope de 3 codigos SIN ACERTAR cada 15 minutos por destinatario (429): entrar y salir varias veces no lo agota. Si hay comprobacion anti-bots configurada, `bot_check_token` es obligatorio.",
+      tags: ["auth"],
+      authorization: {
+        kind: "PUBLIC",
+        justification:
+          "Se usa sin cuenta o sin poder entrar: es la puerta de entrada. No consulta si el contacto tiene cuenta, asi que no revela nada. Lo protegen la comprobacion anti-bots, el tope por destinatario y, en el celular, los limites y la deteccion de fraude de Twilio Verify.",
+      },
+      schema: {
+        body: codeStartBodySchema,
+        response: {
+          200: codeStartResponseSchema,
+          422: errorEnvelopeSchema,
+          429: errorEnvelopeSchema,
+          503: errorEnvelopeSchema,
+        },
+      },
+      handler: async (request) => {
+        const body = request.body as z.infer<typeof codeStartBodySchema>;
+        const now = new Date();
+        const locale = emailLocaleFrom(request.headers["accept-language"]);
+        const target = contactFrom(body.contact);
+
+        // Antes del anti-bots: sin proveedor de SMS no hay nada que proteger.
+        const verifier = target.channel === "SMS" ? requireSms() : null;
+        await requireHuman(body.bot_check_token);
+
+        const { throttleWindowMinutes, throttleMaxCodes, ttlMinutes } = SIGN_IN_CODE_POLICY;
+        const since = new Date(now.getTime() - throttleWindowMinutes * 60_000);
+        // Solo cuentan los codigos sin acertar: quien entra y sale no se frena.
+        const pending = await identity.signInCodes.countUnverifiedSince(
+          target.channel,
+          target.contact,
+          since,
+        );
+        if (pending >= throttleMaxCodes) throw ApiErrors.rateLimited(throttleWindowMinutes * 60);
+
+        const id = randomUUID();
+        const expiresAt = new Date(now.getTime() + ttlMinutes * 60_000);
+
+        if (verifier === null) {
+          // Correo: el codigo lo genera la API y se guarda solo su HMAC.
+          const code = generateSignInCode();
+          await identity.signInCodes.issue({
+            id,
+            channel: "EMAIL",
+            contact: target.contact,
+            codeHash: hashSignInCode(code, id, config.session.secret),
+            expiresAt,
+          });
+
+          try {
+            await email.send({
+              to: target.contact,
+              ...renderSignInCodeEmail(locale, code),
+              kind: "sign_in_code",
+            });
+          } catch (error) {
+            // Aqui SI hay a quien decirselo: la persona espera el codigo ahora.
+            request.log.error(
+              { event: "email.sign_in_code.failed", to: maskEmail(target.contact), err: error },
+              "envio del codigo fallido",
+            );
+            throw ApiErrors.serviceUnavailable();
+          }
+        } else {
+          // La fila se escribe antes de pedir el SMS: un envio que falla cuenta
+          // igual para el tope, y asi no se puede insistir hasta que salga.
+          await identity.signInCodes.issue({
+            id,
+            channel: "SMS",
+            contact: target.contact,
+            codeHash: null,
+            expiresAt,
+          });
+
+          let outcome;
+          try {
+            outcome = await verifier.start(target.contact, locale);
+          } catch {
+            throw ApiErrors.serviceUnavailable();
+          }
+
+          if (outcome === "INVALID_NUMBER") throw ApiErrors.phoneInvalid();
+          // Limite de Twilio para ese numero; diez minutos es su ventana.
+          if (outcome === "RATE_LIMITED") throw ApiErrors.rateLimited(600);
+        }
+
+        return { acknowledged: true as const, channel: target.channel };
+      },
+    },
+
+    {
+      method: "POST",
+      url: "/api/v1/auth/code/verify",
+      operationId: "verifySignInCode",
+      summary: "Comprobar el codigo: entra si hay cuenta o deja abierta el alta si no.",
+      description:
+        "Con cuenta: abre una sesion de PARTICIPANTE (`SIGNED_IN`), adopta el carrito sin cuenta (DEC-079) y, si era el correo, lo da por verificado. Sin cuenta: `PROFILE_REQUIRED` y una cookie `httpOnly` `<base>_signup`, valida 30 minutos y de un solo uso, para `POST /auth/code/register`. 422 SIGN_IN_CODE_INVALID (codigo incorrecto), 410 SIGN_IN_CODE_EXPIRED (caducado, agotado o sin pedir: pedir otro), 403 STAFF_ACCOUNT_USE_PANEL (el personal entra por el panel con contrasena y segundo factor) y 403 ACCOUNT_UNAVAILABLE (cuenta no activa).",
+      tags: ["auth"],
+      authorization: {
+        kind: "PUBLIC",
+        justification:
+          "Se usa sin sesion: es la que la abre. El codigo es la prueba de control del contacto: de un solo uso, 10 minutos y 5 intentos en el correo; lo genera y lo caduca Twilio Verify en el celular. Si la cuenta existe solo se sabe despues de acertarlo, y un codigo nunca abre una sesion de personal.",
+      },
+      schema: {
+        body: codeVerifyBodySchema,
+        response: {
+          200: codeVerifyResponseSchema,
+          403: errorEnvelopeSchema,
+          410: errorEnvelopeSchema,
+          422: errorEnvelopeSchema,
+          503: errorEnvelopeSchema,
+        },
+      },
+      handler: async (request, reply) => {
+        const body = request.body as z.infer<typeof codeVerifyBodySchema>;
+        const now = new Date();
+        const target = contactFrom(body.contact);
+        const code = body.code.replace(/\s+/gu, "");
+
+        const codeId =
+          target.channel === "EMAIL"
+            ? await verifyEmailCode(target.contact, code, now)
+            : await verifySmsCode(target.contact, code, now);
+
+        const found =
+          target.channel === "EMAIL"
+            ? await identity.identities.findByEmail(target.contact)
+            : await identity.identities.findByVerifiedPhone(target.contact);
+
+        if (found === null) {
+          // Contacto sin cuenta: el codigo se queda como permiso de alta.
+          const ticket = generateSessionToken();
+          const ttlMinutes = SIGNUP_TICKET_POLICY.absoluteTtlMinutes;
+          const recorded = await identity.signInCodes.markVerified(codeId, now, {
+            tokenHash: hashSessionToken(ticket),
+            expiresAt: new Date(now.getTime() + ttlMinutes * 60_000),
+          });
+          // Otra peticion acerto el mismo codigo antes: gana la primera.
+          if (!recorded) throw ApiErrors.signInCodeExpired();
+
+          void reply.setCookie(
+            signupCookieNameFor(cookieConfig.name),
+            ticket,
+            signupCookieOptions(cookieConfig, ttlMinutes * 60),
+          );
+          return { status: "PROFILE_REQUIRED" as const, session: null };
+        }
+
+        const spent = await identity.signInCodes.markVerified(codeId, now, null);
+        if (!spent) throw ApiErrors.signInCodeExpired();
+
+        // SUSPENDED, CLOSED o el expediente PENDING_VERIFICATION de una ficha
+        // postal no entran. El expediente no se "reclama" aqui: unirlo a una
+        // cuenta es una decision de AMOE (DEC-089, pendiente).
+        if (found.status !== "ACTIVE") throw ApiErrors.accountUnavailable();
+
+        // El personal entra por el panel, con contrasena y segundo factor
+        // (DEC-006). Se mira la cuenta administrativa ademas de los roles: una
+        // cuenta desactivada puede conservar sus asignaciones.
+        const roles = await identity.identities.listAdminRoles(found.id);
+        const staff =
+          roles.length > 0 || (await identity.identities.findAdminUser(found.id)) !== null;
+        if (staff) throw ApiErrors.staffMustUsePanel();
+
+        // Acertar el codigo del correo demuestra que el correo es suyo.
+        let record = found;
+        if (target.channel === "EMAIL" && found.email !== null && found.emailVerifiedAt === null) {
+          await identity.identities.markEmailVerified(found.id, found.email, now);
+          record = { ...found, emailVerifiedAt: now };
+        }
+
+        // Siempre `PARTICIPANT`: un codigo no eleva a nadie.
+        await openSession(request, reply, found.id, "PARTICIPANT", now);
+        await adoptGuestCart(request, reply, found.id, now);
+
+        return { status: "SIGNED_IN" as const, session: participantSessionOf(record) };
+      },
+    },
+
+    {
+      method: "POST",
+      url: "/api/v1/auth/code/register",
+      operationId: "registerWithSignInCode",
+      summary: "Crear la cuenta tras acertar el codigo: nombre, estado y documentos.",
+      description:
+        "Gasta la cookie `<base>_signup` que deja `POST /auth/code/verify` y crea la cuenta SIN contrasena con el contacto ya verificado: identidad ACTIVE, perfil con nombre y estado (DEC-067) y consentimientos. La fecha de nacimiento no se pide aqui: se declara en el checkout con la puerta de edad encendida (`PUT /me/eligibility`). Abre sesion de escaparate y adopta el carrito sin cuenta. 410 SIGNUP_EXPIRED si la cookie falta, caduco o ya se uso.",
+      tags: ["auth"],
+      authorization: {
+        kind: "PUBLIC",
+        justification:
+          "Se usa antes de tener cuenta. La prueba es la cookie de alta: un token de 256 bits que solo existe tras acertar el codigo de ese contacto, valido 30 minutos y de un solo uso. Solo crea participantes, sin roles.",
+      },
+      schema: {
+        body: codeRegisterBodySchema,
+        response: {
+          201: sessionResponseSchema,
+          409: errorEnvelopeSchema,
+          410: errorEnvelopeSchema,
+          422: errorEnvelopeSchema,
+        },
+      },
+      handler: async (request, reply) => {
+        const body = request.body as z.infer<typeof codeRegisterBodySchema>;
+        const now = new Date();
+
+        // Antes de gastar el permiso: un documento sin aceptar no lo quema.
+        const consents = assertConsents(body.consents);
+
+        const cookieName = signupCookieNameFor(cookieConfig.name);
+        const presented = (request.cookies as Record<string, string | undefined>)[cookieName];
+        if (presented === undefined || !looksLikeSessionToken(presented)) {
+          throw ApiErrors.signupExpired();
+        }
+
+        const ticket = await identity.signInCodes.consumeSignupTicket(
+          hashSessionToken(presented),
+          now,
+        );
+        // Usada o no, la cookie ya no sirve para nada.
+        void reply.clearCookie(cookieName, signupCookieOptions(cookieConfig, 0));
+        if (ticket.status !== "CONSUMED") throw ApiErrors.signupExpired();
+
+        const created = await identity.identities.registerVerifiedParticipant({
+          channel: ticket.channel,
+          contact: ticket.contact,
+          verifiedAt: ticket.verifiedAt,
+          displayName: body.display_name,
+          preferredLocale: body.language_preference,
+          residenceState: body.residence_state,
+          consents,
+        });
+
+        // Otra alta con el mismo contacto gano la carrera. La persona entra con
+        // un codigo nuevo: ese contacto ya tiene cuenta.
+        if (created === null) {
+          throw ticket.channel === "EMAIL"
+            ? ApiErrors.emailAlreadyRegistered()
+            : ApiErrors.phoneAlreadyRegistered();
+        }
+
+        await openSession(request, reply, created.id, "PARTICIPANT", now);
+        await adoptGuestCart(request, reply, created.id, now);
+
+        void reply.code(201);
+        return participantSessionOf(created);
       },
     },
   ];

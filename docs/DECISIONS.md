@@ -4475,3 +4475,87 @@ Affected areas: `packages/database` (`0039`, `schema/catalog.ts`), `apps/api`
 
 Proposed by: sesión del usuario (2026-10-16, petición del usuario)
 Agreed by: backend, frontend-ux (petición directa del usuario)
+
+## DEC-089
+
+Status: Accepted
+
+Date: 2026-10-18
+
+Decision:
+**Los participantes entran y se dan de alta con un código, sin contraseña, y el
+alta solo pide contacto, nombre, estado y una casilla.** El cliente pidió un
+registro "muy sencillo, que no pierdan tiempo": solo correo o celular, nombre y
+estado. El usuario confirmó dos puntos: entrar siempre con código, sin
+contraseña, y una sola casilla para los documentos.
+
+1. **Un solo flujo para entrar y darse de alta** (`POST /auth/code/start`,
+   `/verify`, `/register`). La persona escribe correo o celular y recibe un
+   código. Si el contacto tenía cuenta, entra; si no, se le piden nombre y
+   estado y se crea. El código se envía exista o no la cuenta, y si existe solo
+   se sabe después de acertarlo: no enumera. La web usa el mismo flujo en
+   `/account/login` y `/account/register`.
+2. **El código.** Correo: 6 dígitos de la API, 10 minutos, 5 intentos, de un
+   solo uso, solo vale el más reciente, y la tabla guarda su **HMAC con
+   `SESSION_SECRET`**, no su SHA-256: con un millón de valores, un hash sin
+   clave se invierte al instante. Celular: Twilio Verify (DEC-060). Tope de 3
+   códigos **sin acertar** cada 15 minutos por destinatario: frena llenar un
+   buzón ajeno sin frenar a quien entra y sale. Turnstile antes de cada envío.
+   Políticas en `packages/security` (`SIGN_IN_CODE_POLICY`).
+3. **Permiso de alta en cookie `httpOnly`** (`<base>_signup`, 30 minutos, de un
+   solo uso, `SIGNUP_TICKET_POLICY`): lo deja `verify` al acertar el código de un
+   contacto sin cuenta, y lo gasta `register`. El navegador nunca ve el token,
+   igual que la sesión.
+4. **Cuenta sin contraseña**: identidad `ACTIVE` sin fila en
+   `identity_credentials`, con el contacto ya verificado. Nombre obligatorio.
+5. **Un código nunca abre una sesión de personal** (`403
+STAFF_ACCOUNT_USE_PANEL`): el panel sigue con contraseña y TOTP (DEC-006,
+   DEC-087). Una cuenta no `ACTIVE` -incluido el expediente
+   `PENDING_VERIFICATION` de una ficha postal- no entra (`403
+ACCOUNT_UNAVAILABLE`); unir ese expediente a una cuenta queda para AMOE.
+6. **La fecha de nacimiento sale del alta y pasa al checkout.** La declaración
+   de DEC-067 se parte en dos mitades con su instante (migración 0040): el
+   estado en el alta y la fecha después. El checkout pide solo la fecha si
+   `age_gate_enabled` está encendido y falta; hoy está apagado, así que nadie
+   la ve. Con la puerta encendida y sin fecha, la compra no otorga
+   (`UNDECLARED`). `PUT /me/eligibility` declara lo que falte, sin reescribir.
+7. **Una sola casilla** para los documentos de `required_consents`. La frase se
+   compone con los que publica `GET /config`, y se guarda una aceptación por
+   documento y versión, como antes.
+8. Se conservan `POST /auth/register` y `/auth/login` con contraseña, sin
+   cambios: el panel entra por `login`, y una cuenta antigua conserva su
+   credencial aunque la tienda ya no la pida. La web retira los formularios de
+   contraseña de la tienda; el restablecimiento sigue para el personal.
+
+**Pendiente del abogado** (`docs/LEGAL_PENDING.md`): la casilla conjunta y su
+texto, pedir la fecha en el checkout en vez del alta (con la puerta de edad hoy
+apagada), el aviso del SMS ahora también para entrar, y cuánto se conservan las
+filas de `sign_in_codes`.
+
+Alternatives considered: A — Alta sin verificar el contacto (descartada:
+cualquiera podría registrarse con el correo o el celular de otra persona, y el
+aviso de premio le llegaría a quien no es). B — Mantener la contraseña como
+opción (descartada por el usuario: un solo camino). C — Seguir pidiendo la fecha
+en el alta (descartada por el cliente; hoy no se usa porque la puerta de edad
+está apagada). D — Una casilla de autodeclaración de edad en lugar de la fecha
+(descartada: cambia lo que exigen las Reglas sin el abogado). E — Enlace mágico
+en vez de código (descartada: en el celular el enlace se abre a menudo en otro
+navegador y la sesión queda donde no está la persona). F — Devolver el permiso
+de alta en el JSON (descartada: el token llegaría al JavaScript del navegador).
+
+Affected areas: `packages/security` (`crypto/sign-in-code.ts`, `session.ts`),
+`packages/database` (0040, `schema/sign-in-codes.ts`, `schema/identity.ts`),
+`apps/api` (`routes/auth.ts`, `routes/portal.ts`, `services/drizzle-identity.ts`,
+`services/identity-ports.ts`, `services/eligibility.ts`,
+`services/email-templates.ts`, `http/errors.ts`, `http/eligibility-input.ts`,
+`http/session-cookie.ts`, OpenAPI, pruebas unitarias y de integración),
+`apps/web` (`components/sign-in-flow.tsx`, `eligibility-fields.tsx`,
+`eligibility-declaration-form.tsx`, páginas de login, alta, perfil y checkout,
+acciones, cliente de la API, mensajes, mocks, pruebas; se retiran
+`login-form.tsx` y `register-form.tsx`), `tests/e2e` (entrada por código con
+`SMS_PROVIDER=console`, alta real por pantalla), `.github/workflows/ci.yml`,
+`docs/API_CONTRACT.md` (§10 y §11.2), `docs/LEGAL_PENDING.md`.
+
+Proposed by: sesión del usuario (2026-10-18, petición del cliente)
+Agreed by: security, backend, frontend-ux (petición directa del usuario);
+pendiente: abogado

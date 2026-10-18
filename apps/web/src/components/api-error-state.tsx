@@ -112,6 +112,14 @@ const TRANSLATED_CODES = [
   "ELIGIBILITY_ALREADY_DECLARED",
   "SMS_CODE_INVALID",
   "BOT_CHECK_FAILED",
+  // Entrar sin contrasena (DEC-089) y declarar la fecha despues del estado.
+  "CONTACT_INVALID",
+  "SIGN_IN_CODE_INVALID",
+  "SIGN_IN_CODE_EXPIRED",
+  "SIGNUP_EXPIRED",
+  "STAFF_ACCOUNT_USE_PANEL",
+  "ACCOUNT_UNAVAILABLE",
+  "ELIGIBILITY_STATE_REQUIRED",
   // Altas del panel (seccion 12) y validacion previa de sus formularios.
   "CATALOG_CONFLICT",
   "LIFECYCLE_REFUSED",
@@ -256,6 +264,20 @@ export function useApiErrorMessage(): (code: string | null) => string {
         return t("SMS_CODE_INVALID");
       case "BOT_CHECK_FAILED":
         return t("BOT_CHECK_FAILED");
+      case "CONTACT_INVALID":
+        return t("CONTACT_INVALID");
+      case "SIGN_IN_CODE_INVALID":
+        return t("SIGN_IN_CODE_INVALID");
+      case "SIGN_IN_CODE_EXPIRED":
+        return t("SIGN_IN_CODE_EXPIRED");
+      case "SIGNUP_EXPIRED":
+        return t("SIGNUP_EXPIRED");
+      case "STAFF_ACCOUNT_USE_PANEL":
+        return t("STAFF_ACCOUNT_USE_PANEL");
+      case "ACCOUNT_UNAVAILABLE":
+        return t("ACCOUNT_UNAVAILABLE");
+      case "ELIGIBILITY_STATE_REQUIRED":
+        return t("ELIGIBILITY_STATE_REQUIRED");
       case "CATALOG_CONFLICT":
         return t("CATALOG_CONFLICT");
       case "LIFECYCLE_REFUSED":

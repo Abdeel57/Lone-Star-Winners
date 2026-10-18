@@ -30,3 +30,5 @@ export * from "./email-tokens.js";
 export * from "./cash-payments.js";
 // DEC-079: carrito sin cuenta y tarifa de envio. Al final.
 export * from "./guest-cart-and-shipping.js";
+// DEC-089: codigos para entrar sin contrasena. Al final.
+export * from "./sign-in-codes.js";

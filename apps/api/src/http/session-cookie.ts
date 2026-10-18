@@ -18,7 +18,12 @@
  */
 
 import type { CookieSerializeOptions } from "@fastify/cookie";
-import { CART_SESSION_POLICY, SESSION_POLICIES, type SessionAudience } from "@lsw/security";
+import {
+  CART_SESSION_POLICY,
+  SESSION_POLICIES,
+  SIGNUP_TICKET_POLICY,
+  type SessionAudience,
+} from "@lsw/security";
 
 export interface SessionCookieConfig {
   readonly name: string;
@@ -115,4 +120,30 @@ export function cartCookieOptions(
 
 export function clearCartCookieOptions(config: SessionCookieConfig): CookieSerializeOptions {
   return cartCookieOptions(config, 0);
+}
+
+// ---------------------------------------------------------------------------
+// Cookie del permiso de alta (DEC-089)
+// ---------------------------------------------------------------------------
+
+/** La base con sufijo `_signup`: convive con la de carrito, que el alta adopta. */
+export function signupCookieNameFor(base: string): string {
+  return `${base}_signup`;
+}
+
+/** Mismos atributos que el resto: los decide `SIGNUP_TICKET_POLICY`. */
+export function signupCookieOptions(
+  config: SessionCookieConfig,
+  maxAgeSeconds: number,
+): CookieSerializeOptions {
+  const policy = SIGNUP_TICKET_POLICY;
+
+  return {
+    httpOnly: policy.cookie.httpOnly,
+    sameSite: policy.cookie.sameSite,
+    path: policy.cookie.path,
+    secure: config.secure,
+    ...(config.domain === "localhost" ? {} : { domain: config.domain }),
+    maxAge: maxAgeSeconds,
+  };
 }

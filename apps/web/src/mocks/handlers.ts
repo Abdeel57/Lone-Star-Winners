@@ -279,6 +279,25 @@ export const scenarios = {
       HttpResponse.json(errorEnvelope(code, details), { status: 422 }),
     ),
 
+  /** DEC-089: el codigo es bueno pero el contacto no tenia cuenta. */
+  signInCodeNewContact: () =>
+    http.post(url(API_PATHS.authCodeVerify), () =>
+      HttpResponse.json({ status: "PROFILE_REQUIRED", session: null }),
+    ),
+
+  /** DEC-089: un paso del acceso con codigo rechazado con ese codigo y status. */
+  signInCodeRejected: (step: "start" | "verify" | "register", code: string, status = 422) =>
+    http.post(
+      url(
+        step === "start"
+          ? API_PATHS.authCodeStart
+          : step === "verify"
+            ? API_PATHS.authCodeVerify
+            : API_PATHS.authCodeRegister,
+      ),
+      () => HttpResponse.json(errorEnvelope(code), { status }),
+    ),
+
   entrySummary: (body: JsonBodyType) =>
     http.get(url(API_PATHS.entrySummary), () => HttpResponse.json(body)),
 

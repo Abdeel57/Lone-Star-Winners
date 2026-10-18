@@ -123,6 +123,8 @@ export type {
   SessionLifecycle,
   SessionScope,
   SessionState,
+  SignInCodeSent,
+  SignInCodeVerified,
   SiteConfigResponse,
 } from "./contract";
 export type {
@@ -314,6 +316,7 @@ export {
   productPath,
   promotionPath,
   register,
+  registerWithSignInCode,
   rejectAmoeSubmission,
   removeCartItem,
   requestPasswordReset,
@@ -321,6 +324,7 @@ export {
   resetPassword,
   resetPasswordWithSms,
   startPhoneVerification,
+  startSignInCode,
   submitAmoe,
   submitPrivacyRequest,
   putAdminRulesDocument,
@@ -334,6 +338,7 @@ export {
   updateMe,
   verifyEmail,
   verifyMfa,
+  verifySignInCode,
   type AdminPageQuery,
   type EligibilityStatus,
   type SessionContext,

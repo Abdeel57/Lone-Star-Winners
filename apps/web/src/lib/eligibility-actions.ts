@@ -10,11 +10,17 @@ import { consentsFrom, localeFrom, textFrom } from "./form-input";
 import { mutableSession } from "./session-server";
 
 /**
- * Declaracion de elegibilidad de una cuenta anterior a DEC-067.
+ * Declaracion de elegibilidad en el checkout.
  *
  * La pide el checkout ANTES de cobrar cuando la promocion comprueba edad o
  * estado: sin ella el backend no puede saber si la compra da participaciones y
  * no las otorga. Se envia una vez; el backend no deja reescribirla.
+ *
+ * DEC-089: dos formas. Una cuenta anterior a DEC-067 declara todo -fecha,
+ * estado y documentos-; una cuenta sin contrasena ya declaro el estado y acepto
+ * los documentos en el alta, y solo le falta la fecha (`scope=date_of_birth`).
+ * El campo oculto lo pone la pagina, pero no se confia en el: el backend
+ * rechaza una fecha sin estado y exige los documentos al declarar el estado.
  */
 export async function declareEligibilityAction(
   _previous: ActionResult,
@@ -26,19 +32,24 @@ export async function declareEligibilityAction(
   const dateOfBirth = textFrom(formData, "date_of_birth");
   if (dateOfBirth === null) return invalid("FIELD_REQUIRED", "date_of_birth");
 
-  const residenceState = textFrom(formData, "residence_state");
-  if (residenceState === null) return invalid("FIELD_REQUIRED", "residence_state");
+  const onlyDateOfBirth = textFrom(formData, "scope") === "date_of_birth";
+
+  const residenceState = onlyDateOfBirth ? null : textFrom(formData, "residence_state");
+  if (!onlyDateOfBirth && residenceState === null) {
+    return invalid("FIELD_REQUIRED", "residence_state");
+  }
 
   const consents = consentsFrom(formData);
-  if (consents.missing) return invalid("CONSENT_REQUIRED", "consent");
+  if (!onlyDateOfBirth && consents.missing) return invalid("CONSENT_REQUIRED", "consent");
 
   const session = await mutableSession();
   const result = await declareMyEligibility(
     {
       date_of_birth: dateOfBirth,
-      residence_state: residenceState,
-      consents: consents.accepted,
       language: localeTag(locale),
+      ...(residenceState === null
+        ? {}
+        : { residence_state: residenceState, consents: consents.accepted }),
     },
     locale,
     session,

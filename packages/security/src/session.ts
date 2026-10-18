@@ -155,6 +155,54 @@ export const CART_SESSION_POLICY: CartSessionPolicy = Object.freeze({
   absoluteTtlMinutes: Math.min(60 * 24 * 30, SESSION_LIMITS.PARTICIPANT.maxAbsoluteTtlMinutes),
 });
 
+// ---------------------------------------------------------------------------
+// Entrar sin contrasena (DEC-089)
+// ---------------------------------------------------------------------------
+
+/**
+ * Limites del codigo de un solo uso con el que entra un participante.
+ *
+ * DIEZ MINUTOS Y CINCO INTENTOS
+ *   Lo justo para abrir el correo o el SMS y teclearlo, y nada mas: un codigo de
+ *   seis digitos con cinco intentos se acierta al azar una vez de cada
+ *   doscientas mil. Twilio Verify aplica limites parecidos a los del celular.
+ *
+ * TRES CODIGOS SIN USAR CADA QUINCE MINUTOS POR DESTINATARIO
+ *   El mismo tope que los enlaces de correo (DEC-058), y por lo mismo: la API
+ *   ve la IP del servidor de la web, no la del visitante, asi que el freno que
+ *   sirve es por destinatario. Impide usar el formulario para inundar el buzon
+ *   o el celular de otra persona y para gastar el saldo de SMS. Solo cuentan
+ *   los codigos que nadie acerto: quien entra y sale varias veces no se frena,
+ *   y quien llena un buzon ajeno no puede acertar los codigos que manda.
+ */
+export const SIGN_IN_CODE_POLICY = Object.freeze({
+  ttlMinutes: 10,
+  maxAttempts: 5,
+  throttleWindowMinutes: 15,
+  throttleMaxCodes: 3,
+});
+
+/**
+ * Permiso de alta: lo que queda tras acertar el codigo de un contacto que
+ * todavia no tiene cuenta (DEC-089).
+ *
+ * Es una cookie `httpOnly` con un token opaco, no un dato que devuelva la API:
+ * el navegador nunca lo lee, igual que la sesion. Solo sirve para crear UNA
+ * cuenta con ese contacto, durante media hora, y se gasta al usarlo.
+ *
+ * `Lax` y raiz, como el escaparate: el alta puede terminar en cualquier pagina
+ * de la tienda (el checkout, por ejemplo).
+ */
+export interface SignupTicketPolicy {
+  readonly cookie: SessionCookiePolicy;
+  readonly absoluteTtlMinutes: number;
+}
+
+export const SIGNUP_TICKET_POLICY: SignupTicketPolicy = Object.freeze({
+  cookie: Object.freeze({ httpOnly: true, secure: true, sameSite: "lax", path: "/" }),
+  absoluteTtlMinutes: 30,
+});
+
 export type CartSessionState = "ACTIVE" | "EXPIRED_ABSOLUTE" | "REVOKED";
 
 export interface CartSessionFacts {

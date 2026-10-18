@@ -212,6 +212,29 @@ export const mockRoutes: readonly MockRoute[] = [
   // DEC-060: celular por SMS.
   { method: "POST", path: API_PATHS.authPhoneStart, body: { acknowledged: true } },
   { method: "POST", path: API_PATHS.authPasswordResetSms, body: { acknowledged: true } },
+  /*
+   * DEC-089: entrar sin contrasena. Por defecto el contacto ya tiene cuenta y
+   * entra; el caso "sin cuenta" (`PROFILE_REQUIRED`) lo sirve `dev-server.ts`
+   * segun el contacto, y los tests lo piden con `scenarios.signInCodeNewContact()`.
+   */
+  { method: "POST", path: API_PATHS.authCodeStart, body: { acknowledged: true, channel: "EMAIL" } },
+  {
+    method: "POST",
+    path: API_PATHS.authCodeVerify,
+    body: { status: "SIGNED_IN", session: activeSession },
+  },
+  { method: "POST", path: API_PATHS.authCodeRegister, body: activeSession },
+  // DEC-067 y DEC-089: la cuenta de las pantallas ya declaro las dos mitades.
+  {
+    method: "GET",
+    path: API_PATHS.meEligibility,
+    body: {
+      declared: true,
+      declared_at: "2026-10-05T12:00:00.000Z",
+      residence_state_declared: true,
+      date_of_birth_declared: true,
+    },
+  },
   { method: "GET", path: API_PATHS.me, body: participant },
   { method: "PATCH", path: API_PATHS.me, body: participant },
 

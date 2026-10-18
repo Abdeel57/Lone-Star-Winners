@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import type { ReactNode } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/i18n/navigation", async () => {
   const { createElement } = await import("react");
@@ -32,36 +32,48 @@ vi.mock("@/i18n/navigation", async () => {
  * Las Server Actions no se pueden importar en jsdom: son funciones marcadas
  * `"use server"` que Next transforma en tiempo de build. Se sustituyen por
  * funciones que devuelven el estado inicial, porque lo que se prueba aqui es lo
- * que la pantalla PINTA, no lo que la accion HACE.
+ * que la pantalla PINTA, no lo que la accion HACE. Las del acceso con codigo
+ * (DEC-089) se pueden programar para que devuelvan `ok` y la pantalla avance.
  */
-vi.mock("@/lib/auth-actions", () => {
+const actions = vi.hoisted(() => {
   const idle = {
     status: "idle" as const,
     code: null,
     requestId: null,
     field: null,
     retryAfterSeconds: null,
+    detail: null,
   };
+  const ok = { ...idle, status: "ok" as const };
 
   return {
-    registerAction: () => Promise.resolve(idle),
-    loginAction: () => Promise.resolve(idle),
-    logoutAction: () => Promise.resolve(undefined),
-    forgotPasswordAction: () => Promise.resolve(idle),
-    resetPasswordAction: () => Promise.resolve(idle),
-    verifyEmailAction: () => Promise.resolve(idle),
-    resendVerificationAction: () => Promise.resolve(idle),
-    verifyMfaAction: () => Promise.resolve(idle),
-    sendPhoneCodeAction: () => Promise.resolve(idle),
-    resetPasswordSmsAction: () => Promise.resolve(idle),
+    idle,
+    ok,
+    sendSignInCodeAction: vi.fn(() => Promise.resolve(ok)),
+    verifySignInCodeAction: vi.fn(() => Promise.resolve(ok)),
+    completeSignupAction: vi.fn(() => Promise.resolve(idle)),
   };
 });
 
+vi.mock("@/lib/auth-actions", () => ({
+  sendSignInCodeAction: actions.sendSignInCodeAction,
+  verifySignInCodeAction: actions.verifySignInCodeAction,
+  completeSignupAction: actions.completeSignupAction,
+  logoutAction: () => Promise.resolve(undefined),
+  forgotPasswordAction: () => Promise.resolve(actions.idle),
+  resetPasswordAction: () => Promise.resolve(actions.idle),
+  verifyEmailAction: () => Promise.resolve(actions.idle),
+  resendVerificationAction: () => Promise.resolve(actions.idle),
+  verifyMfaAction: () => Promise.resolve(actions.idle),
+  sendPhoneCodeAction: () => Promise.resolve(actions.idle),
+  resetPasswordSmsAction: () => Promise.resolve(actions.idle),
+}));
+
 import { UnverifiedEmailNotice } from "@/components/email-verification";
-import { LoginForm } from "@/components/login-form";
 import { MfaForm } from "@/components/mfa-form";
-import { RegisterForm } from "@/components/register-form";
+import { SignInFlow } from "@/components/sign-in-flow";
 import { LOCALES, type Locale } from "@/i18n/locales";
+import type { ConsentRequirement } from "@/lib/api";
 import { requiredConsents, unknownConsent, unverifiedParticipant } from "@/mocks/fixtures/account";
 
 import enMessages from "../../messages/en-US.json";
@@ -70,17 +82,80 @@ import esMessages from "../../messages/es-US.json";
 /**
  * Pantallas de identidad (FE-M4).
  *
- * LAS DOS REDES QUE IMPORTAN DE VERDAD AQUI
- * -----------------------------------------
- * 1. Que el alta NO PREGUNTE nada legal que nadie ha aprobado: ni edad, ni
- *    estado de residencia, ni una casilla de elegibilidad escrita por el
- *    frontend. Las unicas casillas que aparecen son las que publica el backend.
- * 2. Que en ningun formulario haya un token ni un `localStorage` (DEC-006).
+ * LAS REDES QUE IMPORTAN DE VERDAD AQUI
+ * -------------------------------------
+ * 1. Que el alta NO PREGUNTE nada legal que nadie ha aprobado. Desde DEC-089
+ *    pide contacto, nombre, estado y UNA casilla con los documentos que
+ *    publica el backend; nada mas, ni siquiera la fecha de nacimiento, que la
+ *    pide el checkout si la puerta de edad esta encendida.
+ * 2. Que en ningun formulario haya un token ni un `localStorage` (DEC-006), ni
+ *    una contrasena en la tienda.
  *
  * Un test que solo comprobara que los campos se ven no detectaria a nadie
  * anadiendo un "confirmo que tengo 18 anos", que es exactamente el cambio
  * bienintencionado que hay que impedir.
  */
+
+/** Ningun paso pregunta esto: ni las Reglas lo piden ni la tienda usa contrasena. */
+const FORBIDDEN_FIELDS = [
+  "password",
+  "password_confirmation",
+  "date_of_birth",
+  "birth_date",
+  "age",
+  "state",
+  "region",
+  "country",
+];
+
+function expectNoForbiddenFields(container: HTMLElement): void {
+  for (const forbidden of FORBIDDEN_FIELDS) {
+    expect(
+      container.querySelector(`[name="${forbidden}"]`),
+      `el acceso pregunta un dato que no debe: ${forbidden}`,
+    ).toBeNull();
+  }
+  expect(container.querySelector('input[type="password"]')).toBeNull();
+}
+
+/** Escribe el contacto y lo envia; espera al paso del codigo. */
+async function sendCode(container: HTMLElement, contact: string, locale: Locale): Promise<void> {
+  const input = container.querySelector('input[name="contact"]');
+  if (input === null) throw new Error("no hay campo de contacto");
+  fireEvent.change(input, { target: { value: contact } });
+
+  const form = input.closest("form");
+  if (form === null) throw new Error("el campo no esta en un formulario");
+  fireEvent.submit(form);
+
+  const messages = locale === "en" ? enMessages : esMessages;
+  await screen.findByRole("button", { name: messages.auth.code.verify });
+}
+
+/** Teclea un codigo y lo envia; espera al paso de nombre y estado. */
+async function verifyCode(container: HTMLElement, locale: Locale): Promise<void> {
+  const code = container.querySelector('input[name="code"]');
+  if (code === null) throw new Error("no hay campo de codigo");
+  fireEvent.change(code, { target: { value: "123456" } });
+
+  const form = code.closest("form");
+  if (form === null) throw new Error("el campo no esta en un formulario");
+  fireEvent.submit(form);
+
+  const messages = locale === "en" ? enMessages : esMessages;
+  await screen.findByText(messages.auth.code.profileTitle);
+}
+
+function renderFlow(
+  locale: Locale,
+  consents: readonly ConsentRequirement[] = [],
+  returnPath: string | null = null,
+) {
+  return renderIn(
+    locale,
+    <SignInFlow locale={locale} consents={consents} returnPath={returnPath} />,
+  );
+}
 
 function renderIn(locale: Locale, ui: ReactNode) {
   return render(
@@ -94,57 +169,91 @@ function renderIn(locale: Locale, ui: ReactNode) {
   );
 }
 
-describe("formulario de inicio de sesion", () => {
-  it.each(LOCALES)("pinta 'correo o celular' y contrasena en %s", (locale) => {
-    const { container } = renderIn(locale, <LoginForm locale={locale} returnPath={null} />);
-
-    // DEC-060: un solo campo para los dos identificadores. `type="text"` y no
-    // `email`: el navegador rechazaria un telefono antes de enviarlo.
-    const identifier = container.querySelector('input[name="identifier"]');
-    expect(identifier).not.toBeNull();
-    expect(identifier?.getAttribute("type")).toBe("text");
-    expect(identifier?.getAttribute("autocomplete")).toBe("username");
-    expect(container.querySelector('input[name="password"]')).not.toBeNull();
+describe("entrar o crear la cuenta con un codigo (DEC-089)", () => {
+  beforeEach(() => {
+    actions.sendSignInCodeAction.mockClear();
+    actions.verifySignInCodeAction.mockClear();
   });
 
-  it("el destino de vuelta viaja en un campo oculto", () => {
-    const { container } = renderIn("en", <LoginForm locale="en" returnPath="/account/entries" />);
+  it.each(LOCALES)("el primer paso es UN campo, correo o celular, en %s", (locale) => {
+    const { container } = renderFlow(locale);
 
-    const hidden = container.querySelector('input[name="next"]');
-    expect(hidden).not.toBeNull();
-    expect(hidden?.getAttribute("value")).toBe("/account/entries");
+    // `type="text"` y no `email`: el navegador rechazaria un telefono.
+    const contact = container.querySelector('input[name="contact"]');
+    expect(contact).not.toBeNull();
+    expect(contact?.getAttribute("type")).toBe("text");
+    expect(container.querySelectorAll("input:not([type=hidden])")).toHaveLength(1);
+
+    // Se avisa del mensaje de texto ANTES de enviarlo.
+    const messages = locale === "en" ? enMessages : esMessages;
+    expect(screen.getByText(messages.auth.code.smsDisclosure)).toBeInTheDocument();
+
+    expect(container.querySelector('input[type="checkbox"]')).toBeNull();
+    // Sin la clave publica de Turnstile no se pinta ningun widget.
+    expect(container.querySelector("iframe")).toBeNull();
+    expectNoForbiddenFields(container);
   });
 
-  it("sin destino de vuelta no se pinta el campo", () => {
-    const { container } = renderIn("en", <LoginForm locale="en" returnPath={null} />);
-    expect(container.querySelector('input[name="next"]')).toBeNull();
-  });
-
-  it("el campo de contrasena pide la guardada, no una nueva", () => {
-    // `current-password` y no `new-password`: con el segundo, el gestor de
-    // contrasenas ofrece GENERAR una en la pantalla de entrar.
-    const { container } = renderIn("en", <LoginForm locale="en" returnPath={null} />);
-
-    expect(container.querySelector('input[name="password"]')?.getAttribute("autocomplete")).toBe(
-      "current-password",
-    );
-  });
-});
-
-describe("formulario de alta", () => {
   it.each(LOCALES)(
-    "pregunta fecha de nacimiento y estado (DEC-067), y ningun otro dato legal en %s",
-    (locale) => {
-      const { container } = renderIn(
-        locale,
-        <RegisterForm locale={locale} consents={[]} returnPath={null} />,
-      );
+    "tras enviar, pide el codigo de forma que el telefono lo rellene, en %s",
+    async (locale) => {
+      const { container } = renderFlow(locale);
+      await sendCode(container, "ana@example.invalid", locale);
 
-      // Las Official Rules definen al "Entrant" por edad y estado: esos dos se
-      // preguntan. Lo demas no lo piden las Reglas y no se pregunta.
-      const dateOfBirth = container.querySelector('input[name="date_of_birth"]');
-      expect(dateOfBirth?.getAttribute("type")).toBe("date");
-      expect(dateOfBirth?.hasAttribute("required")).toBe(true);
+      const code = container.querySelector('input[name="code"]');
+      expect(code?.getAttribute("inputmode")).toBe("numeric");
+      expect(code?.getAttribute("autocomplete")).toBe("one-time-code");
+      // La longitud la decide el backend.
+      expect(code?.hasAttribute("pattern")).toBe(false);
+      expect(code?.hasAttribute("maxlength")).toBe(false);
+
+      // El contacto viaja con el codigo; no hay ningun token en el formulario.
+      expect(
+        container.querySelector('form input[name="contact"][type="hidden"]')?.getAttribute("value"),
+      ).toBe("ana@example.invalid");
+      expectNoForbiddenFields(container);
+    },
+  );
+
+  it("dice por donde salio el codigo: correo o mensaje de texto", async () => {
+    const byEmail = renderFlow("es");
+    await sendCode(byEmail.container, "ana@example.invalid", "es");
+    expect(screen.getByText(esMessages.auth.code.sentEmailTitle)).toBeInTheDocument();
+    byEmail.unmount();
+
+    const byPhone = renderFlow("es");
+    await sendCode(byPhone.container, "(512) 555-0100", "es");
+    expect(screen.getByText(esMessages.auth.code.sentSmsTitle)).toBeInTheDocument();
+  });
+
+  it("el destino de vuelta viaja con el codigo", async () => {
+    const { container } = renderFlow("en", [], "/checkout");
+    await sendCode(container, "ana@example.invalid", "en");
+
+    expect(container.querySelector('input[name="next"]')?.getAttribute("value")).toBe("/checkout");
+  });
+
+  it("'usar otro correo o celular' vuelve al primer paso sin perder lo escrito", async () => {
+    const { container } = renderFlow("es");
+    await sendCode(container, "ana@example.invalid", "es");
+
+    fireEvent.click(screen.getByRole("button", { name: esMessages.auth.code.changeContact }));
+
+    expect(
+      container.querySelector('input[name="contact"]:not([type="hidden"])')?.getAttribute("value"),
+    ).toBe("ana@example.invalid");
+  });
+
+  it.each(LOCALES)(
+    "un contacto sin cuenta pide nombre, estado y UNA casilla; nada mas, en %s",
+    async (locale) => {
+      const { container } = renderFlow(locale, requiredConsents);
+      await sendCode(container, "nueva@example.invalid", locale);
+      await verifyCode(container, locale);
+
+      const name = container.querySelector('input[name="display_name"]');
+      expect(name?.hasAttribute("required")).toBe(true);
+      expect(name?.getAttribute("autocomplete")).toBe("name");
 
       const state = container.querySelector('select[name="residence_state"]');
       // 50 estados + DC, mas la opcion vacia de "elige".
@@ -152,116 +261,60 @@ describe("formulario de alta", () => {
       expect(state?.querySelector('option[value="DC"]')).not.toBeNull();
       expect(state?.querySelector('option[value="PR"]')).toBeNull();
 
-      for (const forbidden of ["birth_date", "age", "state", "region", "country"]) {
-        expect(
-          container.querySelector(`[name="${forbidden}"]`),
-          `el alta pregunta un dato que las Reglas no piden: ${forbidden}`,
-        ).toBeNull();
-      }
-    },
-  );
+      // Una sola casilla para todos los documentos.
+      expect(container.querySelectorAll('input[type="checkbox"]')).toHaveLength(1);
+      expect(container.querySelector('input[name="consents_agreed"]')).not.toBeNull();
 
-  it("sin consentimientos publicados no pinta ninguna casilla", () => {
-    const { container } = renderIn(
-      "en",
-      <RegisterForm locale="en" consents={[]} returnPath={null} />,
-    );
-
-    expect(container.querySelector('input[type="checkbox"]')).toBeNull();
-  });
-
-  it("pinta las casillas que publica el backend, con su version", () => {
-    const { container } = renderIn(
-      "en",
-      <RegisterForm locale="en" consents={requiredConsents} returnPath={null} />,
-    );
-
-    const consent = requiredConsents[0];
-    expect(consent).toBeDefined();
-    if (consent === undefined) return;
-
-    expect(container.querySelector(`input[name="consent_accepted:${consent.key}"]`)).not.toBeNull();
-
-    // Clave y version viajan juntas: aceptar unas reglas sin decir cual version
-    // es una afirmacion sin fecha.
-    const hidden = container.querySelector('input[name="consent"]');
-    expect(hidden?.getAttribute("value")).toBe(`${consent.key}:${consent.version}`);
-    // El patron sale de un fixture de este repositorio, no de entrada de usuario.
-    // eslint-disable-next-line security/detect-non-literal-regexp
-    expect(screen.getByText(new RegExp(consent.version))).toBeInTheDocument();
-  });
-
-  it("una clave de consentimiento desconocida no aparece en crudo", () => {
-    renderIn("es", <RegisterForm locale="es" consents={[unknownConsent]} returnPath={null} />);
-
-    // Nunca la clave tecnica delante de un participante; un texto generico que
-    // remite a las Reglas Oficiales.
-    expect(screen.queryByText(/SOMETHING_THE_FRONTEND_DOES_NOT_KNOW/)).toBeNull();
-    expect(screen.getByText(esMessages.auth.consent.fallback)).toBeInTheDocument();
-  });
-
-  it.each(LOCALES)("las dos contrasenas piden una nueva en %s", (locale) => {
-    const { container } = renderIn(
-      locale,
-      <RegisterForm locale={locale} consents={[]} returnPath={null} />,
-    );
-
-    for (const name of ["password", "password_confirmation"]) {
-      expect(container.querySelector(`input[name="${name}"]`)?.getAttribute("autocomplete")).toBe(
-        "new-password",
-      );
-    }
-  });
-});
-
-describe("alta con celular (DEC-060)", () => {
-  it.each(LOCALES)(
-    "el selector cambia a celular y pide el numero, no el correo, en %s",
-    (locale) => {
-      const { container } = renderIn(
-        locale,
-        <RegisterForm locale={locale} consents={[]} returnPath={null} />,
-      );
-
-      // Por defecto, correo: el alta de siempre.
-      expect(container.querySelector('input[name="email"]')).not.toBeNull();
-
-      const phoneButton = screen.getByRole("button", {
-        name: locale === "en" ? "Mobile number" : "Celular",
-      });
-      fireEvent.click(phoneButton);
-
-      expect(phoneButton.getAttribute("aria-pressed")).toBe("true");
-      expect(container.querySelector('input[name="email"]')).toBeNull();
-
-      const phone = container.querySelector('input[name="phone"]');
-      expect(phone).not.toBeNull();
-      expect(phone?.getAttribute("type")).toBe("tel");
-
-      // El primer paso pide el codigo: el proposito viaja en el formulario.
-      const purpose = container.querySelector('input[name="purpose"]');
-      expect(purpose?.getAttribute("value")).toBe("REGISTER");
-
-      // Se avisa de que se enviara un mensaje de texto ANTES de enviarlo.
+      // Nombre y estado son los unicos campos que se teclean.
       expect(
-        screen.getByText(locale === "en" ? /one text message/iu : /mensaje de texto/iu),
-      ).not.toBeNull();
-
-      // Sin la clave publica de Turnstile no se pinta ningun widget.
-      expect(container.querySelector("iframe")).toBeNull();
+        container.querySelectorAll("input:not([type=hidden]):not([type=checkbox]), select"),
+      ).toHaveLength(2);
+      expectNoForbiddenFields(container);
+      expect(container.textContent).not.toMatch(/\b18\b/u);
     },
   );
 
-  it("el primer paso no pide contrasena ni ningun dato legal", () => {
-    const { container } = renderIn(
-      "es",
-      <RegisterForm locale="es" consents={[]} returnPath={null} />,
-    );
-    fireEvent.click(screen.getByRole("button", { name: "Celular" }));
+  it("la casilla nombra los documentos que publica el backend, y su version viaja oculta", async () => {
+    const consents: readonly ConsentRequirement[] = [
+      { key: "OFFICIAL_RULES", version: "2026-10-04", text_key: "OFFICIAL_RULES", required: true },
+      { key: "TERMS", version: "2026-09-30", text_key: "TERMS", required: true },
+      { key: "PRIVACY", version: "2026-09-30", text_key: "PRIVACY", required: true },
+    ];
+    const { container } = renderFlow("es", consents);
+    await sendCode(container, "nueva@example.invalid", "es");
+    await verifyCode(container, "es");
 
-    expect(container.querySelector('input[type="password"]')).toBeNull();
+    expect(
+      screen.getByText(
+        "He leído y acepto las Reglas Oficiales, los Términos y condiciones y la Política de privacidad.",
+      ),
+    ).toBeInTheDocument();
+
+    // Clave y version juntas: aceptar sin decir que version es una afirmacion sin fecha.
+    const hidden = [...container.querySelectorAll('input[name="consent"]')].map((input) =>
+      input.getAttribute("value"),
+    );
+    expect(hidden).toEqual(["OFFICIAL_RULES:2026-10-04", "TERMS:2026-09-30", "PRIVACY:2026-09-30"]);
+  });
+
+  it("sin consentimientos publicados no pinta ninguna casilla", async () => {
+    const { container } = renderFlow("en", []);
+    await sendCode(container, "new@example.invalid", "en");
+    await verifyCode(container, "en");
+
     expect(container.querySelector('input[type="checkbox"]')).toBeNull();
-    expect(container.textContent).not.toMatch(/18|edad|residen/iu);
+  });
+
+  it("una clave de consentimiento desconocida no aparece en crudo", async () => {
+    const { container } = renderFlow("es", [unknownConsent]);
+    await sendCode(container, "nueva@example.invalid", "es");
+    await verifyCode(container, "es");
+
+    // Nunca la clave tecnica delante de un participante; un texto generico.
+    expect(screen.queryByText(/SOMETHING_THE_FRONTEND_DOES_NOT_KNOW/)).toBeNull();
+    expect(
+      screen.getByText(`He leído y acepto ${esMessages.auth.consent.documents.fallback}.`),
+    ).toBeInTheDocument();
   });
 });
 

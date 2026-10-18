@@ -12,7 +12,7 @@
 import { expect } from "@playwright/test";
 import { Secret, TOTP } from "otpauth";
 
-import { FAKE_PARTICIPANT_PASSWORD, FAKE_STAFF_PASSWORD } from "./fixture.mjs";
+import { CONSOLE_SMS_CODE, FAKE_STAFF_PASSWORD, PHONE_FOR_EMAIL } from "./fixture.mjs";
 
 /**
  * Codigo TOTP del instante actual, derivado del secreto que sembro el escenario.
@@ -46,19 +46,34 @@ export async function waitForNextTotpWindow() {
   await new Promise((resolve) => setTimeout(resolve, periodMs - elapsed + 1_000));
 }
 
+/**
+ * Pide el codigo y lo teclea (DEC-089), desde la pantalla de entrar.
+ *
+ * Por celular y con el codigo fijo del SMS de consola: el e2e no tiene buzon de
+ * correo. Deja la pagina donde la deje la accion: el portal si la cuenta
+ * existia, o el paso de nombre y estado si no.
+ */
+export async function enterWithCode(page, phone) {
+  await page.locator('input[name="contact"]').fill(phone);
+  await page.getByRole("button", { name: "Continuar", exact: true }).click();
+
+  await page.locator('input[name="code"]').fill(CONSOLE_SMS_CODE);
+  await page.getByRole("button", { name: "Entrar", exact: true }).click();
+}
+
 /** Inicia sesion como participante y deja la pagina en `/es/account`. */
 export async function loginParticipant(page, email) {
+  const phone = PHONE_FOR_EMAIL.get(email);
+  if (phone === undefined) throw new Error(`El escenario no sembro un celular para ${email}.`);
+
   await page.goto("/es/account/login");
 
-  // DEC-060: el campo acepta correo o celular y se llama `identifier`. El
-  // acceso del personal (`loginStaff`) sigue siendo solo por correo.
-  await page.locator('input[name="identifier"]').fill(email);
-  await page.locator('input[name="password"]').fill(FAKE_PARTICIPANT_PASSWORD);
-  await page.getByRole("button", { name: "Iniciar sesión" }).click();
+  // DEC-089: el participante entra con un codigo, sin contrasena. El acceso del
+  // personal (`loginStaff`) sigue siendo correo, contrasena y TOTP.
+  await enterWithCode(page, phone);
 
-  // El participante no tiene segundo factor, asi que la accion redirige
-  // directamente al portal. Si acabara en `/account/mfa`, el escenario habria
-  // creado un factor que no debia.
+  // La cuenta existe y no tiene segundo factor, asi que la accion redirige
+  // directamente al portal.
   await page.waitForURL(/\/es\/account(\?|$)/, { timeout: 30_000 });
 }
 

@@ -140,12 +140,15 @@ export default async function CheckoutPage({ params }: { params: Promise<{ local
     fetchMyEligibility(locale, session),
   ]);
   const flags = configResult.ok ? toFeatureFlags(configResult.data) : null;
-  const checksEligibility =
-    flags !== null &&
-    (isFeatureEnabled(flags, "age_gate_enabled") ||
-      isFeatureEnabled(flags, "state_eligibility_enforcement_enabled"));
-  const needsDeclaration =
-    checksEligibility && eligibilityResult.ok && !eligibilityResult.data.declared;
+  const ageGate = flags !== null && isFeatureEnabled(flags, "age_gate_enabled");
+  const stateGate =
+    flags !== null && isFeatureEnabled(flags, "state_eligibility_enforcement_enabled");
+  const declaration = eligibilityResult.ok ? eligibilityResult.data : null;
+  // DEC-089: cada mitad por separado. La edad necesita tambien el estado (la
+  // mayoria de edad depende de el); el estado no necesita la edad.
+  const needsState = (ageGate || stateGate) && declaration?.residence_state_declared === false;
+  const needsDateOfBirth = ageGate && declaration?.date_of_birth_declared === false;
+  const needsDeclaration = needsState || needsDateOfBirth;
   const requiredConsents = configResult.ok ? (configResult.data.required_consents ?? []) : [];
 
   const timeZone =
@@ -163,7 +166,11 @@ export default async function CheckoutPage({ params }: { params: Promise<{ local
             </h2>
 
             <div className="mt-s5">
-              <EligibilityDeclarationForm locale={locale} consents={requiredConsents} />
+              <EligibilityDeclarationForm
+                locale={locale}
+                consents={requiredConsents}
+                onlyDateOfBirth={!needsState}
+              />
             </div>
           </section>
         ) : (

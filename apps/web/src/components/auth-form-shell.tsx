@@ -216,35 +216,6 @@ export function LocaleField({ locale }: { readonly locale: string }) {
 }
 
 /**
- * "Correo o celular" en un solo campo (DEC-060), para iniciar sesion.
- *
- * `type="text"` y no `email`: el navegador rechazaria un telefono. Y
- * `autoComplete="username"`, que es lo que el gestor de contrasenas asocia a la
- * contrasena guardada sea cual sea el identificador.
- */
-export function IdentifierField({ result }: { readonly result: ActionResult }) {
-  const t = useTranslations("auth.fields");
-  const fieldError = useFieldError(result);
-
-  return (
-    <FormField
-      label={t("identifier")}
-      required
-      requiredHint={t("requiredHint")}
-      error={fieldError("identifier")}
-    >
-      <Input
-        name="identifier"
-        type="text"
-        autoComplete="username"
-        autoCapitalize="none"
-        spellCheck={false}
-      />
-    </FormField>
-  );
-}
-
-/**
  * Celular (DEC-060). `type="tel"` abre el teclado numerico en el movil.
  *
  * Controlado a proposito, al contrario que los demas campos: el numero tiene

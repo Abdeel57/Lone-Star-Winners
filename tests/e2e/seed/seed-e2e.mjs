@@ -53,6 +53,7 @@ import {
   AMOE_FIELD_KEYS,
   AMOE_MAX_CARDS_PER_PARTICIPANT,
   CAP_PARTICIPANT_EMAIL,
+  CAP_PARTICIPANT_PHONE,
   CAP_SEEDED_ENTRIES,
   COMPLIANCE_OFFICER_EMAIL,
   FAKE_PARTICIPANT_PASSWORD,
@@ -65,6 +66,7 @@ import {
   PACKAGE_SKU,
   PACKAGE_SLUG,
   PARTICIPANT_EMAIL,
+  PARTICIPANT_PHONE,
   PER_PARTICIPANT_MAX,
   PRODUCT_CURRENCY,
   PRODUCT_NAME,
@@ -290,12 +292,16 @@ function buildRulesConfig(window) {
   };
 }
 
-async function insertIdentity(client, { email, password }) {
+/**
+ * `phone` (DEC-089): celular VERIFICADO con el que el participante entra por
+ * codigo. El personal no lo lleva: entra por el panel con contrasena y TOTP.
+ */
+async function insertIdentity(client, { email, password, phone = null }) {
   const identity = await client.query(
-    `INSERT INTO identities (email, status, email_verified_at)
-     VALUES ($1, 'ACTIVE', now())
+    `INSERT INTO identities (email, status, email_verified_at, phone_e164, phone_verified_at)
+     VALUES ($1, 'ACTIVE', now(), $2::text, CASE WHEN $2::text IS NULL THEN NULL ELSE now() END)
      RETURNING id`,
-    [email],
+    [email, phone],
   );
 
   const identityId = identity.rows[0].id;
@@ -370,6 +376,7 @@ async function seed(client) {
   const participantIdentityId = await insertIdentity(client, {
     email: PARTICIPANT_EMAIL,
     password: FAKE_PARTICIPANT_PASSWORD,
+    phone: PARTICIPANT_PHONE,
   });
 
   const participant = await client.query(
@@ -601,6 +608,7 @@ async function seed(client) {
   const capIdentityId = await insertIdentity(client, {
     email: CAP_PARTICIPANT_EMAIL,
     password: FAKE_PARTICIPANT_PASSWORD,
+    phone: CAP_PARTICIPANT_PHONE,
   });
 
   const capParticipant = await client.query(

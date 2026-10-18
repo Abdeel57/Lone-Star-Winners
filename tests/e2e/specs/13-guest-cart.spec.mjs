@@ -14,13 +14,8 @@
 
 import { expect, test } from "@playwright/test";
 
-import {
-  API_BASE_URL,
-  FAKE_PARTICIPANT_PASSWORD,
-  PARTICIPANT_EMAIL,
-  PRODUCT_SLUG,
-  readFixture,
-} from "../lib/fixture.mjs";
+import { enterWithCode } from "../lib/actions.mjs";
+import { API_BASE_URL, PARTICIPANT_PHONE, PRODUCT_SLUG, readFixture } from "../lib/fixture.mjs";
 
 let fixture;
 
@@ -62,12 +57,10 @@ test("un visitante sin cuenta llena el carrito, ve el total con envio y paga tra
   await expect(page.getByRole("heading", { name: "Crea tu cuenta para pagar" })).toBeVisible();
   await expect(page.getByText("Lo que estás pidiendo")).toBeVisible();
 
-  // 4. Iniciar sesion desde ahi devuelve al pago.
+  // 4. Iniciar sesion desde ahi -con codigo, DEC-089- devuelve al pago.
   await page.getByRole("link", { name: "Ya tengo cuenta" }).click();
   await page.waitForURL(/\/es\/account\/login\?next=/);
-  await page.locator('input[name="identifier"]').fill(PARTICIPANT_EMAIL);
-  await page.locator('input[name="password"]').fill(FAKE_PARTICIPANT_PASSWORD);
-  await page.getByRole("button", { name: "Iniciar sesión" }).click();
+  await enterWithCode(page, PARTICIPANT_PHONE);
 
   await page.waitForURL(/\/es\/checkout(?!.*login)/, { timeout: 30_000 });
   await expect(page.getByRole("heading", { name: "Crea tu cuenta para pagar" })).toHaveCount(0);

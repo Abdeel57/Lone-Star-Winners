@@ -227,6 +227,9 @@ markdown, y es lo que verifica el test de contrato de DEC-015.
 | POST   | /api/v1/auth/password/reset             | `PUBLIC`           |
 | POST   | /api/v1/auth/phone/start                | `PUBLIC`           |
 | POST   | /api/v1/auth/password/reset-sms         | `PUBLIC`           |
+| POST   | /api/v1/auth/code/start                 | `PUBLIC` (DEC-089) |
+| POST   | /api/v1/auth/code/verify                | `PUBLIC` (DEC-089) |
+| POST   | /api/v1/auth/code/register              | `PUBLIC` (DEC-089) |
 
 Las tres de infraestructura (`/api/v1/health`, `/api/v1/health/ready`,
 `/api/v1/openapi.json`) están documentadas más abajo y exentas de ese gate por
@@ -1512,6 +1515,10 @@ sola transacción, y **abre sesión de escaparate en el acto**: responde con el
 mismo `SessionState` que el login y emite la misma cookie. Nunca crea personal;
 los roles administrativos no se conceden por aquí.
 
+> **DEC-089:** la web ya no la usa. La tienda da de alta con código
+> (`POST /auth/code/*`, más abajo), sin contraseña y sin fecha de nacimiento.
+> Esta ruta se conserva sin cambios para no romper el contrato.
+
 Cuerpo:
 
 ```json
@@ -1753,6 +1760,99 @@ RATE_LIMITED` si se alcanzó su límite para ese número.
 Respuestas: `200` · `422 SMS_CODE_INVALID` (código incorrecto **o** número sin
 cuenta; no se distinguen) · `422 WEAK_PASSWORD` · `503 SMS_NOT_CONFIGURED`. Al
 fijar la contraseña levanta el bloqueo por intentos y revoca todas las sesiones.
+
+### Entrar sin contraseña (DEC-089)
+
+La tienda ya no usa contraseña: el participante entra **o se da de alta** con un
+código que le llega al correo o al celular. Es un solo flujo: si el contacto
+tenía cuenta, entra; si no, se piden nombre y estado y se crea. Que una cuenta
+existe solo se sabe **después** de acertar el código, así que este camino no
+enumera nada. `register` y `login` con contraseña siguen existiendo: el panel
+entra con `login` + `mfa/verify`, y un código **nunca** abre una sesión de
+personal.
+
+Límites (`SIGN_IN_CODE_POLICY`, `packages/security`): el código del correo es de
+**6 dígitos**, vale **10 minutos**, admite **5 intentos** y se gasta al
+acertarlo; solo vale el más reciente. El del celular lo genera y comprueba
+Twilio Verify. Tope: **3 códigos sin acertar cada 15 minutos por destinatario**
+(los acertados no cuentan, así que entrar y salir no lo agota). La tabla
+`sign_in_codes` (0040) guarda el **HMAC** del código con `SESSION_SECRET`, nunca
+el código.
+
+### `POST /api/v1/auth/code/start`
+
+`Authorization: PUBLIC`. Cuerpo: `{ "contact", "bot_check_token"? }`.
+
+- `contact` es lo que teclea la persona: con `@`, correo (se normaliza a
+  minúsculas); sin `@`, celular de EE. UU. (E.164). `422 CONTACT_INVALID` (correo
+  mal formado) o `422 PHONE_INVALID`.
+- Se envía **exista o no** una cuenta con ese contacto; la respuesta es la misma.
+- `bot_check_token` (Turnstile) es obligatorio si la API tiene
+  `TURNSTILE_SECRET_KEY`: sin él, `422 BOT_CHECK_FAILED`.
+
+Respuestas: `200 { "acknowledged": true, "channel": "EMAIL" | "SMS" }` ·
+`429 RATE_LIMITED` (con `retry_after_seconds`) · `503 SMS_NOT_CONFIGURED` ·
+`503 SERVICE_UNAVAILABLE` (el proveedor no aceptó el envío).
+
+### `POST /api/v1/auth/code/verify`
+
+`Authorization: PUBLIC`. Cuerpo: `{ "contact", "code" }` (se quitan los espacios
+del código).
+
+```json
+{
+  "status": "SIGNED_IN",
+  "session": {
+    "authenticated": true,
+    "state": "ACTIVE",
+    "scope": "PARTICIPANT",
+    "...": "..."
+  }
+}
+```
+
+- **`SIGNED_IN`**: el contacto tenía cuenta. Abre sesión de **participante**
+  (cookie del escaparate), adopta el carrito sin cuenta (DEC-079) y, si era el
+  correo, lo da por verificado.
+- **`PROFILE_REQUIRED`** con `session: null`: el contacto no tenía cuenta. Deja
+  una cookie `httpOnly`, `SameSite=Lax`, `Path=/`, **`<SESSION_COOKIE_NAME>_signup`**,
+  válida **30 minutos** y de un solo uso (`SIGNUP_TICKET_POLICY`). El navegador
+  no la lee.
+
+Rechazos: `422 SIGN_IN_CODE_INVALID` (código incorrecto) · `410
+SIGN_IN_CODE_EXPIRED` (caducado, agotado o sin pedir: hay que pedir otro) ·
+`403 STAFF_ACCOUNT_USE_PANEL` (cuenta de personal: entra por el panel) ·
+`403 ACCOUNT_UNAVAILABLE` (cuenta no `ACTIVE`, incluido el expediente
+`PENDING_VERIFICATION` de una ficha postal) · `503`.
+
+### `POST /api/v1/auth/code/register`
+
+`Authorization: PUBLIC`. Exige la cookie `<SESSION_COOKIE_NAME>_signup`. Cuerpo:
+
+```json
+{
+  "display_name": "Ana Pérez",
+  "residence_state": "TX",
+  "consents": [
+    { "key": "OFFICIAL_RULES", "version": "2026-10-04" },
+    { "key": "TERMS", "version": "2026-09-30" },
+    { "key": "PRIVACY", "version": "2026-09-30" }
+  ],
+  "language_preference": "es-US"
+}
+```
+
+Crea la cuenta **sin contraseña** (sin fila en `identity_credentials`), con el
+contacto ya verificado (`email_verified_at` o `phone_verified_at`), el estado
+declarado (DEC-067) y los consentimientos de `required_consents`. **No pide la
+fecha de nacimiento**: se declara en el checkout con `PUT /me/eligibility` si
+`age_gate_enabled` está encendido. Abre sesión de escaparate, adopta el carrito
+sin cuenta y retira la cookie de alta.
+
+Respuestas: `201 SessionState` · `410 SIGNUP_EXPIRED` (sin cookie, caducada o ya
+usada) · `422 CONSENT_REQUIRED` (antes de gastar la cookie) ·
+`409 EMAIL_ALREADY_REGISTERED` / `409 PHONE_ALREADY_REGISTERED` (otra alta con el
+mismo contacto ganó la carrera) · `422 VALIDATION_FAILED`.
 
 ### La cabecera `Cookie` que reenvía `apps/web`
 
@@ -2310,12 +2410,17 @@ Method: GET
 Endpoint: /api/v1/me/eligibility
 
 Purpose: GET /api/v1/me/eligibility dice si el participante ya declaró fecha de
-nacimiento y estado (DEC-067).
+nacimiento y estado (DEC-067), cada mitad por separado (DEC-089).
 
-Response: 200 { "declared": boolean, "declared_at": "ISO-8601" | null }
+Response: 200 { "declared": boolean, "declared_at": "ISO-8601" | null,
+                "residence_state_declared": boolean,
+                "date_of_birth_declared": boolean }
 
-Solo dice SI declaró y cuándo, nunca lo declarado. Si es elegible no se responde
-aquí: depende de las reglas de cada promoción y se evalúa al otorgar.
+`declared` es true solo con LAS DOS mitades. `declared_at` es el instante de la
+declaración del estado. Una cuenta creada sin contraseña (DEC-089) declaró el
+estado en el alta y no la fecha. Solo dice SI declaró y cuándo, nunca lo
+declarado. Si es elegible no se responde aquí: depende de las reglas de cada
+promoción y se evalúa al otorgar.
 
 Authorization: participant.self.read
 
@@ -2328,22 +2433,28 @@ Status: IMPLEMENTED
 Method: PUT
 Endpoint: /api/v1/me/eligibility
 
-Purpose: con PUT /api/v1/me/eligibility, una cuenta anterior a DEC-067 declara
-fecha de nacimiento y estado.
+Purpose: con PUT /api/v1/me/eligibility se declara lo que falte: una cuenta
+anterior a DEC-067, fecha de nacimiento y estado; una cuenta sin contraseña
+(DEC-089), solo la fecha.
 
-Request: { "date_of_birth": "YYYY-MM-DD", "residence_state": "TX",
-           "consents": [{ "key": "...", "version": "..." }],
+Request: { "date_of_birth"?: "YYYY-MM-DD", "residence_state"?: "TX",
+           "consents"?: [{ "key": "...", "version": "..." }],
            "language": "en-US" | "es-US" }
 
-Una sola vez: una declaración existente no se reescribe, porque cambiar la fecha
-o el estado después de comprar sería volverse elegible a posteriori. Exige los
-mismos consentimientos que el alta. La web la pide en el checkout cuando la
-promoción comprueba edad o estado.
+Hace falta al menos una de las dos mitades. No se reescribe: una mitad ya
+declarada con otro valor, o un envío que no añade nada, es 409, porque cambiar la
+fecha o el estado después de comprar sería volverse elegible a posteriori. Al
+declarar el ESTADO exige los consentimientos de `required_consents` (los de una
+cuenta anterior a DEC-067); declarar solo la fecha no los pide, porque la cuenta
+nueva ya los aceptó en el alta. Una fecha sin estado, en una cuenta que no lo
+declaró, es 422 ELIGIBILITY_STATE_REQUIRED. La web lo pide en el checkout:
+fecha y estado si la promoción comprueba edad o estado y no hay estado; solo la
+fecha si comprueba la edad y falta la fecha.
 
-Response: 200 { "declared": true, "declared_at": "ISO-8601" }
+Response: 200, la misma forma que GET /api/v1/me/eligibility.
 
 Errors: 409 ELIGIBILITY_ALREADY_DECLARED, 422 CONSENT_REQUIRED,
-422 VALIDATION_FAILED
+422 ELIGIBILITY_STATE_REQUIRED, 422 VALIDATION_FAILED
 
 Authorization: participant.self.update
 

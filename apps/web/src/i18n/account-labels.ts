@@ -252,3 +252,29 @@ export function useConsentText(): (textKey: string) => string {
     return t("fallback");
   };
 }
+
+/**
+ * Nombre de un documento para la casilla unica del alta (DEC-089): "las Reglas
+ * Oficiales", "los Terminos y condiciones"... La frase la compone
+ * `ConsentAgreement` con los que publique `GET /config`, asi que un documento
+ * nuevo aparece en ella sin tocar el texto. Una clave desconocida cae al mismo
+ * generico que `useConsentText`, que no afirma nada concreto.
+ */
+export function useConsentDocumentName(): (textKey: string) => string {
+  const t = useTranslations("auth.consent.documents");
+
+  return (textKey: string): string => {
+    if (isTranslatedConsentKey(textKey)) {
+      switch (textKey) {
+        case "OFFICIAL_RULES":
+          return t("OFFICIAL_RULES");
+        case "TERMS":
+          return t("TERMS");
+        case "PRIVACY":
+          return t("PRIVACY");
+      }
+    }
+
+    return t("fallback");
+  };
+}

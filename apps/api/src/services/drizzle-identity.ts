@@ -14,12 +14,13 @@
 import type { Database } from "@lsw/database";
 import { schema } from "@lsw/database";
 import type { SessionAudience } from "@lsw/security";
-import { and, count, eq, gt, gte, isNull, sql } from "drizzle-orm";
+import { and, count, desc, eq, gt, gte, isNull, lt, sql } from "drizzle-orm";
 
 import type {
   CartSessionRecord,
   ConsentAcceptanceInput,
   ConsumeEmailTokenResult,
+  ConsumeSignupTicketResult,
   CreateSessionInput,
   CredentialRecord,
   EligibilityDeclarationInput,
@@ -40,6 +41,7 @@ const {
   cartSessions,
   adminUserRoles,
   adminUsers,
+  signInCodes,
 } = schema;
 
 function toCartSession(row: {
@@ -56,12 +58,16 @@ function toCartSession(row: {
   };
 }
 
-/** DEC-067: las columnas de la declaracion, para el INSERT o el UPDATE de `participants`. */
+/**
+ * DEC-067: las columnas de una declaracion COMPLETA, para el INSERT del alta con
+ * contrasena. DEC-089: las dos mitades con el mismo instante.
+ */
 function declarationColumns(eligibility: EligibilityDeclarationInput) {
   return {
     dateOfBirth: eligibility.dateOfBirth,
     residenceState: eligibility.residenceState,
     eligibilityDeclaredAt: eligibility.declaredAt,
+    dateOfBirthDeclaredAt: eligibility.declaredAt,
   };
 }
 
@@ -294,12 +300,74 @@ export function createIdentityRepositories(db: Database): IdentityRepositories {
         }
       },
 
+      async registerVerifiedParticipant(input): Promise<IdentityRecord | null> {
+        const byEmail = input.channel === "EMAIL";
+
+        try {
+          return await db.transaction(async (tx) => {
+            const [identity] = await tx
+              .insert(identities)
+              .values({
+                // `ACTIVE` y verificado desde el primer instante: el contacto
+                // llega aqui demostrado con el codigo. Sin fila en
+                // `identity_credentials`: la cuenta entra con codigo, no con
+                // contrasena.
+                email: byEmail ? input.contact : null,
+                emailVerifiedAt: byEmail ? input.verifiedAt : null,
+                phoneE164: byEmail ? null : input.contact,
+                phoneVerifiedAt: byEmail ? null : input.verifiedAt,
+                status: "ACTIVE",
+              })
+              .returning(identityProjection);
+
+            if (identity === undefined) throw new Error("identity_insert_returned_no_row");
+
+            const [participant] = await tx
+              .insert(participants)
+              .values({
+                identityId: identity.id,
+                displayName: input.displayName,
+                preferredLocale: input.preferredLocale,
+                // Tambien como dato de contacto, como en el alta con celular.
+                ...(byEmail ? {} : { phoneE164: input.contact }),
+                // DEC-089: solo el estado. La fecha se pide en el checkout si
+                // la puerta de edad esta encendida.
+                residenceState: input.residenceState,
+                eligibilityDeclaredAt: input.verifiedAt,
+              })
+              .returning({ id: participants.id });
+
+            if (participant === undefined) throw new Error("participant_insert_returned_no_row");
+
+            if (input.consents.length > 0) {
+              await tx
+                .insert(participantConsents)
+                .values(
+                  consentRows(
+                    participant.id,
+                    input.consents,
+                    input.preferredLocale,
+                    input.verifiedAt,
+                  ),
+                );
+            }
+
+            return toIdentity(identity);
+          });
+        } catch (error) {
+          const index = violatedUniqueIndex(error);
+          if (index === EMAIL_UNIQUE_INDEX || index === PHONE_UNIQUE_INDEX) return null;
+          throw error;
+        }
+      },
+
       async findEligibilityDeclaration(participantId) {
         const [row] = await db
           .select({
             dateOfBirth: participants.dateOfBirth,
             residenceState: participants.residenceState,
             declaredAt: participants.eligibilityDeclaredAt,
+            dateOfBirthDeclaredAt: participants.dateOfBirthDeclaredAt,
           })
           .from(participants)
           .where(eq(participants.id, participantId))
@@ -307,50 +375,80 @@ export function createIdentityRepositories(db: Database): IdentityRepositories {
 
         if (row === undefined) return null;
 
-        // La CHECK `participants_eligibility_declaration_complete` garantiza que
-        // vienen las tres o ninguna; se comprueban las tres igual.
-        const { dateOfBirth, residenceState, declaredAt } = row;
-        if (dateOfBirth === null || residenceState === null || declaredAt === null) return null;
-        return { dateOfBirth, residenceState, declaredAt };
+        // Sin estado no hay declaracion: la CHECK de 0040 impide una fecha sin
+        // estado. La fecha puede faltar (DEC-089).
+        const { dateOfBirth, residenceState, declaredAt, dateOfBirthDeclaredAt } = row;
+        if (residenceState === null || declaredAt === null) return null;
+        return {
+          dateOfBirth,
+          residenceState,
+          declaredAt,
+          dateOfBirthDeclaredAt: dateOfBirth === null ? null : dateOfBirthDeclaredAt,
+        };
       },
 
       async declareEligibility(input) {
         return await db.transaction(async (tx) => {
-          // Solo si no habia declarado: el `WHERE` lo decide en el motor, y dos
-          // envios simultaneos no pueden escribir los dos.
-          const updated = await tx
-            .update(participants)
-            .set({
-              ...declarationColumns(input.eligibility),
-              updatedAt: input.eligibility.declaredAt,
+          // La fila se bloquea: dos envios simultaneos no pueden escribir los
+          // dos una mitad que estaba vacia.
+          const [current] = await tx
+            .select({
+              residenceState: participants.residenceState,
+              dateOfBirth: participants.dateOfBirth,
             })
-            .where(
-              and(
-                eq(participants.id, input.participantId),
-                isNull(participants.eligibilityDeclaredAt),
-              ),
-            )
-            .returning({ id: participants.id });
+            .from(participants)
+            .where(eq(participants.id, input.participantId))
+            .limit(1)
+            .for("update");
 
-          if (updated.length === 0) {
-            const [exists] = await tx
-              .select({ id: participants.id })
-              .from(participants)
-              .where(eq(participants.id, input.participantId))
-              .limit(1);
-            return exists === undefined ? "NOT_FOUND" : "ALREADY_DECLARED";
+          if (current === undefined) return "NOT_FOUND";
+
+          const changes: {
+            residenceState?: string;
+            eligibilityDeclaredAt?: Date;
+            dateOfBirth?: string;
+            dateOfBirthDeclaredAt?: Date;
+          } = {};
+
+          if (input.residenceState !== null) {
+            if (current.residenceState === null) {
+              changes.residenceState = input.residenceState;
+              changes.eligibilityDeclaredAt = input.declaredAt;
+            } else if (current.residenceState !== input.residenceState) {
+              return "ALREADY_DECLARED";
+            }
           }
+
+          if (input.dateOfBirth !== null) {
+            if (current.dateOfBirth === null) {
+              changes.dateOfBirth = input.dateOfBirth;
+              changes.dateOfBirthDeclaredAt = input.declaredAt;
+            } else if (current.dateOfBirth !== input.dateOfBirth) {
+              return "ALREADY_DECLARED";
+            }
+          }
+
+          if (Object.keys(changes).length === 0) return "ALREADY_DECLARED";
+
+          // La mayoria de edad depende del estado: una fecha sin estado no se
+          // guarda (y la CHECK de 0040 tampoco la dejaria pasar).
+          if (
+            changes.dateOfBirth !== undefined &&
+            (changes.residenceState ?? current.residenceState) === null
+          ) {
+            return "STATE_REQUIRED";
+          }
+
+          await tx
+            .update(participants)
+            .set({ ...changes, updatedAt: input.declaredAt })
+            .where(eq(participants.id, input.participantId));
 
           if (input.consents.length > 0) {
             await tx
               .insert(participantConsents)
               .values(
-                consentRows(
-                  input.participantId,
-                  input.consents,
-                  input.locale,
-                  input.eligibility.declaredAt,
-                ),
+                consentRows(input.participantId, input.consents, input.locale, input.declaredAt),
               )
               // Una version ya aceptada no es un error: la fila ya cuenta lo mismo.
               .onConflictDoNothing();
@@ -630,6 +728,128 @@ export function createIdentityRepositories(db: Database): IdentityRepositories {
               isNull(identityEmailTokens.consumedAt),
             ),
           );
+      },
+    },
+
+    // DEC-089: como los enlaces de correo, todas las condiciones de un gasto
+    // van en el WHERE, para que el motor decida las carreras.
+    signInCodes: {
+      async countUnverifiedSince(channel, contact, since): Promise<number> {
+        const rows = await db
+          .select({ issued: count() })
+          .from(signInCodes)
+          .where(
+            and(
+              eq(signInCodes.channel, channel),
+              eq(signInCodes.contact, contact),
+              gte(signInCodes.createdAt, since),
+              isNull(signInCodes.verifiedAt),
+            ),
+          );
+
+        return rows[0]?.issued ?? 0;
+      },
+
+      async issue(input): Promise<void> {
+        await db.insert(signInCodes).values({
+          id: input.id,
+          channel: input.channel,
+          contact: input.contact,
+          codeHash: input.codeHash,
+          expiresAt: input.expiresAt,
+        });
+      },
+
+      async findLatestOpen(channel, contact) {
+        const rows = await db
+          .select({
+            id: signInCodes.id,
+            codeHash: signInCodes.codeHash,
+            attempts: signInCodes.attempts,
+            expiresAt: signInCodes.expiresAt,
+          })
+          .from(signInCodes)
+          .where(
+            and(
+              eq(signInCodes.channel, channel),
+              eq(signInCodes.contact, contact),
+              isNull(signInCodes.verifiedAt),
+              isNull(signInCodes.consumedAt),
+            ),
+          )
+          .orderBy(desc(signInCodes.createdAt))
+          .limit(1);
+
+        return rows[0] ?? null;
+      },
+
+      async registerAttempt(id, maxAttempts): Promise<number | null> {
+        const rows = await db
+          .update(signInCodes)
+          .set({ attempts: sql`${signInCodes.attempts} + 1` })
+          .where(and(eq(signInCodes.id, id), lt(signInCodes.attempts, maxAttempts)))
+          .returning({ attempts: signInCodes.attempts });
+
+        return rows[0]?.attempts ?? null;
+      },
+
+      async markVerified(id, now, signup): Promise<boolean> {
+        const rows = await db
+          .update(signInCodes)
+          .set({
+            verifiedAt: now,
+            ...(signup === null
+              ? { consumedAt: now }
+              : { signupTokenHash: signup.tokenHash, signupExpiresAt: signup.expiresAt }),
+          })
+          .where(
+            and(
+              eq(signInCodes.id, id),
+              isNull(signInCodes.verifiedAt),
+              isNull(signInCodes.consumedAt),
+            ),
+          )
+          .returning({ id: signInCodes.id });
+
+        return rows.length > 0;
+      },
+
+      async consumeSignupTicket(tokenHash, now): Promise<ConsumeSignupTicketResult> {
+        const consumed = await db
+          .update(signInCodes)
+          .set({ consumedAt: now })
+          .where(
+            and(
+              eq(signInCodes.signupTokenHash, tokenHash),
+              isNull(signInCodes.consumedAt),
+              gt(signInCodes.signupExpiresAt, now),
+            ),
+          )
+          .returning({
+            channel: signInCodes.channel,
+            contact: signInCodes.contact,
+            verifiedAt: signInCodes.verifiedAt,
+          });
+
+        const row = consumed[0];
+        // La CHECK `sign_in_codes_signup_needs_verification` garantiza `verifiedAt`.
+        if (row?.verifiedAt != null) {
+          return {
+            status: "CONSUMED",
+            channel: row.channel,
+            contact: row.contact,
+            verifiedAt: row.verifiedAt,
+          };
+        }
+
+        // Solo para elegir el mensaje, como en los enlaces de correo.
+        const existing = await db
+          .select({ consumedAt: signInCodes.consumedAt })
+          .from(signInCodes)
+          .where(eq(signInCodes.signupTokenHash, tokenHash))
+          .limit(1);
+
+        return existing[0]?.consumedAt === null ? { status: "EXPIRED" } : { status: "INVALID" };
       },
     },
 

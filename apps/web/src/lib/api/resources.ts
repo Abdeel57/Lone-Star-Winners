@@ -48,6 +48,8 @@ import type {
   LogoutResponse,
   PromotionSummary,
   SessionState,
+  SignInCodeSent,
+  SignInCodeVerified,
   SiteConfigResponse,
 } from "./contract";
 import type {
@@ -160,6 +162,12 @@ export const API_PATHS = {
   authPhoneStart: "/auth/phone/start",
   /** [CONTRATO] Fijar la contrasena con el codigo SMS (DEC-060). */
   authPasswordResetSms: "/auth/password/reset-sms",
+  /** [CONTRATO] Enviar un codigo para entrar sin contrasena (DEC-089). */
+  authCodeStart: "/auth/code/start",
+  /** [CONTRATO] Comprobar el codigo: entra o deja abierta el alta (DEC-089). */
+  authCodeVerify: "/auth/code/verify",
+  /** [CONTRATO] Alta tras acertar el codigo: nombre, estado y documentos (DEC-089). */
+  authCodeRegister: "/auth/code/register",
   /** [CONTRATO] Formulario de `/privacychoices` (DEC-063). PUBLIC. */
   privacyRequests: "/privacy-requests",
   /** [CONTRATO] Declaracion de elegibilidad del participante (DEC-067). */
@@ -777,6 +785,60 @@ export function startPhoneVerification(
 }
 
 /**
+ * Enviar un codigo para entrar o crear la cuenta (DEC-089).
+ *
+ * Un solo campo, correo o celular: la arroba decide en la API. Se envia exista o
+ * no la cuenta, y la respuesta no lo dice. `channel` dice por donde salio.
+ */
+export function startSignInCode(
+  input: { readonly contact: string; readonly bot_check_token?: string },
+  locale: Locale,
+): Promise<ApiResult<SignInCodeSent>> {
+  return apiRequest<SignInCodeSent>("POST", API_PATHS.authCodeStart, { locale, body: input });
+}
+
+/**
+ * Comprobar el codigo (DEC-089).
+ *
+ * `SIGNED_IN`: la sesion llega en la `Set-Cookie`. `PROFILE_REQUIRED`: el
+ * contacto no tenia cuenta, y la API deja una cookie `httpOnly` de alta que
+ * `mutableSession()` propaga sin leer; el navegador nunca ve ese token.
+ */
+export function verifySignInCode(
+  input: { readonly contact: string; readonly code: string },
+  locale: Locale,
+  session: SessionContext,
+): Promise<ApiResult<SignInCodeVerified>> {
+  return apiRequest<SignInCodeVerified>("POST", API_PATHS.authCodeVerify, {
+    locale,
+    body: input,
+    ...sessionOptions(session),
+  });
+}
+
+/**
+ * Crear la cuenta tras acertar el codigo (DEC-089): nombre, estado y documentos.
+ * La fecha de nacimiento no se pide aqui. 410 `SIGNUP_EXPIRED` si paso media
+ * hora o la cookie de alta ya se uso.
+ */
+export function registerWithSignInCode(
+  input: {
+    readonly display_name: string;
+    readonly residence_state: string;
+    readonly consents: readonly ConsentAcceptance[];
+    readonly language_preference: string;
+  },
+  locale: Locale,
+  session: SessionContext,
+): Promise<ApiResult<SessionState>> {
+  return apiRequest<SessionState>("POST", API_PATHS.authCodeRegister, {
+    locale,
+    body: input,
+    ...sessionOptions(session),
+  });
+}
+
+/**
  * Solicitud de privacidad (DEC-063). La API la manda al buzon del negocio y
  * acusa recibo; `reference` es lo que la persona cita si escribe despues. 503
  * significa que NO llego al buzon.
@@ -802,10 +864,17 @@ export function submitPrivacyRequest(
   );
 }
 
-/** DEC-067: si la cuenta ya declaro fecha de nacimiento y estado. Nunca lo declarado. */
+/**
+ * DEC-067: si la cuenta ya declaro fecha de nacimiento y estado. Nunca lo declarado.
+ *
+ * DEC-089: cada mitad por separado. El alta sin contrasena declara el estado y
+ * no la fecha; `declared` es `true` solo con las dos.
+ */
 export interface EligibilityStatus {
   readonly declared: boolean;
   readonly declared_at: string | null;
+  readonly residence_state_declared: boolean;
+  readonly date_of_birth_declared: boolean;
 }
 
 /** DEC-067: si el participante ya declaro su elegibilidad. Exige sesion. */
@@ -820,15 +889,16 @@ export function fetchMyEligibility(
 }
 
 /**
- * DEC-067: una cuenta anterior declara fecha de nacimiento y estado, con los
- * mismos consentimientos que el alta. Una sola vez: 409
- * `ELIGIBILITY_ALREADY_DECLARED` si ya lo hizo.
+ * DEC-067 y DEC-089: declarar lo que falte. Una cuenta anterior declara fecha y
+ * estado con los consentimientos del alta; una cuenta sin contrasena, solo la
+ * fecha. No se reescribe: 409 `ELIGIBILITY_ALREADY_DECLARED`.
  */
 export function declareMyEligibility(
   input: {
-    readonly date_of_birth: string;
-    readonly residence_state: string;
-    readonly consents: readonly ConsentAcceptance[];
+    readonly date_of_birth?: string;
+    readonly residence_state?: string;
+    /** Obligatorios al declarar el estado; sobran si solo se declara la fecha. */
+    readonly consents?: readonly ConsentAcceptance[];
     readonly language: "en-US" | "es-US";
   },
   locale: Locale,
