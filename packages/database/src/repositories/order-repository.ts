@@ -34,6 +34,7 @@ import { and, asc, desc, eq, sql } from "drizzle-orm";
 import type { JsonObject } from "@lsw/sweepstakes";
 import { toCanonicalJsonObject } from "@lsw/sweepstakes";
 
+import { orderVoids } from "../schema/order-voids.js";
 import {
   checkoutSessions,
   orderDisputes,
@@ -128,11 +129,16 @@ export interface OrderRecord {
   readonly fulfilledAt: Date | null;
   readonly shippingCarrier: string | null;
   readonly trackingNumber: string | null;
+  /**
+   * DEC-091: cuando se anulo el pedido cobrado, o `null`. Sale de la fila de
+   * `order_voids`, que es la unica fuente: no hay columna en `orders`.
+   */
+  readonly voidedAt: Date | null;
 }
 
 /**
  * DEC-079: `DELIVERY` = se envia (con mercancia, lleva envio); `PICKUP` =
- * pagado en efectivo y entregado en el mismo punto de venta, sin envio.
+ * entregado en el punto de venta, sin envio. DEC-091: con efectivo o tarjeta.
  */
 export type FulfillmentMethodValue = "DELIVERY" | "PICKUP";
 
@@ -177,7 +183,7 @@ export interface CreateOrderInput {
    * pedido duplicado si el valor esta en la fila desde el INSERT.
    */
   readonly provider?: string | null;
-  /** DEC-079: ausente = `DELIVERY`. `PICKUP` solo en efectivo y sin envio (CHECK). */
+  /** DEC-079: ausente = `DELIVERY`. `PICKUP` siempre sin envio (CHECK). */
   readonly fulfillmentMethod?: FulfillmentMethodValue;
 }
 
@@ -283,7 +289,7 @@ function toItem(row: ItemRow): OrderItemRecord {
   };
 }
 
-function toOrder(row: OrderRow, items: readonly ItemRow[]): OrderRecord {
+function toOrder(row: OrderRow, items: readonly ItemRow[], voidedAt: Date | null): OrderRecord {
   return {
     id: row.id,
     orderNumber: row.orderNumber,
@@ -313,6 +319,7 @@ function toOrder(row: OrderRow, items: readonly ItemRow[]): OrderRecord {
     createdAt: row.createdAt,
     paidAt: row.paidAt,
     qualifiedAt: row.qualifiedAt,
+    voidedAt,
   };
 }
 
@@ -435,7 +442,12 @@ export class DrizzleOrderRepository {
   }
 
   public async findById(orderId: string): Promise<OrderRecord | null> {
-    const rows = await this.db.select().from(orders).where(eq(orders.id, orderId)).limit(1);
+    const rows = await this.db
+      .select({ order: orders, voidedAt: orderVoids.voidedAt })
+      .from(orders)
+      .leftJoin(orderVoids, eq(orderVoids.orderId, orders.id))
+      .where(eq(orders.id, orderId))
+      .limit(1);
     const row = rows[0];
     if (row === undefined) {
       return null;
@@ -446,7 +458,7 @@ export class DrizzleOrderRepository {
       .where(eq(orderItems.orderId, orderId))
       .orderBy(asc(orderItems.createdAt), asc(orderItems.id));
 
-    return toOrder(row, items);
+    return toOrder(row.order, items, row.voidedAt);
   }
 
   /**
@@ -480,8 +492,9 @@ export class DrizzleOrderRepository {
     readonly after: string | null;
   }): Promise<readonly OrderRecord[]> {
     const rows = await this.db
-      .select()
+      .select({ order: orders, voidedAt: orderVoids.voidedAt })
       .from(orders)
+      .leftJoin(orderVoids, eq(orderVoids.orderId, orders.id))
       .where(
         options.after === null
           ? eq(orders.participantId, options.participantId)
@@ -505,15 +518,16 @@ export class DrizzleOrderRepository {
       .from(orderItems)
       .where(
         sql`${orderItems.orderId} IN (${sql.join(
-          rows.map((row) => sql`${row.id}::uuid`),
+          rows.map((row) => sql`${row.order.id}::uuid`),
           sql`, `,
         )})`,
       );
 
     return rows.map((row) =>
       toOrder(
-        row,
-        items.filter((item) => item.orderId === row.id),
+        row.order,
+        items.filter((item) => item.orderId === row.order.id),
+        row.voidedAt,
       ),
     );
   }

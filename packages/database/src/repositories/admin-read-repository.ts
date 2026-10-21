@@ -52,6 +52,7 @@ import {
   orderItems,
   orderRefunds,
   orders,
+  orderVoids,
   participants,
 } from "../schema/index.js";
 import { currentExecutor, type DbExecutor } from "./executor.js";
@@ -170,23 +171,38 @@ export interface AdminAuditListOptions {
 }
 
 /**
- * DEC-085: corte de caja de un dia. Cobrado = pedido con `paid_at` dentro de
- * la ventana, sea cual sea su estado despues; lo que se devolvio va aparte, en
- * `refunds`, por el dia en que se devolvio.
+ * DEC-085: corte de caja. Cobrado = pedido con `paid_at` dentro de la ventana,
+ * sea cual sea su estado despues; lo que se devolvio va aparte, en `refunds`,
+ * por el dia en que se devolvio.
+ *
+ * DEC-091: la ventana puede ser de varios dias, y por eso cobros y
+ * devoluciones vienen POR DIA LOCAL (`date`, `YYYY-MM-DD` en la zona del
+ * corte); quien llama suma. Un pedido ANULADO no cuenta en ningun sitio -ni su
+ * cobro ni sus devoluciones-, como si nunca se hubiera cobrado; sale aparte,
+ * en `voided`, para que se vea que existio.
  */
 export interface AdminDailyCut {
   readonly totals: readonly {
+    readonly date: string;
     readonly method: "CASH" | "CARD";
     readonly currency: string;
     readonly orders: number;
     readonly amountMinor: bigint;
   }[];
   readonly refunds: readonly {
+    readonly date: string;
     readonly currency: string;
     readonly refunds: number;
     readonly amountMinor: bigint;
   }[];
-  /** Una fila por LINEA de mercancia de los pedidos cobrados ese dia. */
+  /** DEC-091: pedidos cobrados en la ventana y anulados despues. NO suman. */
+  readonly voided: readonly {
+    readonly method: "CASH" | "CARD";
+    readonly currency: string;
+    readonly orders: number;
+    readonly amountMinor: bigint;
+  }[];
+  /** Una fila por LINEA de mercancia de los pedidos cobrados en la ventana. */
   readonly merchandise: readonly AdminDailyCutMerchandiseRow[];
 }
 
@@ -402,20 +418,59 @@ export class DrizzleAdminReadRepository {
   /**
    * DEC-085: el corte de caja de `[from, to)`.
    *
-   * La ventana -el dia de calendario en la zona del punto de venta- la calcula
-   * quien llama: aqui solo hay instantes (DEC-011). Efectivo es
+   * La ventana -uno o varios dias de calendario en la zona del punto de venta-
+   * la calcula quien llama: aqui solo hay instantes (DEC-011) y la zona con la
+   * que se reparte por dia, que tambien llega como parametro. Efectivo es
    * `provider = 'cash'` y tarjeta todo lo demas, igual que en `listOrders`.
+   *
+   * DEC-091: un pedido con fila en `order_voids` no cuenta -ni su cobro ni sus
+   * devoluciones, que restarian dos veces- ni se prepara: sale en `voided`.
    */
   public async dailyCut(window: {
     readonly from: Date;
     readonly to: Date;
+    readonly timeZone: string;
   }): Promise<AdminDailyCut> {
     const paidInWindow = and(gte(orders.paidAt, window.from), lt(orders.paidAt, window.to));
+    const notVoided = sql`NOT EXISTS (SELECT 1 FROM ${orderVoids} WHERE ${orderVoids.orderId} = ${orders.id})`;
     const method = sql<
       "CASH" | "CARD"
     >`CASE WHEN ${orders.provider} = 'cash' THEN 'CASH' ELSE 'CARD' END`;
+    // `timestamptz AT TIME ZONE` da la hora de pared de esa zona, con su cambio
+    // de horario: es el mismo dia que ve quien cuadra la caja.
+    const paidDate = sql<string>`to_char(${orders.paidAt} AT TIME ZONE ${window.timeZone}, 'YYYY-MM-DD')`;
+    const refundDate = sql<string>`to_char(${orderRefunds.occurredAt} AT TIME ZONE ${window.timeZone}, 'YYYY-MM-DD')`;
 
-    const [totals, refunds, merchandise] = await Promise.all([
+    const [totals, refunds, voided, merchandise] = await Promise.all([
+      this.db
+        .select({
+          date: paidDate,
+          method,
+          currency: orders.currency,
+          orders: sql<string>`count(*)::text`,
+          amount: sql<string>`coalesce(sum(${orders.totalMinor}), 0)::text`,
+        })
+        .from(orders)
+        .where(and(paidInWindow, notVoided))
+        .groupBy(sql`1`, sql`2`, sql`3`)
+        .orderBy(sql`1`, sql`2`, sql`3`),
+      this.db
+        .select({
+          date: refundDate,
+          currency: orderRefunds.currency,
+          refunds: sql<string>`count(*)::text`,
+          amount: sql<string>`coalesce(sum(${orderRefunds.amountMinor}), 0)::text`,
+        })
+        .from(orderRefunds)
+        .where(
+          and(
+            gte(orderRefunds.occurredAt, window.from),
+            lt(orderRefunds.occurredAt, window.to),
+            sql`NOT EXISTS (SELECT 1 FROM ${orderVoids} WHERE ${orderVoids.orderId} = ${orderRefunds.orderId})`,
+          ),
+        )
+        .groupBy(sql`1`, sql`2`)
+        .orderBy(sql`1`, sql`2`),
       this.db
         .select({
           method,
@@ -424,21 +479,10 @@ export class DrizzleAdminReadRepository {
           amount: sql<string>`coalesce(sum(${orders.totalMinor}), 0)::text`,
         })
         .from(orders)
+        .innerJoin(orderVoids, eq(orderVoids.orderId, orders.id))
         .where(paidInWindow)
         .groupBy(sql`1`, sql`2`)
         .orderBy(sql`1`, sql`2`),
-      this.db
-        .select({
-          currency: orderRefunds.currency,
-          refunds: sql<string>`count(*)::text`,
-          amount: sql<string>`coalesce(sum(${orderRefunds.amountMinor}), 0)::text`,
-        })
-        .from(orderRefunds)
-        .where(
-          and(gte(orderRefunds.occurredAt, window.from), lt(orderRefunds.occurredAt, window.to)),
-        )
-        .groupBy(orderRefunds.currency)
-        .orderBy(orderRefunds.currency),
       this.db
         .select({
           orderId: orders.id,
@@ -463,20 +507,28 @@ export class DrizzleAdminReadRepository {
         .innerJoin(orders, eq(orders.id, orderItems.orderId))
         .innerJoin(participants, eq(participants.id, orders.participantId))
         .innerJoin(identities, eq(identities.id, participants.identityId))
-        .where(and(paidInWindow, eq(orderItems.productKind, "MERCHANDISE")))
+        .where(and(paidInWindow, notVoided, eq(orderItems.productKind, "MERCHANDISE")))
         .orderBy(asc(orders.paidAt), asc(orders.orderNumber), asc(orderItems.sku)),
     ]);
 
     return {
       totals: totals.map((row) => ({
+        date: row.date,
         method: row.method,
         currency: row.currency,
         orders: toCount(row.orders),
         amountMinor: BigInt(row.amount),
       })),
       refunds: refunds.map((row) => ({
+        date: row.date,
         currency: row.currency,
         refunds: toCount(row.refunds),
+        amountMinor: BigInt(row.amount),
+      })),
+      voided: voided.map((row) => ({
+        method: row.method,
+        currency: row.currency,
+        orders: toCount(row.orders),
         amountMinor: BigInt(row.amount),
       })),
       merchandise: merchandise.flatMap((row) => {

@@ -1503,7 +1503,9 @@ export type OrderStatus =
   | "CANCELLED"
   | "REFUNDED"
   | "PARTIALLY_REFUNDED"
-  | "CHARGEBACK";
+  | "CHARGEBACK"
+  // DEC-091: cobrado y anulado despues (duplicado o error).
+  | "VOIDED";
 
 export const ORDER_STATUSES: readonly OrderStatus[] = [
   "PENDING_PAYMENT",
@@ -1513,6 +1515,7 @@ export const ORDER_STATUSES: readonly OrderStatus[] = [
   "REFUNDED",
   "PARTIALLY_REFUNDED",
   "CHARGEBACK",
+  "VOIDED",
 ];
 
 /**
@@ -2114,6 +2117,8 @@ export type AdminCapability =
   | "order.cancel"
   /** DEC-085: marcar la mercancia como enviada, o devolverla a pendiente. */
   | "order.fulfillment.update"
+  /** DEC-091: anular un pedido ya cobrado (duplicado o error). Con step-up. */
+  | "order.void"
   | "entry.ledger.read"
   | "entry.adjust.create"
   | "entry.adjust.approve"
@@ -2170,6 +2175,7 @@ export const ADMIN_CAPABILITIES: readonly AdminCapability[] = [
   "order.cash.confirm",
   "order.cancel",
   "order.fulfillment.update",
+  "order.void",
   "entry.ledger.read",
   "entry.adjust.create",
   "entry.adjust.approve",
@@ -2410,7 +2416,13 @@ export type AdminOrderPage = CursorPage<AdminOrderRow>;
  * real. La pantalla los usa para ofrecer o no los botones; quien protege es la
  * ruta, que lo vuelve a comprobar todo con el pedido bloqueado.
  */
-export type CashPaymentStage = "PENDING_CASH_PAYMENT" | "PAID" | "ENTRIES_GENERATED" | "CANCELLED";
+export type CashPaymentStage =
+  | "PENDING_CASH_PAYMENT"
+  | "PAID"
+  | "ENTRIES_GENERATED"
+  | "CANCELLED"
+  // DEC-091: cobrado y anulado despues; ya no se cobra ni se genera nada.
+  | "VOIDED";
 
 export type CashEntriesStatus =
   "AWAITING_PAYMENT" | "PENDING" | "GENERATED" | "HELD" | "NO_ENTRIES" | "NOT_APPLICABLE";
@@ -2448,6 +2460,26 @@ export interface AdminCashPayment {
 }
 
 /**
+ * [CONTRATO] Anulacion de un pedido ya cobrado (DEC-091), vista desde el panel.
+ * Quien anulo es un dato del panel: no viaja en la ficha del pedido.
+ */
+export interface AdminOrderVoid {
+  readonly order_id: string;
+  readonly order_number: string;
+  readonly payment_method: "CARD" | "CASH";
+  /** El total del pedido: lo que dejo de contar en el corte. */
+  readonly amount: MoneyMinor;
+  /** Lo que devolvio esta anulacion. Cero si ya estaba devuelto entero. */
+  readonly refund_amount: MoneyMinor;
+  readonly provider_refund_id: string | null;
+  readonly voided_at: string;
+  readonly voided_by_admin_user_id: string;
+  readonly voided_by_name: string | null;
+  readonly reason_code: string;
+  readonly notes: string | null;
+}
+
+/**
  * [CONTRATO] Corte de caja de un dia (DEC-085).
  *
  * El dia va de 12:00 a. m. a 11:59 p. m. en `time_zone` (Nuevo Mexico), y
@@ -2478,16 +2510,40 @@ export interface AdminDailyCutLine {
   readonly refunded_quantity: number;
 }
 
+export interface AdminDailyCutRefunds {
+  readonly refunds: number;
+  readonly amount: MoneyMinor;
+}
+
+/** DEC-091: un dia del rango, con sus propias cifras. */
+export interface AdminDailyCutDay {
+  readonly date: string;
+  readonly cash: AdminDailyCutTotal;
+  readonly card: AdminDailyCutTotal;
+  readonly total: AdminDailyCutTotal;
+  readonly refunds: AdminDailyCutRefunds;
+}
+
+/**
+ * DEC-091: tambien de un RANGO, de `date` a `date_to`, los dos incluidos. Los
+ * totales son del rango y `days` los reparte por dia. Los pedidos anulados no
+ * cuentan en ninguna cifra: salen en `voided`. Los tres campos nuevos son
+ * opcionales para que la pantalla siga pintando el corte de una API anterior.
+ */
 export interface AdminDailyCut {
   readonly date: string;
+  readonly date_to?: string;
   readonly time_zone: string;
   readonly from: string;
   readonly to: string;
   readonly cash: AdminDailyCutTotal;
   readonly card: AdminDailyCutTotal;
   readonly total: AdminDailyCutTotal;
-  /** Reembolsos con tarjeta hechos ese dia, de pedidos de cualquier dia. */
-  readonly refunds: { readonly refunds: number; readonly amount: MoneyMinor };
+  /** Reembolsos con tarjeta hechos en el rango, de pedidos de cualquier dia. */
+  readonly refunds: AdminDailyCutRefunds;
+  /** DEC-091: lo cobrado en el rango y anulado despues. NO esta sumado arriba. */
+  readonly voided?: AdminDailyCutTotal;
+  readonly days?: readonly AdminDailyCutDay[];
   readonly merchandise: {
     readonly products: readonly {
       readonly sku: string;

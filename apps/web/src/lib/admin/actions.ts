@@ -49,6 +49,7 @@ import {
   unscheduleAdminPromotion,
   updateAdminProduct,
   updateAdminPromotion,
+  voidAdminOrder,
 } from "@/lib/api";
 import {
   fromCredentialFailure,
@@ -409,6 +410,41 @@ export async function cancelOrderAction(
 
   const session = await mutableSession();
   const result = await cancelAdminOrder(
+    orderId,
+    reason.note === null
+      ? { reason_code: reason.reason_key }
+      : { reason_code: reason.reason_key, notes: reason.note },
+    locale,
+    session,
+  );
+
+  if (!result.ok) return fromFailure(result.error);
+
+  revalidatePath("/admin", "layout");
+  return SUCCEEDED;
+}
+
+/**
+ * DEC-091: anular un pedido YA COBRADO. Con tarjeta, el backend devuelve en la
+ * pasarela lo que quede del cobro; en los dos casos revierte sus
+ * participaciones y lo saca del corte. Lleva step-up: si el MFA no es reciente,
+ * el 403 `STEP_UP_REQUIRED` se ensena tal cual, con el enlace para confirmarlo.
+ */
+export async function voidOrderAction(
+  _previous: ActionResult,
+  formData: FormData,
+): Promise<ActionResult> {
+  const locale = localeFrom(formData);
+  if (locale === null) return invalid("VALIDATION_FAILED");
+
+  const orderId = textFrom(formData, "order_id");
+  if (orderId === null) return invalid("VALIDATION_FAILED");
+
+  const reason = reasonFrom(formData);
+  if (isActionResult(reason)) return reason;
+
+  const session = await mutableSession();
+  const result = await voidAdminOrder(
     orderId,
     reason.note === null
       ? { reason_code: reason.reason_key }

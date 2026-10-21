@@ -225,6 +225,13 @@
       "when": 1787616040000,
       "tag": "0040_passwordless_sign_in",
       "breakpoints": false
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1787616041000,
+      "tag": "0041_card_pickup_and_order_void",
+      "breakpoints": false
     }
   ]
 }

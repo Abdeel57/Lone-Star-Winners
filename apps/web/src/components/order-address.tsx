@@ -1,7 +1,7 @@
 import { Card, CardTitle } from "@lsw/ui";
 import { useTranslations } from "next-intl";
 
-import type { FulfillmentMethod, PostalAddress } from "@/lib/api";
+import type { FulfillmentMethod, PaymentMethod, PostalAddress } from "@/lib/api";
 
 /**
  * Direccion de envio de un pedido.
@@ -16,16 +16,19 @@ import type { FulfillmentMethod, PostalAddress } from "@/lib/api";
  * en todas partes, y una plantilla fija seria una regla de jurisdiccion
  * escondida en una pantalla.
  *
- * DEC-079: un pedido en efectivo que se RECOGE en el punto de venta no tiene
- * direccion, y no es un olvido: se dice que se entrega ahi, para que quien
- * atiende lo entregue en mano en vez de buscar a donde mandarlo.
+ * DEC-079: un pedido que se RECOGE en el punto de venta no tiene direccion, y
+ * no es un olvido: se dice que se entrega ahi, para que quien atiende lo
+ * entregue en mano en vez de buscar a donde mandarlo. DEC-091: pagado con
+ * tarjeta, ya esta cobrado y se recoge despues; el texto lo dice.
  */
 export function OrderAddress({
   address,
   fulfillmentMethod = "DELIVERY",
+  paymentMethod = "CASH",
 }: {
   readonly address: PostalAddress | null;
   readonly fulfillmentMethod?: FulfillmentMethod | undefined;
+  readonly paymentMethod?: PaymentMethod | undefined;
 }) {
   const t = useTranslations("account.order");
 
@@ -35,7 +38,9 @@ export function OrderAddress({
         <CardTitle as="h2" size="sm">
           {t("pickupHeading")}
         </CardTitle>
-        <p className="mt-s4 text-body-sm text-text-muted">{t("pickupBody")}</p>
+        <p className="mt-s4 text-body-sm text-text-muted">
+          {paymentMethod === "CARD" ? t("pickupBodyCard") : t("pickupBody")}
+        </p>
       </Card>
     );
   }

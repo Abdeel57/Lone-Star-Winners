@@ -74,6 +74,8 @@ const APPEND_ONLY_TABLES = [
   // DEC-078: quien cobro en efectivo, y que paso con las participaciones.
   "cash_payment_confirmations",
   "cash_payment_entry_outcomes",
+  // DEC-091: quien anulo un pedido cobrado, y por que.
+  "order_voids",
 ];
 
 const migrations = loadMigrations();

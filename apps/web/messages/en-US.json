@@ -128,7 +128,11 @@
     "CASH_PAYMENT_NOT_PENDING": "This order is no longer waiting for a cash payment.",
     "CASH_PAYMENT_NOT_CONFIRMED": "Nobody has confirmed the cash payment for this order yet, so there are no entries to generate.",
     "CASH_ENTRIES_GENERATION_FAILED": "The cash payment is confirmed and recorded, but the entries could not be generated. No second payment was recorded: retry generating the entries from this order.",
-    "ORDER_NOT_CANCELLABLE": "This order is already paid (or no longer pending), so it can't be cancelled. If money has to go back, that's a refund.",
+    "ORDER_NOT_CANCELLABLE": "This order is already paid (or no longer pending), so it can't be cancelled. If it isn't needed because it's a duplicate or a mistake, void it.",
+    "ORDER_NOT_VOIDABLE": "This order can't be voided: it isn't paid (that's a cancellation), it's already cancelled, or it has an open dispute with the bank.",
+    "ORDER_VOIDED": "This order is voided: it can no longer be paid or generate entries.",
+    "ORDER_VOID_NOT_FOUND": "This order isn't voided.",
+    "ORDER_HAS_NO_PAYMENT": "This order has no charge recorded at the payment gateway, so there's nothing to refund from here.",
     "ORDER_PAYMENT_IN_PROGRESS": "The payment gateway says the customer already paid this order or has a payment in progress, so it was not cancelled. Wait a few minutes: the payment will show up on its own.",
     "ORDER_PROVIDER_MISMATCH": "This order was opened with a different payment gateway and can't be cancelled from here.",
     "ORDER_NOT_FULFILLABLE": "This order isn't paid, or it's cancelled or refunded, so there's nothing to ship.",
@@ -941,6 +945,7 @@
       "noAddress": "No shipping address is recorded for this order.",
       "pickupHeading": "Delivery",
       "pickupBody": "Picked up at the store location when paying in cash. No shipping.",
+      "pickupBodyCard": "Paid by card online and picked up at one of our physical store locations with the order number. No shipping.",
       "shippingPickup": "No shipping (store pickup)",
       "entriesHeading": "Entries from this order",
       "calculationHeading": "How that figure was reached",
@@ -1004,7 +1009,8 @@
     "CANCELLED": "Cancelled",
     "REFUNDED": "Refunded",
     "PARTIALLY_REFUNDED": "Partly refunded",
-    "CHARGEBACK": "Charged back"
+    "CHARGEBACK": "Charged back",
+    "VOIDED": "Voided"
   },
   "orderEntryState": {
     "NOT_APPLICABLE": "Not part of a promotion",
@@ -1082,7 +1088,9 @@
       "heading": "How do you get your order?",
       "pickup": {
         "title": "I'll pick it up where I pay",
-        "body": "It's handed to you at the store location when you pay. No shipping: you pay {total}."
+        "body": "It's handed to you at the store location when you pay. No shipping: you pay {total}.",
+        "cardTitle": "I'll pick it up at a store location",
+        "cardBody": "You pay now by card and pick up your order at one of our physical store locations. No shipping: you pay {total}."
       },
       "delivery": {
         "title": "Ship it to my home",
@@ -1498,6 +1506,30 @@
       "submit": "Cancel the order",
       "confirm": "I confirm order {number} was not paid and should be cancelled."
     },
+    "orderVoid": {
+      "title": "Void this order",
+      "introCash": "This order was already paid in cash. If it's a duplicate or a mistake (for example, the customer got a second order for the same payment), void it: its entries are removed and it no longer counts in the cash report. Nothing is deleted: who voided it and why is kept.",
+      "introCard": "This order was already paid by card. Voiding it refunds whatever is left of the charge to the customer in Stripe, removes its entries and takes it out of the cash report. Nothing is deleted: who voided it and why is kept.",
+      "stepUpNote": "For security you'll be asked to confirm your verification code if you haven't used it in the last few minutes.",
+      "impactStatus": "Order status",
+      "impactVoid": "voided",
+      "impactMoney": "Money",
+      "impactCashOut": "leaves the cash report",
+      "impactCardRefund": "refunded in Stripe and leaves the report",
+      "impactEntries": "Entries",
+      "impactEntriesBefore": "{count, plural, =0 {No entries} one {# entry} other {# entries}}",
+      "impactEntriesUnknown": "Whatever it has",
+      "impactRemoved": "removed",
+      "impactNone": "None",
+      "submit": "Void the order",
+      "confirm": "I confirm order {number} is not needed (duplicate or mistake) and should be voided.",
+      "voidedTitle": "Order voided",
+      "voidedBody": "Voided on {when} by {who}. Reason: {reason}.",
+      "voidedRefund": "{amount} was refunded in Stripe.",
+      "voidedCash": "Paid in cash: it doesn't count in the cash report.",
+      "voidedNotes": "Notes: {notes}",
+      "unknownStaff": "a staff account"
+    },
     "orderFulfillment": {
       "saved": "Saved.",
       "shippedAt": "Shipped on",
@@ -1513,7 +1545,7 @@
     },
     "dailyCut": {
       "title": "Daily cash report",
-      "description": "What was collected during the day, 12:00 a.m. to 11:59 p.m. {zone} time, and the merchandise to prepare.",
+      "description": "What was collected in a day or a period (12:00 a.m. to 11:59 p.m. {zone} time), and the merchandise to prepare.",
       "zoneName": "New Mexico",
       "print": "Print",
       "download": "Download CSV",
@@ -1558,7 +1590,28 @@
       "shipped": "Shipped",
       "handedOver": "Handed over",
       "shippingPending": "Not shipped yet",
-      "pickupPending": "Not handed over yet"
+      "pickupPending": "Not handed over yet",
+      "fromLabel": "From",
+      "toLabel": "To",
+      "toHint": "Leave it the same as “From” to see a single day.",
+      "presetsLabel": "Quick periods",
+      "lastSevenDays": "Last 7 days",
+      "thisMonth": "This month",
+      "rangeWindow": "From {from} to {to}, 12:00 a.m. on the first day to 11:59 p.m. on the last ({zone} time).",
+      "rangeTotalsHeading": "Period totals",
+      "rangeTooLong": "The period can be up to {max} days. Pick a shorter range.",
+      "refundsRange": "Card refunds made in the period: {amount} ({count, plural, one {# refund} other {# refunds}}). They are not subtracted from the totals above, which are what was collected.",
+      "voided": "{count, plural, one {# voided order} other {# voided orders}} for {amount}: not added to the totals (duplicates or mistakes).",
+      "daysHeading": "Day by day",
+      "daysCaption": "What was collected each day of the period",
+      "columnDay": "Day",
+      "columnCash": "Cash",
+      "columnCard": "Card",
+      "columnTotal": "Total",
+      "columnOrders": "Transactions",
+      "merchandiseEmptyTitleRange": "No merchandise was sold in that period",
+      "merchandiseEmptyBodyRange": "Physical products from the orders paid in the period show up here, with their customer and shipping.",
+      "linesCaptionRange": "Merchandise from the orders paid in the period"
     },
     "cashPayment": {
       "title": "Cash payment at a store location",
@@ -1567,9 +1620,11 @@
         "PENDING_CASH_PAYMENT": "Pending cash payment",
         "PAID": "Paid",
         "ENTRIES_GENERATED": "Entries generated",
-        "CANCELLED": "Cancelled"
+        "CANCELLED": "Cancelled",
+        "VOIDED": "Voided"
       },
       "cancelledBody": "This order was cancelled. There is no payment to confirm.",
+      "voidedBody": "This order was paid and then voided: it doesn't count in the cash report and no longer has entries.",
       "orderNumber": "Order number",
       "amount": "Amount to collect",
       "customer": "Customer account",

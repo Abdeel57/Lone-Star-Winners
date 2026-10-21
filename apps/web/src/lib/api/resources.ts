@@ -16,6 +16,7 @@ import type {
   AdminDrawAuthorizationPage,
   AdminExportSnapshotPage,
   AdminOrderPage,
+  AdminOrderVoid,
   AdminParticipantPage,
   AdminRulesVersion,
   AdminRulesVersionPage,
@@ -1154,10 +1155,17 @@ export function fetchOrder(
  * tambien los precios.
  */
 export function createCheckoutSession(
-  input: {
-    readonly shipping_address: PostalAddress;
-    readonly return_url: string;
-  },
+  /**
+   * DEC-091: con tarjeta tambien se recoge en el punto de venta: `PICKUP` va
+   * sin direccion y sin envio. Sin `fulfillment_method`, envio, como siempre.
+   */
+  input:
+    | {
+        readonly fulfillment_method?: "DELIVERY";
+        readonly shipping_address: PostalAddress;
+        readonly return_url: string;
+      }
+    | { readonly fulfillment_method: "PICKUP"; readonly return_url: string },
   locale: Locale,
   session: SessionContext,
 ): Promise<ApiResult<CheckoutSessionResponse>> {
@@ -1764,13 +1772,49 @@ export function setAdminOrderFulfillment(
   });
 }
 
-/** DEC-085: corte de caja de `date` (`YYYY-MM-DD`), o de hoy si es `null`. */
+/**
+ * DEC-091: anular un pedido YA COBRADO (duplicado o error). Con tarjeta, el
+ * backend devuelve en la pasarela lo que quede del cobro; lleva step-up.
+ */
+export function voidAdminOrder(
+  orderId: string,
+  input: { readonly reason_code: string; readonly notes?: string },
+  locale: Locale,
+  session: SessionContext,
+): Promise<ApiResult<OrderDetail>> {
+  return apiRequest<OrderDetail>("POST", `${adminOrderPath(orderId)}/void`, {
+    locale,
+    body: input,
+    ...sessionOptions(session),
+  });
+}
+
+/** DEC-091: quien anulo el pedido, cuando y por que. 404 si no esta anulado. */
+export function fetchAdminOrderVoid(
+  orderId: string,
+  locale: Locale,
+  session: SessionContext,
+): Promise<ApiResult<AdminOrderVoid>> {
+  return apiGet<AdminOrderVoid>(`${adminOrderPath(orderId)}/void`, {
+    locale,
+    ...sessionOptions(session),
+  });
+}
+
+/**
+ * DEC-085: corte de caja de `date` (`YYYY-MM-DD`), o de hoy si es `null`.
+ * DEC-091: con `dateTo`, del dia `date` al dia `dateTo`, los dos incluidos.
+ */
 export function fetchAdminDailyCut(
   date: string | null,
   locale: Locale,
   session: SessionContext,
+  dateTo: string | null = null,
 ): Promise<ApiResult<AdminDailyCut>> {
-  const search = date === null ? "" : `?date=${encodeURIComponent(date)}`;
+  const params = new URLSearchParams();
+  if (date !== null) params.set("date", date);
+  if (dateTo !== null) params.set("date_to", dateTo);
+  const search = params.size === 0 ? "" : `?${params.toString()}`;
   return apiGet<AdminDailyCut>(`${API_PATHS.adminDailyCut}${search}`, {
     locale,
     ...sessionOptions(session),

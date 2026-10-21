@@ -70,8 +70,15 @@ export interface AdminReads {
   listParticipants(options: AdminParticipantListOptions): Promise<readonly AdminParticipantRow[]>;
   findParticipant(participantId: string): Promise<AdminParticipantRow | null>;
   listAuditEvents(options: AdminAuditListOptions): Promise<readonly AdminAuditEventRow[]>;
-  /** DEC-085: corte de caja de `[from, to)`. La ventana la calcula quien llama. */
-  dailyCut(window: { readonly from: Date; readonly to: Date }): Promise<AdminDailyCut>;
+  /**
+   * DEC-085: corte de caja de `[from, to)`. La ventana la calcula quien llama.
+   * DEC-091: `timeZone` reparte cobros y devoluciones por dia local.
+   */
+  dailyCut(window: {
+    readonly from: Date;
+    readonly to: Date;
+    readonly timeZone: string;
+  }): Promise<AdminDailyCut>;
 }
 
 const cache = new WeakMap<AppDependencies, AdminReads>();

@@ -160,3 +160,14 @@ export const ORDER_CANCEL_REASONS = [
   "TEST_ORDER",
   "OTHER",
 ] as const;
+
+/**
+ * Motivos para anular un pedido YA COBRADO (DEC-091). Los mismos que cancelar,
+ * menos el pago abandonado: un pedido cobrado no se abandono.
+ */
+export const ORDER_VOID_REASONS = [
+  "DUPLICATE_ORDER",
+  "CUSTOMER_REQUEST",
+  "TEST_ORDER",
+  "OTHER",
+] as const;

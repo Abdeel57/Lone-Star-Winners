@@ -310,6 +310,29 @@ export const CAPABILITIES = Object.freeze({
     { requiresReason: true },
   ),
   /**
+   * Anular un pedido YA COBRADO (DEC-091).
+   *
+   * La otra mitad de `order.cancel`: un duplicado o un error que si se cobro.
+   * El caso que lo pidio: un cliente paga en efectivo, dice que no le llego
+   * nada, la tienda le hace otro pedido y el primero sobra. No se borra nada:
+   * el pedido queda anulado, con quien y por que en una fila inmutable
+   * (`order_voids`); con tarjeta se devuelve en la pasarela lo que quede del
+   * cobro; sus participaciones se revierten con una fila nueva del ledger
+   * (DEC-007), y deja de contar en el corte de caja.
+   *
+   * CRITICA Y CON STEP-UP, AL CONTRARIO QUE CANCELAR
+   *   Retira participaciones del universo del sorteo y, con tarjeta, devuelve
+   *   dinero. No es trabajo de mostrador ni de volumen: es una correccion rara,
+   *   y una ventana de MFA reciente cuesta poco frente a lo que deshace.
+   */
+  "order.void": define(
+    "order.void",
+    "order",
+    "CRITICAL",
+    "Anular un pedido ya cobrado (duplicado o error): con tarjeta devuelve lo que quede del cobro, revierte sus participaciones y lo saca del corte de caja. El pedido no se borra.",
+    { requiresStepUp: true, requiresReason: true },
+  ),
+  /**
    * Marcar un pedido como enviado o devolverlo a pendiente de envio (DEC-085).
    *
    * Solo logistica: no cambia importes, estado de pago ni participaciones.

@@ -48,9 +48,9 @@ export interface FrozenCart {
  * lista de mercancia elegible alteraria el prorrateo de una devolucion de una
  * compra anterior.
  *
- * DEC-079: `PICKUP` (recoger en el punto de venta, solo en efectivo) no lleva
- * envio y no necesita tarifa. Que solo se use con efectivo lo decide quien
- * llama, y lo garantiza la CHECK `orders_pickup_requires_cash`.
+ * DEC-079: `PICKUP` (recoger en el punto de venta) no lleva envio y no
+ * necesita tarifa. DEC-091: vale pagando en efectivo o con tarjeta; la CHECK
+ * `orders_pickup_without_shipping` garantiza que no lleve envio.
  */
 export async function freezeOpenCart(
   repositories: Repositories,

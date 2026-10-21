@@ -105,6 +105,8 @@ const ho041Sql = readMigration("0027_rbac_catalog_ho041.sql");
 const cashPaymentsSql = readMigration("0035_cash_payments.sql");
 // DEC-085: `order.cancel` y `order.fulfillment.update`.
 const orderCancelSql = readMigration("0038_order_cancel_and_fulfillment.sql");
+// DEC-091: `order.void`, anular un pedido ya cobrado.
+const orderVoidSql = readMigration("0041_card_pickup_and_order_void.sql");
 
 const RBAC_SEED_MIGRATIONS = [
   rbacSql,
@@ -112,6 +114,7 @@ const RBAC_SEED_MIGRATIONS = [
   ho041Sql,
   cashPaymentsSql,
   orderCancelSql,
+  orderVoidSql,
 ] as const;
 
 /** Las de arriba mas las que solo CORRIGEN filas ya sembradas. */
@@ -122,6 +125,7 @@ const RBAC_CATALOG_MIGRATIONS = [
   ho041Sql,
   cashPaymentsSql,
   orderCancelSql,
+  orderVoidSql,
 ] as const;
 
 function parseSeedRowsAcross(table: string): string[][] {

@@ -98,6 +98,12 @@ function projectStatus(order: OrderRecord): OrderSummary["status"] {
   if (order.chargebackState === "OPEN" || order.chargebackState === "LOST") {
     return "CHARGEBACK";
   }
+  // DEC-091: anulado gana sobre devuelto. Por dentro un pedido anulado esta
+  // REFUNDED, pero decirle "reembolsado" a quien pago en efectivo un duplicado
+  // seria prometerle un dinero que no va a recibir.
+  if (order.voidedAt !== null) {
+    return "VOIDED";
+  }
   if (order.status === "REFUNDED") {
     return "REFUNDED";
   }
@@ -140,6 +146,11 @@ export async function entryStateForOrder(
   });
 
   if (award === null) {
+    // DEC-091: anulado sin haber llegado a otorgar -por ejemplo, en efectivo
+    // antes de generar sus participaciones-: ya no hay nada pendiente.
+    if (order.voidedAt !== null) {
+      return { state: "NOT_APPLICABLE", entriesGranted: null };
+    }
     // Cobrado y NUNCA calificado: el pago llego fuera del periodo de la
     // promocion y se registro sin calificar (`applyQualifyingPayment` en
     // `routes/orders.ts`). No hay nada pendiente, y decir "pendiente de

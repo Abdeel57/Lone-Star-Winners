@@ -175,8 +175,9 @@ export function createCashCheckout(
 // Panel: confirmar el cobro y generar participaciones
 // ---------------------------------------------------------------------------
 
-/** En que punto del flujo esta el pedido. */
-export type CashPaymentStage = "PENDING_CASH_PAYMENT" | "PAID" | "ENTRIES_GENERATED" | "CANCELLED";
+/** En que punto del flujo esta el pedido. DEC-091: `VOIDED` = cobrado y anulado. */
+export type CashPaymentStage =
+  "PENDING_CASH_PAYMENT" | "PAID" | "ENTRIES_GENERATED" | "CANCELLED" | "VOIDED";
 
 /** Que paso con las participaciones del pedido. */
 export type CashEntriesStatus =
@@ -245,6 +246,8 @@ const errors = {
   /** Se pidio generar participaciones de un pedido que nadie ha cobrado. */
   notConfirmed: (): ApiError =>
     new ApiError({ statusCode: 409, code: "CASH_PAYMENT_NOT_CONFIRMED" }),
+  /** DEC-091: el pedido se anulo; ya no genera participaciones. */
+  voided: (): ApiError => new ApiError({ statusCode: 409, code: "ORDER_VOIDED" }),
 };
 
 /**
@@ -330,13 +333,15 @@ export function createCashPayments(
     const entries = await entriesOf(order, confirmation, outcome, facts);
 
     const stage: CashPaymentStage =
-      order.status === "CANCELLED"
-        ? "CANCELLED"
-        : confirmation === null
-          ? "PENDING_CASH_PAYMENT"
-          : entries.status === "GENERATED"
-            ? "ENTRIES_GENERATED"
-            : "PAID";
+      order.voidedAt !== null
+        ? "VOIDED"
+        : order.status === "CANCELLED"
+          ? "CANCELLED"
+          : confirmation === null
+            ? "PENDING_CASH_PAYMENT"
+            : entries.status === "GENERATED"
+              ? "ENTRIES_GENERATED"
+              : "PAID";
 
     return {
       order,
@@ -365,6 +370,16 @@ export function createCashPayments(
       };
     }
     if (outcome === null) {
+      // DEC-091: anulado antes de generar sus participaciones. Ya no hay nada
+      // pendiente de reintentar.
+      if (order.voidedAt !== null) {
+        return {
+          status: "NOT_APPLICABLE",
+          notApplicableReason: null,
+          entriesGranted: null,
+          resolvedAt,
+        };
+      }
       return { status: "PENDING", notApplicableReason: null, entriesGranted: null, resolvedAt };
     }
     if (outcome.outcome !== "QUALIFIED") {
@@ -422,6 +437,12 @@ export function createCashPayments(
           return;
         }
 
+        // DEC-091: un pedido anulado no califica, ni ahora ni en un reintento.
+        // Se comprueba con el cerrojo: la anulacion toma el mismo.
+        if ((await domain.repositories.orderVoids.findByOrder(orderId)) !== null) {
+          throw errors.voided();
+        }
+
         const confirmation = await cash.findConfirmation(orderId);
         if (confirmation === null) {
           throw errors.notConfirmed();
@@ -475,7 +496,9 @@ export function createCashPayments(
       // calculo: es una peticion que no procede, y se contesta como tal.
       const notApplicable =
         error instanceof ApiError &&
-        (error.code === "ORDER_NOT_FOUND" || error.code === "CASH_PAYMENT_NOT_CONFIRMED");
+        (error.code === "ORDER_NOT_FOUND" ||
+          error.code === "CASH_PAYMENT_NOT_CONFIRMED" ||
+          error.code === "ORDER_VOIDED");
       if (notApplicable) {
         throw error;
       }

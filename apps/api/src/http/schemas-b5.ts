@@ -45,6 +45,8 @@ export const orderStatusSchema = z.enum([
   "REFUNDED",
   "PARTIALLY_REFUNDED",
   "CHARGEBACK",
+  // DEC-091: cobrado y anulado despues (duplicado o error). No cuenta en caja.
+  "VOIDED",
 ]);
 
 /**
@@ -120,9 +122,9 @@ export const orderDetailSchema = orderSummarySchema.extend({
   tax_total: moneySchema.nullable(),
   shipping_address: postalAddressSchema.nullable(),
   /**
-   * DEC-079: `DELIVERY` = se envia a `shipping_address`. `PICKUP` = pagado en
-   * efectivo y entregado en el mismo punto de venta: sin envio
-   * (`shipping_total = null`) y sin direccion.
+   * DEC-079: `DELIVERY` = se envia a `shipping_address`. `PICKUP` = se entrega
+   * en el punto de venta: sin envio (`shipping_total = null`) y sin direccion.
+   * DEC-091: `PICKUP` pagando en efectivo o con tarjeta.
    */
   fulfillment_method: z.enum(["DELIVERY", "PICKUP"]),
   /**
@@ -201,7 +203,8 @@ export const webhookAckSchema = z.object({ received: z.literal(true) });
 export const cashPaymentSchema = z.object({
   order_id: z.uuid(),
   order_number: z.string(),
-  stage: z.enum(["PENDING_CASH_PAYMENT", "PAID", "ENTRIES_GENERATED", "CANCELLED"]),
+  /** DEC-091: `VOIDED` = cobrado y anulado despues; ya no se cobra ni se genera nada. */
+  stage: z.enum(["PENDING_CASH_PAYMENT", "PAID", "ENTRIES_GENERATED", "CANCELLED", "VOIDED"]),
   /** Lo que hay que cobrar -o lo que se cobro-: el total del pedido. */
   amount: moneySchema,
   /** SIEMPRE enmascarado: `order.read` no es una capacidad de PII. */

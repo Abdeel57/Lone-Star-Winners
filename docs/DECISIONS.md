@@ -4559,3 +4559,78 @@ acciones, cliente de la API, mensajes, mocks, pruebas; se retiran
 Proposed by: sesión del usuario (2026-10-18, petición del cliente)
 Agreed by: security, backend, frontend-ux (petición directa del usuario);
 pendiente: abogado
+
+## DEC-091
+
+Status: Accepted
+
+Date: 2026-10-21
+
+Decision:
+**Con tarjeta también se recoge en un punto de venta, el panel anula pedidos ya
+cobrados y el corte de caja admite un rango de fechas.** Tres peticiones del
+cliente del 2026-10-21. (DEC-090, el envío en vivo con EasyPost, está en su
+propia rama sin publicar; este número va después para no chocar con ella.)
+
+1. **Recoger pagando con tarjeta.** `POST /checkout/session` admite
+   `fulfillment_method` como el pedido en efectivo: `PICKUP` va sin dirección ni
+   envío y no necesita tarifa; `DELIVERY`, por defecto, exige la dirección como
+   siempre. La migración `0041` retira la CHECK `orders_pickup_requires_cash` y
+   conserva `orders_pickup_without_shipping`. El cliente no elige punto de venta
+   (lo decidió el usuario): "Paso por él a un punto de venta". En el checkout,
+   con tarjeta lo marcado es el envío, salvo que no haya tarifa; en efectivo,
+   recoger, como antes. Recoger no da ni quita participaciones: el envío nunca
+   las dio.
+2. **Anular un pedido cobrado** (`POST /admin/orders/:id/void`, capacidad
+   nueva `order.void`, CRITICAL, motivo obligatorio y **step-up**; la tienen
+   PROMOTION_MANAGER y COMPLIANCE_OFFICER). Es la otra mitad de cancelar
+   (DEC-085): el caso que lo pidió es un cliente que pagó en efectivo, dijo que
+   no le llegó nada y recibió otro pedido; el primero sobra. **No se borra
+   nada** (principios 6 y 7): una fila inmutable en `order_voids` (quién,
+   cuándo, por qué, cuánto) y, en la misma transacción, la devolución de lo que
+   quede por devolver -en Stripe si fue con tarjeta, como hecho
+   `provider = 'cash'` si fue en caja-, el reversal de sus participaciones por
+   el mismo camino que cualquier devolución (DEC-007) y el paso a REFUNDED sin
+   calificar. Por fuera el pedido se ve `VOIDED` ("Anulado"): decirle
+   "reembolsado" a quien pagó un duplicado en efectivo le prometería un dinero
+   que no va a recibir. La llamada a Stripe va antes y fuera de la transacción,
+   con clave de idempotencia por pedido e importe; si el webhook de esa misma
+   devolución llega primero, el hecho ya consta y no se revierte dos veces. Un
+   pedido anulado no vuelve a generar participaciones (`409 ORDER_VOIDED`). Se
+   anula lo cobrado; con una disputa abierta, no (`409 ORDER_NOT_VOIDABLE`).
+   `GET /admin/orders/:id/void` dice quién lo anuló y por qué.
+3. **El corte de caja de un rango** (`GET /admin/reports/daily-cut?date=&date_to=`,
+   los dos días incluidos, hasta 93). Los totales son del periodo y `days` los
+   reparte por día local de Nuevo México. **Un pedido anulado no cuenta**: ni
+   su cobro ni sus devoluciones, como si nunca se hubiera cobrado (lo eligió el
+   usuario), y sale aparte en `voided` para que se vea que existió. Esto cambia
+   también los cortes de días pasados que tenían ese pedido: es lo que se pidió,
+   porque esos cortes estaban mal. Pantalla con "Desde" y "Hasta", "Últimos 7
+   días" y "Este mes", y el desglose día por día.
+
+Alternatives considered: A — Borrar el pedido duplicado (descartada:
+principios 6 y 7, DELETE revocado). B — Anular solo pedidos en efectivo y
+dejar los de tarjeta al panel de Stripe (descartada por el usuario: también con
+tarjeta, devolviendo). C — Contar la anulación como una devolución del día en
+que se anula (descartada por el usuario: el día original seguiría mostrando el
+cobro). D — Una columna `voided_at` en `orders` (descartada: segunda fuente de
+verdad junto a la fila de `order_voids`). E — Un estado interno nuevo `VOIDED`
+en la máquina de `@lsw/commerce` (descartada: REFUNDED ya bloquea envío, cobro y
+cancelación; `VOIDED` es una proyección). F — Que el cliente elija el punto de
+venta (descartada por el usuario por ahora).
+
+Affected areas: `packages/security` (`order.void` y roles),
+`packages/database` (`0041`, `schema/order-voids.ts`,
+`repositories/order-void-repository.ts`, `order-repository.ts`,
+`admin-read-repository.ts`, pruebas de paridad y de migraciones), `apps/api`
+(`routes/orders.ts`, `routes/admin-orders.ts`,
+`services/order-admin-actions.ts`, `services/cash-payments.ts`,
+`services/order-presenter.ts`, `services/daily-cut.ts`, OpenAPI, pruebas
+unitarias y de integración), `apps/web` (checkout, ficha del pedido del
+participante y del panel, `components/admin/order-void-panel.tsx`,
+`/admin/daily-cut`, cliente de la API, mensajes, pruebas),
+`docs/API_CONTRACT.md`, `docs/LEGAL_PENDING.md`.
+
+Proposed by: sesión del usuario (2026-10-21, petición del cliente)
+Agreed by: backend, frontend-ux, security (petición directa del usuario);
+pendiente: abogado (preguntas 29 y 30 de `docs/LEGAL_PENDING.md`)

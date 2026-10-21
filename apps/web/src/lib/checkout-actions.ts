@@ -148,9 +148,9 @@ function paymentMethodFrom(formData: FormData): "CARD" | "CASH" {
 }
 
 /**
- * DEC-079: con efectivo, como recibe el pedido. Igual que la forma de pago, se
- * compara contra la lista: cualquier otro valor es envio, que pide direccion y
- * cobra envio, lo que existia antes. Con tarjeta no se lee: siempre es envio.
+ * DEC-079: como recibe el pedido. Igual que la forma de pago, se compara contra
+ * la lista: cualquier otro valor es envio, que pide direccion y cobra envio, lo
+ * que existia antes. DEC-091: vale en efectivo y con tarjeta.
  */
 function fulfillmentFrom(formData: FormData): "DELIVERY" | "PICKUP" {
   return textFrom(formData, "fulfillment_method") === "PICKUP" ? "PICKUP" : "DELIVERY";
@@ -163,12 +163,14 @@ export async function startCheckoutAction(
   const locale = localeFrom(formData);
   if (locale === null) return invalid("VALIDATION_FAILED");
 
+  const pickup = fulfillmentFrom(formData) === "PICKUP";
+
   /*
    * EFECTIVO Y LO RECOGE DONDE PAGA (DEC-079): sin direccion y sin envio. El
    * articulo se entrega en el mismo punto de venta, asi que no hay a donde
    * mandarlo y no se piden seis campos que nadie va a usar.
    */
-  if (paymentMethodFrom(formData) === "CASH" && fulfillmentFrom(formData) === "PICKUP") {
+  if (paymentMethodFrom(formData) === "CASH" && pickup) {
     const order = await createCashOrder(
       { fulfillment_method: "PICKUP" },
       locale,
@@ -177,6 +179,19 @@ export async function startCheckoutAction(
     if (!order.ok) return fromFailure(order.error);
 
     redirect({ href: `/orders/${encodeURIComponent(order.data.id)}/confirmation`, locale });
+  }
+
+  /*
+   * TARJETA Y PASA POR EL A UN PUNTO DE VENTA (DEC-091): tampoco hay direccion
+   * ni envio. Se paga ahora en la pasarela, igual que con envio.
+   */
+  if (paymentMethodFrom(formData) === "CARD" && pickup) {
+    const result = await createCheckoutSession(
+      { fulfillment_method: "PICKUP", return_url: await returnUrlFor(locale) },
+      locale,
+      await mutableSession(),
+    );
+    return redirectToProvider(result);
   }
 
   const address = addressFrom(formData);
@@ -214,6 +229,17 @@ export async function startCheckoutAction(
     session,
   );
 
+  return redirectToProvider(result);
+}
+
+/**
+ * Lleva el navegador a la pasarela con la sesion que abrio el backend. Lo
+ * comparten el envio y la recogida con tarjeta (DEC-091): lo unico que cambia
+ * entre los dos es el cuerpo con que se abrio la sesion.
+ */
+function redirectToProvider(
+  result: Awaited<ReturnType<typeof createCheckoutSession>>,
+): ActionResult {
   if (!result.ok) return fromFailure(result.error);
 
   const { mode, client_config: config } = result.data;

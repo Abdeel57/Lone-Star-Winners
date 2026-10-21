@@ -4,11 +4,12 @@ import { cn, FOCUS_VISIBLE_CLASSES } from "@lsw/ui";
 import { useTranslations } from "next-intl";
 import { useId } from "react";
 
-import type { FulfillmentMethod } from "@/lib/api";
+import type { FulfillmentMethod, PaymentMethod } from "@/lib/api";
 
 /**
- * Lo que se paga en cada forma de recibir un pedido en efectivo, YA FORMATEADO
- * por la pagina con cifras de la API. Aqui no se suma nada.
+ * Lo que se paga en cada forma de recibir un pedido, YA FORMATEADO por la
+ * pagina con cifras de la API. Aqui no se suma nada. Es lo mismo en efectivo y
+ * con tarjeta (DEC-091): recogiendo no hay envio.
  */
 export interface CashDeliveryOptions {
   /** Recogiendolo: el subtotal del carrito, que es lo que cobra el backend (sin envio). */
@@ -18,12 +19,16 @@ export interface CashDeliveryOptions {
 }
 
 /**
- * Como recibe su pedido quien paga en efectivo (DEC-079).
+ * Como recibe su pedido quien compra (DEC-079, DEC-091).
  *
  * En efectivo el articulo se entrega en el mismo punto de venta donde se paga,
  * asi que RECOGERLO es la opcion por defecto y no lleva envio. Enviarlo a casa
  * es opcional y suma el envio. Cada tarjeta dice cuanto se paga, porque es lo
  * que cambia entre una y otra.
+ *
+ * DEC-091: con tarjeta tambien se puede recoger. Lo que cambia es el texto: en
+ * efectivo se recoge donde se paga; con tarjeta se paga ahora y se pasa despues
+ * por el pedido a un punto de venta fisico.
  *
  * Mismo patron que `PaymentMethodChoice`: radios nativos en un `fieldset`, la
  * tarjeta entera es la etiqueta. El valor viaja en el formulario y el servidor
@@ -33,14 +38,17 @@ export function FulfillmentChoice({
   value,
   onChange,
   options,
+  paymentMethod,
 }: {
   readonly value: FulfillmentMethod;
   readonly onChange: (method: FulfillmentMethod) => void;
   readonly options: CashDeliveryOptions;
+  readonly paymentMethod: PaymentMethod;
 }) {
   const t = useTranslations("checkout.fulfillment");
   const legendId = useId();
   const delivery = options.delivery;
+  const card = paymentMethod === "CARD";
 
   const choices: readonly {
     readonly method: FulfillmentMethod;
@@ -52,8 +60,10 @@ export function FulfillmentChoice({
     {
       method: "PICKUP",
       icon: "🏬",
-      title: t("pickup.title"),
-      body: t("pickup.body", { total: options.pickupTotal }),
+      title: card ? t("pickup.cardTitle") : t("pickup.title"),
+      body: card
+        ? t("pickup.cardBody", { total: options.pickupTotal })
+        : t("pickup.body", { total: options.pickupTotal }),
       disabled: false,
     },
     {

@@ -1975,6 +1975,8 @@ que compara el test de contrato contra `apps/api/openapi/route-manifest.json`.
 | POST   | /api/v1/admin/orders/:order_id/cash-payment/entries                                 | `order.cash.confirm`        |
 | POST   | /api/v1/admin/orders/:order_id/cancel                                               | `order.cancel`              |
 | POST   | /api/v1/admin/orders/:order_id/fulfillment                                          | `order.fulfillment.update`  |
+| POST   | /api/v1/admin/orders/:order_id/void                                                 | `order.void` (DEC-091)      |
+| GET    | /api/v1/admin/orders/:order_id/void                                                 | `order.read` (DEC-091)      |
 | GET    | /api/v1/admin/reports/daily-cut                                                     | `order.read`                |
 | GET    | /api/v1/admin/participants                                                          | `participant.list`          |
 | GET    | /api/v1/admin/participants/:participant_id                                          | `participant.read`          |
@@ -2003,12 +2005,19 @@ Authentication: sesión de participante
 
 Request:
 {
+  "fulfillment_method": "DELIVERY",
   "shipping_address": {
     "full_name": "...", "line1": "...", "line2": null,
     "city": "...", "region": "...", "postal_code": "...", "country": "US"
   },
   "return_url": "https://example.test/checkout/return"
 }
+
+DEC-091: `fulfillment_method` es `DELIVERY` (por defecto, y lo único que existía
+antes) o `PICKUP`: el cliente paga con tarjeta y pasa por el pedido a un punto de
+venta físico. Con `PICKUP` no hay `shipping_address` (si llega una, se ignora) ni
+envío, y no hace falta tarifa. Con `DELIVERY` y sin dirección, 422 con
+`path: "shipping_address"`.
 
 `region`, no `state`: el nombre del campo no debe presuponer que la subdivisión
 territorial se llama estado en toda jurisdicción cubierta. NO hay validación de
@@ -2038,8 +2047,8 @@ paquetes), `shipping_total_minor` es `null`. `tax_total_minor` sigue `null`
 (pendiente legal). La pasarela cobra el envío como una línea aparte marcada
 como envío; no es una línea del pedido y no genera participaciones. Lo mismo
 vale para `POST /checkout/cash-order` con `fulfillment_method = DELIVERY`; con
-`PICKUP` (lo recoge en el punto de venta) no hay envío. Con tarjeta siempre es
-`DELIVERY`.
+`PICKUP` (lo recoge en el punto de venta) no hay envío. DEC-091: con tarjeta
+también se puede recoger (`PICKUP`), igual que en efectivo.
 
 Errors:
 409 CART_EMPTY
@@ -2345,7 +2354,9 @@ promotion_id, entry_state, entries_granted }.
 
 `status` es la PROYECCIÓN del vocabulario de frontend
 (PENDING_PAYMENT | PAID | FULFILLED | CANCELLED | REFUNDED |
-PARTIALLY_REFUNDED | CHARGEBACK) derivada de las cuatro máquinas internas.
+PARTIALLY_REFUNDED | CHARGEBACK | VOIDED) derivada de las cuatro máquinas
+internas. DEC-091: `VOIDED` es un pedido cobrado y anulado después (duplicado o
+error); por dentro está REFUNDED, y gana sobre REFUNDED en la proyección.
 `entry_state` es un campo APARTE
 (NOT_APPLICABLE | PENDING_QUALIFICATION | GRANTED | PARTIALLY_REVERSED |
 REVERSED) y se DERIVA del ledger en cada lectura: no hay columna que lo guarde.
@@ -3034,7 +3045,7 @@ cobro. El export al administrador externo cuenta estas participaciones como
 {
   "order_id": "…",
   "order_number": "LSW-00001234",
-  "stage": "PENDING_CASH_PAYMENT | PAID | ENTRIES_GENERATED | CANCELLED",
+  "stage": "PENDING_CASH_PAYMENT | PAID | ENTRIES_GENERATED | CANCELLED | VOIDED",
   "amount": { "amount_minor": "5000", "currency": "USD" },
   "customer_email": "c***@example.test",
   "confirmation": null,
@@ -3111,9 +3122,53 @@ el proveedor dice que el pago ya se completó o está en curso, no se cancela.
 Cancelar uno ya cancelado responde la ficha sin hacer nada.
 
 200 `OrderDetail` · 401 · 403 (sin la capacidad o sin motivo) · 404 ·
-409 ORDER_NOT_CANCELLABLE (`details.status`; cobrado: eso es un reembolso) ·
+409 ORDER_NOT_CANCELLABLE (`details.status`; cobrado: eso se anula, DEC-091) ·
 409 ORDER_PAYMENT_IN_PROGRESS · 409 ORDER_PROVIDER_MISMATCH · 422 ·
 503 PAYMENT_PROVIDER_UNAVAILABLE / PAYMENT_PROVIDER_NOT_CONFIGURED.
+
+### POST /api/v1/admin/orders/:order_id/void
+
+    Authorization: order.void (CRITICAL, motivo obligatorio y step-up)
+
+DEC-091. Cuerpo: `{ "reason_code": "DUPLICATE_ORDER", "notes": "..." }`.
+
+Anula un pedido **ya cobrado** -CONFIRMED, PARTIALLY_REFUNDED o REFUNDED, en
+efectivo o con tarjeta- que sobra: un duplicado o un error. No se borra nada:
+
+- una fila inmutable en `order_voids` (quién, cuándo, por qué, el total y lo
+  devuelto) y un `AuditEvent` `order.voided`;
+- lo que quede por devolver se devuelve: con tarjeta, en la pasarela (antes y
+  fuera de la transacción, con clave de idempotencia por pedido e importe); en
+  efectivo se registra como hecho de devolución con `provider = 'cash'` y
+  `provider_refund_id = void:<order_id>`;
+- sus participaciones se revierten con una fila nueva del ledger, por el mismo
+  camino que cualquier devolución (DEC-007). Si el webhook de esa misma
+  devolución llega antes, el hecho ya consta y no se revierte dos veces;
+- el pedido queda REFUNDED por dentro (sin calificar si no había calificado) y
+  `status = VOIDED` por fuera, también para el participante;
+- no cuenta en el corte de caja (ver abajo) ni vuelve a generar participaciones
+  (`POST .../cash-payment/entries` responde 409 `ORDER_VOIDED`).
+
+Anular uno ya anulado responde la ficha sin hacer nada.
+
+200 `OrderDetail` · 401 · 403 (sin la capacidad, sin motivo o
+`STEP_UP_REQUIRED`) · 404 · 409 ORDER_NOT_VOIDABLE (`details.status`: sin cobrar
+-eso se cancela-, cancelado o con una disputa abierta o perdida) ·
+409 ORDER_HAS_NO_PAYMENT (con tarjeta y sin identificador de pago) ·
+409 ORDER_PROVIDER_MISMATCH · 422 · 503 PAYMENT_PROVIDER_UNAVAILABLE /
+PAYMENT_PROVIDER_NOT_CONFIGURED (no se sabe si se devolvió: reintentar es seguro).
+
+### GET /api/v1/admin/orders/:order_id/void
+
+    Authorization: order.read
+
+DEC-091. La anulación de un pedido, para el panel: `{ order_id, order_number,
+payment_method, amount, refund_amount, provider_refund_id, voided_at,
+voided_by_admin_user_id, voided_by_name, reason_code, notes }`. Quién anuló es un
+dato del panel: no viaja en `OrderDetail`, que es la misma forma que ve el
+participante.
+
+200 · 401 · 403 · 404 ORDER_VOID_NOT_FOUND (el pedido no está anulado).
 
 ### POST /api/v1/admin/orders/:order_id/fulfillment
 
@@ -3159,7 +3214,22 @@ hora del punto de venta y no la zona legal de la promoción.
 Sin desglose de paquetes ni de participaciones. Una moneda distinta de la de la
 tienda no se suma: se registra en el log y queda fuera.
 
-200 · 401 · 403 · 422 (fecha imposible).
+DEC-091, **un rango**: `?date=2026-10-10&date_to=2026-10-17`, los dos días
+incluidos, de las 12:00 a. m. del primero a las 11:59 p. m. del último, cada día
+con su propio horario. Sin `date_to`, el mismo `date` (el corte de un día).
+Como mucho 93 días.
+
+- `date_to`: el último día (igual a `date` en el corte de un día).
+- `cash`, `card`, `total`, `refunds`: del periodo entero.
+- `days`: un elemento por día del periodo, también los que no tienen cobros:
+  `{ date, cash, card, total, refunds }`.
+- `voided`: `{ orders, amount }` de los pedidos cobrados en el periodo y
+  **anulados** después. Un pedido anulado no cuenta en ninguna otra cifra -ni
+  su cobro, ni sus devoluciones, ni su mercancía-, como si nunca se hubiera
+  cobrado; esto cambia también el corte de los días que lo tenían.
+
+200 · 401 · 403 · 422 (fecha imposible; `date_to` anterior a `date`,
+`before_date`; más de 93 días, `range_too_long`).
 
 ### GET /api/v1/admin/participants
 

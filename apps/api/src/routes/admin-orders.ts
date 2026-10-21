@@ -34,6 +34,7 @@
  * su propia capacidad declarada.
  */
 
+import type { OrderVoidRecord } from "@lsw/database";
 import { z } from "zod";
 
 import type { AppDependencies } from "../app.js";
@@ -57,7 +58,13 @@ import {
   type CashActionResult,
   type CashPaymentView,
 } from "../services/cash-payments.js";
-import { DAILY_CUT_TIME_ZONE, dailyCutWindow, isCalendarDate } from "../services/daily-cut.js";
+import {
+  cutWindow,
+  DAILY_CUT_TIME_ZONE,
+  datesInRange,
+  isCalendarDate,
+  MAX_CUT_DAYS,
+} from "../services/daily-cut.js";
 import { domainServicesFor } from "../services/domain-registry.js";
 import { localDateIn } from "../services/eligibility.js";
 import { createOrderAdminActions } from "../services/order-admin-actions.js";
@@ -116,6 +123,58 @@ const cancelOrderBodySchema = z.object({
   notes: z.string().trim().max(2000).nullable().optional(),
 });
 
+/** DEC-091: mismo trato del motivo que cancelar. */
+const voidOrderBodySchema = z.object({
+  reason_code: z
+    .string()
+    .regex(/^[a-zA-Z][a-zA-Z0-9_.]{2,63}$/u)
+    .optional(),
+  /** Que pedido lo sustituye, que dijo el cliente. Queda en la fila y en la auditoria. */
+  notes: z.string().trim().max(2000).nullable().optional(),
+});
+
+/**
+ * DEC-091: la anulacion de un pedido cobrado, vista desde el panel. Quien anulo
+ * es un dato del panel, no del participante: por eso no viaja en la ficha del
+ * pedido, que es la misma forma que ve el.
+ */
+const orderVoidSchema = z.object({
+  order_id: z.uuid(),
+  order_number: z.string(),
+  payment_method: z.enum(["CARD", "CASH"]),
+  /** El total del pedido: lo que dejo de contar en el corte. */
+  amount: moneySchema,
+  /** Lo que devolvio esta anulacion. Cero si ya estaba devuelto entero. */
+  refund_amount: moneySchema,
+  /** La devolucion en la pasarela (o `void:<pedido>` en efectivo); `null` si no hubo. */
+  provider_refund_id: z.string().nullable(),
+  voided_at: z.string(),
+  voided_by_admin_user_id: z.uuid(),
+  /** Nombre de la cuenta de personal. `null` si no se pudo leer. */
+  voided_by_name: z.string().nullable(),
+  reason_code: z.string(),
+  notes: z.string().nullable(),
+});
+
+function presentOrderVoid(record: OrderVoidRecord): z.infer<typeof orderVoidSchema> {
+  return {
+    order_id: record.orderId,
+    order_number: record.orderNumber,
+    payment_method: record.paymentMethod,
+    amount: { amount_minor: record.amountMinor.toString(10), currency: record.currency },
+    refund_amount: {
+      amount_minor: record.refundAmountMinor.toString(10),
+      currency: record.currency,
+    },
+    provider_refund_id: record.providerRefundId,
+    voided_at: record.voidedAt.toISOString(),
+    voided_by_admin_user_id: record.voidedByAdminUserId,
+    voided_by_name: record.voidedByName,
+    reason_code: record.reasonCode,
+    notes: record.notes,
+  };
+}
+
 /** DEC-085: entregado (con transportista y guia opcionales) o de vuelta a pendiente. */
 const fulfillmentBodySchema = z.object({
   delivered: z.boolean(),
@@ -126,6 +185,11 @@ const fulfillmentBodySchema = z.object({
 const dailyCutQuerySchema = z.object({
   /** Dia de calendario en la hora del punto de venta. Ausente = hoy. */
   date: z.string().refine(isCalendarDate, { message: "YYYY-MM-DD" }).optional(),
+  /**
+   * DEC-091: ultimo dia del rango, incluido. Ausente = el mismo `date`, que es
+   * el corte de un solo dia de siempre.
+   */
+  date_to: z.string().refine(isCalendarDate, { message: "YYYY-MM-DD" }).optional(),
 });
 
 const dailyCutTotalSchema = z.object({
@@ -134,22 +198,43 @@ const dailyCutTotalSchema = z.object({
   amount: moneySchema,
 });
 
+const dailyCutRefundsSchema = z.object({ refunds: z.number().int(), amount: moneySchema });
+
 /**
  * DEC-085: el corte de caja. Sin desglose de paquetes ni de participaciones:
  * lo que cuadra es dinero. La mercancia va aparte, linea a linea, porque es
  * lo que hay que preparar y enviar.
+ *
+ * DEC-091: de un dia o de un rango. Los totales son del rango entero y `days`
+ * los reparte dia a dia. Los pedidos anulados no cuentan en ninguna cifra: van
+ * aparte, en `voided`.
  */
 const dailyCutSchema = z.object({
+  /** Primer dia del rango (el unico, en el corte de un dia). */
   date: z.string(),
+  /** DEC-091: ultimo dia del rango, incluido. Igual a `date` en el corte de un dia. */
+  date_to: z.string(),
   time_zone: z.string(),
-  /** `[from, to)`: de las 12:00 a. m. del dia a las 12:00 a. m. del siguiente. */
+  /** `[from, to)`: de las 12:00 a. m. del primer dia a las 12:00 a. m. del siguiente al ultimo. */
   from: z.string(),
   to: z.string(),
   cash: dailyCutTotalSchema,
   card: dailyCutTotalSchema,
   total: dailyCutTotalSchema,
-  /** Reembolsos con tarjeta hechos ESE dia, de pedidos de cualquier dia. */
-  refunds: z.object({ refunds: z.number().int(), amount: moneySchema }),
+  /** Reembolsos con tarjeta hechos en el rango, de pedidos de cualquier dia. */
+  refunds: dailyCutRefundsSchema,
+  /** DEC-091: lo cobrado en el rango y anulado despues. NO esta sumado en ningun total. */
+  voided: dailyCutTotalSchema,
+  /** DEC-091: un elemento por dia del rango, tambien los dias sin cobros. */
+  days: z.array(
+    z.object({
+      date: z.string(),
+      cash: dailyCutTotalSchema,
+      card: dailyCutTotalSchema,
+      total: dailyCutTotalSchema,
+      refunds: dailyCutRefundsSchema,
+    }),
+  ),
   merchandise: z.object({
     /** Unidades por producto. `refunded_quantity` ya devueltas, aparte. */
     products: z.array(
@@ -499,7 +584,7 @@ export function buildAdminOrdersRoutes(dependencies: AppDependencies): RouteDefi
     },
 
     // -----------------------------------------------------------------------
-    // DEC-085: cancelar sin cobrar, entregar, corte de caja
+    // DEC-085: cancelar sin cobrar, entregar, corte de caja (DEC-091: de un rango)
     // -----------------------------------------------------------------------
 
     {
@@ -585,13 +670,88 @@ export function buildAdminOrdersRoutes(dependencies: AppDependencies): RouteDefi
       },
     },
 
+    // -----------------------------------------------------------------------
+    // DEC-091: anular un pedido ya cobrado
+    // -----------------------------------------------------------------------
+
+    {
+      method: "POST",
+      url: "/api/v1/admin/orders/:order_id/void",
+      operationId: "voidAdminOrder",
+      summary: "Anular un pedido ya cobrado (duplicado o error).",
+      description:
+        "DEC-091. Para pedidos cobrados (CONFIRMED, PARTIALLY_REFUNDED o REFUNDED), en efectivo o con tarjeta, sin disputa abierta. No borra nada: registra quien, cuando y por que (una fila inmutable por pedido); con tarjeta devuelve en la pasarela lo que quede del cobro y en efectivo registra la devolucion como hecho; revierte sus participaciones con una fila nueva del ledger y deja el pedido REFUNDED, que se ve como `VOIDED`. Un pedido anulado no cuenta en el corte de caja. 409 `ORDER_NOT_VOIDABLE` si no esta cobrado (eso se cancela) o esta en disputa; 503 si la pasarela no contesta (reintentar es seguro). Anular uno ya anulado responde la ficha sin hacer nada.",
+      tags: ["admin"],
+      authorization: { kind: "PERMISSION", permission: "order.void" },
+      schema: {
+        params: orderParamsSchema,
+        body: voidOrderBodySchema,
+        response: {
+          200: orderDetailSchema,
+          401: errorEnvelopeSchema,
+          403: errorEnvelopeSchema,
+          404: errorEnvelopeSchema,
+          409: errorEnvelopeSchema,
+          422: errorEnvelopeSchema,
+          503: errorEnvelopeSchema,
+        },
+      },
+      handler: async (request) => {
+        const staff = await requireStaffContext(dependencies, request);
+        const params = request.params as z.infer<typeof orderParamsSchema>;
+        const body = request.body as z.infer<typeof voidOrderBodySchema>;
+        const reasonCode = requireReasonCode(body.reason_code);
+        const notes = body.notes === undefined || body.notes === "" ? null : body.notes;
+
+        const domain = domainServicesFor(dependencies);
+        const result = await createOrderAdminActions(dependencies, domain).voidPaid(
+          params.order_id,
+          { adminUserId: staff.adminUserId },
+          { reasonCode, notes },
+        );
+
+        return await presentOrderDetail(domain, result.order);
+      },
+    },
+
+    {
+      method: "GET",
+      url: "/api/v1/admin/orders/:order_id/void",
+      operationId: "getAdminOrderVoid",
+      summary: "Quien anulo un pedido, cuando y por que.",
+      description:
+        "DEC-091. La fila de la anulacion, con el nombre de quien la hizo y lo que se devolvio. 404 `ORDER_VOID_NOT_FOUND` si el pedido no esta anulado.",
+      tags: ["admin"],
+      authorization: { kind: "PERMISSION", permission: "order.read" },
+      schema: {
+        params: orderParamsSchema,
+        response: {
+          200: orderVoidSchema,
+          401: errorEnvelopeSchema,
+          403: errorEnvelopeSchema,
+          404: errorEnvelopeSchema,
+        },
+      },
+      handler: async (request) => {
+        await requireStaff(dependencies, request);
+        const params = request.params as z.infer<typeof orderParamsSchema>;
+
+        const domain = domainServicesFor(dependencies);
+        const record = await domain.repositories.orderVoids.findByOrder(params.order_id);
+        if (record === null) {
+          throw new ApiError({ statusCode: 404, code: "ORDER_VOID_NOT_FOUND" });
+        }
+        return presentOrderVoid(record);
+      },
+    },
+
     {
       method: "GET",
       url: "/api/v1/admin/reports/daily-cut",
       operationId: "getAdminDailyCut",
-      summary: "Corte de caja de un dia, en la hora del punto de venta.",
+      summary: "Corte de caja de un dia o de un rango de dias, en la hora del punto de venta.",
       description:
-        "DEC-085. De 12:00 a. m. a 11:59 p. m. en `America/Denver` (Nuevo Mexico). Totales en efectivo, con tarjeta y en conjunto, con el numero de pedidos cobrados ese dia (`paid_at`) por medio de pago; los reembolsos de ese dia, aparte. Sin desglose de paquetes ni de participaciones. `merchandise` lista la mercancia de esos pedidos con cliente, direccion o recogida, numero de pedido y estado de envio, y las unidades por producto. Sin `date`, hoy.",
+        "DEC-085. De 12:00 a. m. a 11:59 p. m. en `America/Denver` (Nuevo Mexico). Totales en efectivo, con tarjeta y en conjunto, con el numero de pedidos cobrados ese dia (`paid_at`) por medio de pago; los reembolsos de ese dia, aparte. Sin desglose de paquetes ni de participaciones. `merchandise` lista la mercancia de esos pedidos con cliente, direccion o recogida, numero de pedido y estado de envio, y las unidades por producto. Sin `date`, hoy. DEC-091: con `date_to`, del dia `date` al dia `date_to`, los dos incluidos (como mucho 93 dias; 422 si `date_to` es anterior a `date` o el rango es mas largo): los totales son del rango y `days` los reparte por dia. Un pedido anulado no cuenta ni en los cobros ni en los reembolsos ni en la mercancia; sale en `voided`.",
       tags: ["admin"],
       authorization: { kind: "PERMISSION", permission: "order.read" },
       schema: {
@@ -609,36 +769,70 @@ export function buildAdminOrdersRoutes(dependencies: AppDependencies): RouteDefi
 
         const domain = domainServicesFor(dependencies);
         const date = query.date ?? localDateIn(domain.clock.now(), DAILY_CUT_TIME_ZONE);
-        const window = dailyCutWindow(date);
-        const cut = await adminReadsFor(dependencies).dailyCut(window);
+        const dateTo = query.date_to ?? date;
+
+        // DEC-091: el rango se valida aqui y no en el esquema para que el 422
+        // diga QUE esta mal: un fin anterior al inicio o un rango demasiado largo.
+        if (dateTo < date) {
+          throw ApiErrors.validationFailed([{ path: "date_to", code: "before_date" }]);
+        }
+        const dates = datesInRange(date, dateTo);
+        if (dates.length > MAX_CUT_DAYS) {
+          throw ApiErrors.validationFailed([{ path: "date_to", code: "range_too_long" }]);
+        }
+
+        const window = cutWindow(date, dateTo);
+        const cut = await adminReadsFor(dependencies).dailyCut({
+          ...window,
+          timeZone: DAILY_CUT_TIME_ZONE,
+        });
 
         // Una sola moneda, la de la tienda. Si apareciera otra, no se suma a
         // ciegas con esta: se registra y queda fuera del corte.
         const currency = dependencies.config.commerce.defaultCurrency;
-        const foreign = [...cut.totals, ...cut.refunds].filter((row) => row.currency !== currency);
+        const foreign = [...cut.totals, ...cut.refunds, ...cut.voided].filter(
+          (row) => row.currency !== currency,
+        );
         if (foreign.length > 0) {
           request.log.warn(
             {
               event: "daily_cut.foreign_currency",
               date,
+              date_to: dateTo,
               currencies: foreign.map((r) => r.currency),
             },
             "el corte de caja encontro cobros en otra moneda y no los suma",
           );
         }
 
-        const sumOf = (method: "CASH" | "CARD" | null) => {
-          const rows = cut.totals.filter(
-            (row) => row.currency === currency && (method === null || row.method === method),
+        const totalOf = (
+          rows: readonly { readonly orders: number; readonly amountMinor: bigint }[],
+        ) => ({
+          orders: rows.reduce((total, row) => total + row.orders, 0),
+          amount: {
+            amount_minor: rows.reduce((total, row) => total + row.amountMinor, 0n).toString(10),
+            currency,
+          },
+        });
+        const refundsOf = (
+          rows: readonly { readonly refunds: number; readonly amountMinor: bigint }[],
+        ) => ({
+          refunds: rows.reduce((total, row) => total + row.refunds, 0),
+          amount: {
+            amount_minor: rows.reduce((total, row) => total + row.amountMinor, 0n).toString(10),
+            currency,
+          },
+        });
+        /** `null` en `day` = el rango entero; `null` en `method` = los dos medios. */
+        const sumOf = (method: "CASH" | "CARD" | null, day: string | null = null) =>
+          totalOf(
+            cut.totals.filter(
+              (row) =>
+                row.currency === currency &&
+                (method === null || row.method === method) &&
+                (day === null || row.date === day),
+            ),
           );
-          return {
-            orders: rows.reduce((total, row) => total + row.orders, 0),
-            amount: {
-              amount_minor: rows.reduce((total, row) => total + row.amountMinor, 0n).toString(10),
-              currency,
-            },
-          };
-        };
         const refunds = cut.refunds.filter((row) => row.currency === currency);
 
         const lines = cut.merchandise.map((row) => ({
@@ -686,21 +880,22 @@ export function buildAdminOrdersRoutes(dependencies: AppDependencies): RouteDefi
 
         return {
           date,
+          date_to: dateTo,
           time_zone: DAILY_CUT_TIME_ZONE,
           from: window.from.toISOString(),
           to: window.to.toISOString(),
           cash: sumOf("CASH"),
           card: sumOf("CARD"),
           total: sumOf(null),
-          refunds: {
-            refunds: refunds.reduce((total, row) => total + row.refunds, 0),
-            amount: {
-              amount_minor: refunds
-                .reduce((total, row) => total + row.amountMinor, 0n)
-                .toString(10),
-              currency,
-            },
-          },
+          refunds: refundsOf(refunds),
+          voided: totalOf(cut.voided.filter((row) => row.currency === currency)),
+          days: dates.map((day) => ({
+            date: day,
+            cash: sumOf("CASH", day),
+            card: sumOf("CARD", day),
+            total: sumOf(null, day),
+            refunds: refundsOf(refunds.filter((row) => row.date === day)),
+          })),
           merchandise: {
             products: [...bySku.values()].sort((a, b) => a.sku.localeCompare(b.sku)),
             lines,

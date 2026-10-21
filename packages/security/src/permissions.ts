@@ -64,6 +64,8 @@ export const ROLE_CAPABILITIES: Readonly<Record<RoleId, readonly CapabilityId[]>
     // DEC-085: y quien limpia los pedidos que nadie pago y despacha la mercancia.
     "order.cancel",
     "order.fulfillment.update",
+    // DEC-091: y quien anula el que se cobro de mas (duplicado o error).
+    "order.void",
     "entry.ledger.read",
     "entry.adjust.create",
     "amoe.review.read",
@@ -107,6 +109,8 @@ export const ROLE_CAPABILITIES: Readonly<Record<RoleId, readonly CapabilityId[]>
     // DEC-085: los mismos dos roles que cobran en caja.
     "order.cancel",
     "order.fulfillment.update",
+    // DEC-091: y los mismos dos anulan lo cobrado por error.
+    "order.void",
     "payment.webhook.read",
     "entry.ledger.read",
     "entry.adjust.approve",
@@ -292,6 +296,7 @@ export const CAPABILITY_READ_COVERAGE: readonly ReadCoverageRule[] = Object.free
   { write: "order.cash.confirm", read: "order.read" },
   { write: "order.cancel", read: "order.read" },
   { write: "order.fulfillment.update", read: "order.read" },
+  { write: "order.void", read: "order.read" },
   { write: "payment.webhook.replay", read: "payment.webhook.read" },
   { write: "entry.adjust.create", read: "entry.ledger.read" },
   { write: "entry.adjust.approve", read: "entry.ledger.read" },

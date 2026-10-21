@@ -129,8 +129,15 @@ const cashOrderBodySchema = z.object({
   shipping_address: shippingAddressBodySchema.optional(),
 });
 
+/**
+ * DEC-091: con tarjeta tambien se puede recoger en el punto de venta. Igual
+ * que en efectivo: `PICKUP` sin envio y sin direccion (si llega una, se
+ * ignora); `DELIVERY` -por defecto, lo unico que existia antes de este campo-
+ * con direccion obligatoria.
+ */
 const checkoutBodySchema = z.object({
-  shipping_address: shippingAddressBodySchema,
+  fulfillment_method: z.enum(["DELIVERY", "PICKUP"]).optional(),
+  shipping_address: shippingAddressBodySchema.optional(),
   return_url: z.url().max(2048),
 });
 
@@ -539,7 +546,7 @@ export function buildOrdersRoutes(dependencies: AppDependencies): RouteDefinitio
       operationId: "createCheckoutSession",
       summary: "Abrir una sesion de pago sobre el carrito de servidor.",
       description:
-        "Congela el carrito en un pedido DRAFT y pide al proveedor una sesion. El pedido no genera participaciones hasta que el pago alcance el estado cualificante (DEC-023).",
+        "Congela el carrito en un pedido DRAFT y pide al proveedor una sesion. El pedido no genera participaciones hasta que el pago alcance el estado cualificante (DEC-023). DEC-091: `fulfillment_method = PICKUP` (el cliente pasa por el pedido a un punto de venta fisico) no lleva envio ni direccion y no necesita tarifa; `DELIVERY` (por defecto) exige `shipping_address` y cobra el envio.",
       tags: ["commerce"],
       authorization: { kind: "PARTICIPANT", selfOnly: true },
       schema: {
@@ -556,9 +563,21 @@ export function buildOrdersRoutes(dependencies: AppDependencies): RouteDefinitio
         const principal = await requirePrincipal(request);
         const body = request.body as z.infer<typeof checkoutBodySchema>;
 
+        // DEC-091: sin direccion solo se puede recoger. Se comprueba aqui y no
+        // en el esquema para que el 422 diga QUE campo falta, como en efectivo.
+        const pickup = body.fulfillment_method === "PICKUP";
+        const address = body.shipping_address;
+        if (!pickup && address === undefined) {
+          throw ApiErrors.validationFailed([{ path: "shipping_address", code: "required" }]);
+        }
+
         // La foto del carrito -precios, SKU, tipo y elegibilidad congelados- la
         // hace `freezeOpenCart`, la MISMA que usa el pedido en efectivo.
-        const cart = await freezeOpenCart(repositories, cartOwnerOf(principal));
+        const cart = await freezeOpenCart(
+          repositories,
+          cartOwnerOf(principal),
+          pickup ? "PICKUP" : "DELIVERY",
+        );
         const subtotal = cart.subtotalMinor;
 
         const orderId = domain.ids.next();
@@ -571,12 +590,15 @@ export function buildOrdersRoutes(dependencies: AppDependencies): RouteDefinitio
           currency: cart.currency,
           subtotalMinor: subtotal,
           // DEC-079: la tarifa fija si el pedido lleva mercancia; `null` si
-          // solo lleva paquetes, que no se envian. Impuestos: `null`, pendiente
-          // legal (no es "cero impuestos", es "todavia no se cobran").
+          // solo lleva paquetes, que no se envian, o si se recoge en el punto
+          // de venta (DEC-091). Impuestos: `null`, pendiente legal (no es "cero
+          // impuestos", es "todavia no se cobran").
           shippingTotalMinor: cart.shippingMinor,
           taxTotalMinor: null,
           totalMinor: cart.totalMinor,
-          shippingAddress: { ...body.shipping_address, line2: body.shipping_address.line2 ?? null },
+          shippingAddress:
+            pickup || address === undefined ? null : { ...address, line2: address.line2 ?? null },
+          fulfillmentMethod: cart.fulfillmentMethod,
           items: cart.items,
           createdAt: domain.clock.now(),
         });

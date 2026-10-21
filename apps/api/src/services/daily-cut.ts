@@ -1,5 +1,5 @@
 /**
- * Corte de caja diario (DEC-085).
+ * Corte de caja diario (DEC-085) y de un rango de dias (DEC-091).
  *
  * El dia va de 12:00 a. m. a 11:59 p. m. en la hora del punto de venta, que el
  * cliente fijo en la de NUEVO MEXICO (`America/Denver`, con su horario de
@@ -76,8 +76,38 @@ export function isCalendarDate(date: string): boolean {
 
 /** `[from, to)` del dia `date` en la zona del corte. */
 export function dailyCutWindow(date: string): { readonly from: Date; readonly to: Date } {
+  return cutWindow(date, date);
+}
+
+/**
+ * DEC-091: el corte de un RANGO, del dia `first` al dia `last`, los dos
+ * incluidos: de las 12:00 a. m. de `first` a las 12:00 a. m. del dia siguiente
+ * a `last`. Cada dia con su propio desfase, asi que un rango que cruza el cambio
+ * de horario no pierde ni gana una hora.
+ */
+export function cutWindow(first: string, last: string): { readonly from: Date; readonly to: Date } {
   return {
-    from: startOfLocalDay(date, DAILY_CUT_TIME_ZONE),
-    to: startOfLocalDay(nextDate(date), DAILY_CUT_TIME_ZONE),
+    from: startOfLocalDay(first, DAILY_CUT_TIME_ZONE),
+    to: startOfLocalDay(nextDate(last), DAILY_CUT_TIME_ZONE),
   };
+}
+
+/**
+ * DEC-091: el rango mas largo que admite el corte. Un trimestre de calendario
+ * cabe de sobra; mas alla, la lista de mercancia deja de ser algo que alguien
+ * vaya a leer en una pantalla.
+ */
+export const MAX_CUT_DAYS = 93;
+
+/**
+ * Los dias de `first` a `last`, los dos incluidos. Vacio si `last` es anterior
+ * a `first`. Se detiene en `limit` + 1 dias para que quien llama pueda decir
+ * "demasiado largo" sin recorrer un rango arbitrario.
+ */
+export function datesInRange(first: string, last: string, limit = MAX_CUT_DAYS): string[] {
+  const dates: string[] = [];
+  for (let date = first; date <= last && dates.length <= limit; date = nextDate(date)) {
+    dates.push(date);
+  }
+  return dates;
 }

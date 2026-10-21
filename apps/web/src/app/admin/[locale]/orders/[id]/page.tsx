@@ -9,6 +9,7 @@ import { AdminSectionError } from "@/components/admin/admin-section-error";
 import { CashPaymentPanel } from "@/components/admin/cash-payment-panel";
 import { OrderCancelPanel } from "@/components/admin/order-cancel-panel";
 import { OrderFulfillmentForm } from "@/components/admin/order-fulfillment-form";
+import { OrderVoidedNotice, OrderVoidPanel } from "@/components/admin/order-void-panel";
 import { EntryCalculationTrace } from "@/components/entry-calculation-trace";
 import { OrderAddress } from "@/components/order-address";
 import { OrderLineList } from "@/components/order-line-list";
@@ -18,7 +19,7 @@ import { isLocale } from "@/i18n/locales";
 import { setOrderFulfillmentAction } from "@/lib/admin/actions";
 import { can } from "@/lib/admin/capabilities";
 import { DAILY_CUT_TIME_ZONE } from "@/lib/admin/daily-cut";
-import { fetchAdminOrder, fetchAdminOrderCashPayment } from "@/lib/api";
+import { fetchAdminOrder, fetchAdminOrderCashPayment, fetchAdminOrderVoid } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
 
@@ -70,6 +71,16 @@ export default async function AdminOrderDetailPage({
    */
   const isCash = result.ok && result.data.payment_method === "CASH";
   const cash = isCash ? await fetchAdminOrderCashPayment(id, locale, screen.session) : null;
+
+  /*
+   * DEC-091: quien anulo y por que, tambien APARTE: es un dato del panel, no
+   * del participante. Solo se pide si el pedido esta anulado.
+   */
+  const voided = result.ok && result.data.status === "VOIDED";
+  const voidRecord = voided ? await fetchAdminOrderVoid(id, locale, screen.session) : null;
+  // Se anula lo cobrado; lo que nunca se cobro se cancela (abajo).
+  const voidable =
+    result.ok && ["PAID", "FULFILLED", "PARTIALLY_REFUNDED"].includes(result.data.status);
 
   // DEC-085: hay algo que enviar si el pedido esta cobrado y lleva mercancia.
   // Sin `product_kind` (API anterior) se supone que si: la ruta lo comprueba.
@@ -139,6 +150,12 @@ export default async function AdminOrderDetailPage({
             </dl>
           </Card>
 
+          {voidRecord === null ? null : voidRecord.ok ? (
+            <OrderVoidedNotice record={voidRecord.data} locale={locale} />
+          ) : (
+            <AdminSectionError failure={voidRecord.error} headingLevel="h2" />
+          )}
+
           {cash === null ? null : cash.ok ? (
             <CashPaymentPanel
               cash={cash.data}
@@ -168,6 +185,7 @@ export default async function AdminOrderDetailPage({
           <OrderAddress
             address={result.data.shipping_address}
             fulfillmentMethod={result.data.fulfillment_method}
+            paymentMethod={result.data.payment_method}
           />
 
           {/*
@@ -221,6 +239,15 @@ export default async function AdminOrderDetailPage({
            */}
           {result.data.status === "PENDING_PAYMENT" && can(screen.actor, "order.cancel") ? (
             <OrderCancelPanel order={result.data} locale={locale} />
+          ) : null}
+
+          {/*
+           * DEC-091: anular lo que SI se cobro (duplicado o error). La ruta lo
+           * vuelve a comprobar todo y pide step-up; aqui solo no se ofrece
+           * donde no procede.
+           */}
+          {voidable && can(screen.actor, "order.void") ? (
+            <OrderVoidPanel order={result.data} locale={locale} />
           ) : null}
 
           <section aria-labelledby="order-trace">

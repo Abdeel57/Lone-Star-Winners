@@ -93,9 +93,9 @@ export const orders = pgTable(
     /** Sin ninguna regla de jurisdiccion: la elegibilidad territorial es legal. */
     shippingAddress: jsonb("shipping_address"),
     /**
-     * DEC-079 (0036): `DELIVERY` o `PICKUP` (pagado en efectivo y entregado en
-     * el punto de venta, sin envio). Se fija al crear el pedido; las CHECK de la
-     * migracion impiden un `PICKUP` con tarjeta o con envio.
+     * DEC-079 (0036): `DELIVERY` o `PICKUP` (entregado en el punto de venta,
+     * sin envio). Se fija al crear el pedido; una CHECK impide un `PICKUP` con
+     * envio. DEC-091 (0041): `PICKUP` vale tambien con tarjeta.
      */
     fulfillmentMethod: text("fulfillment_method", { enum: ["DELIVERY", "PICKUP"] })
       .notNull()

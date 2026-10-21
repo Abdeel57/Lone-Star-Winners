@@ -1334,7 +1334,8 @@
                               "CANCELLED",
                               "REFUNDED",
                               "PARTIALLY_REFUNDED",
-                              "CHARGEBACK"
+                              "CHARGEBACK",
+                              "VOIDED"
                             ],
                             "type": "string"
                           },
@@ -1821,7 +1822,8 @@
                         "CANCELLED",
                         "REFUNDED",
                         "PARTIALLY_REFUNDED",
-                        "CHARGEBACK"
+                        "CHARGEBACK",
+                        "VOIDED"
                       ],
                       "type": "string"
                     },
@@ -9459,7 +9461,8 @@
                               "CANCELLED",
                               "REFUNDED",
                               "PARTIALLY_REFUNDED",
-                              "CHARGEBACK"
+                              "CHARGEBACK",
+                              "VOIDED"
                             ],
                             "type": "string"
                           },
@@ -10023,7 +10026,8 @@
                         "CANCELLED",
                         "REFUNDED",
                         "PARTIALLY_REFUNDED",
-                        "CHARGEBACK"
+                        "CHARGEBACK",
+                        "VOIDED"
                       ],
                       "type": "string"
                     },
@@ -10647,7 +10651,8 @@
                         "CANCELLED",
                         "REFUNDED",
                         "PARTIALLY_REFUNDED",
-                        "CHARGEBACK"
+                        "CHARGEBACK",
+                        "VOIDED"
                       ],
                       "type": "string"
                     },
@@ -11184,7 +11189,8 @@
                         "PENDING_CASH_PAYMENT",
                         "PAID",
                         "ENTRIES_GENERATED",
-                        "CANCELLED"
+                        "CANCELLED",
+                        "VOIDED"
                       ],
                       "type": "string"
                     }
@@ -11602,7 +11608,8 @@
                         "PENDING_CASH_PAYMENT",
                         "PAID",
                         "ENTRIES_GENERATED",
-                        "CANCELLED"
+                        "CANCELLED",
+                        "VOIDED"
                       ],
                       "type": "string"
                     }
@@ -12048,7 +12055,8 @@
                         "PENDING_CASH_PAYMENT",
                         "PAID",
                         "ENTRIES_GENERATED",
-                        "CANCELLED"
+                        "CANCELLED",
+                        "VOIDED"
                       ],
                       "type": "string"
                     }
@@ -12697,7 +12705,8 @@
                         "CANCELLED",
                         "REFUNDED",
                         "PARTIALLY_REFUNDED",
-                        "CHARGEBACK"
+                        "CHARGEBACK",
+                        "VOIDED"
                       ],
                       "type": "string"
                     },
@@ -13358,6 +13367,1015 @@
         "x-lsw-authorization": {
           "kind": "PERMISSION",
           "permission": "order.refund.initiate",
+          "requires_step_up": true
+        }
+      }
+    },
+    "/api/v1/admin/orders/{order_id}/void": {
+      "get": {
+        "description": "DEC-091. La fila de la anulacion, con el nombre de quien la hizo y lo que se devolvio. 404 `ORDER_VOID_NOT_FOUND` si el pedido no esta anulado.",
+        "operationId": "getAdminOrderVoid",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "order_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "amount": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "amount_minor": {
+                          "type": "string"
+                        },
+                        "currency": {
+                          "maxLength": 3,
+                          "minLength": 3,
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "amount_minor",
+                        "currency"
+                      ],
+                      "type": "object"
+                    },
+                    "notes": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "order_id": {
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                      "type": "string"
+                    },
+                    "order_number": {
+                      "type": "string"
+                    },
+                    "payment_method": {
+                      "enum": [
+                        "CARD",
+                        "CASH"
+                      ],
+                      "type": "string"
+                    },
+                    "provider_refund_id": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "reason_code": {
+                      "type": "string"
+                    },
+                    "refund_amount": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "amount_minor": {
+                          "type": "string"
+                        },
+                        "currency": {
+                          "maxLength": 3,
+                          "minLength": 3,
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "amount_minor",
+                        "currency"
+                      ],
+                      "type": "object"
+                    },
+                    "voided_at": {
+                      "type": "string"
+                    },
+                    "voided_by_admin_user_id": {
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                      "type": "string"
+                    },
+                    "voided_by_name": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "order_id",
+                    "order_number",
+                    "payment_method",
+                    "amount",
+                    "refund_amount",
+                    "provider_refund_id",
+                    "voided_at",
+                    "voided_by_admin_user_id",
+                    "voided_by_name",
+                    "reason_code",
+                    "notes"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 200."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "additionalProperties": {},
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "request_id"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 401."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "additionalProperties": {},
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "request_id"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 403."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "additionalProperties": {},
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "request_id"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 404."
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Quien anulo un pedido, cuando y por que.",
+        "tags": [
+          "admin"
+        ],
+        "x-lsw-authorization": {
+          "kind": "PERMISSION",
+          "permission": "order.read",
+          "requires_step_up": false
+        }
+      },
+      "post": {
+        "description": "DEC-091. Para pedidos cobrados (CONFIRMED, PARTIALLY_REFUNDED o REFUNDED), en efectivo o con tarjeta, sin disputa abierta. No borra nada: registra quien, cuando y por que (una fila inmutable por pedido); con tarjeta devuelve en la pasarela lo que quede del cobro y en efectivo registra la devolucion como hecho; revierte sus participaciones con una fila nueva del ledger y deja el pedido REFUNDED, que se ve como `VOIDED`. Un pedido anulado no cuenta en el corte de caja. 409 `ORDER_NOT_VOIDABLE` si no esta cobrado (eso se cancela) o esta en disputa; 503 si la pasarela no contesta (reintentar es seguro). Anular uno ya anulado responde la ficha sin hacer nada.",
+        "operationId": "voidAdminOrder",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "order_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "notes": {
+                    "anyOf": [
+                      {
+                        "maxLength": 2000,
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "reason_code": {
+                    "pattern": "^[a-zA-Z][a-zA-Z0-9_.]{2,63}$",
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "entries_granted": {
+                      "anyOf": [
+                        {
+                          "maximum": 9007199254740991,
+                          "minimum": -9007199254740991,
+                          "type": "integer"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "entry_calculation": {
+                      "anyOf": [
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "engine_version": {
+                              "maximum": 9007199254740991,
+                              "minimum": -9007199254740991,
+                              "type": "integer"
+                            },
+                            "evaluated_at": {
+                              "type": "string"
+                            },
+                            "final_entries": {
+                              "maximum": 9007199254740991,
+                              "minimum": -9007199254740991,
+                              "type": "integer"
+                            },
+                            "rules_version_id": {
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                              "type": "string"
+                            },
+                            "trace": {
+                              "additionalProperties": {},
+                              "propertyNames": {
+                                "type": "string"
+                              },
+                              "type": "object"
+                            }
+                          },
+                          "required": [
+                            "rules_version_id",
+                            "engine_version",
+                            "evaluated_at",
+                            "final_entries",
+                            "trace"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "entry_state": {
+                      "enum": [
+                        "NOT_APPLICABLE",
+                        "PENDING_QUALIFICATION",
+                        "GRANTED",
+                        "PARTIALLY_REVERSED",
+                        "REVERSED"
+                      ],
+                      "type": "string"
+                    },
+                    "fulfillment": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "carrier": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "delivered_at": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "state": {
+                          "enum": [
+                            "NOT_APPLICABLE",
+                            "UNFULFILLED",
+                            "PARTIALLY_FULFILLED",
+                            "FULFILLED",
+                            "RETURNED"
+                          ],
+                          "type": "string"
+                        },
+                        "tracking_number": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "state",
+                        "delivered_at",
+                        "carrier",
+                        "tracking_number"
+                      ],
+                      "type": "object"
+                    },
+                    "fulfillment_method": {
+                      "enum": [
+                        "DELIVERY",
+                        "PICKUP"
+                      ],
+                      "type": "string"
+                    },
+                    "id": {
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                      "type": "string"
+                    },
+                    "item_count": {
+                      "maximum": 9007199254740991,
+                      "minimum": -9007199254740991,
+                      "type": "integer"
+                    },
+                    "items": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "line_id": {
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                            "type": "string"
+                          },
+                          "line_total": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "amount_minor": {
+                                "type": "string"
+                              },
+                              "currency": {
+                                "maxLength": 3,
+                                "minLength": 3,
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "amount_minor",
+                              "currency"
+                            ],
+                            "type": "object"
+                          },
+                          "product_kind": {
+                            "enum": [
+                              "MERCHANDISE",
+                              "ENTRY_PACKAGE"
+                            ],
+                            "type": "string"
+                          },
+                          "product_name": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "en-US": {
+                                "type": "string"
+                              },
+                              "es-US": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "en-US",
+                              "es-US"
+                            ],
+                            "type": "object"
+                          },
+                          "product_slug": {
+                            "type": "string"
+                          },
+                          "quantity": {
+                            "maximum": 9007199254740991,
+                            "minimum": -9007199254740991,
+                            "type": "integer"
+                          },
+                          "refunded_quantity": {
+                            "maximum": 9007199254740991,
+                            "minimum": -9007199254740991,
+                            "type": "integer"
+                          },
+                          "sku": {
+                            "type": "string"
+                          },
+                          "sweepstakes_eligible": {
+                            "type": "boolean"
+                          },
+                          "unit_price": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "amount_minor": {
+                                "type": "string"
+                              },
+                              "currency": {
+                                "maxLength": 3,
+                                "minLength": 3,
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "amount_minor",
+                              "currency"
+                            ],
+                            "type": "object"
+                          }
+                        },
+                        "required": [
+                          "line_id",
+                          "sku",
+                          "product_slug",
+                          "product_name",
+                          "quantity",
+                          "unit_price",
+                          "line_total",
+                          "sweepstakes_eligible",
+                          "refunded_quantity",
+                          "product_kind"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "order_number": {
+                      "type": "string"
+                    },
+                    "payment_method": {
+                      "enum": [
+                        "CARD",
+                        "CASH"
+                      ],
+                      "type": "string"
+                    },
+                    "placed_at": {
+                      "type": "string"
+                    },
+                    "promotion_id": {
+                      "anyOf": [
+                        {
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "shipping_address": {
+                      "anyOf": [
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "city": {
+                              "type": "string"
+                            },
+                            "country": {
+                              "type": "string"
+                            },
+                            "full_name": {
+                              "type": "string"
+                            },
+                            "line1": {
+                              "type": "string"
+                            },
+                            "line2": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "postal_code": {
+                              "type": "string"
+                            },
+                            "region": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "full_name",
+                            "line1",
+                            "line2",
+                            "city",
+                            "region",
+                            "postal_code",
+                            "country"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "shipping_total": {
+                      "anyOf": [
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "amount_minor": {
+                              "type": "string"
+                            },
+                            "currency": {
+                              "maxLength": 3,
+                              "minLength": 3,
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "amount_minor",
+                            "currency"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "status": {
+                      "enum": [
+                        "PENDING_PAYMENT",
+                        "PAID",
+                        "FULFILLED",
+                        "CANCELLED",
+                        "REFUNDED",
+                        "PARTIALLY_REFUNDED",
+                        "CHARGEBACK",
+                        "VOIDED"
+                      ],
+                      "type": "string"
+                    },
+                    "subtotal": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "amount_minor": {
+                          "type": "string"
+                        },
+                        "currency": {
+                          "maxLength": 3,
+                          "minLength": 3,
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "amount_minor",
+                        "currency"
+                      ],
+                      "type": "object"
+                    },
+                    "tax_total": {
+                      "anyOf": [
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "amount_minor": {
+                              "type": "string"
+                            },
+                            "currency": {
+                              "maxLength": 3,
+                              "minLength": 3,
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "amount_minor",
+                            "currency"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "total": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "amount_minor": {
+                          "type": "string"
+                        },
+                        "currency": {
+                          "maxLength": 3,
+                          "minLength": 3,
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "amount_minor",
+                        "currency"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "order_number",
+                    "status",
+                    "placed_at",
+                    "total",
+                    "item_count",
+                    "promotion_id",
+                    "entry_state",
+                    "entries_granted",
+                    "payment_method",
+                    "items",
+                    "subtotal",
+                    "shipping_total",
+                    "tax_total",
+                    "shipping_address",
+                    "fulfillment_method",
+                    "fulfillment",
+                    "entry_calculation"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 200."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "additionalProperties": {},
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "request_id"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 401."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "additionalProperties": {},
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "request_id"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 403."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "additionalProperties": {},
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "request_id"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 404."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "additionalProperties": {},
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "request_id"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 409."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "additionalProperties": {},
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "request_id"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 422."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "additionalProperties": {},
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "request_id"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 503."
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Anular un pedido ya cobrado (duplicado o error).",
+        "tags": [
+          "admin"
+        ],
+        "x-lsw-authorization": {
+          "kind": "PERMISSION",
+          "permission": "order.void",
           "requires_step_up": true
         }
       }
@@ -28363,12 +29381,20 @@
     },
     "/api/v1/admin/reports/daily-cut": {
       "get": {
-        "description": "DEC-085. De 12:00 a. m. a 11:59 p. m. en `America/Denver` (Nuevo Mexico). Totales en efectivo, con tarjeta y en conjunto, con el numero de pedidos cobrados ese dia (`paid_at`) por medio de pago; los reembolsos de ese dia, aparte. Sin desglose de paquetes ni de participaciones. `merchandise` lista la mercancia de esos pedidos con cliente, direccion o recogida, numero de pedido y estado de envio, y las unidades por producto. Sin `date`, hoy.",
+        "description": "DEC-085. De 12:00 a. m. a 11:59 p. m. en `America/Denver` (Nuevo Mexico). Totales en efectivo, con tarjeta y en conjunto, con el numero de pedidos cobrados ese dia (`paid_at`) por medio de pago; los reembolsos de ese dia, aparte. Sin desglose de paquetes ni de participaciones. `merchandise` lista la mercancia de esos pedidos con cliente, direccion o recogida, numero de pedido y estado de envio, y las unidades por producto. Sin `date`, hoy. DEC-091: con `date_to`, del dia `date` al dia `date_to`, los dos incluidos (como mucho 93 dias; 422 si `date_to` es anterior a `date` o el rango es mas largo): los totales son del rango y `days` los reparte por dia. Un pedido anulado no cuenta ni en los cobros ni en los reembolsos ni en la mercancia; sale en `voided`.",
         "operationId": "getAdminDailyCut",
         "parameters": [
           {
             "in": "query",
             "name": "date",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "date_to",
             "required": false,
             "schema": {
               "type": "string"
@@ -28450,6 +29476,160 @@
                     },
                     "date": {
                       "type": "string"
+                    },
+                    "date_to": {
+                      "type": "string"
+                    },
+                    "days": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "card": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "amount": {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "amount_minor": {
+                                    "type": "string"
+                                  },
+                                  "currency": {
+                                    "maxLength": 3,
+                                    "minLength": 3,
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "amount_minor",
+                                  "currency"
+                                ],
+                                "type": "object"
+                              },
+                              "orders": {
+                                "maximum": 9007199254740991,
+                                "minimum": -9007199254740991,
+                                "type": "integer"
+                              }
+                            },
+                            "required": [
+                              "orders",
+                              "amount"
+                            ],
+                            "type": "object"
+                          },
+                          "cash": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "amount": {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "amount_minor": {
+                                    "type": "string"
+                                  },
+                                  "currency": {
+                                    "maxLength": 3,
+                                    "minLength": 3,
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "amount_minor",
+                                  "currency"
+                                ],
+                                "type": "object"
+                              },
+                              "orders": {
+                                "maximum": 9007199254740991,
+                                "minimum": -9007199254740991,
+                                "type": "integer"
+                              }
+                            },
+                            "required": [
+                              "orders",
+                              "amount"
+                            ],
+                            "type": "object"
+                          },
+                          "date": {
+                            "type": "string"
+                          },
+                          "refunds": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "amount": {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "amount_minor": {
+                                    "type": "string"
+                                  },
+                                  "currency": {
+                                    "maxLength": 3,
+                                    "minLength": 3,
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "amount_minor",
+                                  "currency"
+                                ],
+                                "type": "object"
+                              },
+                              "refunds": {
+                                "maximum": 9007199254740991,
+                                "minimum": -9007199254740991,
+                                "type": "integer"
+                              }
+                            },
+                            "required": [
+                              "refunds",
+                              "amount"
+                            ],
+                            "type": "object"
+                          },
+                          "total": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "amount": {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "amount_minor": {
+                                    "type": "string"
+                                  },
+                                  "currency": {
+                                    "maxLength": 3,
+                                    "minLength": 3,
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "amount_minor",
+                                  "currency"
+                                ],
+                                "type": "object"
+                              },
+                              "orders": {
+                                "maximum": 9007199254740991,
+                                "minimum": -9007199254740991,
+                                "type": "integer"
+                              }
+                            },
+                            "required": [
+                              "orders",
+                              "amount"
+                            ],
+                            "type": "object"
+                          }
+                        },
+                        "required": [
+                          "date",
+                          "cash",
+                          "card",
+                          "total",
+                          "refunds"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
                     },
                     "from": {
                       "type": "string"
@@ -28776,10 +29956,44 @@
                         "amount"
                       ],
                       "type": "object"
+                    },
+                    "voided": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "amount": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "amount_minor": {
+                              "type": "string"
+                            },
+                            "currency": {
+                              "maxLength": 3,
+                              "minLength": 3,
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "amount_minor",
+                            "currency"
+                          ],
+                          "type": "object"
+                        },
+                        "orders": {
+                          "maximum": 9007199254740991,
+                          "minimum": -9007199254740991,
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "orders",
+                        "amount"
+                      ],
+                      "type": "object"
                     }
                   },
                   "required": [
                     "date",
+                    "date_to",
                     "time_zone",
                     "from",
                     "to",
@@ -28787,6 +30001,8 @@
                     "card",
                     "total",
                     "refunds",
+                    "voided",
+                    "days",
                     "merchandise"
                   ],
                   "type": "object"
@@ -28918,7 +30134,7 @@
             "sessionCookie": []
           }
         ],
-        "summary": "Corte de caja de un dia, en la hora del punto de venta.",
+        "summary": "Corte de caja de un dia o de un rango de dias, en la hora del punto de venta.",
         "tags": [
           "admin"
         ],
@@ -36207,7 +37423,8 @@
                         "CANCELLED",
                         "REFUNDED",
                         "PARTIALLY_REFUNDED",
-                        "CHARGEBACK"
+                        "CHARGEBACK",
+                        "VOIDED"
                       ],
                       "type": "string"
                     },
@@ -36319,7 +37536,8 @@
                         "CANCELLED",
                         "REFUNDED",
                         "PARTIALLY_REFUNDED",
-                        "CHARGEBACK"
+                        "CHARGEBACK",
+                        "VOIDED"
                       ],
                       "type": "string"
                     },
@@ -36495,13 +37713,20 @@
     },
     "/api/v1/checkout/session": {
       "post": {
-        "description": "Congela el carrito en un pedido DRAFT y pide al proveedor una sesion. El pedido no genera participaciones hasta que el pago alcance el estado cualificante (DEC-023).",
+        "description": "Congela el carrito en un pedido DRAFT y pide al proveedor una sesion. El pedido no genera participaciones hasta que el pago alcance el estado cualificante (DEC-023). DEC-091: `fulfillment_method = PICKUP` (el cliente pasa por el pedido a un punto de venta fisico) no lleva envio ni direccion y no necesita tarifa; `DELIVERY` (por defecto) exige `shipping_address` y cobra el envio.",
         "operationId": "createCheckoutSession",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
                 "properties": {
+                  "fulfillment_method": {
+                    "enum": [
+                      "DELIVERY",
+                      "PICKUP"
+                    ],
+                    "type": "string"
+                  },
                   "return_url": {
                     "format": "uri",
                     "maxLength": 2048,
@@ -36563,7 +37788,6 @@
                   }
                 },
                 "required": [
-                  "shipping_address",
                   "return_url"
                 ],
                 "type": "object"

@@ -61,9 +61,9 @@ vi.mock("next-intl/server", async () => {
 import { CashPaymentPanel } from "@/components/admin/cash-payment-panel";
 import { CheckoutForm } from "@/components/checkout-form";
 import { LOCALES, type Locale } from "@/i18n/locales";
-import { confirmCashPaymentAction } from "@/lib/admin/actions";
+import { confirmCashPaymentAction, voidOrderAction } from "@/lib/admin/actions";
 import { IDLE } from "@/lib/action-result";
-import { adminOrderCashPaymentPath, API_PATHS, apiBaseUrl } from "@/lib/api";
+import { adminOrderCashPaymentPath, adminOrderPath, API_PATHS, apiBaseUrl } from "@/lib/api";
 import { startCheckoutAction } from "@/lib/checkout-actions";
 import { cashPendingOrder } from "@/mocks/fixtures/account";
 import { confirmedCashPayment, pendingCashPayment } from "@/mocks/fixtures/admin";
@@ -237,8 +237,13 @@ describe("efectivo: recogerlo donde se paga o enviarlo (DEC-079)", () => {
     const { container } = renderIn("es", <CheckoutForm locale="es" cashDelivery={options} />);
     const copy = esMessages.checkout.fulfillment;
 
-    // Con tarjeta no se pregunta: siempre es envio, con su direccion.
-    expect(screen.queryByText(copy.heading)).not.toBeInTheDocument();
+    // DEC-091: con tarjeta tambien se pregunta, y lo marcado es el envio, con
+    // su direccion: es lo que espera quien paga en linea.
+    expect(screen.getByText(copy.heading)).toBeInTheDocument();
+    expect(screen.getByText(copy.pickup.cardTitle)).toBeInTheDocument();
+    expect(container.querySelector<HTMLInputElement>('input[value="DELIVERY"]')?.checked).toBe(
+      true,
+    );
     expect(container.querySelector('input[name="line1"]')).not.toBeNull();
 
     chooseCash(container);
@@ -294,17 +299,29 @@ describe("efectivo: recogerlo donde se paga o enviarlo (DEC-079)", () => {
     expect(captured.cash).toEqual([{ fulfillment_method: "PICKUP" }]);
   });
 
-  it("con tarjeta, un PICKUP manipulado no quita el envio: sigue pidiendo direccion", async () => {
+  it("con tarjeta y recoger, abre la pasarela sin direccion ni envio (DEC-091)", async () => {
     const captured = captureCheckout();
     const formData = new FormData();
     formData.set("locale", "es");
     formData.set("payment_method", "CARD");
     formData.set("fulfillment_method", "PICKUP");
 
-    const result = await startCheckoutAction(IDLE, formData);
-    expect(result.code).toBe("FIELD_REQUIRED");
+    await expect(startCheckoutAction(IDLE, formData)).rejects.toThrow(/EXTERNAL_REDIRECT/u);
     expect(captured.cash).toHaveLength(0);
-    expect(captured.card).toHaveLength(0);
+    expect(captured.card).toEqual([
+      { fulfillment_method: "PICKUP", return_url: expect.stringContaining("/checkout/return") },
+    ]);
+  });
+
+  it("con tarjeta y sin tarifa de envio, lo marcado es recoger y no se pide direccion", () => {
+    const { container } = renderIn(
+      "es",
+      <CheckoutForm locale="es" cashDelivery={{ pickupTotal: "$25.00", delivery: null }} />,
+    );
+
+    expect(container.querySelector<HTMLInputElement>('input[value="PICKUP"]')?.checked).toBe(true);
+    expect(screen.getByText(esMessages.checkout.fulfillment.pickup.cardTitle)).toBeInTheDocument();
+    expect(container.querySelector('input[name="line1"]')).toBeNull();
   });
 });
 
@@ -425,5 +442,73 @@ describe("panel: la accion de confirmar", () => {
     );
     expect(result.status).toBe("error");
     expect(result.code).toBe("CASH_ENTRIES_GENERATION_FAILED");
+  });
+});
+
+describe("panel: anular un pedido ya cobrado (DEC-091)", () => {
+  function voidForm(entries: Readonly<Record<string, string>>): FormData {
+    const formData = new FormData();
+    formData.set("locale", "es");
+    formData.set("order_id", cashPendingOrder.id);
+    for (const [name, value] of Object.entries(entries)) formData.set(name, value);
+    return formData;
+  }
+
+  it("manda el motivo y la nota a la ruta de anular", async () => {
+    const bodies: unknown[] = [];
+    mockApiServer.use(
+      http.post(`${API}${adminOrderPath(cashPendingOrder.id)}/void`, async ({ request }) => {
+        bodies.push(await request.json());
+        return HttpResponse.json({ ...cashPendingOrder, status: "VOIDED" });
+      }),
+    );
+
+    const result = await voidOrderAction(
+      IDLE,
+      voidForm({ reason_key: "DUPLICATE_ORDER", reason_note: "Se le hizo otro pedido." }),
+    );
+
+    expect(result.status).toBe("ok");
+    expect(bodies).toEqual([{ reason_code: "DUPLICATE_ORDER", notes: "Se le hizo otro pedido." }]);
+  });
+
+  it("sin motivo no llama al backend", async () => {
+    const result = await voidOrderAction(IDLE, voidForm({}));
+    expect(result.code).toBe("FIELD_REQUIRED");
+    expect(result.field).toBe("reason_key");
+  });
+
+  it("si falta el step-up, lo dice con su codigo para confirmar el codigo de la app", async () => {
+    mockApiServer.use(
+      http.post(`${API}${adminOrderPath(cashPendingOrder.id)}/void`, () =>
+        HttpResponse.json(
+          { error: { code: "STEP_UP_REQUIRED", request_id: "req-void" } },
+          { status: 403 },
+        ),
+      ),
+    );
+
+    const result = await voidOrderAction(IDLE, voidForm({ reason_key: "DUPLICATE_ORDER" }));
+    expect(result.status).toBe("error");
+    expect(result.code).toBe("STEP_UP_REQUIRED");
+  });
+
+  it("el cobro en efectivo de un pedido anulado no ofrece nada y lo dice", async () => {
+    const ui = await CashPaymentPanel({
+      cash: {
+        ...confirmedCashPayment,
+        stage: "VOIDED",
+        can_confirm: false,
+        can_generate_entries: false,
+      },
+      locale: "es",
+      actorCanConfirm: true,
+    });
+    renderIn("es", ui);
+
+    const copy = esMessages.admin.cashPayment;
+    expect(screen.getByText(copy.voidedBody)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: copy.confirmSubmit })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: copy.retrySubmit })).not.toBeInTheDocument();
   });
 });

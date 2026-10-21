@@ -135,6 +135,7 @@ export default async function AccountOrderPage({
           <OrderAddress
             address={order.shipping_address}
             fulfillmentMethod={order.fulfillment_method}
+            paymentMethod={order.payment_method}
           />
         </div>
 

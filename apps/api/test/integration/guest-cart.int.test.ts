@@ -520,19 +520,23 @@ describe("efectivo y lo recoge en el punto de venta: sin envio", () => {
     ).toMatch(/permission denied/u);
   });
 
-  it("el motor no admite recoger con tarjeta ni recoger con envio", async () => {
+  it("el motor no admite recoger con envio, pague como pague", async () => {
+    // DEC-091 (0041): recoger con tarjeta ya es valido. Lo que sigue sin
+    // poderse es recoger y pagar envio, ni en efectivo ni con tarjeta.
     expect(
       await failureOf(
         sql`INSERT INTO orders (participant_id, currency, subtotal_minor, total_minor, provider, fulfillment_method)
             VALUES (${participantId}, 'USD', 100, 100, 'stripe', 'PICKUP')`,
       ),
-    ).toMatch(/orders_pickup_requires_cash/u);
+    ).toBe("");
 
-    expect(
-      await failureOf(
-        sql`INSERT INTO orders (participant_id, currency, subtotal_minor, shipping_total_minor, total_minor, provider, fulfillment_method)
-            VALUES (${participantId}, 'USD', 100, ${SHIPPING_MINOR}, ${100 + SHIPPING_MINOR}, 'cash', 'PICKUP')`,
-      ),
-    ).toMatch(/orders_pickup_without_shipping/u);
+    for (const provider of ["cash", "stripe"]) {
+      expect(
+        await failureOf(
+          sql`INSERT INTO orders (participant_id, currency, subtotal_minor, shipping_total_minor, total_minor, provider, fulfillment_method)
+              VALUES (${participantId}, 'USD', 100, ${SHIPPING_MINOR}, ${100 + SHIPPING_MINOR}, ${provider}, 'PICKUP')`,
+        ),
+      ).toMatch(/orders_pickup_without_shipping/u);
+    }
   });
 });

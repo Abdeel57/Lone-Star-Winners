@@ -60,8 +60,10 @@ export async function CashPaymentPanel({
         </Badge>
       </div>
 
-      {cash.stage === "CANCELLED" ? (
-        <p className="mt-s4 text-body-sm text-text-muted">{t("cancelledBody")}</p>
+      {cash.stage === "CANCELLED" || cash.stage === "VOIDED" ? (
+        <p className="mt-s4 text-body-sm text-text-muted">
+          {cash.stage === "VOIDED" ? t("voidedBody") : t("cancelledBody")}
+        </p>
       ) : (
         <ol className="mt-s5 grid list-none gap-s2 sm:grid-cols-3" aria-label={t("stagesLabel")}>
           {stages.map((stage, index) => {

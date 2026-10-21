@@ -1,10 +1,11 @@
 import type { AdminDailyCutLine } from "@/lib/api";
 
 /**
- * Corte de caja diario (DEC-085), del lado de la web.
+ * Corte de caja diario (DEC-085) y de un rango de dias (DEC-091), del lado de
+ * la web.
  *
- * La ventana del dia y todas las cifras las calcula el backend. Aqui solo se
- * decide que dia pedir y se convierte lo recibido a CSV para descargarlo.
+ * La ventana y todas las cifras las calcula el backend. Aqui solo se decide que
+ * dias pedir y se convierte lo recibido a CSV para descargarlo.
  */
 
 /**
@@ -43,6 +44,42 @@ export function isCalendarDate(value: string): boolean {
 export function shiftDate(date: string, days: number): string {
   const [year = 0, month = 1, day = 1] = date.split("-").map(Number);
   return new Date(Date.UTC(year, month - 1, day + days)).toISOString().slice(0, 10);
+}
+
+/**
+ * DEC-091: el rango mas largo que admite la API (`MAX_CUT_DAYS` en
+ * `apps/api/src/services/daily-cut.ts`). Se comprueba tambien aqui para decirlo
+ * con palabras en vez de pintar un 422.
+ */
+export const MAX_CUT_DAYS = 93;
+
+/** Dias de `from` a `to`, los dos incluidos. Cero si `to` es anterior. */
+export function daysInRange(from: string, to: string): number {
+  const start = Date.parse(`${from}T00:00:00Z`);
+  const end = Date.parse(`${to}T00:00:00Z`);
+  return end < start ? 0 : Math.round((end - start) / 86_400_000) + 1;
+}
+
+/** El primer dia del mes de `date`. */
+export function monthStart(date: string): string {
+  return `${date.slice(0, 7)}-01`;
+}
+
+/**
+ * DEC-091: el rango que se pide, a partir de lo que llega en la URL.
+ *
+ * Una fecha que no es de calendario se ignora: sin "desde", hoy; sin "hasta",
+ * el mismo dia (el corte de un dia de siempre). Si llegan al reves -alguien
+ * escribio primero la fecha mas reciente- se ordenan en vez de fallar.
+ */
+export function cutRangeFrom(
+  rawFrom: string | undefined,
+  rawTo: string | undefined,
+  today: string,
+): { readonly from: string; readonly to: string } {
+  const from = rawFrom !== undefined && isCalendarDate(rawFrom) ? rawFrom : today;
+  const to = rawTo !== undefined && isCalendarDate(rawTo) ? rawTo : from;
+  return to < from ? { from: to, to: from } : { from, to };
 }
 
 /**

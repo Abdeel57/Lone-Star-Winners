@@ -85,11 +85,25 @@ interface Scenario {
   readonly promotionId: string;
   readonly variantId: string;
   readonly participants: Record<
-    "card" | "cash" | "retry" | "pending" | "cancelCash" | "cancelCard" | "stuckCard",
+    | "card"
+    | "cash"
+    | "retry"
+    | "pending"
+    | "cancelCash"
+    | "cancelCard"
+    | "stuckCard"
+    | "pickupCard"
+    | "voidCash"
+    | "voidCard",
     string
   >;
   readonly manager: Staff;
   readonly support: Staff;
+  /**
+   * DEC-091: anular lleva step-up. Su sesion se abre en la primera anulacion,
+   * asi que el MFA es reciente pase lo que pase antes en el fichero.
+   */
+  readonly compliance: Staff;
 }
 
 let testDb: TestDatabase;
@@ -192,6 +206,7 @@ function rulesConfig(): Record<string, unknown> {
 async function seed(config: ApiConfig): Promise<Scenario> {
   const manager = await insertStaff("manager@example.invalid", "PROMOTION_MANAGER", config);
   const support = await insertStaff("support@example.invalid", "SUPPORT", config);
+  const compliance = await insertStaff("compliance@example.invalid", "COMPLIANCE_OFFICER", config);
 
   const participants = {
     card: await insertParticipant("card-buyer@example.invalid"),
@@ -202,6 +217,10 @@ async function seed(config: ApiConfig): Promise<Scenario> {
     cancelCash: await insertParticipant("cancel-cash@example.invalid"),
     cancelCard: await insertParticipant("cancel-card@example.invalid"),
     stuckCard: await insertParticipant("stuck-card@example.invalid"),
+    // DEC-091: recoger con tarjeta, y pedidos cobrados que se anulan.
+    pickupCard: await insertParticipant("pickup-card@example.invalid"),
+    voidCash: await insertParticipant("void-cash@example.invalid"),
+    voidCard: await insertParticipant("void-card@example.invalid"),
   };
 
   // DEC-079: sin tarifa, un carrito con mercancia no se puede pagar (409).
@@ -272,7 +291,7 @@ async function seed(config: ApiConfig): Promise<Scenario> {
          WHERE key = 'visible_entry_numbers_enabled'`,
   );
 
-  return { promotionId, variantId, participants, manager, support };
+  return { promotionId, variantId, participants, manager, support, compliance };
 }
 
 // ---------------------------------------------------------------------------
@@ -455,14 +474,35 @@ function stripeJson(status: number, body: unknown): Promise<Response> {
   );
 }
 
+/** DEC-091: devoluciones que "hizo" Stripe, por clave de idempotencia. */
+const stripeRefunds = new Map<
+  string,
+  { id: string; amount: number; payment_intent: string; created: number }
+>();
+
 /**
  * Stripe, del lado de la red: abre la sesion de Checkout y, desde DEC-085, la
- * caduca (`POST .../expire`) o dice en que estado esta (`GET`).
+ * caduca (`POST .../expire`) o dice en que estado esta (`GET`). DEC-091:
+ * tambien devuelve (`POST /refunds`), y la misma clave de idempotencia da la
+ * MISMA devolucion, como el Stripe de verdad.
  */
 const fakeStripeFetch: typeof fetch = (input, init) => {
   const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
   const method = init?.method ?? "GET";
   stripeCalls.push({ method, url });
+
+  if (method === "POST" && url.endsWith("/refunds")) {
+    const form = new URLSearchParams(typeof init?.body === "string" ? init.body : "");
+    const key = new Headers(init?.headers).get("idempotency-key") ?? randomUUID();
+    const refund = stripeRefunds.get(key) ?? {
+      id: `re_${randomUUID().replaceAll("-", "")}`,
+      amount: Number(form.get("amount") ?? "0"),
+      payment_intent: form.get("payment_intent") ?? "",
+      created: Math.floor(Date.now() / 1000),
+    };
+    stripeRefunds.set(key, refund);
+    return stripeJson(200, { ...refund, currency: "usd", status: "succeeded" });
+  }
 
   const session = /\/checkout\/sessions\/([^/]+)(\/expire)?$/u.exec(url);
   if (session !== null) {
@@ -1421,5 +1461,411 @@ describe("corte de caja del dia, en hora de Nuevo Mexico (DEC-085)", () => {
 
     const invalid = await manager.request("GET", "/api/v1/admin/reports/daily-cut?date=2026-02-30");
     expect(invalid.statusCode).toBe(422);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 11. Recoger en el punto de venta pagando con tarjeta (DEC-091)
+// ---------------------------------------------------------------------------
+
+const RETURN_URL = "https://lonestarwinners.test/es/checkout/return";
+
+describe("con tarjeta tambien se recoge en el punto de venta (DEC-091)", () => {
+  it("sin direccion y sin envio: la pasarela cobra solo la mercancia", async () => {
+    const buyer = await participantBrowser("pickup-card@example.invalid");
+    await fillCart(buyer);
+
+    // Sin `fulfillment_method` sigue siendo envio, y el envio pide direccion.
+    const missing = await buyer.request("POST", "/api/v1/checkout/session", {
+      return_url: RETURN_URL,
+    });
+    expect(missing.statusCode, missing.body).toBe(422);
+
+    const session = await buyer.request("POST", "/api/v1/checkout/session", {
+      fulfillment_method: "PICKUP",
+      return_url: RETURN_URL,
+    });
+    expect(session.statusCode, session.body).toBe(201);
+    const orderId = session.json<{ order_draft_id: string }>().order_draft_id;
+
+    const row = (
+      await db.execute<{
+        fulfillment_method: string;
+        shipping_total_minor: string | null;
+        total_minor: string;
+        shipping_address: unknown;
+        provider: string;
+      }>(
+        sql`SELECT fulfillment_method, shipping_total_minor::text AS shipping_total_minor,
+                   total_minor::text AS total_minor, shipping_address, provider
+              FROM orders WHERE id = ${orderId}`,
+      )
+    ).rows[0];
+    expect(row).toEqual({
+      fulfillment_method: "PICKUP",
+      shipping_total_minor: null,
+      total_minor: String(UNIT_PRICE_MINOR * QUANTITY),
+      shipping_address: null,
+      provider: "stripe",
+    });
+
+    const detail = (await buyer.request("GET", `/api/v1/account/orders/${orderId}`)).json<
+      Record<string, unknown>
+    >();
+    expect(detail).toMatchObject({
+      payment_method: "CARD",
+      fulfillment_method: "PICKUP",
+      shipping_total: null,
+      shipping_address: null,
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 12. Anular un pedido ya cobrado (DEC-091)
+// ---------------------------------------------------------------------------
+
+interface CutTotals {
+  date: string;
+  total: { orders: number; amount: { amount_minor: string } };
+  refunds: { refunds: number; amount: { amount_minor: string } };
+  voided: { orders: number; amount: { amount_minor: string } };
+  merchandise: { lines: { order_number: string }[] };
+}
+
+async function todaysCut(): Promise<CutTotals> {
+  const manager = await staffBrowser(scenario.manager);
+  const response = await manager.request("GET", "/api/v1/admin/reports/daily-cut");
+  expect(response.statusCode, response.body).toBe(200);
+  return response.json<CutTotals>();
+}
+
+async function reversals(orderId: string): Promise<readonly { type: string; delta: number }[]> {
+  const result = await db.execute<{ type: string; delta: number }>(
+    sql`SELECT r.type::text AS type, r.quantity_delta AS delta
+          FROM entry_transactions r
+          JOIN entry_transactions o ON o.id = r.reverses_transaction_id
+         WHERE o.source_ref = ${`order:${orderId}`}`,
+  );
+  return result.rows;
+}
+
+function signedWebhook(body: Record<string, unknown>): Promise<LightMyRequestResponse> {
+  const created = Math.floor(Date.now() / 1000);
+  const raw = JSON.stringify({
+    id: `evt_${randomUUID().replaceAll("-", "")}`,
+    created,
+    ...body,
+  });
+  return app.inject({
+    method: "POST",
+    url: "/api/v1/webhooks/payments/stripe",
+    headers: {
+      "content-type": "application/json",
+      "stripe-signature": `t=${String(created)},v1=${provider.sign(Buffer.from(raw), created)}`,
+    },
+    payload: raw,
+  });
+}
+
+describe("anular un pedido cobrado (DEC-091)", () => {
+  let voided = { id: "", order_number: "" };
+
+  it("efectivo cobrado: SUPPORT no puede, y sin motivo tampoco", async () => {
+    const buyer = await participantBrowser("void-cash@example.invalid");
+    voided = await placeCashOrder(buyer);
+
+    const manager = await staffBrowser(scenario.manager);
+    const confirmed = await manager.request(
+      "POST",
+      `/api/v1/admin/orders/${voided.id}/cash-payment/confirm`,
+      { reason_code: "CASH_RECEIVED_AT_STORE" },
+    );
+    expect(confirmed.statusCode, confirmed.body).toBe(200);
+    expect(await purchaseAwards(voided.id)).toHaveLength(1);
+
+    const support = await staffBrowser(scenario.support);
+    const denied = await support.request("POST", `/api/v1/admin/orders/${voided.id}/void`, {
+      reason_code: "DUPLICATE_ORDER",
+    });
+    expect(denied.statusCode).toBe(403);
+
+    const compliance = await staffBrowser(scenario.compliance);
+    const noReason = await compliance.request("POST", `/api/v1/admin/orders/${voided.id}/void`, {});
+    expect(noReason.statusCode).toBe(403);
+    expect(await count(sql`SELECT count(*)::text FROM order_voids`)).toBe(0);
+  });
+
+  it("lo anula: revierte sus participaciones, queda VOIDED y sale del corte", async () => {
+    const before = await todaysCut();
+    expect(before.merchandise.lines.map((line) => line.order_number)).toContain(
+      voided.order_number,
+    );
+
+    const compliance = await staffBrowser(scenario.compliance);
+    const response = await compliance.request("POST", `/api/v1/admin/orders/${voided.id}/void`, {
+      reason_code: "DUPLICATE_ORDER",
+      notes: "El cliente dijo que no le llego nada y se le hizo otro pedido.",
+    });
+    expect(response.statusCode, response.body).toBe(200);
+    expect(response.json<Record<string, unknown>>()).toMatchObject({
+      status: "VOIDED",
+      entry_state: "REVERSED",
+      entries_granted: 0,
+    });
+
+    // Por dentro: devuelto entero, con su hecho de devolucion en efectivo y el
+    // reversal en el ledger. Nada borrado.
+    expect(await orderRow(voided.id)).toMatchObject({
+      status: "REFUNDED",
+      payment_state: "REFUNDED",
+    });
+    expect(await reversals(voided.id)).toEqual([
+      { type: "REFUND_REVERSAL", delta: -EXPECTED_ENTRIES },
+    ]);
+    expect(
+      await one<string>(
+        sql`SELECT provider || ':' || provider_refund_id || ':' || amount_minor::text
+              FROM order_refunds WHERE order_id = ${voided.id}`,
+      ),
+    ).toBe(`cash:void:${voided.id}:${String(ORDER_TOTAL_MINOR)}`);
+    expect(await purchaseAwards(voided.id)).toHaveLength(1);
+
+    // Quien, cuando y por que.
+    const record = await compliance.request("GET", `/api/v1/admin/orders/${voided.id}/void`);
+    expect(record.statusCode, record.body).toBe(200);
+    expect(record.json<Record<string, unknown>>()).toMatchObject({
+      order_number: voided.order_number,
+      payment_method: "CASH",
+      amount: { amount_minor: String(ORDER_TOTAL_MINOR) },
+      refund_amount: { amount_minor: String(ORDER_TOTAL_MINOR) },
+      voided_by_admin_user_id: scenario.compliance.adminUserId,
+      voided_by_name: "Staff COMPLIANCE_OFFICER",
+      reason_code: "DUPLICATE_ORDER",
+    });
+    expect(
+      await count(
+        sql`SELECT count(*)::text FROM audit_events
+             WHERE action = 'order.voided' AND target_entity_id = ${voided.id}
+               AND actor_id = ${scenario.compliance.adminUserId}`,
+      ),
+    ).toBe(1);
+
+    // El corte: como si nunca se hubiera cobrado, sin restar su devolucion.
+    const after = await todaysCut();
+    expect(after.total.orders).toBe(before.total.orders - 1);
+    expect(BigInt(after.total.amount.amount_minor)).toBe(
+      BigInt(before.total.amount.amount_minor) - BigInt(ORDER_TOTAL_MINOR),
+    );
+    expect(after.refunds).toEqual(before.refunds);
+    expect(after.voided).toMatchObject({
+      orders: before.voided.orders + 1,
+      amount: {
+        amount_minor: String(BigInt(before.voided.amount.amount_minor) + BigInt(ORDER_TOTAL_MINOR)),
+      },
+    });
+    expect(after.merchandise.lines.map((line) => line.order_number)).not.toContain(
+      voided.order_number,
+    );
+
+    // El comprador lo ve anulado; la caja ya no ofrece nada.
+    const buyer = await participantBrowser("void-cash@example.invalid");
+    const mine = (await buyer.request("GET", `/api/v1/account/orders/${voided.id}`)).json<{
+      status: string;
+    }>();
+    expect(mine.status).toBe("VOIDED");
+    const cash = (
+      await compliance.request("GET", `/api/v1/admin/orders/${voided.id}/cash-payment`)
+    ).json<Record<string, unknown>>();
+    expect(cash).toMatchObject({
+      stage: "VOIDED",
+      can_confirm: false,
+      can_generate_entries: false,
+    });
+  });
+
+  it("anularlo otra vez no devuelve ni revierte otra vez", async () => {
+    const compliance = await staffBrowser(scenario.compliance);
+    const again = await compliance.request("POST", `/api/v1/admin/orders/${voided.id}/void`, {
+      reason_code: "DUPLICATE_ORDER",
+    });
+    expect(again.statusCode, again.body).toBe(200);
+    expect(await reversals(voided.id)).toHaveLength(1);
+    expect(
+      await count(sql`SELECT count(*)::text FROM order_refunds WHERE order_id = ${voided.id}`),
+    ).toBe(1);
+    expect(
+      await count(
+        sql`SELECT count(*)::text FROM audit_events
+             WHERE action = 'order.voided' AND target_entity_id = ${voided.id}`,
+      ),
+    ).toBe(1);
+  });
+
+  it("la anulacion no se edita ni se borra: el rol de la aplicacion no puede", async () => {
+    for (const statement of [
+      sql`UPDATE order_voids SET notes = 'x' WHERE order_id = ${voided.id}`,
+      sql`DELETE FROM order_voids WHERE order_id = ${voided.id}`,
+    ]) {
+      await expect(db.execute(statement)).rejects.toThrow();
+    }
+    expect(
+      await count(sql`SELECT count(*)::text FROM order_voids WHERE order_id = ${voided.id}`),
+    ).toBe(1);
+  });
+
+  it("tarjeta: devuelve en Stripe lo cobrado, y el webhook tardio no revierte dos veces", async () => {
+    const { orderId, sessionId } = await openCardCheckout("void-card@example.invalid");
+    const paymentIntent = `pi_${randomUUID().replaceAll("-", "")}`;
+    const paid = await signedWebhook({
+      type: "checkout.session.completed",
+      data: {
+        object: {
+          id: sessionId,
+          client_reference_id: orderId,
+          payment_status: "paid",
+          payment_intent: paymentIntent,
+          amount_total: ORDER_TOTAL_MINOR,
+          currency: "usd",
+          metadata: { order_id: orderId },
+        },
+      },
+    });
+    expect(paid.statusCode, paid.body).toBe(200);
+    expect(await purchaseAwards(orderId)).toHaveLength(1);
+
+    const compliance = await staffBrowser(scenario.compliance);
+    const response = await compliance.request("POST", `/api/v1/admin/orders/${orderId}/void`, {
+      reason_code: "DUPLICATE_ORDER",
+    });
+    expect(response.statusCode, response.body).toBe(200);
+    expect(response.json<{ status: string }>().status).toBe("VOIDED");
+
+    expect(stripeCalls).toContainEqual({
+      method: "POST",
+      url: "https://api.stripe.com/v1/refunds",
+    });
+    const refund = (
+      await db.execute<{ provider: string; provider_refund_id: string; amount_minor: string }>(
+        sql`SELECT provider, provider_refund_id, amount_minor::text AS amount_minor
+              FROM order_refunds WHERE order_id = ${orderId}`,
+      )
+    ).rows;
+    expect(refund).toHaveLength(1);
+    expect(refund[0]).toMatchObject({
+      provider: "stripe",
+      amount_minor: String(ORDER_TOTAL_MINOR),
+    });
+    expect(refund[0]?.provider_refund_id).toMatch(/^re_/u);
+    expect(await reversals(orderId)).toEqual([
+      { type: "REFUND_REVERSAL", delta: -EXPECTED_ENTRIES },
+    ]);
+
+    // Stripe avisa de la misma devolucion despues: ya consta, no se revierte otra vez.
+    const late = await signedWebhook({
+      type: "refund.created",
+      data: {
+        object: {
+          id: refund[0]?.provider_refund_id,
+          object: "refund",
+          status: "succeeded",
+          amount: ORDER_TOTAL_MINOR,
+          currency: "usd",
+          payment_intent: paymentIntent,
+          metadata: { order_id: orderId },
+        },
+      },
+    });
+    expect(late.statusCode, late.body).toBe(200);
+    expect(await reversals(orderId)).toHaveLength(1);
+    expect(
+      await count(sql`SELECT count(*)::text FROM order_refunds WHERE order_id = ${orderId}`),
+    ).toBe(1);
+    expect((await orderRow(orderId)).status).toBe("REFUNDED");
+  });
+
+  it("un pedido sin cobrar no se anula: eso se cancela", async () => {
+    const compliance = await staffBrowser(scenario.compliance);
+    const pending = await one<string>(
+      sql`SELECT id FROM orders WHERE participant_id = ${scenario.participants.pending}`,
+    );
+    const refused = await compliance.request("POST", `/api/v1/admin/orders/${pending}/void`, {
+      reason_code: "DUPLICATE_ORDER",
+    });
+    expect(refused.statusCode).toBe(409);
+    expect(refused.json<{ error: { code: string } }>().error.code).toBe("ORDER_NOT_VOIDABLE");
+
+    const missing = await compliance.request("GET", `/api/v1/admin/orders/${pending}/void`);
+    expect(missing.statusCode).toBe(404);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 13. Corte de caja de un rango de dias (DEC-091)
+// ---------------------------------------------------------------------------
+
+describe("corte de caja de un rango de dias (DEC-091)", () => {
+  it("de hoy a hoy es el corte del dia, con un solo dia en el desglose", async () => {
+    const day = await todaysCut();
+    const manager = await staffBrowser(scenario.manager);
+    const today = day.date;
+
+    const range = await manager.request(
+      "GET",
+      `/api/v1/admin/reports/daily-cut?date=${today}&date_to=${today}`,
+    );
+    expect(range.statusCode, range.body).toBe(200);
+    const cut = range.json<CutTotals & { date_to: string; days: { date: string }[] }>();
+    expect(cut.date_to).toBe(today);
+    expect(cut.total).toEqual(day.total);
+    expect(cut.days).toHaveLength(1);
+    expect(cut.days[0]).toMatchObject({ date: today, total: day.total });
+  });
+
+  it("un rango de varios dias suma los dias y los lista todos, tambien los vacios", async () => {
+    const day = await todaysCut();
+    const today = day.date;
+    const [year = 0, month = 1, dayOfMonth = 1] = today.split("-").map(Number);
+    const twoDaysAgo = new Date(Date.UTC(year, month - 1, dayOfMonth - 2))
+      .toISOString()
+      .slice(0, 10);
+
+    const manager = await staffBrowser(scenario.manager);
+    const response = await manager.request(
+      "GET",
+      `/api/v1/admin/reports/daily-cut?date=${twoDaysAgo}&date_to=${today}`,
+    );
+    expect(response.statusCode, response.body).toBe(200);
+    const cut = response.json<
+      CutTotals & {
+        days: { date: string; total: { orders: number; amount: { amount_minor: string } } }[];
+      }
+    >();
+
+    expect(cut.days.map((entry) => entry.date)).toHaveLength(3);
+    expect(cut.days[0]?.date).toBe(twoDaysAgo);
+    expect(cut.days[2]).toMatchObject({ date: today, total: day.total });
+    expect(cut.days[0]?.total).toEqual({
+      orders: 0,
+      amount: { amount_minor: "0", currency: "USD" },
+    });
+    // Todo lo de esta prueba se cobro hoy: el rango suma lo mismo que el dia.
+    expect(cut.total).toEqual(day.total);
+    expect(cut.voided).toEqual(day.voided);
+  });
+
+  it("un fin anterior al inicio o un rango de mas de 93 dias se rechazan", async () => {
+    const manager = await staffBrowser(scenario.manager);
+    const backwards = await manager.request(
+      "GET",
+      "/api/v1/admin/reports/daily-cut?date=2026-10-17&date_to=2026-10-10",
+    );
+    expect(backwards.statusCode).toBe(422);
+
+    const tooLong = await manager.request(
+      "GET",
+      "/api/v1/admin/reports/daily-cut?date=2026-01-01&date_to=2026-12-31",
+    );
+    expect(tooLong.statusCode).toBe(422);
   });
 });

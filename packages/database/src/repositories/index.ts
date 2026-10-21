@@ -48,6 +48,7 @@ import { DrizzleUnitOfWork } from "./executor.js";
 import { DrizzleParticipantIdentityRepository } from "./identity-repository.js";
 import { DrizzleLedgerRepository } from "./ledger-repository.js";
 import { DrizzleOrderRepository } from "./order-repository.js";
+import { DrizzleOrderVoidRepository } from "./order-void-repository.js";
 import { DrizzlePaymentEventRepository } from "./payment-event-repository.js";
 import { DrizzlePromotionContextRepository } from "./promotion-context-repository.js";
 import { DrizzleSnapshotRepository } from "./snapshot-repository.js";
@@ -66,6 +67,9 @@ export * from "./order-repository.js";
 // DEC-078: cobro en efectivo. Entra en `createSweepstakesRepositories` porque
 // escribe dentro de la MISMA transaccion que mueve el pedido y que otorga.
 export * from "./cash-payment-repository.js";
+// DEC-091: anulacion de un pedido cobrado. Por la misma razon: va en la misma
+// transaccion que la devolucion y el reversal.
+export * from "./order-void-repository.js";
 export * from "./payment-event-repository.js";
 export * from "./snapshot-repository.js";
 export * from "./export-reconciliation-repository.js";
@@ -96,6 +100,7 @@ export interface SweepstakesRepositories {
   readonly disqualifications: DrizzleDisqualificationRepository;
   readonly orders: DrizzleOrderRepository;
   readonly cashPayments: DrizzleCashPaymentRepository;
+  readonly orderVoids: DrizzleOrderVoidRepository;
   readonly paymentEvents: DrizzlePaymentEventRepository;
   readonly exportSnapshots: DrizzleSnapshotRepository;
   readonly exportReconciliation: DrizzleExportReconciliationRepository;
@@ -133,6 +138,7 @@ export function createSweepstakesRepositories(
     disqualifications: new DrizzleDisqualificationRepository(db),
     orders: new DrizzleOrderRepository(db),
     cashPayments: new DrizzleCashPaymentRepository(db),
+    orderVoids: new DrizzleOrderVoidRepository(db),
     paymentEvents: new DrizzlePaymentEventRepository(db),
     exportSnapshots: new DrizzleSnapshotRepository(db, {
       ...(options.contentDigestCalculator === undefined

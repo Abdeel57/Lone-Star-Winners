@@ -42,6 +42,8 @@ export function useOrderStatusLabel(): (status: OrderStatus) => string {
         return t("PARTIALLY_REFUNDED");
       case "CHARGEBACK":
         return t("CHARGEBACK");
+      case "VOIDED":
+        return t("VOIDED");
     }
   };
 }

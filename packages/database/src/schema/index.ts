@@ -32,3 +32,5 @@ export * from "./cash-payments.js";
 export * from "./guest-cart-and-shipping.js";
 // DEC-089: codigos para entrar sin contrasena. Al final.
 export * from "./sign-in-codes.js";
+// DEC-091: anulacion de un pedido ya cobrado. Al final.
+export * from "./order-voids.js";

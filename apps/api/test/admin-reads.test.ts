@@ -139,6 +139,8 @@ function orderFixture(overrides: Record<string, unknown> = {}): Record<string, u
     fulfilledAt: null,
     shippingCarrier: null,
     trackingNumber: null,
+    // DEC-091: sin anular.
+    voidedAt: null,
     ...overrides,
   };
 }

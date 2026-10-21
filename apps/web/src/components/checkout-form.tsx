@@ -48,11 +48,16 @@ import { PaymentMethodChoice } from "./payment-method-choice";
  * porque es lo que cambia para quien compra: con efectivo no se cobra nada
  * ahora y las participaciones llegan cuando la tienda confirma el pago.
  *
- * RECOGER O ENVIAR, SOLO EN EFECTIVO (DEC-079)
- * --------------------------------------------
+ * RECOGER O ENVIAR (DEC-079, DEC-091)
+ * -----------------------------------
  * Quien paga en efectivo recibe el articulo en el mismo punto de venta: por
  * defecto lo recoge, sin envio y SIN DIRECCION (los campos desaparecen). Si
  * prefiere que se lo envien, elige envio y vuelven la direccion y el envio.
+ *
+ * Con tarjeta tambien se puede pasar por el pedido a un punto de venta. Ahi el
+ * defecto es el envio -es lo que existia y lo que espera quien paga en linea-,
+ * salvo que todavia no haya tarifa: entonces solo queda recoger.
+ *
  * `cashDelivery` es `null` cuando el carrito no lleva mercancia (solo
  * paquetes): no hay nada que recoger ni que enviar y no se pregunta.
  */
@@ -66,10 +71,21 @@ export function CheckoutForm({
   const t = useTranslations("checkout");
   const [state, formAction, pending] = useActionState(startCheckoutAction, IDLE);
   const fieldError = useFieldError(state);
+  const deliveryAvailable = (cashDelivery?.delivery ?? null) !== null;
+  const defaultFulfillment = (payment: PaymentMethod): FulfillmentMethod =>
+    payment === "CARD" && deliveryAvailable ? "DELIVERY" : "PICKUP";
   const [method, setMethod] = useState<PaymentMethod>("CARD");
-  const [fulfillment, setFulfillment] = useState<FulfillmentMethod>("PICKUP");
+  const [fulfillment, setFulfillment] = useState<FulfillmentMethod>(() =>
+    defaultFulfillment("CARD"),
+  );
 
-  const asksFulfillment = method === "CASH" && cashDelivery !== null;
+  // Cambiar la forma de pago vuelve a su forma de entrega por defecto.
+  const choosePayment = (next: PaymentMethod): void => {
+    setMethod(next);
+    setFulfillment(defaultFulfillment(next));
+  };
+
+  const asksFulfillment = cashDelivery !== null;
   const needsAddress = !(asksFulfillment && fulfillment === "PICKUP");
 
   return (
@@ -83,10 +99,15 @@ export function CheckoutForm({
        * carrito, y en un telefono, con seis campos de direccion delante, las
        * dos opciones quedarian fuera de la pantalla.
        */}
-      <PaymentMethodChoice value={method} onChange={setMethod} />
+      <PaymentMethodChoice value={method} onChange={choosePayment} />
 
       {asksFulfillment && cashDelivery !== null ? (
-        <FulfillmentChoice value={fulfillment} onChange={setFulfillment} options={cashDelivery} />
+        <FulfillmentChoice
+          value={fulfillment}
+          onChange={setFulfillment}
+          options={cashDelivery}
+          paymentMethod={method}
+        />
       ) : null}
 
       {needsAddress ? (

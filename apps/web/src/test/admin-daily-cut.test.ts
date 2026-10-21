@@ -3,9 +3,13 @@ import { describe, expect, it } from "vitest";
 import {
   calendarDateIn,
   csvCell,
+  cutRangeFrom,
   DAILY_CUT_TIME_ZONE,
   dailyCutCsv,
+  daysInRange,
   isCalendarDate,
+  MAX_CUT_DAYS,
+  monthStart,
   shiftDate,
 } from "@/lib/admin/daily-cut";
 import type { AdminDailyCutLine } from "@/lib/api";
@@ -61,6 +65,44 @@ describe("el dia del corte, en hora de Nuevo Mexico", () => {
     expect(shiftDate("2026-12-31", 1)).toBe("2027-01-01");
     expect(isCalendarDate("2026-02-30")).toBe(false);
     expect(isCalendarDate("2026-10-08")).toBe(true);
+  });
+});
+
+describe("el rango del corte (DEC-091)", () => {
+  const today = "2026-10-21";
+
+  it("sin fechas, hoy; con una sola, ese dia: el corte diario de siempre", () => {
+    expect(cutRangeFrom(undefined, undefined, today)).toEqual({ from: today, to: today });
+    expect(cutRangeFrom("2026-10-10", undefined, today)).toEqual({
+      from: "2026-10-10",
+      to: "2026-10-10",
+    });
+  });
+
+  it("del 10 al 17, tal cual; al reves, se ordena en vez de fallar", () => {
+    expect(cutRangeFrom("2026-10-10", "2026-10-17", today)).toEqual({
+      from: "2026-10-10",
+      to: "2026-10-17",
+    });
+    expect(cutRangeFrom("2026-10-17", "2026-10-10", today)).toEqual({
+      from: "2026-10-10",
+      to: "2026-10-17",
+    });
+  });
+
+  it("una fecha imposible se ignora", () => {
+    expect(cutRangeFrom("2026-02-30", "2026-10-17", today)).toEqual({
+      from: "2026-10-17",
+      to: today,
+    });
+  });
+
+  it("cuenta los dias con los dos extremos, y el primero del mes", () => {
+    expect(daysInRange("2026-10-10", "2026-10-17")).toBe(8);
+    expect(daysInRange("2026-10-17", "2026-10-17")).toBe(1);
+    expect(daysInRange("2026-10-31", "2026-11-02")).toBe(3);
+    expect(daysInRange("2026-01-01", "2026-12-31")).toBeGreaterThan(MAX_CUT_DAYS);
+    expect(monthStart("2026-10-21")).toBe("2026-10-01");
   });
 });
 

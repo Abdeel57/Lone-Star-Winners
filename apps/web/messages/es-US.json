@@ -128,7 +128,11 @@
     "CASH_PAYMENT_NOT_PENDING": "Este pedido ya no está esperando un pago en efectivo.",
     "CASH_PAYMENT_NOT_CONFIRMED": "Nadie ha confirmado todavía el pago en efectivo de este pedido, así que no hay participaciones que generar.",
     "CASH_ENTRIES_GENERATION_FAILED": "El pago en efectivo quedó confirmado y registrado, pero las participaciones no se pudieron generar. No se registró un segundo cobro: reintenta la generación de participaciones desde este pedido.",
-    "ORDER_NOT_CANCELLABLE": "Este pedido ya está cobrado (o ya no está pendiente), así que no se puede cancelar. Si hay que devolver el dinero, es un reembolso.",
+    "ORDER_NOT_CANCELLABLE": "Este pedido ya está cobrado (o ya no está pendiente), así que no se puede cancelar. Si sobra porque es un duplicado o un error, anúlalo.",
+    "ORDER_NOT_VOIDABLE": "Este pedido no se puede anular: no está cobrado (eso se cancela), ya está cancelado o tiene una disputa abierta con el banco.",
+    "ORDER_VOIDED": "Este pedido está anulado: ya no se cobra ni genera participaciones.",
+    "ORDER_VOID_NOT_FOUND": "Este pedido no está anulado.",
+    "ORDER_HAS_NO_PAYMENT": "Este pedido no tiene un cobro registrado en la pasarela, así que no hay nada que devolver desde aquí.",
     "ORDER_PAYMENT_IN_PROGRESS": "La pasarela de pago dice que el cliente ya pagó este pedido o tiene el pago en curso, así que no se canceló. Espera unos minutos: el pago se reflejará solo.",
     "ORDER_PROVIDER_MISMATCH": "Este pedido se abrió con otra pasarela de pago y no se puede cancelar desde aquí.",
     "ORDER_NOT_FULFILLABLE": "Este pedido no está cobrado, o está cancelado o reembolsado, así que no hay nada que enviar.",
@@ -941,6 +945,7 @@
       "noAddress": "Este pedido no tiene dirección de envío registrada.",
       "pickupHeading": "Entrega",
       "pickupBody": "Se recoge en el punto de venta al pagar en efectivo. Sin envío.",
+      "pickupBodyCard": "Se paga con tarjeta en línea y se recoge en uno de nuestros puntos de venta físicos con el número de pedido. Sin envío.",
       "shippingPickup": "Sin envío (recoge en el punto de venta)",
       "entriesHeading": "Participaciones de este pedido",
       "calculationHeading": "Cómo se llegó a esa cifra",
@@ -1004,7 +1009,8 @@
     "CANCELLED": "Cancelado",
     "REFUNDED": "Reembolsado",
     "PARTIALLY_REFUNDED": "Reembolsado en parte",
-    "CHARGEBACK": "Con contracargo"
+    "CHARGEBACK": "Con contracargo",
+    "VOIDED": "Anulado"
   },
   "orderEntryState": {
     "NOT_APPLICABLE": "Sin promoción asociada",
@@ -1082,7 +1088,9 @@
       "heading": "¿Cómo recibes tu pedido?",
       "pickup": {
         "title": "Lo recojo donde pago",
-        "body": "Te lo entregan en el punto de venta al pagar. Sin envío: pagas {total}."
+        "body": "Te lo entregan en el punto de venta al pagar. Sin envío: pagas {total}.",
+        "cardTitle": "Paso por él a un punto de venta",
+        "cardBody": "Pagas ahora con tarjeta y recoges tu pedido en uno de nuestros puntos de venta físicos. Sin envío: pagas {total}."
       },
       "delivery": {
         "title": "Envíamelo a domicilio",
@@ -1498,6 +1506,30 @@
       "submit": "Cancelar el pedido",
       "confirm": "Confirmo que el pedido {number} no se ha cobrado y que hay que cancelarlo."
     },
+    "orderVoid": {
+      "title": "Anular este pedido",
+      "introCash": "Este pedido ya se cobró en efectivo. Si es un duplicado o un error (por ejemplo, se le hizo otro pedido al cliente por el mismo pago), anúlalo: se le quitan sus participaciones y deja de contar en el corte de caja. No se borra nada: queda quién lo anuló y por qué.",
+      "introCard": "Este pedido ya se cobró con tarjeta. Al anularlo se le devuelve al cliente en Stripe lo que quede del cobro, se le quitan sus participaciones y deja de contar en el corte de caja. No se borra nada: queda quién lo anuló y por qué.",
+      "stepUpNote": "Por seguridad te pedirá confirmar tu código de verificación si no lo usaste en los últimos minutos.",
+      "impactStatus": "Estado del pedido",
+      "impactVoid": "se anula",
+      "impactMoney": "Dinero",
+      "impactCashOut": "sale del corte de caja",
+      "impactCardRefund": "se devuelve en Stripe y sale del corte",
+      "impactEntries": "Participaciones",
+      "impactEntriesBefore": "{count, plural, =0 {Sin participaciones} one {# participación} other {# participaciones}}",
+      "impactEntriesUnknown": "Las que tenga",
+      "impactRemoved": "se quitan",
+      "impactNone": "Ninguna",
+      "submit": "Anular el pedido",
+      "confirm": "Confirmo que el pedido {number} sobra (duplicado o error) y que hay que anularlo.",
+      "voidedTitle": "Pedido anulado",
+      "voidedBody": "Anulado el {when} por {who}. Motivo: {reason}.",
+      "voidedRefund": "Se devolvió {amount} en Stripe.",
+      "voidedCash": "Pagado en efectivo: no cuenta en el corte de caja.",
+      "voidedNotes": "Notas: {notes}",
+      "unknownStaff": "una cuenta del personal"
+    },
     "orderFulfillment": {
       "saved": "Guardado.",
       "shippedAt": "Enviado el",
@@ -1513,7 +1545,7 @@
     },
     "dailyCut": {
       "title": "Corte de caja",
-      "description": "Lo cobrado en el día, de 12:00 a. m. a 11:59 p. m. en hora de {zone}, y la mercancía que hay que preparar.",
+      "description": "Lo cobrado en un día o en un periodo (de 12:00 a. m. a 11:59 p. m. en hora de {zone}), y la mercancía que hay que preparar.",
       "zoneName": "Nuevo México",
       "print": "Imprimir",
       "download": "Descargar CSV",
@@ -1558,7 +1590,28 @@
       "shipped": "Enviado",
       "handedOver": "Entregado",
       "shippingPending": "Pendiente de envío",
-      "pickupPending": "Pendiente de entrega"
+      "pickupPending": "Pendiente de entrega",
+      "fromLabel": "Desde",
+      "toLabel": "Hasta",
+      "toHint": "Déjalo igual que «Desde» para ver un solo día.",
+      "presetsLabel": "Periodos rápidos",
+      "lastSevenDays": "Últimos 7 días",
+      "thisMonth": "Este mes",
+      "rangeWindow": "Del {from} al {to}, de 12:00 a. m. del primer día a 11:59 p. m. del último (hora de {zone}).",
+      "rangeTotalsHeading": "Totales del periodo",
+      "rangeTooLong": "El periodo puede ser de hasta {max} días. Elige un rango más corto.",
+      "refundsRange": "Reembolsos con tarjeta hechos en el periodo: {amount} ({count, plural, one {# reembolso} other {# reembolsos}}). No se restan de los totales de arriba, que son lo cobrado.",
+      "voided": "{count, plural, one {# pedido anulado} other {# pedidos anulados}} por {amount}: no se suman en los totales (duplicados o errores).",
+      "daysHeading": "Día por día",
+      "daysCaption": "Lo cobrado cada día del periodo",
+      "columnDay": "Día",
+      "columnCash": "Efectivo",
+      "columnCard": "Tarjeta",
+      "columnTotal": "Total",
+      "columnOrders": "Transacciones",
+      "merchandiseEmptyTitleRange": "En ese periodo no se vendió mercancía",
+      "merchandiseEmptyBodyRange": "Aquí aparecen los productos físicos de los pedidos cobrados en el periodo, con su cliente y su envío.",
+      "linesCaptionRange": "Mercancía de los pedidos cobrados en el periodo"
     },
     "cashPayment": {
       "title": "Pago en efectivo en punto de venta",
@@ -1567,9 +1620,11 @@
         "PENDING_CASH_PAYMENT": "Pendiente de pago en efectivo",
         "PAID": "Pagado",
         "ENTRIES_GENERATED": "Participaciones generadas",
-        "CANCELLED": "Cancelado"
+        "CANCELLED": "Cancelado",
+        "VOIDED": "Anulado"
       },
       "cancelledBody": "Este pedido se canceló. No hay ningún pago que confirmar.",
+      "voidedBody": "Este pedido se cobró y después se anuló: no cuenta en el corte de caja y ya no tiene participaciones.",
       "orderNumber": "Número de orden",
       "amount": "Importe a cobrar",
       "customer": "Cuenta del cliente",

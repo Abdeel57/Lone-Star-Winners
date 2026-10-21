@@ -355,6 +355,24 @@
     },
     {
       "method": "GET",
+      "path": "/api/v1/admin/orders/:order_id/void",
+      "operation_id": "getAdminOrderVoid",
+      "authorization": "order.read",
+      "requires_step_up": false,
+      "tags": ["admin"],
+      "summary": "Quien anulo un pedido, cuando y por que."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/orders/:order_id/void",
+      "operation_id": "voidAdminOrder",
+      "authorization": "order.void",
+      "requires_step_up": true,
+      "tags": ["admin"],
+      "summary": "Anular un pedido ya cobrado (duplicado o error)."
+    },
+    {
+      "method": "GET",
       "path": "/api/v1/admin/participants",
       "operation_id": "listAdminParticipants",
       "authorization": "participant.list",
@@ -720,7 +738,7 @@
       "authorization": "order.read",
       "requires_step_up": false,
       "tags": ["admin"],
-      "summary": "Corte de caja de un dia, en la hora del punto de venta."
+      "summary": "Corte de caja de un dia o de un rango de dias, en la hora del punto de venta."
     },
     {
       "method": "GET",

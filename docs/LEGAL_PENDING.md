@@ -723,3 +723,24 @@ y la cuenta se pide solo al pagar. Lo que no puede decidir el código:
     `.docx` del 2026-09-30 lo desharía. La propia Política promete avisar de un
     cambio material por correo o con un aviso visible en el sitio; decidir con
     el abogado si hace falta ese aviso.
+
+## Anular pedidos cobrados y recoger con tarjeta (DEC-091, 2026-10-21)
+
+Construido a petición del usuario. (Las preguntas 23-28 son del envío en vivo,
+DEC-090, en su propia rama sin publicar.)
+
+29. **Retirar las participaciones de una compra anulada.** El panel anula un
+    pedido ya cobrado que sobra -un duplicado o un error, por ejemplo el
+    cliente que pagó una vez y recibió dos pedidos-. Al anularlo se le
+    devuelve el dinero si fue con tarjeta y sus participaciones se revierten
+    con un movimiento nuevo del ledger, igual que en un reembolso (nada se
+    borra; queda quién lo anuló, cuándo y por qué). Confirmar que las Reglas lo
+    admiten como corrección administrativa y si hay que avisar al participante
+    de que esas participaciones dejan de contar. Si la anulación llega
+    después del corte del sorteo, ¿cómo se trata?
+30. **Recoger en el punto de venta pagando con tarjeta.** Hasta ahora solo se
+    recogía pagando en efectivo; ahora quien paga con tarjeta en línea puede
+    pasar por su pedido a un punto de venta físico, sin envío. Las
+    participaciones no cambian (salen del precio de los productos, pregunta
+    18). Confirmar si los Términos de venta deben mencionar la recogida, el
+    plazo para recogerla y qué pasa si nadie pasa por ella.
