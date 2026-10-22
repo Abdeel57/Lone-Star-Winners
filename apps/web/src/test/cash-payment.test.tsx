@@ -313,6 +313,42 @@ describe("efectivo: recogerlo donde se paga o enviarlo (DEC-079)", () => {
     ]);
   });
 
+  it("solo paquetes, en efectivo: el pedido se crea sin direccion (DEC-092)", async () => {
+    const captured = captureCheckout();
+    const formData = new FormData();
+    formData.set("locale", "es");
+    formData.set("payment_method", "CASH");
+    formData.set("ships", "false");
+
+    await expect(startCheckoutAction(IDLE, formData)).rejects.toThrow(
+      `REDIRECT:/es/orders/${cashPendingOrder.id}/confirmation`,
+    );
+    expect(captured.cash).toEqual([{ fulfillment_method: "DELIVERY" }]);
+  });
+
+  it("solo paquetes, con tarjeta: abre la pasarela sin direccion (DEC-092)", async () => {
+    const captured = captureCheckout();
+    const formData = new FormData();
+    formData.set("locale", "es");
+    formData.set("payment_method", "CARD");
+    formData.set("ships", "false");
+
+    await expect(startCheckoutAction(IDLE, formData)).rejects.toThrow(/EXTERNAL_REDIRECT/u);
+    expect(captured.card).toEqual([{ return_url: expect.stringContaining("/checkout/return") }]);
+  });
+
+  it("con mercancia, el pais ya no se pide: la direccion va siempre a US (DEC-092)", async () => {
+    const captured = captureCheckout();
+    const formData = checkoutForm("CASH");
+    formData.delete("country");
+
+    await expect(startCheckoutAction(IDLE, formData)).rejects.toThrow(/REDIRECT/u);
+    expect(captured.cash[0]).toMatchObject({
+      fulfillment_method: "DELIVERY",
+      shipping_address: { country: "US", region: "TX" },
+    });
+  });
+
   it("con tarjeta y sin tarifa de envio, lo marcado es recoger y no se pide direccion", () => {
     const { container } = renderIn(
       "es",

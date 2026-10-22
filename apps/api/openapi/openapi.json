@@ -37276,7 +37276,7 @@
     },
     "/api/v1/checkout/cash-order": {
       "post": {
-        "description": "DEC-078. Congela el carrito de servidor exactamente igual que la sesion con tarjeta y deja el pedido PENDING_PAYMENT con `payment_method = CASH`. NO genera participaciones: no hay cobro hasta que una persona con `order.cash.confirm` lo confirma en el panel. Idempotente por carrito: repetir el envio devuelve 200 con el mismo pedido en vez de crear otro. DEC-079: `fulfillment_method = PICKUP` (se entrega en el punto de venta) no lleva envio ni direccion y no necesita tarifa; `DELIVERY` (por defecto) exige `shipping_address` y cobra el envio.",
+        "description": "DEC-078. Congela el carrito de servidor exactamente igual que la sesion con tarjeta y deja el pedido PENDING_PAYMENT con `payment_method = CASH`. NO genera participaciones: no hay cobro hasta que una persona con `order.cash.confirm` lo confirma en el panel. Idempotente por carrito: repetir el envio devuelve 200 con el mismo pedido en vez de crear otro. DEC-079: `fulfillment_method = PICKUP` (se entrega en el punto de venta) no lleva envio ni direccion y no necesita tarifa; `DELIVERY` (por defecto) exige `shipping_address` y cobra el envio. DEC-092: la direccion solo se exige si el carrito lleva mercancia; uno solo de paquetes va sin ella.",
         "operationId": "createCashOrder",
         "requestBody": {
           "content": {
@@ -37713,7 +37713,7 @@
     },
     "/api/v1/checkout/session": {
       "post": {
-        "description": "Congela el carrito en un pedido DRAFT y pide al proveedor una sesion. El pedido no genera participaciones hasta que el pago alcance el estado cualificante (DEC-023). DEC-091: `fulfillment_method = PICKUP` (el cliente pasa por el pedido a un punto de venta fisico) no lleva envio ni direccion y no necesita tarifa; `DELIVERY` (por defecto) exige `shipping_address` y cobra el envio.",
+        "description": "Congela el carrito en un pedido DRAFT y pide al proveedor una sesion. El pedido no genera participaciones hasta que el pago alcance el estado cualificante (DEC-023). DEC-091: `fulfillment_method = PICKUP` (el cliente pasa por el pedido a un punto de venta fisico) no lleva envio ni direccion y no necesita tarifa; `DELIVERY` (por defecto) exige `shipping_address` y cobra el envio. DEC-092: la direccion solo se exige si el carrito lleva mercancia; uno solo de paquetes va sin ella.",
         "operationId": "createCheckoutSession",
         "requestBody": {
           "content": {
@@ -38742,6 +38742,156 @@
         "x-lsw-authorization": {
           "kind": "PERMISSION",
           "permission": "participant.self.update",
+          "requires_step_up": false
+        }
+      }
+    },
+    "/api/v1/me/checkout-defaults": {
+      "get": {
+        "description": "La direccion de envio del pedido mas reciente que llevaba una (`source = LAST_ORDER`); si no hay, el nombre de la cuenta y el estado declarado en el alta (`ACCOUNT`). Es para no volver a teclear lo que la persona ya dio: solo a ella misma, nada se guarda ni se decide aqui, y el pedido se congela con lo que envie al pagar. Es la unica lectura que devuelve el estado declarado, y solo como sugerencia de direccion.",
+        "operationId": "getParticipantCheckoutDefaults",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "city": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "full_name": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "line1": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "line2": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "postal_code": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "region": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "source": {
+                      "enum": [
+                        "LAST_ORDER",
+                        "ACCOUNT"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "source",
+                    "full_name",
+                    "line1",
+                    "line2",
+                    "city",
+                    "region",
+                    "postal_code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 200."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "additionalProperties": {},
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "request_id"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 401."
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Datos con que se rellena la direccion del checkout (DEC-092).",
+        "tags": [
+          "portal"
+        ],
+        "x-lsw-authorization": {
+          "kind": "PERMISSION",
+          "permission": "participant.self.read",
           "requires_step_up": false
         }
       }

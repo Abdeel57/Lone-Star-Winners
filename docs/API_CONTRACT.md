@@ -1937,6 +1937,7 @@ que compara el test de contrato contra `apps/api/openapi/route-manifest.json`.
 | GET    | /api/v1/account/award-holds                                                         | `entry.self.read`           |
 | GET    | /api/v1/me                                                                          | `participant.self.read`     |
 | PATCH  | /api/v1/me                                                                          | `participant.self.update`   |
+| GET    | /api/v1/me/checkout-defaults                                                        | `participant.self.read`     |
 | GET    | /api/v1/promotions/:slug/amoe-config                                                | `PUBLIC`                    |
 | POST   | /api/v1/promotions/:promotion_id/amoe-submissions                                   | `amoe.self.submit`          |
 | GET    | /api/v1/account/amoe-submissions                                                    | `PARTICIPANT_SELF`          |
@@ -2017,7 +2018,10 @@ DEC-091: `fulfillment_method` es `DELIVERY` (por defecto, y lo único que exist�
 antes) o `PICKUP`: el cliente paga con tarjeta y pasa por el pedido a un punto de
 venta físico. Con `PICKUP` no hay `shipping_address` (si llega una, se ignora) ni
 envío, y no hace falta tarifa. Con `DELIVERY` y sin dirección, 422 con
-`path: "shipping_address"`.
+`path: "shipping_address"`. DEC-092: solo si el carrito lleva mercancía; uno
+solo de paquetes va como `DELIVERY` sin dirección ni envío (lo mismo en
+`POST /checkout/cash-order`). La web manda siempre `country = "US"`: la tienda
+solo envía dentro de Estados Unidos.
 
 `region`, no `state`: el nombre del campo no debe presuponer que la subdivisión
 territorial se llama estado en toda jurisdicción cubierta. NO hay validación de
@@ -2468,6 +2472,35 @@ Errors: 409 ELIGIBILITY_ALREADY_DECLARED, 422 CONSENT_REQUIRED,
 422 ELIGIBILITY_STATE_REQUIRED, 422 VALIDATION_FAILED
 
 Authorization: participant.self.update
+
+Owner: backend
+
+Status: IMPLEMENTED
+```
+
+```text
+Method: GET
+Endpoint: /api/v1/me/checkout-defaults
+
+Purpose: DEC-092. Con qué se rellena la dirección del checkout para no volver
+a teclear lo que la persona ya dio.
+
+Response: 200 { "source": "LAST_ORDER" | "ACCOUNT", "full_name": string | null,
+                "line1": string | null, "line2": string | null,
+                "city": string | null, "region": string | null,
+                "postal_code": string | null }
+
+`LAST_ORDER`: la dirección del pedido más reciente que llevaba una (el nombre y
+el estado del alta rellenan lo que le falte). `ACCOUNT`: no hay pedidos con
+dirección; solo el nombre de la cuenta y el estado declarado en el alta. Solo a
+la propia persona; nada se guarda ni se decide aquí, y el pedido se congela con
+lo que envíe al pagar. Es la única lectura que devuelve el estado declarado, y
+solo como sugerencia de dirección: `GET /me` y `GET /me/eligibility` siguen sin
+devolverlo. Sin país: la tienda solo envía dentro de Estados Unidos.
+
+Errors: 401
+
+Authorization: participant.self.read
 
 Owner: backend
 

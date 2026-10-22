@@ -94,9 +94,14 @@ interface Scenario {
     | "stuckCard"
     | "pickupCard"
     | "voidCash"
-    | "voidCard",
+    | "voidCard"
+    | "packageCard"
+    | "packageCash"
+    | "texan",
     string
   >;
+  /** DEC-092: un paquete de participaciones, que no se envia. */
+  readonly packageVariantId: string;
   readonly manager: Staff;
   readonly support: Staff;
   /**
@@ -136,12 +141,20 @@ async function insertIdentity(email: string): Promise<string> {
   return identityId;
 }
 
-async function insertParticipant(email: string): Promise<string> {
+async function insertParticipant(email: string, residenceState?: string): Promise<string> {
   const identityId = await insertIdentity(email);
-  return one<string>(
-    sql`INSERT INTO participants (identity_id, display_name, preferred_locale, status)
-        VALUES (${identityId}, ${`Participante ${email}`}, 'es-US', 'ACTIVE') RETURNING id`,
-  );
+  // DEC-089: el alta sin contrasena declara el estado y no la fecha.
+  return residenceState === undefined
+    ? one<string>(
+        sql`INSERT INTO participants (identity_id, display_name, preferred_locale, status)
+            VALUES (${identityId}, ${`Participante ${email}`}, 'es-US', 'ACTIVE') RETURNING id`,
+      )
+    : one<string>(
+        sql`INSERT INTO participants
+              (identity_id, display_name, preferred_locale, status, residence_state, eligibility_declared_at)
+            VALUES (${identityId}, ${`Participante ${email}`}, 'es-US', 'ACTIVE', ${residenceState}, now())
+            RETURNING id`,
+      );
 }
 
 async function insertStaff(email: string, roleKey: string, config: ApiConfig): Promise<Staff> {
@@ -221,6 +234,10 @@ async function seed(config: ApiConfig): Promise<Scenario> {
     pickupCard: await insertParticipant("pickup-card@example.invalid"),
     voidCash: await insertParticipant("void-cash@example.invalid"),
     voidCard: await insertParticipant("void-card@example.invalid"),
+    // DEC-092: comprar solo paquetes, y lo que sugiere el checkout.
+    packageCard: await insertParticipant("package-card@example.invalid"),
+    packageCash: await insertParticipant("package-cash@example.invalid"),
+    texan: await insertParticipant("texan@example.invalid", "TX"),
   };
 
   // DEC-079: sin tarifa, un carrito con mercancia no se puede pagar (409).
@@ -242,6 +259,24 @@ async function seed(config: ApiConfig): Promise<Scenario> {
     sql`INSERT INTO product_variants
           (product_id, sku, status, price_amount_minor, currency, stock_quantity, position)
         VALUES (${productId}, 'INT-CAP-STD', 'ACTIVE', ${UNIT_PRICE_MINOR}, 'USD', 500, 0)
+        RETURNING id`,
+  );
+
+  // DEC-092: un paquete de participaciones. No se envia: no lleva envio ni
+  // necesita direccion.
+  const packageId = await one<string>(
+    sql`INSERT INTO products (sku, slug, status, currency, kind, category_key)
+        VALUES ('INT-PKG', 'int-pkg', 'ACTIVE', 'USD', 'ENTRY_PACKAGE', NULL) RETURNING id`,
+  );
+  await db.execute(
+    sql`INSERT INTO product_translations (product_id, locale, name, description)
+        VALUES (${packageId}, 'en-US', 'Fixture package', 'Fixture entry package.'),
+               (${packageId}, 'es-US', 'Paquete de prueba', 'Paquete de prueba.')`,
+  );
+  const packageVariantId = await one<string>(
+    sql`INSERT INTO product_variants
+          (product_id, sku, status, price_amount_minor, currency, stock_quantity, position)
+        VALUES (${packageId}, 'INT-PKG-STD', 'ACTIVE', 1000, 'USD', 500, 0)
         RETURNING id`,
   );
 
@@ -291,7 +326,7 @@ async function seed(config: ApiConfig): Promise<Scenario> {
          WHERE key = 'visible_entry_numbers_enabled'`,
   );
 
-  return { promotionId, variantId, participants, manager, support, compliance };
+  return { promotionId, variantId, packageVariantId, participants, manager, support, compliance };
 }
 
 // ---------------------------------------------------------------------------
@@ -1867,5 +1902,121 @@ describe("corte de caja de un rango de dias (DEC-091)", () => {
       "/api/v1/admin/reports/daily-cut?date=2026-01-01&date_to=2026-12-31",
     );
     expect(tooLong.statusCode).toBe(422);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 14. No volver a pedir lo que la cuenta ya sabe (DEC-092)
+// ---------------------------------------------------------------------------
+
+async function fillPackageCart(browser: Browser): Promise<void> {
+  const added = await browser.request("POST", "/api/v1/cart/items", {
+    variant_id: scenario.packageVariantId,
+    quantity: 1,
+  });
+  expect(added.statusCode, added.body).toBeLessThan(300);
+}
+
+async function addressOf(orderId: string): Promise<{
+  fulfillment_method: string;
+  shipping_total_minor: string | null;
+  shipping_address: unknown;
+}> {
+  const row = (
+    await db.execute<{
+      fulfillment_method: string;
+      shipping_total_minor: string | null;
+      shipping_address: unknown;
+    }>(
+      sql`SELECT fulfillment_method, shipping_total_minor::text AS shipping_total_minor, shipping_address
+            FROM orders WHERE id = ${orderId}`,
+    )
+  ).rows[0];
+  if (row === undefined) throw new Error(`No existe el pedido ${orderId}.`);
+  return row;
+}
+
+describe("comprar solo paquetes no pide direccion (DEC-092)", () => {
+  it("con tarjeta: la sesion se abre sin direccion ni envio", async () => {
+    const buyer = await participantBrowser("package-card@example.invalid");
+    await fillPackageCart(buyer);
+
+    const session = await buyer.request("POST", "/api/v1/checkout/session", {
+      return_url: RETURN_URL,
+    });
+    expect(session.statusCode, session.body).toBe(201);
+
+    expect(await addressOf(session.json<{ order_draft_id: string }>().order_draft_id)).toEqual({
+      fulfillment_method: "DELIVERY",
+      shipping_total_minor: null,
+      shipping_address: null,
+    });
+  });
+
+  it("en efectivo: el pedido se crea sin direccion, y no es una recogida", async () => {
+    const buyer = await participantBrowser("package-cash@example.invalid");
+    await fillPackageCart(buyer);
+
+    const order = await buyer.request("POST", "/api/v1/checkout/cash-order", {});
+    expect(order.statusCode, order.body).toBe(201);
+    expect(await addressOf(order.json<{ id: string }>().id)).toEqual({
+      fulfillment_method: "DELIVERY",
+      shipping_total_minor: null,
+      shipping_address: null,
+    });
+  });
+
+  it("con mercancia y envio, la direccion sigue siendo obligatoria", async () => {
+    const buyer = await participantBrowser("texan@example.invalid");
+    await fillCart(buyer);
+
+    const cash = await buyer.request("POST", "/api/v1/checkout/cash-order", {
+      fulfillment_method: "DELIVERY",
+    });
+    expect(cash.statusCode).toBe(422);
+    const card = await buyer.request("POST", "/api/v1/checkout/session", {
+      return_url: RETURN_URL,
+    });
+    expect(card.statusCode).toBe(422);
+    expect(
+      card.json<{ error: { details: { issues: { path: string }[] } } }>().error.details.issues,
+    ).toContainEqual(expect.objectContaining({ path: "shipping_address" }));
+  });
+});
+
+describe("el checkout se rellena con lo que la cuenta ya sabe (DEC-092)", () => {
+  it("sin pedidos anteriores: el nombre y el estado del alta", async () => {
+    const buyer = await participantBrowser("texan@example.invalid");
+    const defaults = await buyer.request("GET", "/api/v1/me/checkout-defaults");
+    expect(defaults.statusCode, defaults.body).toBe(200);
+    expect(defaults.json()).toEqual({
+      source: "ACCOUNT",
+      full_name: "Participante texan@example.invalid",
+      line1: null,
+      line2: null,
+      city: null,
+      region: "TX",
+      postal_code: null,
+    });
+  });
+
+  it("con un pedido anterior: la direccion que escribio la ultima vez", async () => {
+    const buyer = await participantBrowser("cash-buyer@example.invalid");
+    const defaults = await buyer.request("GET", "/api/v1/me/checkout-defaults");
+    expect(defaults.statusCode, defaults.body).toBe(200);
+    expect(defaults.json()).toEqual({
+      source: "LAST_ORDER",
+      full_name: SHIPPING.full_name,
+      line1: SHIPPING.line1,
+      line2: null,
+      city: SHIPPING.city,
+      region: SHIPPING.region,
+      postal_code: SHIPPING.postal_code,
+    });
+  });
+
+  it("sin sesion no hay nada que sugerir", async () => {
+    const anonymous = await app.inject({ method: "GET", url: "/api/v1/me/checkout-defaults" });
+    expect(anonymous.statusCode).toBe(401);
   });
 });

@@ -302,6 +302,7 @@ export {
   fetchEntryTransactions,
   fetchMe,
   fetchMyEligibility,
+  fetchCheckoutDefaults,
   declareMyEligibility,
   fetchOfficialRules,
   fetchOrder,
@@ -345,6 +346,7 @@ export {
   verifyMfa,
   verifySignInCode,
   type AdminPageQuery,
+  type CheckoutDefaults,
   type EligibilityStatus,
   type SessionContext,
 } from "./resources";

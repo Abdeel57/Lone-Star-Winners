@@ -4634,3 +4634,54 @@ participante y del panel, `components/admin/order-void-panel.tsx`,
 Proposed by: sesión del usuario (2026-10-21, petición del cliente)
 Agreed by: backend, frontend-ux, security (petición directa del usuario);
 pendiente: abogado (preguntas 29 y 30 de `docs/LEGAL_PENDING.md`)
+
+## DEC-092
+
+Status: Accepted
+
+Date: 2026-10-22
+
+Decision:
+**El checkout no vuelve a pedir lo que la cuenta ya sabe, y deja de preguntar
+el país.** El cliente pidió que al comprar no se vuelvan a teclear los datos
+del registro (DEC-089: contacto, nombre y estado) y que se quite el país.
+
+1. **Solo paquetes: sin dirección.** Un carrito sin mercancía no tiene nada que
+   enviar. `POST /checkout/session` y `POST /checkout/cash-order` exigen
+   `shipping_address` solo si hay mercancía y se envía; un carrito solo de
+   paquetes va como `DELIVERY` sin dirección ni envío (no es una recogida). Lo
+   que identifica a quien compra -nombre, contacto, estado- ya está en su
+   cuenta. La ficha del pedido no pinta una "dirección de envío" vacía.
+2. **Mercancía con envío: la dirección llega rellenada.**
+   `GET /me/checkout-defaults` (`participant.self.read`) devuelve la dirección
+   del pedido más reciente que llevaba una (`LAST_ORDER`) o, si no hay, el
+   nombre de la cuenta y el estado declarado en el alta (`ACCOUNT`). Todo se
+   puede corregir; el pedido se congela con lo enviado, como siempre. Es la
+   única lectura que devuelve el estado declarado, solo a la propia persona y
+   solo como sugerencia de dirección: `GET /me` y `GET /me/eligibility` siguen
+   sin devolverlo. No hay tabla nueva: lo guardado son los pedidos.
+3. **Sin país.** La web manda `country = "US"`: la tienda solo envía dentro de
+   Estados Unidos. Es una regla de ENVÍO, no de quién participa; la
+   elegibilidad territorial sigue en las Official Rules y en el estado del
+   alta. La API no cambia (sigue aceptando el código de dos letras). Se retira
+   `country-code.ts`, que traducía el nombre del país.
+
+Alternatives considered: A — Guardar una dirección en el perfil con su propia
+pantalla (descartada por ahora: el último pedido ya la tiene y no pide un paso
+más). B — Pedir la dirección también en los paquetes (descartada: no hay nada
+que enviar). C — Marcar los pedidos de paquetes como `PICKUP` para no pedir
+dirección (descartada: la ficha diría "se recoge en el punto de venta").
+D — Un desplegable de estados en la dirección (descartada: sigue siendo una
+regla legal escrita por el frontend; el estado llega rellenado como texto).
+
+Affected areas: `packages/database` (`order-repository.ts`), `apps/api`
+(`routes/portal.ts`, `routes/orders.ts`, `services/cash-payments.ts`, OpenAPI,
+integración), `apps/web` (`components/checkout-form.tsx`,
+`lib/checkout-actions.ts`, página del checkout, `components/order-address.tsx`,
+fichas del pedido, cliente de la API, mensajes, mocks, pruebas; se retira
+`lib/country-code.ts`), `tests/e2e` (spec 04), `docs/API_CONTRACT.md`,
+`docs/LEGAL_PENDING.md`.
+
+Proposed by: sesión del usuario (2026-10-22, petición del cliente)
+Agreed by: backend, frontend-ux, security (petición directa del usuario);
+pendiente: abogado (pregunta 31 de `docs/LEGAL_PENDING.md`)

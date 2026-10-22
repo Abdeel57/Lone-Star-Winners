@@ -25,12 +25,21 @@ export function OrderAddress({
   address,
   fulfillmentMethod = "DELIVERY",
   paymentMethod = "CASH",
+  hasMerchandise = true,
 }: {
   readonly address: PostalAddress | null;
   readonly fulfillmentMethod?: FulfillmentMethod | undefined;
   readonly paymentMethod?: PaymentMethod | undefined;
+  /** DEC-092: un pedido solo de paquetes no se envia ni lleva direccion. */
+  readonly hasMerchandise?: boolean | undefined;
 }) {
   const t = useTranslations("account.order");
+
+  // DEC-092: sin mercancia no hay nada que enviar; decir "no tiene direccion"
+  // haria creer que falta un dato.
+  if (!hasMerchandise && address === null && fulfillmentMethod === "DELIVERY") {
+    return null;
+  }
 
   if (fulfillmentMethod === "PICKUP") {
     return (

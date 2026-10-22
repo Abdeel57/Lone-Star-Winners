@@ -122,6 +122,28 @@ function readEntryNumberCursor(
   return { batchIndex, offset };
 }
 
+/**
+ * DEC-092: con que se rellena la direccion del checkout para no volver a
+ * teclearla. Cualquier campo puede faltar; nada de esto se guarda aqui ni
+ * decide nada: el pedido se congela con lo que la persona envie.
+ */
+const checkoutDefaultsSchema = z.object({
+  /** `LAST_ORDER`: la direccion de su ultimo pedido. `ACCOUNT`: nombre y estado del alta. */
+  source: z.enum(["LAST_ORDER", "ACCOUNT"]),
+  full_name: z.string().nullable(),
+  line1: z.string().nullable(),
+  line2: z.string().nullable(),
+  city: z.string().nullable(),
+  region: z.string().nullable(),
+  postal_code: z.string().nullable(),
+});
+
+/** Un campo de texto de una direccion guardada, o `null` si falta o esta vacio. */
+function addressField(address: Readonly<Record<string, unknown>>, key: string): string | null {
+  const value = Object.prototype.hasOwnProperty.call(address, key) ? address[key] : undefined;
+  return typeof value === "string" && value.trim() !== "" ? value : null;
+}
+
 /** DEC-067: si la cuenta declaro, y cuando. Nunca lo declarado. */
 const eligibilityStatusSchema = z.object({
   /** Las dos mitades declaradas: estado Y fecha de nacimiento. */
@@ -519,6 +541,61 @@ export function buildPortalRoutes(dependencies: AppDependencies): RouteDefinitio
           throw ApiErrors.unauthenticated();
         }
         return updated;
+      },
+    },
+
+    {
+      method: "GET",
+      url: "/api/v1/me/checkout-defaults",
+      operationId: "getParticipantCheckoutDefaults",
+      summary: "Datos con que se rellena la direccion del checkout (DEC-092).",
+      description:
+        "La direccion de envio del pedido mas reciente que llevaba una (`source = LAST_ORDER`); si no hay, el nombre de la cuenta y el estado declarado en el alta (`ACCOUNT`). Es para no volver a teclear lo que la persona ya dio: solo a ella misma, nada se guarda ni se decide aqui, y el pedido se congela con lo que envie al pagar. Es la unica lectura que devuelve el estado declarado, y solo como sugerencia de direccion.",
+      tags: ["portal"],
+      authorization: { kind: "PERMISSION", permission: "participant.self.read" },
+      schema: {
+        response: {
+          200: checkoutDefaultsSchema,
+          401: errorEnvelopeSchema,
+        },
+      },
+      handler: async (request) => {
+        const principal = await requireParticipant(request);
+        const [profile, lastAddress, declaration] = await Promise.all([
+          domain.participants.findProfile(principal.participantId),
+          domain.repositories.orders.findLatestShippingAddress(principal.participantId),
+          dependencies.identity.identities.findEligibilityDeclaration(principal.participantId),
+        ]);
+        if (profile === null) {
+          throw ApiErrors.unauthenticated();
+        }
+
+        const displayName =
+          profile.display_name === null || profile.display_name.trim() === ""
+            ? null
+            : profile.display_name;
+        const declaredState = declaration?.residenceState ?? null;
+
+        if (lastAddress !== null) {
+          return {
+            source: "LAST_ORDER" as const,
+            full_name: addressField(lastAddress, "full_name") ?? displayName,
+            line1: addressField(lastAddress, "line1"),
+            line2: addressField(lastAddress, "line2"),
+            city: addressField(lastAddress, "city"),
+            region: addressField(lastAddress, "region") ?? declaredState,
+            postal_code: addressField(lastAddress, "postal_code"),
+          };
+        }
+        return {
+          source: "ACCOUNT" as const,
+          full_name: displayName,
+          line1: null,
+          line2: null,
+          city: null,
+          region: declaredState,
+          postal_code: null,
+        };
       },
     },
 

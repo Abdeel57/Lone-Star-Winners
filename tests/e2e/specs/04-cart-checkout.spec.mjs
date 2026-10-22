@@ -206,7 +206,8 @@ test("la pantalla de checkout no cobra ni redirige a ningun proveedor", async ({
   await page.locator('input[name="city"]').fill("Austin");
   await page.locator('input[name="region"]').fill("TX");
   await page.locator('input[name="postal_code"]').fill("73301");
-  await page.locator('input[name="country"]').fill("US");
+  // DEC-092: el pais ya no se pregunta; la tienda solo envia dentro de EE. UU.
+  await expect(page.locator('input[name="country"]')).toHaveCount(0);
 
   await page.getByRole("button", { name: "Continuar al pago" }).click();
 

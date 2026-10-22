@@ -1039,6 +1039,15 @@
     },
     {
       "method": "GET",
+      "path": "/api/v1/me/checkout-defaults",
+      "operation_id": "getParticipantCheckoutDefaults",
+      "authorization": "participant.self.read",
+      "requires_step_up": false,
+      "tags": ["portal"],
+      "summary": "Datos con que se rellena la direccion del checkout (DEC-092)."
+    },
+    {
+      "method": "GET",
       "path": "/api/v1/me/eligibility",
       "operation_id": "getParticipantEligibility",
       "authorization": "participant.self.read",

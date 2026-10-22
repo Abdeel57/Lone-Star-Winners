@@ -533,6 +533,25 @@ export class DrizzleOrderRepository {
   }
 
   /**
+   * DEC-092: la direccion de envio del pedido mas reciente de este participante
+   * que llevaba una, o `null`. Es lo que escribio la ultima vez: el checkout la
+   * ofrece rellenada para que no la vuelva a teclear.
+   */
+  public async findLatestShippingAddress(participantId: string): Promise<JsonObject | null> {
+    const rows = await this.db
+      .select({ shippingAddress: orders.shippingAddress })
+      .from(orders)
+      .where(
+        and(eq(orders.participantId, participantId), sql`${orders.shippingAddress} IS NOT NULL`),
+      )
+      .orderBy(desc(orders.createdAt))
+      .limit(1);
+
+    const address = rows[0]?.shippingAddress;
+    return address === undefined || address === null ? null : toCanonicalJsonObject(address);
+  }
+
+  /**
    * DEC-078: el pedido en efectivo que ya salio de este carrito, o `null`.
    *
    * Es la otra mitad del indice unico parcial `orders_one_cash_order_per_cart`:

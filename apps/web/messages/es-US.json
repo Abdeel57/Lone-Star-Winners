@@ -164,7 +164,6 @@
     "CATALOG_CONFLICT": "Ya existe un producto o una promoción con ese SKU o esa dirección.",
     "LIFECYCLE_REFUSED": "El sistema no permite ese cambio de estado todavía.",
     "PRICE_INVALID": "El precio no tiene un formato válido para esa moneda.",
-    "COUNTRY_INVALID": "No reconocemos ese país. Escribe su nombre o su código de dos letras, por ejemplo US.",
     "DATETIME_INVALID": "Esa fecha y hora no existen en la zona horaria legal.",
     "TIMEZONE_INVALID": "Esa zona horaria no es válida.",
     "CONFIRMATION_REQUIRED": "Marca la casilla de confirmación para continuar.",
@@ -1035,8 +1034,12 @@
     "emptyTitle": "No hay nada que comprar",
     "emptyBody": "Añade antes mercancía elegible a tu carrito.",
     "addressHeading": "A dónde va",
+    "prefilledFromLastOrder": "La rellenamos con la dirección de tu último pedido. Revísala antes de pagar.",
+    "prefilledFromAccount": "Pusimos tu nombre y tu estado de cuando te registraste. Completa la dirección.",
+    "noAddressNeeded": "Los paquetes de participaciones no se envían, así que no te pedimos dirección: usamos los datos de tu cuenta.",
+    "shipsToUsOnly": "Solo enviamos dentro de Estados Unidos.",
     "reviewHeading": "Lo que estás pidiendo",
-    "pickupNote": "Si pagas en efectivo y lo recoges en el punto de venta, no se cobra envío.",
+    "pickupNote": "Si lo recoges en el punto de venta, no se cobra envío.",
     "entriesHeading": "Participaciones promocionales cotizadas para este pedido",
     "entriesNote": "Esta cifra la calculan nuestros sistemas a partir de tu carrito. Es orientativa hasta que el pedido alcance el estado que las Reglas Oficiales definen como calificante.",
     "payCta": "Continuar al pago",
@@ -1049,9 +1052,7 @@
       "line2Hint": "Opcional.",
       "city": "Ciudad",
       "region": "Estado o región",
-      "postalCode": "Código postal",
-      "country": "País",
-      "countryHint": "El nombre o el código de dos letras. Por ejemplo: Estados Unidos o US."
+      "postalCode": "Código postal"
     },
     "return": {
       "title": "De vuelta del proveedor de pago",

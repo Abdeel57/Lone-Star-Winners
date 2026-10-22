@@ -6,7 +6,7 @@ import { useActionState, useState } from "react";
 
 import type { Locale } from "@/i18n/locales";
 import { IDLE } from "@/lib/action-result";
-import type { FulfillmentMethod, PaymentMethod } from "@/lib/api";
+import type { CheckoutDefaults, FulfillmentMethod, PaymentMethod } from "@/lib/api";
 import { startCheckoutAction } from "@/lib/checkout-actions";
 
 import { FormError, useFieldError } from "./auth-form-shell";
@@ -23,18 +23,23 @@ import { PaymentMethodChoice } from "./payment-method-choice";
  * proveedor. Es la consecuencia directa de que el checkout sea un ADAPTADOR: el
  * backend responde COMO se cobra y la interfaz nunca es la que cobra.
  *
- * LOS CAMPOS NO LLEVAN NINGUNA REGLA DE JURISDICCION
- * --------------------------------------------------
- * `region` es un campo de texto libre y no un desplegable de estados. `country`
- * es un campo de texto y no una lista con un valor por defecto. Y no hay patron
- * de codigo postal. Los tres son la misma decision: la elegibilidad territorial
- * la fijan las Official Rules y sigue en `docs/LEGAL_PENDING.md`, asi que un
- * desplegable con la lista de estados admitidos seria una regla legal escrita
- * por el frontend (CLAUDE.md #2 y #14). Cuando el backend publique la lista, el
- * desplegable se pinta con SUS valores.
+ * LOS CAMPOS NO LLEVAN NINGUNA REGLA DE ELEGIBILIDAD
+ * ---------------------------------------------------
+ * `region` es un campo de texto libre y no un desplegable de estados, y no hay
+ * patron de codigo postal: la elegibilidad territorial la fijan las Official
+ * Rules y sigue en `docs/LEGAL_PENDING.md`, asi que un desplegable con la lista
+ * de estados admitidos seria una regla legal escrita por el frontend (CLAUDE.md
+ * #2 y #14). DEC-092: el PAIS ya no se pregunta porque la tienda solo envia
+ * dentro de Estados Unidos; eso es una regla de envio, no de quien participa.
  *
  * Lo que si llevan es `autoComplete` con los tokens estandar, que es lo que
  * hace que un telefono rellene la direccion de una vez.
+ *
+ * NO SE VUELVE A PEDIR LO QUE LA CUENTA YA SABE (DEC-092)
+ * -------------------------------------------------------
+ * Los campos llegan rellenados: con la direccion de su ultimo pedido o, si no
+ * hay, con el nombre y el estado del alta. Todo se puede corregir. Y un carrito
+ * solo de paquetes no pide direccion: no hay nada que enviar.
  *
  * EL CARRITO NO VIAJA EN ESTE FORMULARIO. Lo que se cobra sale del carrito de
  * servidor (DEC-023); si el cliente aportara las lineas, aportaria tambien los
@@ -59,14 +64,18 @@ import { PaymentMethodChoice } from "./payment-method-choice";
  * salvo que todavia no haya tarifa: entonces solo queda recoger.
  *
  * `cashDelivery` es `null` cuando el carrito no lleva mercancia (solo
- * paquetes): no hay nada que recoger ni que enviar y no se pregunta.
+ * paquetes): no hay nada que recoger ni que enviar, no se pregunta y, desde
+ * DEC-092, tampoco se pide direccion.
  */
 export function CheckoutForm({
   locale,
   cashDelivery,
+  addressDefaults = null,
 }: {
   readonly locale: Locale;
   readonly cashDelivery: CashDeliveryOptions | null;
+  /** DEC-092: con que se rellena la direccion. `null` = campos vacios. */
+  readonly addressDefaults?: CheckoutDefaults | null;
 }) {
   const t = useTranslations("checkout");
   const [state, formAction, pending] = useActionState(startCheckoutAction, IDLE);
@@ -85,12 +94,20 @@ export function CheckoutForm({
     setFulfillment(defaultFulfillment(next));
   };
 
-  const asksFulfillment = cashDelivery !== null;
-  const needsAddress = !(asksFulfillment && fulfillment === "PICKUP");
+  // Hay mercancia: se pregunta como se recibe, y si se envia hace falta direccion.
+  const ships = cashDelivery !== null;
+  const needsAddress = ships && fulfillment !== "PICKUP";
+  const prefill = (value: string | null | undefined): string => value ?? "";
+  const prefilled =
+    addressDefaults !== null &&
+    [addressDefaults.full_name, addressDefaults.line1, addressDefaults.region].some(
+      (value) => value !== null,
+    );
 
   return (
     <form action={formAction} className="flex flex-col gap-s5">
       <input type="hidden" name="locale" value={locale} />
+      <input type="hidden" name="ships" value={ships ? "true" : "false"} />
 
       <FormError result={state} />
 
@@ -101,7 +118,7 @@ export function CheckoutForm({
        */}
       <PaymentMethodChoice value={method} onChange={choosePayment} />
 
-      {asksFulfillment && cashDelivery !== null ? (
+      {ships && cashDelivery !== null ? (
         <FulfillmentChoice
           value={fulfillment}
           onChange={setFulfillment}
@@ -110,16 +127,37 @@ export function CheckoutForm({
         />
       ) : null}
 
+      {/* DEC-092: solo paquetes, nada que enviar: se dice y no se pide nada. */}
+      {ships ? null : <p className="text-body-sm text-text-muted">{t("noAddressNeeded")}</p>}
+
       {needsAddress ? (
         <>
           <h2 className="lsw-display mt-s3 text-heading-md text-text">{t("addressHeading")}</h2>
 
+          {prefilled && addressDefaults !== null ? (
+            <p className="text-body-sm text-text-muted">
+              {addressDefaults.source === "LAST_ORDER"
+                ? t("prefilledFromLastOrder")
+                : t("prefilledFromAccount")}
+            </p>
+          ) : null}
+
           <FormField label={t("fields.fullName")} required error={fieldError("full_name")}>
-            <Input name="full_name" type="text" autoComplete="shipping name" />
+            <Input
+              name="full_name"
+              type="text"
+              autoComplete="shipping name"
+              defaultValue={prefill(addressDefaults?.full_name)}
+            />
           </FormField>
 
           <FormField label={t("fields.line1")} required error={fieldError("line1")}>
-            <Input name="line1" type="text" autoComplete="shipping address-line1" />
+            <Input
+              name="line1"
+              type="text"
+              autoComplete="shipping address-line1"
+              defaultValue={prefill(addressDefaults?.line1)}
+            />
           </FormField>
 
           <FormField
@@ -127,38 +165,45 @@ export function CheckoutForm({
             description={t("fields.line2Hint")}
             error={fieldError("line2")}
           >
-            <Input name="line2" type="text" autoComplete="shipping address-line2" />
+            <Input
+              name="line2"
+              type="text"
+              autoComplete="shipping address-line2"
+              defaultValue={prefill(addressDefaults?.line2)}
+            />
           </FormField>
 
           <div className="grid gap-s5 sm:grid-cols-2">
             <FormField label={t("fields.city")} required error={fieldError("city")}>
-              <Input name="city" type="text" autoComplete="shipping address-level2" />
-            </FormField>
-
-            <FormField label={t("fields.region")} required error={fieldError("region")}>
-              <Input name="region" type="text" autoComplete="shipping address-level1" />
-            </FormField>
-          </div>
-
-          <div className="grid gap-s5 sm:grid-cols-2">
-            <FormField label={t("fields.postalCode")} required error={fieldError("postal_code")}>
               <Input
-                name="postal_code"
+                name="city"
                 type="text"
-                inputMode="text"
-                autoComplete="shipping postal-code"
+                autoComplete="shipping address-level2"
+                defaultValue={prefill(addressDefaults?.city)}
               />
             </FormField>
 
-            <FormField
-              label={t("fields.country")}
-              description={t("fields.countryHint")}
-              required
-              error={fieldError("country")}
-            >
-              <Input name="country" type="text" autoComplete="shipping country-name" />
+            <FormField label={t("fields.region")} required error={fieldError("region")}>
+              <Input
+                name="region"
+                type="text"
+                autoComplete="shipping address-level1"
+                defaultValue={prefill(addressDefaults?.region)}
+              />
             </FormField>
           </div>
+
+          <FormField label={t("fields.postalCode")} required error={fieldError("postal_code")}>
+            <Input
+              name="postal_code"
+              type="text"
+              inputMode="text"
+              autoComplete="shipping postal-code"
+              defaultValue={prefill(addressDefaults?.postal_code)}
+            />
+          </FormField>
+
+          <p className="text-caption text-text-subtle">{t("shipsToUsOnly")}</p>
         </>
       ) : null}
 

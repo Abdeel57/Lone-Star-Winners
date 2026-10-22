@@ -744,3 +744,14 @@ DEC-090, en su propia rama sin publicar.)
     participaciones no cambian (salen del precio de los productos, pregunta
     18). Confirmar si los Términos de venta deben mencionar la recogida, el
     plazo para recogerla y qué pasa si nadie pasa por ella.
+
+## El checkout reutiliza los datos del alta (DEC-092, 2026-10-22)
+
+31. **Paquetes sin dirección y envío solo en EE. UU.** Desde DEC-092 una compra
+    solo de paquetes de participaciones no pide dirección: quien compra queda
+    identificado por su cuenta (nombre, correo o celular verificado y el
+    estado declarado en el alta). La mercancía se envía solo dentro de Estados
+    Unidos y el checkout ya no pregunta el país. Confirmar que las Reglas no
+    exigen una dirección postal por cada compra (la del ganador se pide al
+    verificarlo) y si los Términos de venta deben decir que solo se envía
+    dentro de EE. UU.

@@ -133,13 +133,25 @@ const cashOrderBodySchema = z.object({
  * DEC-091: con tarjeta tambien se puede recoger en el punto de venta. Igual
  * que en efectivo: `PICKUP` sin envio y sin direccion (si llega una, se
  * ignora); `DELIVERY` -por defecto, lo unico que existia antes de este campo-
- * con direccion obligatoria.
+ * con direccion obligatoria si hay mercancia (DEC-092: solo paquetes, sin ella).
  */
 const checkoutBodySchema = z.object({
   fulfillment_method: z.enum(["DELIVERY", "PICKUP"]).optional(),
   shipping_address: shippingAddressBodySchema.optional(),
   return_url: z.url().max(2048),
 });
+
+/**
+ * DEC-092: si el pedido necesita direccion de envio. Solo con mercancia que se
+ * envia: un carrito solo de paquetes no tiene nada que mandar, y lo que
+ * identifica a quien compra -nombre, contacto, estado- ya esta en su cuenta.
+ */
+function requiresShippingAddress(
+  cart: { readonly items: readonly { readonly productKind: string }[] },
+  pickup: boolean,
+): boolean {
+  return !pickup && cart.items.some((item) => item.productKind === "MERCHANDISE");
+}
 
 const orderIdParamsSchema = z.object({ order_id: z.uuid() });
 const draftIdParamsSchema = z.object({ order_draft_id: z.uuid() });
@@ -546,7 +558,7 @@ export function buildOrdersRoutes(dependencies: AppDependencies): RouteDefinitio
       operationId: "createCheckoutSession",
       summary: "Abrir una sesion de pago sobre el carrito de servidor.",
       description:
-        "Congela el carrito en un pedido DRAFT y pide al proveedor una sesion. El pedido no genera participaciones hasta que el pago alcance el estado cualificante (DEC-023). DEC-091: `fulfillment_method = PICKUP` (el cliente pasa por el pedido a un punto de venta fisico) no lleva envio ni direccion y no necesita tarifa; `DELIVERY` (por defecto) exige `shipping_address` y cobra el envio.",
+        "Congela el carrito en un pedido DRAFT y pide al proveedor una sesion. El pedido no genera participaciones hasta que el pago alcance el estado cualificante (DEC-023). DEC-091: `fulfillment_method = PICKUP` (el cliente pasa por el pedido a un punto de venta fisico) no lleva envio ni direccion y no necesita tarifa; `DELIVERY` (por defecto) exige `shipping_address` y cobra el envio. DEC-092: la direccion solo se exige si el carrito lleva mercancia; uno solo de paquetes va sin ella.",
       tags: ["commerce"],
       authorization: { kind: "PARTICIPANT", selfOnly: true },
       schema: {
@@ -563,13 +575,8 @@ export function buildOrdersRoutes(dependencies: AppDependencies): RouteDefinitio
         const principal = await requirePrincipal(request);
         const body = request.body as z.infer<typeof checkoutBodySchema>;
 
-        // DEC-091: sin direccion solo se puede recoger. Se comprueba aqui y no
-        // en el esquema para que el 422 diga QUE campo falta, como en efectivo.
         const pickup = body.fulfillment_method === "PICKUP";
         const address = body.shipping_address;
-        if (!pickup && address === undefined) {
-          throw ApiErrors.validationFailed([{ path: "shipping_address", code: "required" }]);
-        }
 
         // La foto del carrito -precios, SKU, tipo y elegibilidad congelados- la
         // hace `freezeOpenCart`, la MISMA que usa el pedido en efectivo.
@@ -579,6 +586,14 @@ export function buildOrdersRoutes(dependencies: AppDependencies): RouteDefinitio
           pickup ? "PICKUP" : "DELIVERY",
         );
         const subtotal = cart.subtotalMinor;
+
+        // DEC-091, DEC-092: la direccion solo hace falta si hay mercancia que
+        // ENVIAR. Recogiendo, o comprando solo paquetes, no hay a donde mandar
+        // nada. Se comprueba aqui y no en el esquema para que el 422 diga QUE
+        // campo falta, como en efectivo.
+        if (requiresShippingAddress(cart, pickup) && address === undefined) {
+          throw ApiErrors.validationFailed([{ path: "shipping_address", code: "required" }]);
+        }
 
         const orderId = domain.ids.next();
         const draft = await orders.createDraft({
@@ -753,7 +768,7 @@ export function buildOrdersRoutes(dependencies: AppDependencies): RouteDefinitio
       operationId: "createCashOrder",
       summary: "Pedido para pagar en efectivo en un punto de venta fisico.",
       description:
-        "DEC-078. Congela el carrito de servidor exactamente igual que la sesion con tarjeta y deja el pedido PENDING_PAYMENT con `payment_method = CASH`. NO genera participaciones: no hay cobro hasta que una persona con `order.cash.confirm` lo confirma en el panel. Idempotente por carrito: repetir el envio devuelve 200 con el mismo pedido en vez de crear otro. DEC-079: `fulfillment_method = PICKUP` (se entrega en el punto de venta) no lleva envio ni direccion y no necesita tarifa; `DELIVERY` (por defecto) exige `shipping_address` y cobra el envio.",
+        "DEC-078. Congela el carrito de servidor exactamente igual que la sesion con tarjeta y deja el pedido PENDING_PAYMENT con `payment_method = CASH`. NO genera participaciones: no hay cobro hasta que una persona con `order.cash.confirm` lo confirma en el panel. Idempotente por carrito: repetir el envio devuelve 200 con el mismo pedido en vez de crear otro. DEC-079: `fulfillment_method = PICKUP` (se entrega en el punto de venta) no lleva envio ni direccion y no necesita tarifa; `DELIVERY` (por defecto) exige `shipping_address` y cobra el envio. DEC-092: la direccion solo se exige si el carrito lleva mercancia; uno solo de paquetes va sin ella.",
       tags: ["commerce"],
       authorization: { kind: "PARTICIPANT", selfOnly: true },
       schema: {
@@ -770,21 +785,20 @@ export function buildOrdersRoutes(dependencies: AppDependencies): RouteDefinitio
         const principal = await requirePrincipal(request);
         const body = request.body as z.infer<typeof cashOrderBodySchema>;
 
-        // DEC-079: sin direccion solo se puede recoger. Se comprueba aqui y no
-        // en el esquema para que el 422 diga QUE campo falta.
+        // DEC-079: con envio y mercancia, la direccion es obligatoria; DEC-092:
+        // un carrito solo de paquetes no la necesita. Lo comprueba `placeOrder`
+        // con el carrito congelado, y el 422 dice QUE campo falta.
         const address = body.shipping_address;
-        if ((body.fulfillment_method ?? "DELIVERY") === "DELIVERY" && address === undefined) {
-          throw ApiErrors.validationFailed([{ path: "shipping_address", code: "required" }]);
-        }
 
         const outcome = await cashCheckout.placeOrder(
           principal.participantId,
           cartOwnerOf(principal),
-          body.fulfillment_method === "PICKUP" || address === undefined
+          body.fulfillment_method === "PICKUP"
             ? { method: "PICKUP" }
             : {
                 method: "DELIVERY",
-                shippingAddress: { ...address, line2: address.line2 ?? null },
+                shippingAddress:
+                  address === undefined ? null : { ...address, line2: address.line2 ?? null },
               },
         );
 

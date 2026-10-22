@@ -17,6 +17,7 @@ import { routing } from "@/i18n/routing";
 import {
   fetchActivePromotion,
   fetchCart,
+  fetchCheckoutDefaults,
   fetchMyEligibility,
   fetchSiteConfig,
   pickLocalized,
@@ -135,9 +136,12 @@ export default async function CheckoutPage({ params }: { params: Promise<{ local
   // DEC-067: si la promocion comprueba edad o estado y la cuenta no los ha
   // declarado, se piden ANTES de cobrar. Si alguna de las dos lecturas falla no
   // se bloquea el pago: el backend vuelve a comprobarlo al otorgar.
-  const [configResult, eligibilityResult] = await Promise.all([
+  // DEC-092: lo que la cuenta ya sabe, para no volver a pedirlo. Si la lectura
+  // falla, el formulario sale vacio y se paga igual.
+  const [configResult, eligibilityResult, defaultsResult] = await Promise.all([
     fetchSiteConfig(locale),
     fetchMyEligibility(locale, session),
+    fetchCheckoutDefaults(locale, session),
   ]);
   const flags = configResult.ok ? toFeatureFlags(configResult.data) : null;
   const ageGate = flags !== null && isFeatureEnabled(flags, "age_gate_enabled");
@@ -178,7 +182,11 @@ export default async function CheckoutPage({ params }: { params: Promise<{ local
           // en un punto de venta- y sigue con la direccion; los dos titulos
           // viven dentro de el, en el orden en que se rellenan.
           <section aria-label={t("title")}>
-            <CheckoutForm locale={locale} cashDelivery={cashDeliveryOf(cartResult.data, locale)} />
+            <CheckoutForm
+              locale={locale}
+              cashDelivery={cashDeliveryOf(cartResult.data, locale)}
+              addressDefaults={defaultsResult.ok ? defaultsResult.data : null}
+            />
           </section>
         )}
 

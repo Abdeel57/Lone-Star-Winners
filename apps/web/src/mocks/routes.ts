@@ -235,6 +235,20 @@ export const mockRoutes: readonly MockRoute[] = [
       date_of_birth_declared: true,
     },
   },
+  // DEC-092: con que se rellena la direccion del checkout.
+  {
+    method: "GET",
+    path: API_PATHS.meCheckoutDefaults,
+    body: {
+      source: "ACCOUNT",
+      full_name: "Ada Lovelace",
+      line1: null,
+      line2: null,
+      city: null,
+      region: "TX",
+      postal_code: null,
+    },
+  },
   { method: "GET", path: API_PATHS.me, body: participant },
   { method: "PATCH", path: API_PATHS.me, body: participant },
 

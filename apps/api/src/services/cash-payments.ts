@@ -58,7 +58,7 @@ import type {
 import { isSweepstakesError, type DomainActor } from "@lsw/sweepstakes";
 
 import type { AppDependencies } from "../app.js";
-import { ApiError } from "../http/errors.js";
+import { ApiError, ApiErrors } from "../http/errors.js";
 import { freezeOpenCart } from "./cart-freeze.js";
 import { toCommerceOrder, type DomainServices } from "./domain-services.js";
 import { entryStateForOrder, type OrderEntryFacts } from "./order-presenter.js";
@@ -86,12 +86,16 @@ export function isCashOrder(order: Pick<OrderRecord, "provider">): boolean {
  * `PICKUP`: se lo entregan en el mismo punto de venta donde paga. Sin envio y
  * sin direccion (no hay a donde mandarlo). `DELIVERY`: pide que se lo envien,
  * con su direccion, y paga el envio como con tarjeta.
+ *
+ * DEC-092: un carrito solo de paquetes va como `DELIVERY` SIN direccion: no hay
+ * nada que enviar ni que recoger. Con mercancia, `DELIVERY` sin direccion es
+ * 422 (lo comprueba `placeOrder` con el carrito congelado).
  */
 export type CashFulfillment =
   | { readonly method: "PICKUP" }
   | {
       readonly method: "DELIVERY";
-      readonly shippingAddress: Readonly<Record<string, string | null>>;
+      readonly shippingAddress: Readonly<Record<string, string | null>> | null;
     };
 
 export interface CashCheckout {
@@ -115,6 +119,16 @@ export function createCashCheckout(
       const orders = domain.repositories.orders;
       const cart = await freezeOpenCart(dependencies.repositories, owner, fulfillment.method);
 
+      // DEC-092: la direccion solo hace falta si hay mercancia que enviar.
+      const shipsMerchandise = cart.items.some((item) => item.productKind === "MERCHANDISE");
+      if (
+        fulfillment.method === "DELIVERY" &&
+        fulfillment.shippingAddress === null &&
+        shipsMerchandise
+      ) {
+        throw ApiErrors.validationFailed([{ path: "shipping_address", code: "required" }]);
+      }
+
       const orderId = domain.ids.next();
       const now = domain.clock.now();
 
@@ -135,7 +149,9 @@ export function createCashCheckout(
           taxTotalMinor: null,
           totalMinor: cart.totalMinor,
           shippingAddress:
-            fulfillment.method === "DELIVERY" ? { ...fulfillment.shippingAddress } : null,
+            fulfillment.method === "DELIVERY" && fulfillment.shippingAddress !== null
+              ? { ...fulfillment.shippingAddress }
+              : null,
           fulfillmentMethod: cart.fulfillmentMethod,
           items: cart.items,
           createdAt: now,

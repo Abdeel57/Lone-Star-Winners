@@ -136,6 +136,7 @@ export default async function AccountOrderPage({
             address={order.shipping_address}
             fulfillmentMethod={order.fulfillment_method}
             paymentMethod={order.payment_method}
+            hasMerchandise={order.items.some((line) => line.product_kind !== "ENTRY_PACKAGE")}
           />
         </div>
 

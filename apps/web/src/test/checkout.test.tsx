@@ -57,13 +57,20 @@ import esMessages from "../../messages/es-US.json";
  * 1. Que el formulario NO recoja ni un dato de pago. En `hosted_redirect` la
  *    tarjeta se teclea en el dominio del proveedor, y un campo de tarjeta que
  *    apareciera aqui seria un cambio de arquitectura disfrazado de mejora.
- * 2. Que la direccion NO lleve ninguna regla de jurisdiccion: ni lista de
- *    estados, ni pais por defecto, ni patron de codigo postal. La elegibilidad
- *    territorial la fijan las Official Rules y sigue en TBD.
+ * 2. Que la direccion NO lleve ninguna regla de elegibilidad: ni lista de
+ *    estados ni patron de codigo postal. La elegibilidad territorial la fijan
+ *    las Official Rules y sigue en TBD. (DEC-092: el pais no se pregunta porque
+ *    la tienda solo envia dentro de Estados Unidos; es una regla de envio.)
  * 3. Que los cuatro estados de la sesion de pago y las dos modalidades del
  *    adaptador tengan texto en LOS DOS idiomas. Un estado sin texto deja en
  *    blanco justo la pantalla a la que se llega despues de pagar.
  */
+
+/** Un carrito con mercancia y tarifa de envio: con tarjeta, lo marcado es el envio. */
+const SHIPS = {
+  pickupTotal: "$25.00",
+  delivery: { shipping: "$7.99", total: "$32.99" },
+} as const;
 
 function renderIn(locale: Locale, ui: ReactNode) {
   return render(
@@ -108,27 +115,83 @@ describe("formulario de checkout", () => {
      * escrita por el frontend (CLAUDE.md #2 y #14). Cuando el backend publique
      * la lista, el desplegable se pinta con SUS valores.
      */
-    const { container } = renderIn("en", <CheckoutForm locale="en" cashDelivery={null} />);
+    const { container } = renderIn("en", <CheckoutForm locale="en" cashDelivery={SHIPS} />);
 
     expect(container.querySelector('select[name="region"]')).toBeNull();
     expect(container.querySelector('input[name="region"]')).not.toBeNull();
-    expect(container.querySelector('select[name="country"]')).toBeNull();
   });
 
-  it("el pais no trae ningun valor por defecto", () => {
-    const { container } = renderIn("en", <CheckoutForm locale="en" cashDelivery={null} />);
-    const country = container.querySelector('input[name="country"]');
+  it("no pregunta el pais: la tienda solo envia dentro de Estados Unidos (DEC-092)", () => {
+    const { container } = renderIn("es", <CheckoutForm locale="es" cashDelivery={SHIPS} />);
 
-    expect(country).not.toBeNull();
-    expect(country?.getAttribute("value") ?? "").toBe("");
+    expect(container.querySelector('[name="country"]')).toBeNull();
+    expect(screen.getByText(esMessages.checkout.shipsToUsOnly)).toBeInTheDocument();
   });
 
   it("el codigo postal no impone ningun formato", () => {
-    const { container } = renderIn("en", <CheckoutForm locale="en" cashDelivery={null} />);
+    const { container } = renderIn("en", <CheckoutForm locale="en" cashDelivery={SHIPS} />);
     const postal = container.querySelector('input[name="postal_code"]');
 
     expect(postal?.hasAttribute("pattern")).toBe(false);
     expect(postal?.hasAttribute("maxlength")).toBe(false);
+  });
+
+  it("rellena la direccion con lo que la cuenta ya sabe, y se puede corregir (DEC-092)", () => {
+    const { container } = renderIn(
+      "es",
+      <CheckoutForm
+        locale="es"
+        cashDelivery={SHIPS}
+        addressDefaults={{
+          source: "ACCOUNT",
+          full_name: "Ada Lovelace",
+          line1: null,
+          line2: null,
+          city: null,
+          region: "TX",
+          postal_code: null,
+        }}
+      />,
+    );
+
+    const value = (name: string): string =>
+      container.querySelector<HTMLInputElement>(`input[name="${name}"]`)?.value ?? "missing";
+    expect(value("full_name")).toBe("Ada Lovelace");
+    expect(value("region")).toBe("TX");
+    expect(value("line1")).toBe("");
+    expect(container.querySelector('input[name="full_name"]')?.hasAttribute("readonly")).toBe(
+      false,
+    );
+    expect(screen.getByText(esMessages.checkout.prefilledFromAccount)).toBeInTheDocument();
+  });
+
+  it("con la direccion del ultimo pedido, lo dice", () => {
+    renderIn(
+      "es",
+      <CheckoutForm
+        locale="es"
+        cashDelivery={SHIPS}
+        addressDefaults={{
+          source: "LAST_ORDER",
+          full_name: "Ada Lovelace",
+          line1: "1 Fixture St",
+          line2: null,
+          city: "Austin",
+          region: "TX",
+          postal_code: "73301",
+        }}
+      />,
+    );
+    expect(screen.getByText(esMessages.checkout.prefilledFromLastOrder)).toBeInTheDocument();
+  });
+
+  it("solo paquetes: no pide direccion y avisa que no hace falta (DEC-092)", () => {
+    const { container } = renderIn("es", <CheckoutForm locale="es" cashDelivery={null} />);
+
+    expect(container.querySelector('input[name="line1"]')).toBeNull();
+    expect(container.querySelector('input[name="full_name"]')).toBeNull();
+    expect(container.querySelector<HTMLInputElement>('input[name="ships"]')?.value).toBe("false");
+    expect(screen.getByText(esMessages.checkout.noAddressNeeded)).toBeInTheDocument();
   });
 
   it.each(LOCALES)("dice quien cobra, en %s", (locale) => {

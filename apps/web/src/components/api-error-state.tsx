@@ -124,8 +124,6 @@ const TRANSLATED_CODES = [
   "CATALOG_CONFLICT",
   "LIFECYCLE_REFUSED",
   "PRICE_INVALID",
-  // Pais de la direccion de envio que no corresponde a ninguno (`country-code.ts`).
-  "COUNTRY_INVALID",
   "DATETIME_INVALID",
   "TIMEZONE_INVALID",
   "CONFIRMATION_REQUIRED",
@@ -284,8 +282,6 @@ export function useApiErrorMessage(): (code: string | null) => string {
         return t("LIFECYCLE_REFUSED");
       case "PRICE_INVALID":
         return t("PRICE_INVALID");
-      case "COUNTRY_INVALID":
-        return t("COUNTRY_INVALID");
       case "DATETIME_INVALID":
         return t("DATETIME_INVALID");
       case "TIMEZONE_INVALID":

@@ -186,6 +186,7 @@ export default async function AdminOrderDetailPage({
             address={result.data.shipping_address}
             fulfillmentMethod={result.data.fulfillment_method}
             paymentMethod={result.data.payment_method}
+            hasMerchandise={result.data.items.some((line) => line.product_kind !== "ENTRY_PACKAGE")}
           />
 
           {/*

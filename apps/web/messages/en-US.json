@@ -164,7 +164,6 @@
     "CATALOG_CONFLICT": "A product or promotion with that SKU or address already exists.",
     "LIFECYCLE_REFUSED": "The system does not allow that status change yet.",
     "PRICE_INVALID": "The price is not in a valid format for that currency.",
-    "COUNTRY_INVALID": "We don't recognize that country. Type its name or its two-letter code, for example US.",
     "DATETIME_INVALID": "That date and time do not exist in the legal time zone.",
     "TIMEZONE_INVALID": "That time zone is not valid.",
     "CONFIRMATION_REQUIRED": "Tick the confirmation box to continue.",
@@ -1035,8 +1034,12 @@
     "emptyTitle": "There is nothing to check out",
     "emptyBody": "Add eligible merchandise to your cart first.",
     "addressHeading": "Where it goes",
+    "prefilledFromLastOrder": "We filled it in with the address from your last order. Check it before paying.",
+    "prefilledFromAccount": "We added your name and the state you gave when you signed up. Complete the address.",
+    "noAddressNeeded": "Entry packages aren't shipped, so we don't ask for an address: we use your account details.",
+    "shipsToUsOnly": "We only ship within the United States.",
     "reviewHeading": "What you are ordering",
-    "pickupNote": "If you pay in cash and pick it up at the store location, no shipping is charged.",
+    "pickupNote": "If you pick it up at the store location, no shipping is charged.",
     "entriesHeading": "Promotional entries quoted for this order",
     "entriesNote": "This figure is calculated by our systems from your cart. It is informational until the order reaches the status the Official Rules define as qualifying.",
     "payCta": "Continue to payment",
@@ -1049,9 +1052,7 @@
       "line2Hint": "Optional.",
       "city": "City",
       "region": "State or region",
-      "postalCode": "Postal code",
-      "country": "Country",
-      "countryHint": "The name or the two-letter code. For example: United States or US."
+      "postalCode": "Postal code"
     },
     "return": {
       "title": "Back from the payment provider",

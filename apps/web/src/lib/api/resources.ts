@@ -173,6 +173,8 @@ export const API_PATHS = {
   privacyRequests: "/privacy-requests",
   /** [CONTRATO] Declaracion de elegibilidad del participante (DEC-067). */
   meEligibility: "/me/eligibility",
+  /** DEC-092: con que se rellena la direccion del checkout. */
+  meCheckoutDefaults: "/me/checkout-defaults",
   /** [PROVISIONAL] Perfil del participante. No esta en el contrato. */
   me: "/me",
 
@@ -890,6 +892,31 @@ export function fetchMyEligibility(
 }
 
 /**
+ * DEC-092: la direccion con que se rellena el checkout. `LAST_ORDER` es la de
+ * su ultimo pedido; `ACCOUNT`, el nombre y el estado del alta. Cualquier campo
+ * puede faltar, y todo se puede corregir: el pedido se congela con lo enviado.
+ */
+export interface CheckoutDefaults {
+  readonly source: "LAST_ORDER" | "ACCOUNT";
+  readonly full_name: string | null;
+  readonly line1: string | null;
+  readonly line2: string | null;
+  readonly city: string | null;
+  readonly region: string | null;
+  readonly postal_code: string | null;
+}
+
+export function fetchCheckoutDefaults(
+  locale: Locale,
+  session: SessionContext,
+): Promise<ApiResult<CheckoutDefaults>> {
+  return apiGet<CheckoutDefaults>(API_PATHS.meCheckoutDefaults, {
+    locale,
+    ...sessionOptions(session),
+  });
+}
+
+/**
  * DEC-067 y DEC-089: declarar lo que falte. Una cuenta anterior declara fecha y
  * estado con los consentimientos del alta; una cuenta sin contrasena, solo la
  * fecha. No se reescribe: 409 `ELIGIBILITY_ALREADY_DECLARED`.
@@ -1158,11 +1185,12 @@ export function createCheckoutSession(
   /**
    * DEC-091: con tarjeta tambien se recoge en el punto de venta: `PICKUP` va
    * sin direccion y sin envio. Sin `fulfillment_method`, envio, como siempre.
+   * DEC-092: un carrito solo de paquetes va sin direccion.
    */
   input:
     | {
         readonly fulfillment_method?: "DELIVERY";
-        readonly shipping_address: PostalAddress;
+        readonly shipping_address?: PostalAddress;
         readonly return_url: string;
       }
     | { readonly fulfillment_method: "PICKUP"; readonly return_url: string },
@@ -1188,12 +1216,13 @@ export function createCheckoutSession(
  * envio), y se devuelve el mismo.
  *
  * DEC-079: `PICKUP` (lo recoge en el punto de venta) va sin direccion y sin
- * envio; `DELIVERY` lleva la direccion y el backend cobra el envio.
+ * envio; `DELIVERY` lleva la direccion y el backend cobra el envio. DEC-092:
+ * un carrito solo de paquetes va como `DELIVERY` sin direccion.
  */
 export function createCashOrder(
   input:
     | { readonly fulfillment_method: "PICKUP" }
-    | { readonly fulfillment_method: "DELIVERY"; readonly shipping_address: PostalAddress },
+    | { readonly fulfillment_method: "DELIVERY"; readonly shipping_address?: PostalAddress },
   locale: Locale,
   session: SessionContext,
 ): Promise<ApiResult<OrderSummary>> {
