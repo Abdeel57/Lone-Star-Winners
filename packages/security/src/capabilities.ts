@@ -320,17 +320,21 @@ export const CAPABILITIES = Object.freeze({
    * cobro; sus participaciones se revierten con una fila nueva del ledger
    * (DEC-007), y deja de contar en el corte de caja.
    *
-   * CRITICA Y CON STEP-UP, AL CONTRARIO QUE CANCELAR
+   * CRITICA Y CON MOTIVO, PERO SIN STEP-UP (DEC-093)
    *   Retira participaciones del universo del sorteo y, con tarjeta, devuelve
-   *   dinero. No es trabajo de mostrador ni de volumen: es una correccion rara,
-   *   y una ventana de MFA reciente cuesta poco frente a lo que deshace.
+   *   dinero: por eso sigue siendo CRITICAL, auditada y con motivo obligatorio.
+   *   DEC-091 le exigio ademas un segundo factor reciente; DEC-093 lo retira a
+   *   peticion del cliente, que no encontraba donde escribir el codigo y dejaba
+   *   la anulacion a medias. Una sesion abierta del panel con el rol basta. Es
+   *   una excepcion deliberada en la lista cerrada de
+   *   `tests/security/.../authorization-matrix.test.ts`, como `order.cash.confirm`.
    */
   "order.void": define(
     "order.void",
     "order",
     "CRITICAL",
     "Anular un pedido ya cobrado (duplicado o error): con tarjeta devuelve lo que quede del cobro, revierte sus participaciones y lo saca del corte de caja. El pedido no se borra.",
-    { requiresStepUp: true, requiresReason: true },
+    { requiresReason: true },
   ),
   /**
    * Marcar un pedido como enviado o devolverlo a pendiente de envio (DEC-085).

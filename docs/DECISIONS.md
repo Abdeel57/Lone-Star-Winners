@@ -4685,3 +4685,42 @@ fichas del pedido, cliente de la API, mensajes, mocks, pruebas; se retira
 Proposed by: sesión del usuario (2026-10-22, petición del cliente)
 Agreed by: backend, frontend-ux, security (petición directa del usuario);
 pendiente: abogado (pregunta 31 de `docs/LEGAL_PENDING.md`)
+
+## DEC-093
+
+Status: Accepted
+
+Date: 2026-10-23
+
+Decision:
+**Anular un pedido cobrado deja de exigir el segundo factor reciente
+(step-up).** El cliente no encontraba dónde escribir el código y la anulación
+se quedaba a medias. `order.void` sigue siendo CRITICAL, con motivo
+obligatorio, casilla de confirmación, fila inmutable en `order_voids`,
+`AuditEvent` `order.voided` y el permiso limitado a PROMOTION_MANAGER y
+COMPLIANCE_OFFICER; lo único que se retira es la ventana de MFA de cinco
+minutos (DEC-006) antes de la acción. Lo decidió el usuario el 2026-10-23
+aceptando lo que implica: con la sesión del panel abierta (doce horas,
+DEC-087) y el rol, basta para anular. `order.void` entra en la lista cerrada
+de excepciones de `authorization-matrix.test.ts`, junto a `order.cash.confirm`.
+La migración `0042` corrige la fila del catálogo (`requires_step_up = false`)
+y el manifiesto OpenAPI se regenera. El panel deja de avisar del código en la
+tarjeta de anular. Las demás acciones con step-up no cambian; el aviso guiado
+de "Confirmar código" (commit 09fed1e, mismo día) sigue sirviendo para ellas.
+
+Alternatives considered: A — Mantener el step-up y solo guiar mejor hacia el
+código (hecho en 09fed1e; no bastó: el cliente seguía sin encontrar dónde
+ponerlo y lo encontraba tedioso). B — Alargar `STEP_UP_MAX_AGE_SECONDS`
+(descartada: el tope es de 300 s por `STEP_UP_MAX_AGE_SECONDS_LIMIT`, y
+alargarlo relajaría todas las acciones críticas, no solo esta). C — Un
+interruptor por entorno solo para esta capacidad (descartada: configuración
+para una decisión ya tomada; DEC-078 sentó el precedente de no añadir
+interruptores).
+
+Affected areas: `packages/security` (`capabilities.ts`), `tests/security`
+(`authorization-matrix.test.ts`), `packages/database` (`0042`,
+`parity.test.ts`), `apps/api` (OpenAPI regenerado), `apps/web`
+(`components/admin/order-void-panel.tsx`, mensajes), `docs/API_CONTRACT.md`.
+
+Proposed by: sesión del usuario (2026-10-23, petición del cliente)
+Agreed by: backend, frontend-ux, security (petición directa del usuario)

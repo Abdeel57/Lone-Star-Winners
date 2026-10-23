@@ -244,8 +244,8 @@ export default async function AdminOrderDetailPage({
 
           {/*
            * DEC-091: anular lo que SI se cobro (duplicado o error). La ruta lo
-           * vuelve a comprobar todo y pide step-up; aqui solo no se ofrece
-           * donde no procede.
+           * vuelve a comprobar todo y exige motivo (sin step-up desde DEC-093);
+           * aqui solo no se ofrece donde no procede.
            */}
           {voidable && can(screen.actor, "order.void") ? (
             <OrderVoidPanel order={result.data} locale={locale} />

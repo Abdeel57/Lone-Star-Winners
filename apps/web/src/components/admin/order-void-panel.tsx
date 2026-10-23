@@ -20,8 +20,8 @@ const VOID_SECTION_ID = "void-order";
  * Es la otra mitad de `OrderCancelPanel`: aquel limpia lo que nunca se cobro,
  * este corrige lo que se cobro de mas -un duplicado, un error-. Se ofrece con el
  * pedido cobrado; el control es la ruta, que lo vuelve a comprobar todo con el
- * pedido bloqueado, exige motivo y step-up y, con tarjeta, devuelve en la
- * pasarela antes de anular.
+ * pedido bloqueado, exige motivo (sin step-up desde DEC-093) y, con tarjeta,
+ * devuelve en la pasarela antes de anular.
  *
  * Pasa por `SensitiveConfirmForm` -antes/despues, motivo y casilla- porque
  * retira participaciones y, con tarjeta, devuelve dinero: no se deshace.
@@ -42,9 +42,9 @@ export async function OrderVoidPanel({
 
   return (
     /*
-     * `id` estable: si la ruta pide el codigo (step-up), la vuelta desde
-     * "Confirmar codigo" aterriza aqui, en la anulacion, y no en lo alto de la
-     * ficha con la tabla y el motivo fuera de la vista.
+     * `id` estable: si la ruta pidiera el codigo (step-up, retirado para esta
+     * capacidad en DEC-093), la vuelta desde "Confirmar codigo" aterriza aqui,
+     * en la anulacion, y no en lo alto de la ficha.
      */
     <Card id={VOID_SECTION_ID} elevation="flat" padding="lg">
       <CardTitle as="h2" size="sm">
@@ -53,7 +53,6 @@ export async function OrderVoidPanel({
       <p className="mt-s2 text-body-sm text-text-muted">
         {isCash ? t("introCash") : t("introCard")}
       </p>
-      <p className="mt-s2 text-caption text-text-subtle">{t("stepUpNote")}</p>
 
       <div className="mt-s4">
         <SensitiveConfirmForm

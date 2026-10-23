@@ -1520,7 +1520,6 @@
       "title": "Anular este pedido",
       "introCash": "Para un pago en efectivo duplicado o por error. Quita sus participaciones y lo saca del corte de caja. Queda registrado quién lo anuló y por qué.",
       "introCard": "Para un cobro con tarjeta duplicado o por error. Devuelve al cliente en Stripe lo que quede del cobro, quita sus participaciones y lo saca del corte de caja. Queda registrado quién lo anuló y por qué.",
-      "stepUpNote": "Ten a mano tu aplicación de autenticación: puede pedirte el código de seis dígitos.",
       "impactStatus": "Estado del pedido",
       "impactVoid": "se anula",
       "impactMoney": "Dinero",

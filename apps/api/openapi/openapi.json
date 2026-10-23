@@ -14376,7 +14376,7 @@
         "x-lsw-authorization": {
           "kind": "PERMISSION",
           "permission": "order.void",
-          "requires_step_up": true
+          "requires_step_up": false
         }
       }
     },

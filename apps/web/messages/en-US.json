@@ -1520,7 +1520,6 @@
       "title": "Void this order",
       "introCash": "For a duplicate or mistaken cash payment. Removes its entries and takes it out of the cash report. Who voided it and why is kept on record.",
       "introCard": "For a duplicate or mistaken card charge. Refunds the customer in Stripe whatever is left of the charge, removes its entries and takes it out of the cash report. Who voided it and why is kept on record.",
-      "stepUpNote": "Keep your authenticator app handy: you may be asked for the six-digit code.",
       "impactStatus": "Order status",
       "impactVoid": "voided",
       "impactMoney": "Money",

@@ -95,8 +95,13 @@ describe("coherencia del catalogo", () => {
     //   que la cola AMOE; lo que no se relaja es la traza -quien, cuando y por
     //   que, en una fila inmutable y en audit_events- ni la unicidad del cobro,
     //   que impone la base de datos.
+    // order.void (DEC-093) tuvo step-up desde DEC-091 y se le retiro a
+    //   peticion del cliente, que no encontraba donde escribir el codigo. Sigue
+    //   con motivo obligatorio, casilla de confirmacion, fila inmutable en
+    //   order_voids y audit_events; lo unico que se relaja es la ventana de MFA.
     expect(weak).toStrictEqual([
       "order.cash.confirm",
+      "order.void",
       "entry.reversal.create",
       "amoe.review.approve",
       "amoe.review.reject",

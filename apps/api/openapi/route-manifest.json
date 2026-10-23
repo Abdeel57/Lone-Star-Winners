@@ -367,7 +367,7 @@
       "path": "/api/v1/admin/orders/:order_id/void",
       "operation_id": "voidAdminOrder",
       "authorization": "order.void",
-      "requires_step_up": true,
+      "requires_step_up": false,
       "tags": ["admin"],
       "summary": "Anular un pedido ya cobrado (duplicado o error)."
     },

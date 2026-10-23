@@ -3161,7 +3161,7 @@ Cancelar uno ya cancelado responde la ficha sin hacer nada.
 
 ### POST /api/v1/admin/orders/:order_id/void
 
-    Authorization: order.void (CRITICAL, motivo obligatorio y step-up)
+    Authorization: order.void (CRITICAL, motivo obligatorio; sin step-up desde DEC-093)
 
 DEC-091. Cuerpo: `{ "reason_code": "DUPLICATE_ORDER", "notes": "..." }`.
 
@@ -3184,8 +3184,8 @@ efectivo o con tarjeta- que sobra: un duplicado o un error. No se borra nada:
 
 Anular uno ya anulado responde la ficha sin hacer nada.
 
-200 `OrderDetail` · 401 · 403 (sin la capacidad, sin motivo o
-`STEP_UP_REQUIRED`) · 404 · 409 ORDER_NOT_VOIDABLE (`details.status`: sin cobrar
+200 `OrderDetail` · 401 · 403 (sin la capacidad o sin motivo; DEC-093 retiró el
+step-up) · 404 · 409 ORDER_NOT_VOIDABLE (`details.status`: sin cobrar
 -eso se cancela-, cancelado o con una disputa abierta o perdida) ·
 409 ORDER_HAS_NO_PAYMENT (con tarjeta y sin identificador de pago) ·
 409 ORDER_PROVIDER_MISMATCH · 422 · 503 PAYMENT_PROVIDER_UNAVAILABLE /
