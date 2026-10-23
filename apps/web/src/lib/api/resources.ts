@@ -15,6 +15,7 @@ import type {
   AdminDashboard,
   AdminDrawAuthorizationPage,
   AdminExportSnapshotPage,
+  AdminOrderContact,
   AdminOrderPage,
   AdminOrderVoid,
   AdminParticipantPage,
@@ -1825,6 +1826,21 @@ export function fetchAdminOrderVoid(
   session: SessionContext,
 ): Promise<ApiResult<AdminOrderVoid>> {
   return apiGet<AdminOrderVoid>(`${adminOrderPath(orderId)}/void`, {
+    locale,
+    ...sessionOptions(session),
+  });
+}
+
+/**
+ * DEC-094: contacto del cliente de un pedido, sin enmascarar. Solo se llama
+ * cuando el actor tiene `order.contact.read`: lo que no se puede ver no se pide.
+ */
+export function fetchAdminOrderContact(
+  orderId: string,
+  locale: Locale,
+  session: SessionContext,
+): Promise<ApiResult<AdminOrderContact>> {
+  return apiGet<AdminOrderContact>(`${adminOrderPath(orderId)}/contact`, {
     locale,
     ...sessionOptions(session),
   });

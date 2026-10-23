@@ -15,6 +15,7 @@ import type {
   AdminExportSnapshot,
   AdminExportSnapshotPage,
   AdminFeatureFlagsResponse,
+  AdminOrderContact,
   AdminOrderPage,
   AdminOrderRow,
   AdminParticipantPage,
@@ -117,6 +118,7 @@ export const promotionManagerSession: SessionState = {
     "order.cancel",
     "order.fulfillment.update",
     "order.void",
+    "order.contact.read",
     "entry.ledger.read",
     "entry.adjust.create",
     "amoe.review.read",
@@ -160,6 +162,7 @@ export const complianceOfficerSession: SessionState = {
     "order.cancel",
     "order.fulfillment.update",
     "order.void",
+    "order.contact.read",
     "payment.webhook.read",
     "entry.ledger.read",
     "entry.adjust.approve",
@@ -1000,6 +1003,22 @@ export const adminOrders: readonly AdminOrderRow[] = [
 ];
 
 export const adminOrderPage: AdminOrderPage = { items: adminOrders, next_cursor: null };
+
+/**
+ * DEC-094: el contacto del cliente de un pedido, SIN enmascarar. La ficha solo
+ * lo pide cuando el actor tiene `order.contact.read`. Cliente en espanol a
+ * proposito: el mensaje de WhatsApp se redacta en SU idioma, no en el del panel.
+ */
+export const adminOrderContact: AdminOrderContact = {
+  order_id: "ord_0000000000000001",
+  order_number: "LSW-10524",
+  participant_id: participant.id,
+  display_name: "Ada Lovelace",
+  email: "ada.lovelace@example.test",
+  phone: "+15055550123",
+  preferred_locale: "es-US",
+  pii_masked: false,
+};
 
 /**
  * DEC-078: el cobro en efectivo del pedido de arriba, todavia PENDIENTE.

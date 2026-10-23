@@ -52,6 +52,7 @@ import {
   adminDrawAuthorizationPage,
   adminExportSnapshotPage,
   adminFeatureFlags,
+  adminOrderContact,
   adminOrderPage,
   adminParticipantPage,
   adminProductCategories,
@@ -517,6 +518,12 @@ export const mockRoutes: readonly MockRoute[] = [
     method: "GET",
     path: adminOrderPath(order.id),
     body: order,
+  })),
+  // DEC-094: el contacto del cliente, sin enmascarar, detras de su capacidad.
+  ...orderDetails.map((order): MockRoute => ({
+    method: "GET",
+    path: `${adminOrderPath(order.id)}/contact`,
+    body: { ...adminOrderContact, order_id: order.id, order_number: order.order_number },
   })),
   /*
    * DEC-078: el cobro en efectivo del pedido en efectivo de los fixtures. La

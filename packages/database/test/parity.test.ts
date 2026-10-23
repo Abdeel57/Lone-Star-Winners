@@ -109,6 +109,8 @@ const orderCancelSql = readMigration("0038_order_cancel_and_fulfillment.sql");
 const orderVoidSql = readMigration("0041_card_pickup_and_order_void.sql");
 // DEC-093: `order.void` deja de exigir step-up. Solo corrige la fila sembrada.
 const orderVoidNoStepUpSql = readMigration("0042_order_void_without_step_up.sql");
+// DEC-094: `order.contact.read`, el contacto del cliente de un pedido.
+const orderContactSql = readMigration("0043_order_contact_read.sql");
 
 const RBAC_SEED_MIGRATIONS = [
   rbacSql,
@@ -117,6 +119,7 @@ const RBAC_SEED_MIGRATIONS = [
   cashPaymentsSql,
   orderCancelSql,
   orderVoidSql,
+  orderContactSql,
 ] as const;
 
 /** Las de arriba mas las que solo CORRIGEN filas ya sembradas. */
@@ -129,6 +132,7 @@ const RBAC_CATALOG_MIGRATIONS = [
   orderCancelSql,
   orderVoidSql,
   orderVoidNoStepUpSql,
+  orderContactSql,
 ] as const;
 
 function parseSeedRowsAcross(table: string): string[][] {

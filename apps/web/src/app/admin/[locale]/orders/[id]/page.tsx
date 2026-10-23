@@ -8,6 +8,7 @@ import { openAdminScreen } from "@/components/admin/admin-screen";
 import { AdminSectionError } from "@/components/admin/admin-section-error";
 import { CashPaymentPanel } from "@/components/admin/cash-payment-panel";
 import { OrderCancelPanel } from "@/components/admin/order-cancel-panel";
+import { OrderContactCard } from "@/components/admin/order-contact-card";
 import { OrderFulfillmentForm } from "@/components/admin/order-fulfillment-form";
 import { OrderVoidedNotice, OrderVoidPanel } from "@/components/admin/order-void-panel";
 import { EntryCalculationTrace } from "@/components/entry-calculation-trace";
@@ -19,7 +20,13 @@ import { isLocale } from "@/i18n/locales";
 import { setOrderFulfillmentAction } from "@/lib/admin/actions";
 import { can } from "@/lib/admin/capabilities";
 import { DAILY_CUT_TIME_ZONE } from "@/lib/admin/daily-cut";
-import { fetchAdminOrder, fetchAdminOrderCashPayment, fetchAdminOrderVoid } from "@/lib/api";
+import {
+  fetchAdminOrder,
+  fetchAdminOrderCashPayment,
+  fetchAdminOrderContact,
+  fetchAdminOrderVoid,
+  fetchAdminPromotion,
+} from "@/lib/api";
 
 export const dynamic = "force-dynamic";
 
@@ -78,6 +85,21 @@ export default async function AdminOrderDetailPage({
    */
   const voided = result.ok && result.data.status === "VOIDED";
   const voidRecord = voided ? await fetchAdminOrderVoid(id, locale, screen.session) : null;
+
+  /*
+   * DEC-094: el contacto del cliente, SIN enmascarar, solo si el actor puede
+   * verlo: lo que no se puede ver no se pide. La promocion se lee para nombrar
+   * el sorteo en el mensaje de WhatsApp; si no se puede leer, el mensaje sale
+   * igual, sin nombre.
+   */
+  const canContact = result.ok && can(screen.actor, "order.contact.read");
+  const contact = canContact ? await fetchAdminOrderContact(id, locale, screen.session) : null;
+  const promotionId = result.ok ? result.data.promotion_id : null;
+  const promotion =
+    canContact && promotionId !== null && can(screen.actor, "promotion.read")
+      ? await fetchAdminPromotion(promotionId, locale, screen.session)
+      : null;
+  const promotionName = promotion?.ok === true ? promotion.data.public_name : null;
   // Se anula lo cobrado; lo que nunca se cobro se cancela (abajo).
   const voidable =
     result.ok && ["PAID", "FULFILLED", "PARTIALLY_REFUNDED"].includes(result.data.status);
@@ -149,6 +171,17 @@ export default async function AdminOrderDetailPage({
               </div>
             </dl>
           </Card>
+
+          {contact === null ? null : contact.ok ? (
+            <OrderContactCard
+              contact={contact.data}
+              order={result.data}
+              promotionName={promotionName}
+              locale={locale}
+            />
+          ) : (
+            <AdminSectionError failure={contact.error} headingLevel="h2" />
+          )}
 
           {voidRecord === null ? null : voidRecord.ok ? (
             <OrderVoidedNotice record={voidRecord.data} locale={locale} />

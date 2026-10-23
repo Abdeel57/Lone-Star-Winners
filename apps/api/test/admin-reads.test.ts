@@ -71,6 +71,19 @@ vi.mock("../src/http/require-staff.js", () => ({
     }
     return Promise.resolve(shared.staff);
   },
+  // DEC-094: la ruta del contacto necesita `adminUserId` para el AuditEvent.
+  // El literal es ADMIN_ID; la constante no existe todavia cuando se eleva el mock.
+  requireStaffContext: () => {
+    if (shared.staff === null) {
+      throw new Error("El test no ha declarado principal de personal.");
+    }
+    return Promise.resolve({
+      principal: shared.staff,
+      roles: [],
+      secondsSinceLastMfa: 0,
+      adminUserId: "44444444-4444-4444-8444-444444444444",
+    });
+  },
 }));
 
 // ---------------------------------------------------------------------------
@@ -171,9 +184,11 @@ interface ReadsOverrides {
 function buildDoubles(overrides: ReadsOverrides = {}): {
   orders: readonly Record<string, unknown>[];
   entryTotalsCalls: number;
+  /** DEC-094: lo que las rutas registraron en la auditoria. */
+  audited: Record<string, unknown>[];
 } {
   const orders = overrides.orders ?? [orderFixture()];
-  const state = { entryTotalsCalls: 0 };
+  const state = { entryTotalsCalls: 0, audited: [] as Record<string, unknown>[] };
 
   shared.reads = {
     dashboardCounts: () =>
@@ -201,6 +216,19 @@ function buildDoubles(overrides: ReadsOverrides = {}): {
           })),
       ),
     participantEmailForOrder: () => Promise.resolve("ada.lovelace@example.test"),
+    // DEC-094: el contacto crudo, solo si el pedido existe.
+    participantContactForOrder: (orderId: string) =>
+      Promise.resolve(
+        orders.some((row) => row.id === orderId)
+          ? {
+              participantId: PARTICIPANT_ID,
+              displayName: "Ada",
+              email: "ada.lovelace@example.test",
+              phoneE164: "+15550101234",
+              preferredLocale: "en-US",
+            }
+          : null,
+      ),
     listParticipants: (options: { limit: number }) =>
       Promise.resolve((overrides.participants ?? [participantFixture()]).slice(0, options.limit)),
     findParticipant: (id: string) => {
@@ -213,6 +241,13 @@ function buildDoubles(overrides: ReadsOverrides = {}): {
 
   shared.domain = {
     clock: { now: () => NOW },
+    // DEC-094: la ruta del contacto deja rastro; aqui se recoge lo que emite.
+    audit: {
+      emit: (event: Record<string, unknown>) => {
+        state.audited.push(event);
+        return Promise.resolve();
+      },
+    },
     repositories: {
       orders: {
         findById: (id: string) => Promise.resolve(orders.find((row) => row.id === id) ?? null),
@@ -227,7 +262,7 @@ function buildDoubles(overrides: ReadsOverrides = {}): {
     },
   };
 
-  return { orders, entryTotalsCalls: state.entryTotalsCalls };
+  return { orders, entryTotalsCalls: state.entryTotalsCalls, audited: state.audited };
 }
 
 function auditFixture(overrides: Record<string, unknown> = {}): Record<string, unknown> {
@@ -528,6 +563,78 @@ describe("GET /admin/participants/:participant_id/pii", () => {
     const response = await app.inject({
       method: "GET",
       url: `/api/v1/admin/participants/${PARTICIPANT_ID}/pii`,
+    });
+
+    expect(response.statusCode).toBe(401);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 3b. Contacto del cliente de un pedido (DEC-094)
+// ---------------------------------------------------------------------------
+
+describe("GET /admin/orders/:order_id/contact", () => {
+  it("publica nombre, celular y correo SIN enmascarar, lo dice con pii_masked false y deja rastro", async () => {
+    const doubles = buildDoubles();
+    shared.staff = staffWith(["order.contact.read"]);
+
+    const app = await appAllowingPermissions();
+    const response = await app.inject({
+      method: "GET",
+      url: `/api/v1/admin/orders/${ORDER_ID}/contact`,
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json<Record<string, unknown>>();
+
+    expect(body.order_id).toBe(ORDER_ID);
+    expect(body.participant_id).toBe(PARTICIPANT_ID);
+    expect(body.display_name).toBe("Ada");
+    expect(body.email).toBe("ada.lovelace@example.test");
+    expect(body.phone).toBe("+15550101234");
+    expect(body.preferred_locale).toBe("en-US");
+    expect(body.pii_masked).toBe(false);
+
+    // Es PII: cada lectura queda en la auditoria con el pedido como objetivo.
+    expect(doubles.audited).toHaveLength(1);
+    expect(doubles.audited[0]?.action).toBe("order.contact.viewed");
+    expect(doubles.audited[0]?.targetEntityType).toBe("Order");
+    expect(doubles.audited[0]?.targetEntityId).toBe(ORDER_ID);
+  });
+
+  it("la ficha del pedido sigue sin llevar el contacto: es otra ruta con otra capacidad", async () => {
+    buildDoubles();
+    shared.staff = staffWith(["order.read"]);
+
+    const app = await appAllowingPermissions();
+    const response = await app.inject({ method: "GET", url: `/api/v1/admin/orders/${ORDER_ID}` });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).not.toContain("ada.lovelace@example.test");
+    expect(response.body).not.toContain("+15550101234");
+  });
+
+  it("404 si el pedido no existe, y entonces no hay nada que auditar", async () => {
+    const doubles = buildDoubles();
+    shared.staff = staffWith(["order.contact.read"]);
+
+    const app = await appAllowingPermissions();
+    const response = await app.inject({
+      method: "GET",
+      url: `/api/v1/admin/orders/${OTHER_ORDER_ID}/contact`,
+    });
+
+    expect(response.statusCode).toBe(404);
+    expect(doubles.audited).toHaveLength(0);
+  });
+
+  it("sin sesion de personal responde 401 con el autorizador por defecto", async () => {
+    buildDoubles();
+    const app = await createApp(buildDependencies());
+
+    const response = await app.inject({
+      method: "GET",
+      url: `/api/v1/admin/orders/${ORDER_ID}/contact`,
     });
 
     expect(response.statusCode).toBe(401);

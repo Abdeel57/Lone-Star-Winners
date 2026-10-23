@@ -2117,8 +2117,10 @@ export type AdminCapability =
   | "order.cancel"
   /** DEC-085: marcar la mercancia como enviada, o devolverla a pendiente. */
   | "order.fulfillment.update"
-  /** DEC-091: anular un pedido ya cobrado (duplicado o error). Con step-up. */
+  /** DEC-091: anular un pedido ya cobrado (duplicado o error). DEC-093 le quito el step-up. */
   | "order.void"
+  /** DEC-094: nombre, celular y correo del cliente de un pedido, para entregar y avisar. */
+  | "order.contact.read"
   | "entry.ledger.read"
   | "entry.adjust.create"
   | "entry.adjust.approve"
@@ -2176,6 +2178,7 @@ export const ADMIN_CAPABILITIES: readonly AdminCapability[] = [
   "order.cancel",
   "order.fulfillment.update",
   "order.void",
+  "order.contact.read",
   "entry.ledger.read",
   "entry.adjust.create",
   "entry.adjust.approve",
@@ -2477,6 +2480,28 @@ export interface AdminOrderVoid {
   readonly voided_by_name: string | null;
   readonly reason_code: string;
   readonly notes: string | null;
+}
+
+/**
+ * [CONTRATO] Contacto del cliente de un pedido (DEC-094), SIN enmascarar.
+ *
+ * Solo lo pide la ficha cuando el actor tiene `order.contact.read`, y cada
+ * lectura queda en la auditoria. `OrderDetail` sigue sin llevar correo ni
+ * celular: lo que no se puede ver no se pide.
+ */
+export interface AdminOrderContact {
+  readonly order_id: string;
+  readonly order_number: string;
+  readonly participant_id: string;
+  readonly display_name: string | null;
+  /** Cadena vacia si la cuenta no tiene correo. */
+  readonly email: string;
+  /** E.164 (`+1505...`), o `null` si no hay ninguno. */
+  readonly phone: string | null;
+  /** Etiqueta BCP 47 del idioma del cliente (`es-US`, `en-US`). */
+  readonly preferred_locale: string;
+  /** Siempre `false`: el backend declara que esto NO esta enmascarado. */
+  readonly pii_masked: boolean;
 }
 
 /**

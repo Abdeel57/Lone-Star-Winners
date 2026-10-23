@@ -4724,3 +4724,64 @@ Affected areas: `packages/security` (`capabilities.ts`), `tests/security`
 
 Proposed by: sesión del usuario (2026-10-23, petición del cliente)
 Agreed by: backend, frontend-ux, security (petición directa del usuario)
+
+## DEC-094
+
+Status: Accepted
+
+Date: 2026-10-23
+
+Decision:
+**El panel muestra el celular y el correo del cliente de un pedido y ofrece
+escribirle por WhatsApp.** El caso que lo pidió: un repartidor llegó con la
+mercancía, el cliente no salió y la tienda no tenía cómo avisarle. Además el
+cliente quiere confirmarle a cada comprador, por WhatsApp, sus participaciones
+en la promoción.
+
+1. **Capacidad nueva `order.contact.read`** (SENSITIVE, `touchesPii`,
+   auditada; sin step-up ni motivo). Estrecha a propósito: el nombre, el
+   celular y el correo del cliente de UN pedido, en su propia ruta
+   `GET /admin/orders/:id/contact`, como `/participants/:id/pii` tiene la suya.
+   `OrderDetail` sigue sin llevar correo ni celular (viajan enmascarados;
+   `order.read` no es PII) y la ficha completa del participante sigue detrás de
+   `pii.view.full` (CRITICAL, con segundo factor y motivo). Cada lectura emite
+   `order.contact.viewed` con el pedido como objetivo. La tienen los tres roles
+   que despachan mercancía: SUPPORT, PROMOTION_MANAGER y COMPLIANCE_OFFICER.
+   Migración `0043`. `phone` es el celular de contacto del perfil o, si no hay,
+   el verificado con el que entra (DEC-089).
+2. **Tarjeta "Cliente" en la ficha del pedido**, solo si el actor tiene la
+   capacidad (lo que no se puede ver no se pide): nombre, celular y correo con
+   sus enlaces, y tres acciones: "Escribir por WhatsApp", "Llamar" y "Enviar
+   correo".
+3. **WhatsApp por enlace, no por API.** El botón abre `wa.me/<número>` con el
+   mensaje ya redactado y quien opera lo manda desde su propio WhatsApp. El
+   mensaje va en el idioma del CLIENTE (`preferred_locale`), no en el del
+   panel, y dice: pedido, participaciones vigentes y nombre del sorteo
+   ("Hola {nombre}, te escribimos de Lone Star Winners. Confirmamos tu pedido
+   {n}: {k} participaciones para el sorteo de {promoción}. ¡Mucha suerte!").
+   Sin participaciones todavía, solo nombra el pedido. No se envía nada desde
+   el sistema, no se guarda ninguna conversación y no hace falta cuenta de
+   WhatsApp Business ni plantillas aprobadas.
+
+Alternatives considered: A — Reutilizar `pii.view.full` (descartada: exige el
+segundo factor y el motivo que DEC-093 acaba de retirar de la anulación por
+tediosos, y sirve la ficha entera, no el contacto de un pedido). B — Meter el
+correo y el celular en `OrderDetail` (descartada: convertiría `order.read` en
+una capacidad de PII y el dato quedaría en el HTML de quien no debe verlo).
+C — Enviar el WhatsApp desde el sistema con la API de WhatsApp Business vía
+Twilio (descartada por ahora: exige un remitente de WhatsApp aprobado,
+plantillas aprobadas por Meta para mensajes iniciados por la empresa y
+consentimiento registrado por cliente; queda como evolución si el volumen lo
+pide). D — Un botón de SMS (descartada: el cliente pidió WhatsApp; `sms:` se
+puede añadir después).
+
+Affected areas: `packages/security` (`capabilities.ts`, `permissions.ts`),
+`packages/database` (`0043`, `admin-read-repository.ts`, `parity.test.ts`),
+`apps/api` (`routes/admin-orders.ts`, `services/admin-reads.ts`, OpenAPI,
+pruebas), `apps/web` (`components/admin/order-contact-card.tsx`, ficha del
+pedido del panel, cliente de la API, mensajes, mocks, pruebas),
+`docs/API_CONTRACT.md`, `docs/LEGAL_PENDING.md` (pregunta 32).
+
+Proposed by: sesión del usuario (2026-10-23, petición del cliente)
+Agreed by: backend, frontend-ux, security (petición directa del usuario);
+pendiente: abogado (pregunta 32 de `docs/LEGAL_PENDING.md`)

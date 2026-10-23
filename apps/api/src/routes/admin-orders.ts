@@ -35,6 +35,7 @@
  */
 
 import type { OrderVoidRecord } from "@lsw/database";
+import type { DomainActor } from "@lsw/sweepstakes";
 import { z } from "zod";
 
 import type { AppDependencies } from "../app.js";
@@ -154,6 +155,28 @@ const orderVoidSchema = z.object({
   voided_by_name: z.string().nullable(),
   reason_code: z.string(),
   notes: z.string().nullable(),
+});
+
+/**
+ * DEC-094: contacto del cliente de un pedido, SIN enmascarar.
+ *
+ * Solo lo sirve la ruta que declara `order.contact.read`, en su propio camino,
+ * por la misma razon que `/participants/:id/pii`: la capacidad va atada a la
+ * ruta y el autorizador corre antes del handler. `OrderDetail` sigue sin llevar
+ * correo ni celular.
+ */
+const orderContactSchema = z.object({
+  order_id: z.uuid(),
+  order_number: z.string(),
+  participant_id: z.uuid(),
+  display_name: z.string().nullable(),
+  /** Cadena vacia si la cuenta no tiene correo (anonimizada). */
+  email: z.string(),
+  /** El celular de contacto del perfil o, si no hay, el verificado con el que entra. */
+  phone: z.string().nullable(),
+  preferred_locale: z.string(),
+  /** Siempre `false` aqui: quien lea la respuesta sabe que NO esta enmascarado. */
+  pii_masked: z.boolean(),
 });
 
 function presentOrderVoid(record: OrderVoidRecord): z.infer<typeof orderVoidSchema> {
@@ -742,6 +765,75 @@ export function buildAdminOrdersRoutes(dependencies: AppDependencies): RouteDefi
           throw new ApiError({ statusCode: 404, code: "ORDER_VOID_NOT_FOUND" });
         }
         return presentOrderVoid(record);
+      },
+    },
+
+    // -----------------------------------------------------------------------
+    // DEC-094: contacto del cliente, para entregar y avisar
+    // -----------------------------------------------------------------------
+
+    {
+      method: "GET",
+      url: "/api/v1/admin/orders/:order_id/contact",
+      operationId: "getAdminOrderContact",
+      summary: "Nombre, celular y correo del cliente de un pedido, sin enmascarar.",
+      description:
+        "DEC-094. Para entregar la mercancia y avisar al cliente de sus participaciones. Es una ruta aparte con su propia capacidad (`order.contact.read`, SENSITIVE, PII): la ficha del pedido sigue sin llevar correo ni celular. Cada lectura emite un AuditEvent `order.contact.viewed` con el pedido como objetivo. `phone` es el celular de contacto del perfil o, si no hay, el verificado con el que entra; `email` es cadena vacia si la cuenta no tiene correo.",
+      tags: ["admin"],
+      authorization: { kind: "PERMISSION", permission: "order.contact.read" },
+      schema: {
+        params: orderParamsSchema,
+        response: {
+          200: orderContactSchema,
+          401: errorEnvelopeSchema,
+          403: errorEnvelopeSchema,
+          404: errorEnvelopeSchema,
+        },
+      },
+      handler: async (request) => {
+        const staff = await requireStaffContext(dependencies, request);
+        const params = request.params as z.infer<typeof orderParamsSchema>;
+
+        const domain = domainServicesFor(dependencies);
+        const order = await domain.repositories.orders.findById(params.order_id);
+        if (order === null) {
+          throw ApiErrors.notFound();
+        }
+
+        const contact = await adminReadsFor(dependencies).participantContactForOrder(order.id);
+        if (contact === null) {
+          throw ApiErrors.notFound();
+        }
+
+        /*
+         * Es PII y la capacidad lo declara (`emitsAuditEvent`, `touchesPii`):
+         * cada lectura deja quien miro el contacto de que pedido y cuando. Se
+         * registra ANTES de responder; si la auditoria no puede escribir, no
+         * se publica el dato (principio 12).
+         */
+        const actor: DomainActor = { type: "ADMIN", adminUserId: staff.adminUserId };
+        await domain.audit.emit({
+          action: "order.contact.viewed",
+          actor,
+          promotionId: order.promotionId,
+          targetEntityType: "Order",
+          targetEntityId: order.id,
+          reasonKey: null,
+          reasonDetail: null,
+          occurredAt: domain.clock.now(),
+          metadata: { order_number: order.orderNumber, participant_id: contact.participantId },
+        });
+
+        return {
+          order_id: order.id,
+          order_number: order.orderNumber,
+          participant_id: contact.participantId,
+          display_name: contact.displayName,
+          email: contact.email ?? "",
+          phone: contact.phoneE164,
+          preferred_locale: contact.preferredLocale,
+          pii_masked: false,
+        };
       },
     },
 

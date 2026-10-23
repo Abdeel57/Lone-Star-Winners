@@ -1539,6 +1539,24 @@
       "voidedNotes": "Notas: {notes}",
       "unknownStaff": "una cuenta del personal"
     },
+    "orderContact": {
+      "heading": "Cliente",
+      "intro": "Para entregar el pedido o avisarle. Cada consulta queda en la auditoría.",
+      "nameLabel": "Nombre",
+      "phoneLabel": "Celular",
+      "emailLabel": "Correo",
+      "notGiven": "Sin indicar",
+      "whatsapp": "Escribir por WhatsApp",
+      "call": "Llamar",
+      "email": "Enviar correo",
+      "whatsappHint": "El mensaje se abre ya redactado en el idioma del cliente. Puedes editarlo antes de enviarlo.",
+      "greetingNamed": "Hola {name}, te escribimos de Lone Star Winners.",
+      "greeting": "Hola, te escribimos de Lone Star Winners.",
+      "messageEntries": "Confirmamos tu pedido {order}: {entries, plural, one {# participación} other {# participaciones}} para el sorteo de {promotion}. ¡Mucha suerte!",
+      "messageEntriesNoPromotion": "Confirmamos tu pedido {order}: {entries, plural, one {# participación} other {# participaciones}}. ¡Mucha suerte!",
+      "messageOrder": "Te contactamos por tu pedido {order}.",
+      "emailSubject": "Tu pedido {order} en Lone Star Winners"
+    },
     "orderFulfillment": {
       "saved": "Guardado.",
       "shippedAt": "Enviado el",

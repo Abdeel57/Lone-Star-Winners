@@ -107,6 +107,24 @@ export interface AdminParticipantRow {
   readonly disqualified: boolean;
 }
 
+/**
+ * DEC-094: contacto del comprador de un pedido, SIN enmascarar.
+ *
+ * Solo lo sirve la ruta que declara `order.contact.read`, y cada lectura deja
+ * un AuditEvent. `phoneE164` es el celular de CONTACTO del perfil o, si no lo
+ * hay, el verificado con el que entra (`identities.phone_e164`): para avisar a
+ * alguien vale cualquiera de los dos, y el segundo siempre existe si entro por
+ * celular (DEC-089).
+ */
+export interface AdminOrderContactRow {
+  readonly participantId: string;
+  readonly displayName: string | null;
+  /** `null` cuando la identidad no tiene correo (cuenta anonimizada). */
+  readonly email: string | null;
+  readonly phoneE164: string | null;
+  readonly preferredLocale: string;
+}
+
 export interface AdminAuditEventRow {
   readonly id: string;
   /** Orden total de escritura. Es tambien la clave de paginacion. */
@@ -578,6 +596,37 @@ export class DrizzleAdminReadRepository {
       .limit(1);
 
     return rows[0]?.email ?? null;
+  }
+
+  /** DEC-094: contacto crudo del comprador de un pedido. `null` si el pedido no existe. */
+  public async participantContactForOrder(orderId: string): Promise<AdminOrderContactRow | null> {
+    const rows = await this.db
+      .select({
+        participantId: participants.id,
+        displayName: participants.displayName,
+        email: identities.email,
+        contactPhone: participants.phoneE164,
+        signInPhone: identities.phoneE164,
+        preferredLocale: participants.preferredLocale,
+      })
+      .from(orders)
+      .innerJoin(participants, eq(participants.id, orders.participantId))
+      .innerJoin(identities, eq(identities.id, participants.identityId))
+      .where(eq(orders.id, orderId))
+      .limit(1);
+
+    const row = rows[0];
+    if (row === undefined) {
+      return null;
+    }
+
+    return {
+      participantId: row.participantId,
+      displayName: row.displayName,
+      email: row.email,
+      phoneE164: row.contactPhone ?? row.signInPhone,
+      preferredLocale: row.preferredLocale,
+    };
   }
 
   /**

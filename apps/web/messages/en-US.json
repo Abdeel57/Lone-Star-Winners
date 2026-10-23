@@ -1539,6 +1539,24 @@
       "voidedNotes": "Notes: {notes}",
       "unknownStaff": "a staff account"
     },
+    "orderContact": {
+      "heading": "Customer",
+      "intro": "To deliver the order or reach them. Every lookup is recorded in the audit trail.",
+      "nameLabel": "Name",
+      "phoneLabel": "Mobile",
+      "emailLabel": "Email",
+      "notGiven": "Not given",
+      "whatsapp": "Message on WhatsApp",
+      "call": "Call",
+      "email": "Send email",
+      "whatsappHint": "The message opens already written in the customer's language. You can edit it before sending.",
+      "greetingNamed": "Hi {name}, this is Lone Star Winners.",
+      "greeting": "Hi, this is Lone Star Winners.",
+      "messageEntries": "We confirm your order {order}: {entries, plural, one {# entry} other {# entries}} in the {promotion} sweepstakes. Good luck!",
+      "messageEntriesNoPromotion": "We confirm your order {order}: {entries, plural, one {# entry} other {# entries}}. Good luck!",
+      "messageOrder": "We are reaching out about your order {order}.",
+      "emailSubject": "Your order {order} at Lone Star Winners"
+    },
     "orderFulfillment": {
       "saved": "Saved.",
       "shippedAt": "Shipped on",

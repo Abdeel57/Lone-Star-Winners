@@ -755,3 +755,19 @@ DEC-090, en su propia rama sin publicar.)
     exigen una dirección postal por cada compra (la del ganador se pide al
     verificarlo) y si los Términos de venta deben decir que solo se envía
     dentro de EE. UU.
+
+## Contacto con el cliente desde el panel (DEC-094, 2026-10-23)
+
+32. **Avisar al cliente por WhatsApp, llamada o correo.** El panel muestra al
+    personal autorizado el celular y el correo del comprador de un pedido, y
+    abre WhatsApp con un mensaje ya redactado que confirma el pedido y sus
+    participaciones en la promoción. Lo manda una persona desde su propio
+    teléfono; el sistema no envía nada. Confirmar: (a) que avisar de la
+    entrega y confirmar las participaciones de una compra cuenta como
+    comunicación transaccional y no como marketing, y qué consentimiento hace
+    falta por canal (celular dado al registrarse o en el pedido; TCPA para
+    llamadas y mensajes); (b) qué puede y qué no puede decir ese mensaje
+    (nada de "ganar" ni de "premio" como promesa; hoy dice "para el sorteo
+    de {promoción}" y "¡Mucha suerte!"); (c) si la Política de Privacidad
+    debe mencionar este uso del celular y del correo; (d) cómo documentar que
+    cada consulta del contacto queda en la auditoría.

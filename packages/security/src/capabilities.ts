@@ -348,6 +348,27 @@ export const CAPABILITIES = Object.freeze({
     "SENSITIVE",
     "Marcar la mercancia de un pedido como enviada, con transportista y numero de guia, o devolverla a pendiente de envio.",
   ),
+  /**
+   * Contacto del cliente de UN pedido (DEC-094).
+   *
+   * El caso que lo pidio: un repartidor llega con la mercancia, el cliente no
+   * sale y la tienda no tiene como avisarle. El correo del pedido viaja
+   * enmascarado (`order.read` no es una capacidad de PII) y el completo solo
+   * existia detras de `pii.view.full`, que es CRITICAL, exige segundo factor
+   * y motivo, y sirve la ficha ENTERA de un participante.
+   *
+   * ESTRECHA A PROPOSITO: nombre, celular y correo del cliente de ese pedido,
+   * nada mas, en su propia ruta. SENSITIVE y marcada como PII: cada lectura
+   * deja un AuditEvent con el pedido. Sin step-up ni motivo porque es trabajo
+   * de entrega y de aviso, del mismo volumen que marcar el envio.
+   */
+  "order.contact.read": define(
+    "order.contact.read",
+    "order",
+    "SENSITIVE",
+    "Ver el nombre, el celular y el correo del cliente de un pedido concreto, para entregarlo o avisarle de sus participaciones. Solo el contacto de ese pedido: la ficha completa sigue detras de pii.view.full.",
+    { touchesPii: true },
+  ),
   "payment.webhook.read": define(
     "payment.webhook.read",
     "payment",

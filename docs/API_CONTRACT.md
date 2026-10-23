@@ -1978,6 +1978,7 @@ que compara el test de contrato contra `apps/api/openapi/route-manifest.json`.
 | POST   | /api/v1/admin/orders/:order_id/fulfillment                                          | `order.fulfillment.update`  |
 | POST   | /api/v1/admin/orders/:order_id/void                                                 | `order.void` (DEC-091)      |
 | GET    | /api/v1/admin/orders/:order_id/void                                                 | `order.read` (DEC-091)      |
+| GET    | /api/v1/admin/orders/:order_id/contact                                              | `order.contact.read`        |
 | GET    | /api/v1/admin/reports/daily-cut                                                     | `order.read`                |
 | GET    | /api/v1/admin/participants                                                          | `participant.list`          |
 | GET    | /api/v1/admin/participants/:participant_id                                          | `participant.read`          |
@@ -3202,6 +3203,22 @@ dato del panel: no viaja en `OrderDetail`, que es la misma forma que ve el
 participante.
 
 200 · 401 · 403 · 404 ORDER_VOID_NOT_FOUND (el pedido no está anulado).
+
+### GET /api/v1/admin/orders/:order_id/contact
+
+    Authorization: order.contact.read (SENSITIVE, PII, auditada; sin step-up ni motivo)
+
+DEC-094. El contacto del cliente de un pedido, **sin enmascarar**: `{ order_id,
+order_number, participant_id, display_name, email, phone, preferred_locale,
+pii_masked: false }`. Existe para entregar la mercancía y avisar al cliente de
+sus participaciones: el panel ofrece WhatsApp, llamada y correo desde la ficha
+del pedido. Es una ruta aparte con su propia capacidad, como
+`/participants/:participant_id/pii`: `OrderDetail` sigue sin llevar correo ni
+celular. Cada lectura emite un `AuditEvent` `order.contact.viewed` con el pedido
+como objetivo. `email` es cadena vacía si la cuenta no tiene correo; `phone` es
+el celular de contacto del perfil o, si no hay, el verificado con el que entra.
+
+200 · 401 · 403 · 404 (el pedido no existe).
 
 ### POST /api/v1/admin/orders/:order_id/fulfillment
 

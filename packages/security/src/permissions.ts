@@ -45,6 +45,8 @@ export const ROLE_CAPABILITIES: Readonly<Record<RoleId, readonly CapabilityId[]>
     // DEC-085: preparar y mandar paquetes es trabajo de atencion; no toca
     // dinero ni participaciones.
     "order.fulfillment.update",
+    // DEC-094: y quien entrega necesita poder llamar o escribir al cliente.
+    "order.contact.read",
     "entry.ledger.read",
     "amoe.review.read",
   ],
@@ -66,6 +68,8 @@ export const ROLE_CAPABILITIES: Readonly<Record<RoleId, readonly CapabilityId[]>
     "order.fulfillment.update",
     // DEC-091: y quien anula el que se cobro de mas (duplicado o error).
     "order.void",
+    // DEC-094: el contacto del cliente de un pedido, para entregar y avisar.
+    "order.contact.read",
     "entry.ledger.read",
     "entry.adjust.create",
     "amoe.review.read",
@@ -111,6 +115,8 @@ export const ROLE_CAPABILITIES: Readonly<Record<RoleId, readonly CapabilityId[]>
     "order.fulfillment.update",
     // DEC-091: y los mismos dos anulan lo cobrado por error.
     "order.void",
+    // DEC-094: y los tres roles que despachan ven el contacto del cliente.
+    "order.contact.read",
     "payment.webhook.read",
     "entry.ledger.read",
     "entry.adjust.approve",

@@ -336,6 +336,15 @@
       "summary": "Reintentar la generacion de participaciones de un cobro en efectivo ya confirmado."
     },
     {
+      "method": "GET",
+      "path": "/api/v1/admin/orders/:order_id/contact",
+      "operation_id": "getAdminOrderContact",
+      "authorization": "order.contact.read",
+      "requires_step_up": false,
+      "tags": ["admin"],
+      "summary": "Nombre, celular y correo del cliente de un pedido, sin enmascarar."
+    },
+    {
       "method": "POST",
       "path": "/api/v1/admin/orders/:order_id/fulfillment",
       "operation_id": "setAdminOrderFulfillment",

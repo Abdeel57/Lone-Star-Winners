@@ -44,6 +44,7 @@ import {
   type AdminDailyCut,
   type AdminDashboardCounts,
   type AdminEntryTotals,
+  type AdminOrderContactRow,
   type AdminOrderListOptions,
   type AdminOrderRow,
   type AdminParticipantListOptions,
@@ -67,6 +68,8 @@ export interface AdminReads {
   entryTotalsFor(promotionId: string, at: Date): Promise<AdminEntryTotals>;
   listOrders(options: AdminOrderListOptions): Promise<readonly AdminOrderRow[]>;
   participantEmailForOrder(orderId: string): Promise<string | null>;
+  /** DEC-094: contacto SIN enmascarar. Solo lo pide la ruta de `order.contact.read`. */
+  participantContactForOrder(orderId: string): Promise<AdminOrderContactRow | null>;
   listParticipants(options: AdminParticipantListOptions): Promise<readonly AdminParticipantRow[]>;
   findParticipant(participantId: string): Promise<AdminParticipantRow | null>;
   listAuditEvents(options: AdminAuditListOptions): Promise<readonly AdminAuditEventRow[]>;
