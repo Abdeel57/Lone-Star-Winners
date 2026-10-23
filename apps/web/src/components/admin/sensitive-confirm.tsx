@@ -67,6 +67,7 @@ export function SensitiveConfirmForm({
   balanceAsOf,
   blockedReason,
   destructive,
+  stepUpAnchor,
 }: {
   readonly locale: Locale;
   readonly action: (previous: ActionResult, formData: FormData) => Promise<ActionResult>;
@@ -108,6 +109,12 @@ export function SensitiveConfirmForm({
   readonly blockedReason?: string;
   /** Si la accion resta participaciones o rechaza algo. Cambia el tono, no la regla. */
   readonly destructive?: boolean;
+  /**
+   * `id` de la seccion que envuelve este formulario. Si la accion contesta
+   * `STEP_UP_REQUIRED`, el boton "Confirmar codigo" vuelve a esa seccion y no
+   * a lo alto de la pantalla.
+   */
+  readonly stepUpAnchor?: string;
 }) {
   const t = useTranslations("admin.confirm");
   const [state, formAction, pending] = useActionState(action, IDLE);
@@ -134,7 +141,7 @@ export function SensitiveConfirmForm({
         <input key={name} type="hidden" name={name} value={value} />
       ))}
 
-      <FormError result={state} />
+      <FormError result={state} {...(stepUpAnchor === undefined ? {} : { stepUpAnchor })} />
 
       {state.status === "ok" ? <Alert tone="success">{t("done")}</Alert> : null}
 

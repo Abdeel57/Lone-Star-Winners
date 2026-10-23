@@ -171,7 +171,7 @@
     "MEDIA_TYPE_UNSUPPORTED": "That file is not a valid image. Use a JPG, PNG or WebP photo.",
     "PAYLOAD_TOO_LARGE": "What you sent is too large. Try lighter images.",
     "FLAG_LEGALLY_MATERIAL": "This setting is legally material and cannot be changed here. Use the change request instead.",
-    "STEP_UP_REQUIRED": "This action needs a recent code from your app. Select “Confirm code” at the top, enter the current code and try again.",
+    "STEP_UP_REQUIRED": "First confirm your verification code with “Confirm code”, then try the action again.",
     "SETTING_CHANGE_SELF_APPROVAL_FORBIDDEN": "You asked for this change, so someone else has to decide it.",
     "SEPARATION_OF_DUTIES": "Whoever transcribed this card cannot approve it. Someone else has to review it.",
     "AMOE_MODE_NOT_ONLINE": "This promotion's free method of entry is not an online form. The Official Rules explain how to take part.",
@@ -645,6 +645,14 @@
       "requestIdLabel": "Reference",
       "retry": "Try again",
       "title": "We could not load this section"
+    },
+    "actionFailed": {
+      "title": "The action could not be completed"
+    },
+    "stepUp": {
+      "title": "Confirm your code to continue",
+      "body": "Enter the six-digit code from your authenticator app. When you're done you come back here and repeat the action.",
+      "cta": "Confirm code"
     },
     "loading": "Loading",
     "noActivePromotion": {
@@ -1176,8 +1184,9 @@
       "nothingToVerifyTitle": "There is nothing to verify",
       "nothingToVerifyBody": "No session is waiting for a second factor. Sign in first.",
       "signInCta": "Go to sign in",
-      "renewTitle": "Confirm with a new code",
-      "renewBody": "Activating or closing a promotion, activating rules, approving changes or refunding a payment needs a code entered in the last few minutes. Enter the current code from your app and you will go back to where you were."
+      "renewTitle": "Confirm your code",
+      "renewBody": "Enter the six-digit code from your authenticator app. Once verified you go back to where you were.",
+      "renewBack": "Go back without confirming"
     },
     "dashboard": {
       "title": "Dashboard",
@@ -1495,8 +1504,8 @@
     },
     "orderCancel": {
       "title": "Cancel this order",
-      "introCash": "Nobody has paid this order. If it's a duplicate or the customer isn't coming to pay, cancel it: it leaves the pending-cash queue and can no longer be paid. Nothing is deleted.",
-      "introCard": "This card order was never paid. Cancelling it first closes the payment at the gateway so nobody can pay it later; if the customer already paid, it is not cancelled. Nothing is deleted.",
+      "introCash": "Nobody has paid this order. Cancelling it removes it from the pending-cash queue and it can no longer be paid. Nothing is deleted.",
+      "introCard": "This card order was never paid. Cancelling it closes the payment at the gateway; if the customer already paid, it is not cancelled. Nothing is deleted.",
       "impactStatus": "Order status",
       "impactCancel": "cancelled",
       "impactMoney": "Money",
@@ -1509,9 +1518,9 @@
     },
     "orderVoid": {
       "title": "Void this order",
-      "introCash": "This order was already paid in cash. If it's a duplicate or a mistake (for example, the customer got a second order for the same payment), void it: its entries are removed and it no longer counts in the cash report. Nothing is deleted: who voided it and why is kept.",
-      "introCard": "This order was already paid by card. Voiding it refunds whatever is left of the charge to the customer in Stripe, removes its entries and takes it out of the cash report. Nothing is deleted: who voided it and why is kept.",
-      "stepUpNote": "For security you'll be asked to confirm your verification code if you haven't used it in the last few minutes.",
+      "introCash": "For a duplicate or mistaken cash payment. Removes its entries and takes it out of the cash report. Who voided it and why is kept on record.",
+      "introCard": "For a duplicate or mistaken card charge. Refunds the customer in Stripe whatever is left of the charge, removes its entries and takes it out of the cash report. Who voided it and why is kept on record.",
+      "stepUpNote": "Keep your authenticator app handy: you may be asked for the six-digit code.",
       "impactStatus": "Order status",
       "impactVoid": "voided",
       "impactMoney": "Money",

@@ -171,7 +171,7 @@
     "MEDIA_TYPE_UNSUPPORTED": "Ese archivo no es una imagen válida. Usa una foto JPG, PNG o WebP.",
     "PAYLOAD_TOO_LARGE": "Lo que enviaste pesa demasiado. Prueba con imágenes más ligeras.",
     "FLAG_LEGALLY_MATERIAL": "Este ajuste es legalmente material y no se cambia por aquí. Usa la solicitud de cambio.",
-    "STEP_UP_REQUIRED": "Esta acción exige confirmar con un código reciente de tu app. Pulsa «Confirmar código» arriba, escribe el código actual y repítela.",
+    "STEP_UP_REQUIRED": "Primero confirma tu código de verificación con «Confirmar código» y repite la acción.",
     "SETTING_CHANGE_SELF_APPROVAL_FORBIDDEN": "Este cambio lo pediste tú, así que tiene que decidirlo otra persona.",
     "SEPARATION_OF_DUTIES": "Quien transcribió esta ficha no puede aprobarla. Tiene que revisarla otra persona.",
     "AMOE_MODE_NOT_ONLINE": "El método gratuito de esta promoción no es un formulario en línea. Las Reglas Oficiales explican cómo participar.",
@@ -645,6 +645,14 @@
       "requestIdLabel": "Referencia",
       "retry": "Reintentar",
       "title": "No hemos podido cargar esta sección"
+    },
+    "actionFailed": {
+      "title": "No se pudo completar la acción"
+    },
+    "stepUp": {
+      "title": "Confirma tu código para continuar",
+      "body": "Escribe el código de seis dígitos de tu aplicación de autenticación. Al terminar vuelves aquí y repites la acción.",
+      "cta": "Confirmar código"
     },
     "loading": "Cargando",
     "noActivePromotion": {
@@ -1176,8 +1184,9 @@
       "nothingToVerifyTitle": "No hay nada que verificar",
       "nothingToVerifyBody": "No hay ninguna sesión esperando un segundo factor. Inicia sesión primero.",
       "signInCta": "Ir a iniciar sesión",
-      "renewTitle": "Confirma con un código nuevo",
-      "renewBody": "Activar o cerrar una promoción, activar reglas, aprobar cambios o devolver un pago exige un código escrito hace pocos minutos. Escribe el código actual de tu app y volverás a donde estabas."
+      "renewTitle": "Confirma tu código",
+      "renewBody": "Escribe el código de seis dígitos de tu aplicación de autenticación. Al verificarlo vuelves a donde estabas.",
+      "renewBack": "Volver sin confirmar"
     },
     "dashboard": {
       "title": "Panel",
@@ -1495,8 +1504,8 @@
     },
     "orderCancel": {
       "title": "Cancelar este pedido",
-      "introCash": "Nadie ha pagado este pedido. Si es un duplicado o el cliente no va a venir a pagar, cancélalo: sale de la cola de efectivo pendiente y ya no se podrá cobrar. No se borra nada.",
-      "introCard": "Este pedido con tarjeta no se llegó a pagar. Al cancelarlo, primero se cierra el pago en la pasarela para que nadie pueda pagarlo después; si el cliente ya pagó, no se cancela. No se borra nada.",
+      "introCash": "Nadie ha pagado este pedido. Al cancelarlo sale de la cola de efectivo pendiente y ya no se podrá cobrar. No se borra nada.",
+      "introCard": "Este pedido con tarjeta no se llegó a pagar. Al cancelarlo se cierra el pago en la pasarela; si el cliente ya pagó, no se cancela. No se borra nada.",
       "impactStatus": "Estado del pedido",
       "impactCancel": "se cancela",
       "impactMoney": "Dinero",
@@ -1509,9 +1518,9 @@
     },
     "orderVoid": {
       "title": "Anular este pedido",
-      "introCash": "Este pedido ya se cobró en efectivo. Si es un duplicado o un error (por ejemplo, se le hizo otro pedido al cliente por el mismo pago), anúlalo: se le quitan sus participaciones y deja de contar en el corte de caja. No se borra nada: queda quién lo anuló y por qué.",
-      "introCard": "Este pedido ya se cobró con tarjeta. Al anularlo se le devuelve al cliente en Stripe lo que quede del cobro, se le quitan sus participaciones y deja de contar en el corte de caja. No se borra nada: queda quién lo anuló y por qué.",
-      "stepUpNote": "Por seguridad te pedirá confirmar tu código de verificación si no lo usaste en los últimos minutos.",
+      "introCash": "Para un pago en efectivo duplicado o por error. Quita sus participaciones y lo saca del corte de caja. Queda registrado quién lo anuló y por qué.",
+      "introCard": "Para un cobro con tarjeta duplicado o por error. Devuelve al cliente en Stripe lo que quede del cobro, quita sus participaciones y lo saca del corte de caja. Queda registrado quién lo anuló y por qué.",
+      "stepUpNote": "Ten a mano tu aplicación de autenticación: puede pedirte el código de seis dígitos.",
       "impactStatus": "Estado del pedido",
       "impactVoid": "se anula",
       "impactMoney": "Dinero",

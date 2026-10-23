@@ -4,6 +4,7 @@ import { Alert, Button, FormField, Input } from "@lsw/ui";
 import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 
+import { StepUpPrompt } from "@/components/admin/step-up-prompt";
 import { useApiErrorMessage } from "@/components/api-error-state";
 import type { ActionResult } from "@/lib/action-result";
 
@@ -34,15 +35,40 @@ import type { ActionResult } from "@/lib/action-result";
  *
  * Devuelve `null` cuando no hay error o cuando el error pertenece a un campo
  * concreto: en ese caso lo pinta el campo, no la cabecera del formulario.
+ *
+ * `STEP_UP_REQUIRED` NO SE PINTA COMO ERROR. Es el backend pidiendo un codigo
+ * reciente antes de una accion sensible del panel (DEC-006), y se ensena como
+ * el paso que falta, con el boton para darlo (`StepUpPrompt`). Vive aqui y no
+ * en cada formulario del panel porque todos pasan por este componente: asi
+ * ninguna accion con step-up puede volver a contestar con una averia. Solo el
+ * panel recibe ese codigo; en el escaparate esta rama no se ejecuta nunca.
+ *
+ * `stepUpAnchor`: `id` de la seccion que contiene el formulario, para que la
+ * vuelta tras el codigo aterrice en ella y no en lo alto de la pantalla.
  */
-export function FormError({ result }: { readonly result: ActionResult }) {
+export function FormError({
+  result,
+  stepUpAnchor,
+}: {
+  readonly result: ActionResult;
+  readonly stepUpAnchor?: string;
+}) {
   const t = useTranslations();
   const message = useApiErrorMessage();
 
   if (result.status !== "error" || result.field !== null) return null;
 
+  if (result.code === "STEP_UP_REQUIRED") {
+    return <StepUpPrompt {...(stepUpAnchor === undefined ? {} : { anchor: stepUpAnchor })} />;
+  }
+
+  /*
+   * El titulo dice lo que paso: la ACCION no se completo. Antes decia "no hemos
+   * podido cargar esta seccion", que es el titulo de un fallo de carga, y
+   * delante de un formulario que si cargo sonaba a averia de la pantalla.
+   */
   return (
-    <Alert tone="danger" title={t("states.loadFailed.title")}>
+    <Alert tone="danger" title={t("states.actionFailed.title")}>
       {message(result.code)}
       {result.requestId === null ? null : (
         <p className="mt-s2 text-caption text-text-subtle">

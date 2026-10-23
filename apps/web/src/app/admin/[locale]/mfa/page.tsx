@@ -46,6 +46,8 @@ export default async function AdminMfaPage({
   const { state } = await loadAdminSession(locale);
 
   if (state.kind === "active") {
+    const returnPath = returnPathOrNull(next);
+
     return (
       <AdminAccessFrame locale={locale}>
         <Card elevation="raised" padding="lg">
@@ -56,8 +58,22 @@ export default async function AdminMfaPage({
           <p className="mt-s3 text-body-sm text-text-muted">{t("renewBody")}</p>
 
           <div className="mt-s6">
-            <StaffMfaForm locale={locale} returnPath={returnPathOrNull(next)} />
+            <StaffMfaForm locale={locale} returnPath={returnPath} />
           </div>
+
+          {/*
+           * Salida sin codigo. Quien llego aqui desde un aviso de step-up y se
+           * arrepiente -o no tiene el telefono a mano- vuelve a donde estaba
+           * con un gesto, en vez de usar "atras" del navegador a ciegas.
+           */}
+          <p className="mt-s4 text-center">
+            <Link
+              href={returnPath ?? adminHref(locale)}
+              className={buttonVariants({ variant: "ghost", size: "sm" })}
+            >
+              {t("renewBack")}
+            </Link>
+          </p>
         </Card>
       </AdminAccessFrame>
     );

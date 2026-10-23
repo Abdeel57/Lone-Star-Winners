@@ -11,6 +11,9 @@ import type { AdminOrderVoid, OrderDetail } from "@/lib/api";
 
 import { SensitiveConfirmForm } from "./sensitive-confirm";
 
+/** `id` de la seccion de anulacion; es a donde vuelve "Confirmar codigo". */
+const VOID_SECTION_ID = "void-order";
+
 /**
  * Anular un pedido YA COBRADO (DEC-091).
  *
@@ -38,7 +41,12 @@ export async function OrderVoidPanel({
   const isCash = order.payment_method === "CASH";
 
   return (
-    <Card elevation="flat" padding="lg">
+    /*
+     * `id` estable: si la ruta pide el codigo (step-up), la vuelta desde
+     * "Confirmar codigo" aterriza aqui, en la anulacion, y no en lo alto de la
+     * ficha con la tabla y el motivo fuera de la vista.
+     */
+    <Card id={VOID_SECTION_ID} elevation="flat" padding="lg">
       <CardTitle as="h2" size="sm">
         {t("title")}
       </CardTitle>
@@ -52,6 +60,7 @@ export async function OrderVoidPanel({
           locale={locale}
           action={voidOrderAction}
           hiddenFields={{ order_id: order.id }}
+          stepUpAnchor={VOID_SECTION_ID}
           impact={[
             {
               label: t("impactStatus"),
