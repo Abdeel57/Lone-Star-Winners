@@ -14,6 +14,7 @@ import { formatInteger, formatMoney, formatZonedDate } from "@/i18n/formatters";
 import { isLocale } from "@/i18n/locales";
 import { can } from "@/lib/admin/capabilities";
 import { fetchAdminProducts, pickLocalized, type AdminProductRow } from "@/lib/api";
+import { BUSINESS_TIME_ZONE } from "@/lib/time-zone";
 
 export const dynamic = "force-dynamic";
 
@@ -180,7 +181,8 @@ export default async function AdminCatalogPage({
               {
                 id: "updated",
                 header: t("columnUpdated"),
-                cell: (row) => formatZonedDate(row.updated_at, locale, { timeZone: "UTC" }) ?? "",
+                cell: (row) =>
+                  formatZonedDate(row.updated_at, locale, { timeZone: BUSINESS_TIME_ZONE }) ?? "",
               },
             ]}
           />

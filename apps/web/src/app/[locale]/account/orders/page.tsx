@@ -10,6 +10,7 @@ import { Link } from "@/i18n/navigation";
 import { routing } from "@/i18n/routing";
 import { fetchActivePromotion, fetchOrders } from "@/lib/api";
 import { loadParticipant } from "@/lib/participant-server";
+import { BUSINESS_TIME_ZONE } from "@/lib/time-zone";
 
 export const dynamic = "force-dynamic";
 
@@ -18,9 +19,9 @@ export const dynamic = "force-dynamic";
  *
  * LA ZONA HORARIA SALE DE LA PROMOCION, aunque la fecha de un pedido no sea un
  * plazo legal. Es la unica zona DECLARADA que esta pagina conoce, y DEC-011
- * prohibe caer en la del navegador: sin promocion abierta se usa UTC explicito,
- * que es una eleccion visible en el codigo en vez de una que depende de donde
- * este quien mira.
+ * prohibe caer en la del navegador: sin promocion abierta se usa la hora del
+ * negocio (DEC-095), que es una eleccion visible en el codigo en vez de una
+ * que depende de donde este quien mira.
  *
  * Paginacion por cursor en la URL, igual que el historial y por las mismas
  * razones.
@@ -75,7 +76,7 @@ export default async function AccountOrdersPage({
   const timeZone =
     promotionResult.ok && promotionResult.data !== null
       ? promotionResult.data.legal_timezone
-      : "UTC";
+      : BUSINESS_TIME_ZONE;
 
   return (
     <AccountShell title={t("title")} current="/account/orders">

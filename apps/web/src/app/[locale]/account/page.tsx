@@ -13,6 +13,7 @@ import { Link } from "@/i18n/navigation";
 import { routing } from "@/i18n/routing";
 import { fetchActivePromotion, fetchEntrySummary, fetchOrders, pickLocalized } from "@/lib/api";
 import { loadParticipant } from "@/lib/participant-server";
+import { BUSINESS_TIME_ZONE } from "@/lib/time-zone";
 
 /** Un resumen de cuenta es de una sesion concreta: nunca se prerenderiza. */
 export const dynamic = "force-dynamic";
@@ -109,7 +110,9 @@ export default async function AccountOverviewPage({
               // ninguna promocion, asi que no hay zona legal declarada contra la
               // que formatearlo. Se usa UTC explicito en vez de caer en la del
               // navegador, que es lo que DEC-011 prohibe.
-              date: formatZonedDate(participant.created_at, locale, { timeZone: "UTC" }) ?? "",
+              date:
+                formatZonedDate(participant.created_at, locale, { timeZone: BUSINESS_TIME_ZONE }) ??
+                "",
             })}
           </p>
         </div>

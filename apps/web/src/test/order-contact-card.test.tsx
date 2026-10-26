@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import type { ReactNode } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 /*
  * `getTranslations` de next-intl/server necesita la configuracion de peticion
@@ -27,6 +27,15 @@ vi.mock("next-intl/server", async () => {
   };
 });
 
+/*
+ * El origen del enlace sale de `NEXT_PUBLIC_SITE_URL` y, sin ella, de las
+ * cabeceras. Aqui se fija la variable y se dobla `headers()` por si acaso: el
+ * enlace tiene que llevar el dominio canonico, no el de quien opera.
+ */
+vi.mock("next/headers", () => ({
+  headers: () => Promise.resolve(new Headers({ host: "panel.interno.test" })),
+}));
+
 import { OrderContactCard } from "@/components/admin/order-contact-card";
 import type { Locale } from "@/i18n/locales";
 import { cashPendingOrder } from "@/mocks/fixtures/account";
@@ -43,11 +52,23 @@ import esMessages from "../../messages/es-US.json";
  * 1. Que el celular y el correo se pinten enteros y con sus enlaces: el dato
  *    llega sin enmascarar de una ruta con su propia capacidad.
  * 2. Que el WhatsApp vaya al numero en digitos y lleve el mensaje YA
- *    REDACTADO en el idioma del cliente, con el pedido, sus participaciones y
- *    el nombre del sorteo, aunque el panel este en el otro idioma.
- * 3. Que sin participaciones el mensaje no invente ninguna, y que sin celular
- *    no se ofrezca ni WhatsApp ni llamar.
+ *    REDACTADO en el idioma del cliente, con el pedido, sus participaciones,
+ *    el nombre del sorteo y el enlace a "Mis participaciones" (por el login,
+ *    con vuelta), aunque el panel este en el otro idioma.
+ * 3. Que el SMS lleve exactamente el mismo mensaje.
+ * 4. Que sin participaciones el mensaje no invente ninguna, y que sin celular
+ *    no se ofrezca ni WhatsApp, ni SMS, ni llamar.
  */
+
+const SITE = "https://lonestarwinners.test";
+
+beforeAll(() => {
+  vi.stubEnv("NEXT_PUBLIC_SITE_URL", SITE);
+});
+
+afterAll(() => {
+  vi.unstubAllEnvs();
+});
 
 function renderIn(locale: Locale, ui: ReactNode) {
   return render(
@@ -64,9 +85,13 @@ function renderIn(locale: Locale, ui: ReactNode) {
 const order = { ...cashPendingOrder, order_number: "LSW-10524", entries_granted: 430 };
 const promotionName = { "en-US": "2025 Chevrolet Silverado", "es-US": "Chevrolet Silverado 2025" };
 
-/** Texto del mensaje que lleva el enlace de WhatsApp. */
-function whatsappText(href: string): string {
+/** Texto del mensaje que lleva un enlace `wa.me/...?text=` o `sms:...?&body=`. */
+function messageText(href: string): string {
   return decodeURIComponent(href.slice(href.indexOf("=") + 1));
+}
+
+function hrefOf(name: string): string {
+  return screen.getByRole("link", { name }).getAttribute("href") ?? "";
 }
 
 describe("contacto del cliente de un pedido", () => {
@@ -88,10 +113,7 @@ describe("contacto del cliente de un pedido", () => {
       "href",
       "mailto:ada.lovelace@example.test",
     );
-    expect(screen.getByRole("link", { name: esMessages.admin.orderContact.call })).toHaveAttribute(
-      "href",
-      "tel:+15055550123",
-    );
+    expect(hrefOf(esMessages.admin.orderContact.call)).toBe("tel:+15055550123");
   });
 
   it("el WhatsApp va al numero en digitos y con el mensaje en el idioma del CLIENTE", async () => {
@@ -110,14 +132,45 @@ describe("contacto del cliente de un pedido", () => {
     expect(href.startsWith("https://wa.me/15055550123?text=")).toBe(true);
     expect(link).toHaveAttribute("target", "_blank");
 
-    const text = whatsappText(href);
+    const text = messageText(href);
     expect(text).toContain("Hola Ada Lovelace");
     expect(text).toContain("LSW-10524");
     expect(text).toContain("430 participaciones");
     expect(text).toContain("Chevrolet Silverado 2025");
   });
 
-  it("un cliente en ingles recibe el mensaje en ingles", async () => {
+  it("el mensaje lleva el enlace a Mis participaciones, por el login y en el idioma del cliente", async () => {
+    const ui = await OrderContactCard({
+      contact: adminOrderContact,
+      order,
+      promotionName,
+      locale: "en",
+    });
+    renderIn("en", ui);
+
+    const text = messageText(hrefOf(enMessages.admin.orderContact.whatsapp));
+
+    // Dominio canonico (la variable), no el host del panel; idioma del cliente;
+    // login con vuelta a /account/entries, que es como entra quien no tiene sesion.
+    expect(text).toContain(`${SITE}/es/account/login?next=%2Faccount%2Fentries`);
+    expect(text).not.toContain("panel.interno.test");
+  });
+
+  it("el SMS abre la app de mensajes con el MISMO texto que el WhatsApp", async () => {
+    const ui = await OrderContactCard({
+      contact: adminOrderContact,
+      order,
+      promotionName,
+      locale: "es",
+    });
+    renderIn("es", ui);
+
+    const sms = hrefOf(esMessages.admin.orderContact.sms);
+    expect(sms.startsWith("sms:+15055550123?&body=")).toBe(true);
+    expect(messageText(sms)).toBe(messageText(hrefOf(esMessages.admin.orderContact.whatsapp)));
+  });
+
+  it("un cliente en ingles recibe el mensaje y el enlace en ingles", async () => {
     const ui = await OrderContactCard({
       contact: { ...adminOrderContact, preferred_locale: "en-US" },
       order,
@@ -126,15 +179,12 @@ describe("contacto del cliente de un pedido", () => {
     });
     renderIn("es", ui);
 
-    const href =
-      screen
-        .getByRole("link", { name: esMessages.admin.orderContact.whatsapp })
-        .getAttribute("href") ?? "";
-    const text = whatsappText(href);
+    const text = messageText(hrefOf(esMessages.admin.orderContact.whatsapp));
 
     expect(text).toContain("Hi Ada Lovelace");
     expect(text).toContain("430 entries");
     expect(text).toContain("2025 Chevrolet Silverado");
+    expect(text).toContain(`${SITE}/en/account/login?next=%2Faccount%2Fentries`);
   });
 
   it("sin participaciones todavia, el mensaje solo nombra el pedido", async () => {
@@ -146,17 +196,14 @@ describe("contacto del cliente de un pedido", () => {
     });
     renderIn("es", ui);
 
-    const href =
-      screen
-        .getByRole("link", { name: esMessages.admin.orderContact.whatsapp })
-        .getAttribute("href") ?? "";
-    const text = whatsappText(href);
+    const text = messageText(hrefOf(esMessages.admin.orderContact.whatsapp));
 
     expect(text).toContain("LSW-10524");
-    expect(text).not.toContain("participaciones");
+    expect(text).not.toContain("430");
+    expect(text).not.toContain("Confirmamos");
   });
 
-  it("sin celular no ofrece WhatsApp ni llamar, pero si el correo", async () => {
+  it("sin celular no ofrece WhatsApp, SMS ni llamar, pero si el correo", async () => {
     const ui = await OrderContactCard({
       contact: { ...adminOrderContact, phone: null },
       order,
@@ -165,15 +212,15 @@ describe("contacto del cliente de un pedido", () => {
     });
     renderIn("es", ui);
 
-    expect(
-      screen.queryByRole("link", { name: esMessages.admin.orderContact.whatsapp }),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole("link", { name: esMessages.admin.orderContact.call }),
-    ).not.toBeInTheDocument();
-    expect(screen.getByRole("link", { name: esMessages.admin.orderContact.email })).toHaveAttribute(
-      "href",
-      expect.stringContaining("mailto:ada.lovelace@example.test"),
+    for (const name of [
+      esMessages.admin.orderContact.whatsapp,
+      esMessages.admin.orderContact.sms,
+      esMessages.admin.orderContact.call,
+    ]) {
+      expect(screen.queryByRole("link", { name })).not.toBeInTheDocument();
+    }
+    expect(hrefOf(esMessages.admin.orderContact.email)).toContain(
+      "mailto:ada.lovelace@example.test",
     );
   });
 });

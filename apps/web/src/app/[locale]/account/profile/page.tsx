@@ -10,6 +10,7 @@ import { ProfileForm } from "@/components/profile-form";
 import { formatZonedDate } from "@/i18n/formatters";
 import { routing } from "@/i18n/routing";
 import { loadParticipant } from "@/lib/participant-server";
+import { BUSINESS_TIME_ZONE } from "@/lib/time-zone";
 
 export const dynamic = "force-dynamic";
 
@@ -66,7 +67,9 @@ export default async function AccountProfilePage({
   }
 
   const { participant } = state;
-  const createdAt = formatZonedDate(participant.created_at, locale, { timeZone: "UTC" });
+  const createdAt = formatZonedDate(participant.created_at, locale, {
+    timeZone: BUSINESS_TIME_ZONE,
+  });
 
   return (
     <AccountShell title={t("title")} current="/account/profile">

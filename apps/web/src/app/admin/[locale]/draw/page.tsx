@@ -11,6 +11,7 @@ import { formatZonedDateTime } from "@/i18n/formatters";
 import { isLocale, type Locale } from "@/i18n/locales";
 import { can } from "@/lib/admin/capabilities";
 import { fetchAdminDrawAuthorizations, type AdminDrawAuthorization } from "@/lib/api";
+import { BUSINESS_TIME_ZONE } from "@/lib/time-zone";
 
 export const dynamic = "force-dynamic";
 
@@ -170,7 +171,9 @@ async function DrawAuthorizationCard({
                 {t("approvalBy", {
                   actor: approval.actor_email,
                   instant:
-                    formatZonedDateTime(approval.approved_at, locale, { timeZone: "UTC" }) ?? "",
+                    formatZonedDateTime(approval.approved_at, locale, {
+                      timeZone: BUSINESS_TIME_ZONE,
+                    }) ?? "",
                 })}
               </li>
             ))}

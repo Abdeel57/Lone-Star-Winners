@@ -9,6 +9,7 @@ import { PromotionStatusBadge } from "@/components/promotion-status-badge";
 import { formatEntryCount, formatInteger, formatZonedDateTime } from "@/i18n/formatters";
 import { isLocale } from "@/i18n/locales";
 import { fetchAdminDashboard } from "@/lib/api";
+import { BUSINESS_TIME_ZONE } from "@/lib/time-zone";
 
 export const dynamic = "force-dynamic";
 
@@ -138,7 +139,9 @@ export default async function AdminDashboardPage({
            */}
           <p className="text-caption text-text-subtle">
             {t("asOf", {
-              instant: formatZonedDateTime(result.data.as_of, locale, { timeZone: "UTC" }) ?? "",
+              instant:
+                formatZonedDateTime(result.data.as_of, locale, { timeZone: BUSINESS_TIME_ZONE }) ??
+                "",
             })}
           </p>
         </div>

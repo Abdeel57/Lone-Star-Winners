@@ -7,6 +7,7 @@ import type { Locale } from "@/i18n/locales";
 import { confirmCashPaymentAction, generateCashEntriesAction } from "@/lib/admin/actions";
 import { CASH_CONFIRM_REASONS, CASH_RETRY_REASONS } from "@/lib/admin/reason-codes";
 import type { AdminCashPayment, CashPaymentStage } from "@/lib/api";
+import { BUSINESS_TIME_ZONE } from "@/lib/time-zone";
 
 import { SensitiveConfirmForm, type SensitiveImpactRow } from "./sensitive-confirm";
 
@@ -125,8 +126,9 @@ export async function CashPaymentPanel({
             <div>
               <dt className="text-caption text-text-subtle">{t("confirmedAt")}</dt>
               <dd className="text-body-sm text-text">
-                {formatZonedDateTime(cash.confirmation.confirmed_at, locale, { timeZone: "UTC" }) ??
-                  ""}
+                {formatZonedDateTime(cash.confirmation.confirmed_at, locale, {
+                  timeZone: BUSINESS_TIME_ZONE,
+                }) ?? ""}
               </dd>
             </div>
             <div>

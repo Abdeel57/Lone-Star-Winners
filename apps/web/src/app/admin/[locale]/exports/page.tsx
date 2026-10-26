@@ -11,6 +11,7 @@ import { formatInteger, formatZonedDateTime } from "@/i18n/formatters";
 import { isLocale } from "@/i18n/locales";
 import { can } from "@/lib/admin/capabilities";
 import { fetchAdminExportSnapshots, type AdminExportSnapshot } from "@/lib/api";
+import { BUSINESS_TIME_ZONE } from "@/lib/time-zone";
 
 export const dynamic = "force-dynamic";
 
@@ -124,7 +125,7 @@ export default async function AdminExportsPage({
                 cell: (row) =>
                   row.finalized_at === null
                     ? t("notFinalized")
-                    : (formatZonedDateTime(row.finalized_at, locale, { timeZone: "UTC" }) ?? ""),
+                    : (formatZonedDateTime(row.finalized_at, locale, { timeZone: BUSINESS_TIME_ZONE }) ?? ""),
               },
               {
                 id: "checksum",

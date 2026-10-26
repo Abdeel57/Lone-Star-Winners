@@ -10,6 +10,7 @@ import { reasonLabeller } from "@/i18n/admin-labels";
 import { formatZonedDateTime } from "@/i18n/formatters";
 import { isLocale } from "@/i18n/locales";
 import { fetchAdminAuditEvents, type AdminAuditEvent } from "@/lib/api";
+import { BUSINESS_TIME_ZONE } from "@/lib/time-zone";
 
 export const dynamic = "force-dynamic";
 
@@ -90,7 +91,8 @@ export default async function AdminAuditPage({
                 header: t("columnWhen"),
                 isRowHeader: true,
                 cell: (row) =>
-                  formatZonedDateTime(row.occurred_at, locale, { timeZone: "UTC" }) ?? "",
+                  formatZonedDateTime(row.occurred_at, locale, { timeZone: BUSINESS_TIME_ZONE }) ??
+                  "",
               },
               {
                 id: "actor",

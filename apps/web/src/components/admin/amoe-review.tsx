@@ -9,6 +9,7 @@ import type { Locale } from "@/i18n/locales";
 import { approveAmoeAction, rejectAmoeAction } from "@/lib/admin/actions";
 import { AMOE_APPROVE_REASONS, AMOE_REJECT_REASONS } from "@/lib/admin/reason-codes";
 import type { AdminAmoeSubmission } from "@/lib/api";
+import { BUSINESS_TIME_ZONE } from "@/lib/time-zone";
 
 import { SensitiveConfirmForm, type SensitiveImpactRow } from "./sensitive-confirm";
 
@@ -65,7 +66,9 @@ export async function AmoeSubmissionRow({
         <div className="min-w-0">
           <p className="truncate text-body-md text-text">{submission.participant_email}</p>
           <p className="mt-s1 text-caption text-text-subtle">
-            {formatZonedDateTime(submission.submitted_at, locale, { timeZone: "UTC" }) ?? ""}
+            {formatZonedDateTime(submission.submitted_at, locale, {
+              timeZone: BUSINESS_TIME_ZONE,
+            }) ?? ""}
           </p>
         </div>
 

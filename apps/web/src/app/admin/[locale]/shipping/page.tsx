@@ -12,6 +12,7 @@ import { isLocale } from "@/i18n/locales";
 import { can } from "@/lib/admin/capabilities";
 import { minorUnitsToPriceText } from "@/lib/admin/catalog-input";
 import { fetchAdminShippingRate, type AdminShippingRateRow } from "@/lib/api";
+import { BUSINESS_TIME_ZONE } from "@/lib/time-zone";
 
 export const dynamic = "force-dynamic";
 
@@ -86,8 +87,9 @@ export default async function AdminShippingPage({
               <p className="mt-s1 text-caption text-text-subtle">
                 {t("currentSince", {
                   when:
-                    formatZonedDateTime(result.data.current.set_at, locale, { timeZone: "UTC" }) ??
-                    "",
+                    formatZonedDateTime(result.data.current.set_at, locale, {
+                      timeZone: BUSINESS_TIME_ZONE,
+                    }) ?? "",
                 })}
               </p>
             </Card>
@@ -139,7 +141,8 @@ export default async function AdminShippingPage({
                     id: "set_at",
                     header: t("columnSetAt"),
                     cell: (row) =>
-                      formatZonedDateTime(row.set_at, locale, { timeZone: "UTC" }) ?? "",
+                      formatZonedDateTime(row.set_at, locale, { timeZone: BUSINESS_TIME_ZONE }) ??
+                      "",
                   },
                 ]}
               />

@@ -8,6 +8,15 @@ import {
   type LocalizedText,
   type OrderDetail,
 } from "@/lib/api";
+import { publicSiteOrigin } from "@/lib/site-origin";
+
+/**
+ * A donde lleva el enlace del mensaje: la pantalla de entrar con la vuelta a
+ * "Mis participaciones". Quien ya tiene sesion no ve el login (la pagina lo
+ * redirige a `next`); quien no, entra y aterriza en sus participaciones. Va SIN
+ * prefijo de idioma: se lo pone el enlace con el idioma del cliente.
+ */
+const ENTRIES_RETURN_PATH = "/account/entries";
 
 /**
  * Contacto del cliente de un pedido (DEC-094).
@@ -50,6 +59,17 @@ export async function OrderContactCard({
   const entries = order.entries_granted;
   const promotion = promotionName === null ? null : pickLocalized(promotionName, customerLocale);
 
+  /*
+   * El enlace a "Mis participaciones", absoluto y en el idioma del cliente.
+   * Pasa por el login con `next`: con sesion va directo; sin ella, entra y
+   * aterriza ahi. Los numeros de participacion se ven en esa pantalla cuando
+   * el interruptor `visible_entry_numbers_enabled` esta encendido (DEC-080).
+   */
+  const origin = await publicSiteOrigin();
+  const entriesLink = `${origin}/${customerLocale}/account/login?next=${encodeURIComponent(
+    ENTRIES_RETURN_PATH,
+  )}`;
+
   const greeting = name === null ? tc("greeting") : tc("greetingNamed", { name });
   const body =
     entries === null || entries <= 0
@@ -57,13 +77,20 @@ export async function OrderContactCard({
       : promotion === null
         ? tc("messageEntriesNoPromotion", { order: order.order_number, entries })
         : tc("messageEntries", { order: order.order_number, entries, promotion });
-  const message = `${greeting} ${body}`;
+  const message = `${greeting} ${body} ${tc("entriesLink", { link: entriesLink })}`;
 
   // `wa.me` quiere el numero en digitos, sin `+` ni separadores.
   const digits = contact.phone === null ? "" : contact.phone.replace(/\D/gu, "");
   const whatsappHref =
     digits === "" ? null : `https://wa.me/${digits}?text=${encodeURIComponent(message)}`;
   const telHref = contact.phone === null ? null : `tel:${contact.phone}`;
+  /*
+   * SMS (o iMessage, si el telefono de quien opera y el del cliente lo tienen):
+   * el esquema `sms:` abre la app de mensajes con el numero y el texto. `?&body=`
+   * es la forma que entienden a la vez iOS y Android.
+   */
+  const smsHref =
+    contact.phone === null ? null : `sms:${contact.phone}?&body=${encodeURIComponent(message)}`;
   const mailHref =
     contact.email === ""
       ? null
@@ -128,6 +155,11 @@ export async function OrderContactCard({
             {t("whatsapp")}
           </a>
         )}
+        {smsHref === null ? null : (
+          <a href={smsHref} className={buttonVariants({ variant: "secondary", size: "md" })}>
+            {t("sms")}
+          </a>
+        )}
         {telHref === null ? null : (
           <a href={telHref} className={buttonVariants({ variant: "secondary", size: "md" })}>
             {t("call")}
@@ -140,8 +172,8 @@ export async function OrderContactCard({
         )}
       </div>
 
-      {whatsappHref === null ? null : (
-        <p className="mt-s3 text-caption text-text-subtle">{t("whatsappHint")}</p>
+      {whatsappHref === null && smsHref === null && mailHref === null ? null : (
+        <p className="mt-s3 text-caption text-text-subtle">{t("prefilledHint")}</p>
       )}
     </Card>
   );

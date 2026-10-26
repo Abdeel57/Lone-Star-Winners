@@ -19,6 +19,7 @@ import { Link } from "@/i18n/navigation";
 import { routing } from "@/i18n/routing";
 import { fetchActivePromotion, fetchOrder, type OrderDetail } from "@/lib/api";
 import { loadParticipant } from "@/lib/participant-server";
+import { BUSINESS_TIME_ZONE } from "@/lib/time-zone";
 
 export const dynamic = "force-dynamic";
 
@@ -97,7 +98,7 @@ export default async function AccountOrderPage({
   const timeZone =
     promotionResult.ok && promotionResult.data !== null
       ? promotionResult.data.legal_timezone
-      : "UTC";
+      : BUSINESS_TIME_ZONE;
 
   return (
     <AccountShell title={`${t("numberLabel")} ${order.order_number}`} current="/account/orders">

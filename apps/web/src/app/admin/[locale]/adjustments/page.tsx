@@ -28,6 +28,7 @@ import {
   type AdminAdjustment,
   type SessionContext,
 } from "@/lib/api";
+import { BUSINESS_TIME_ZONE } from "@/lib/time-zone";
 
 export const dynamic = "force-dynamic";
 
@@ -328,7 +329,7 @@ async function ProposalSection({
                */
               balanceAsOf={
                 formatZonedDateTime(preview.data.as_of, locale, {
-                  timeZone: "UTC",
+                  timeZone: BUSINESS_TIME_ZONE,
                   showTimeZoneName: true,
                 }) ?? preview.data.as_of
               }
@@ -404,7 +405,8 @@ async function ApprovalPanel({
             {t("proposedAt")}
           </dt>
           <dd className="text-body-sm text-text">
-            {formatZonedDateTime(adjustment.created_at, locale, { timeZone: "UTC" }) ?? ""}
+            {formatZonedDateTime(adjustment.created_at, locale, { timeZone: BUSINESS_TIME_ZONE }) ??
+              ""}
           </dd>
         </div>
       </dl>

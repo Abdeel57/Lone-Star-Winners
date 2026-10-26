@@ -148,7 +148,9 @@ export default async function AdminOrderDetailPage({
                   {t("columnPlaced")}
                 </dt>
                 <dd className="text-body-sm text-text">
-                  {formatZonedDateTime(result.data.placed_at, locale, { timeZone: "UTC" }) ?? ""}
+                  {formatZonedDateTime(result.data.placed_at, locale, {
+                    timeZone: DAILY_CUT_TIME_ZONE,
+                  }) ?? ""}
                 </dd>
               </div>
 
@@ -291,16 +293,16 @@ export default async function AdminOrderDetailPage({
 
             <div className="mt-s4">
               {/*
-               * La zona legal de la promocion NO viaja en el pedido. Se formatea
-               * en UTC EXPLICITO, que es la zona neutra, en vez de caer en la
-               * del servidor -que es lo que DEC-011 prohibe- y queda anotado
-               * como peticion: `OrderDetail` deberia traer `legal_timezone` de
-               * su promocion.
+               * La zona legal de la promocion NO viaja en el pedido. DEC-095: el
+               * instante de la evaluacion se pinta en la hora del mostrador,
+               * explicita, en vez de en UTC, que a quien opera le corria la
+               * venta al dia siguiente. Sigue anotado como peticion que
+               * `OrderDetail` traiga `legal_timezone` de su promocion.
                */}
               <EntryCalculationTrace
                 calculation={result.data.entry_calculation}
                 locale={locale}
-                timeZone="UTC"
+                timeZone={DAILY_CUT_TIME_ZONE}
                 currency={result.data.total.currency}
               />
             </div>

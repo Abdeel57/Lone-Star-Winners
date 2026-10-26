@@ -26,6 +26,7 @@ import {
 import { isFeatureEnabled, toFeatureFlags } from "@/lib/flags";
 import { loadParticipant } from "@/lib/participant-server";
 import { readSession } from "@/lib/session-server";
+import { BUSINESS_TIME_ZONE } from "@/lib/time-zone";
 
 /** Un checkout es de una sesion concreta: nunca se prerenderiza. */
 export const dynamic = "force-dynamic";
@@ -158,7 +159,7 @@ export default async function CheckoutPage({ params }: { params: Promise<{ local
   const timeZone =
     promotionResult.ok && promotionResult.data !== null
       ? promotionResult.data.legal_timezone
-      : "UTC";
+      : BUSINESS_TIME_ZONE;
 
   return (
     <CheckoutShell title={t("title")} intro={t("intro")}>

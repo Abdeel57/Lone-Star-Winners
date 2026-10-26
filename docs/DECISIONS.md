@@ -4762,6 +4762,16 @@ en la promoción.
    Sin participaciones todavía, solo nombra el pedido. No se envía nada desde
    el sistema, no se guarda ninguna conversación y no hace falta cuenta de
    WhatsApp Business ni plantillas aprobadas.
+4. **Addendum (2026-10-26, petición del cliente).** El mensaje lleva además el
+   enlace a "Mis participaciones", absoluto, en el idioma del cliente y por la
+   pantalla de entrar con vuelta
+   (`<sitio>/<idioma>/account/login?next=/account/entries`): con sesión va
+   directo, sin ella entra y aterriza ahí. El origen sale de
+   `NEXT_PUBLIC_SITE_URL` y, si no está, de las cabeceras de la petición. Y un
+   botón **"Enviar SMS"** (`sms:<número>?&body=`, que en iPhone abre iMessage
+   cuando lo hay) con exactamente el mismo texto, para quien no tiene WhatsApp.
+   Los números de participación se ven en esa pantalla cuando
+   `visible_entry_numbers_enabled` está encendido (DEC-080).
 
 Alternatives considered: A — Reutilizar `pii.view.full` (descartada: exige el
 segundo factor y el motivo que DEC-093 acaba de retirar de la anulación por
@@ -4785,3 +4795,50 @@ pedido del panel, cliente de la API, mensajes, mocks, pruebas),
 Proposed by: sesión del usuario (2026-10-23, petición del cliente)
 Agreed by: backend, frontend-ux, security (petición directa del usuario);
 pendiente: abogado (pregunta 32 de `docs/LEGAL_PENDING.md`)
+
+## DEC-095
+
+Status: Accepted
+
+Date: 2026-10-26
+
+Decision:
+**Los instantes operativos se muestran en la hora de Nuevo México
+(`America/Denver`).** El cliente veía una venta de las 6 o 7 de la tarde como
+"mañana a la 1, 2 o 3 de la madrugada": los pedidos, el cobro en caja, la
+auditoría y el resto de pantallas operativas se formateaban en UTC "como zona
+neutra", mientras el corte de caja ya iba en hora local (DEC-085). La misma
+venta caía en dos días distintos según la pantalla.
+
+1. **Una constante, `BUSINESS_TIME_ZONE = "America/Denver"`**
+   (`apps/web/src/lib/time-zone.ts`), de la que `DAILY_CUT_TIME_ZONE` pasa a
+   ser alias: la zona del corte y la de los pedidos no pueden divergir.
+2. **Qué cambia a esa zona:** listado y ficha de pedidos (incluida la traza del
+   cálculo), confirmación del cobro en efectivo, auditoría, participantes,
+   portada del panel, ajustes, interruptores, exportaciones, autorizaciones
+   del sorteo, tarifa de envío, catálogo, envíos AMOE (panel y cuenta),
+   versiones de reglas (fecha de creación) y "con nosotros desde" de la
+   cuenta. En la tienda, las páginas que ya formateaban con
+   `promotion.legal_timezone` siguen igual; su respaldo sin promoción abierta
+   pasa de UTC a la hora del negocio.
+3. **Qué NO cambia (DEC-011):** apertura y cierre de la promoción, vigencia de
+   las reglas y plazos de la vía gratuita siguen contra `legal_timezone`; la
+   fecha de vigencia de un documento legal y la etiqueta del día del corte
+   siguen con su truco de mediodía UTC. Los instantes se siguen guardando en
+   UTC y la zona sigue siendo explícita en cada llamada.
+4. **Nada cambia en la API ni en la base de datos.** El corte ya se calculaba
+   en `America/Denver`; lo que estaba mal era lo que la pantalla decía al lado.
+
+Alternatives considered: A — Cambiar el `timeZone` por defecto del proveedor
+de next-intl (descartada: DEC-011 exige la zona explícita en cada llamada, y
+un valor por defecto es justo lo que permite olvidarla). B — Usar
+`legal_timezone` de la promoción también para lo operativo (descartada: un
+pedido sin promoción, la auditoría o el catálogo no tienen promoción de la que
+leerla, y la zona del mostrador no depende de las Official Rules). C — La zona
+del navegador (descartada: DEC-011 la prohíbe como fuente de verdad).
+
+Affected areas: `apps/web` (`lib/time-zone.ts`, `lib/admin/daily-cut.ts`,
+páginas del panel y de la cuenta citadas arriba, pruebas).
+
+Proposed by: sesión del usuario (2026-10-26, petición del cliente)
+Agreed by: frontend-ux, security (petición directa del usuario)

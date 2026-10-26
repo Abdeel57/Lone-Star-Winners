@@ -26,6 +26,7 @@ import {
   type AdminFeatureFlagRow,
   type AdminSettingChangeRequest,
 } from "@/lib/api";
+import { BUSINESS_TIME_ZONE } from "@/lib/time-zone";
 
 export const dynamic = "force-dynamic";
 
@@ -274,7 +275,8 @@ async function FlagCard({
       {flag.updated_at === undefined || flag.updated_at === null ? null : (
         <p className="mt-s1 text-caption text-text-subtle">
           {t("updatedAt", {
-            instant: formatZonedDateTime(flag.updated_at, locale, { timeZone: "UTC" }) ?? "",
+            instant:
+              formatZonedDateTime(flag.updated_at, locale, { timeZone: BUSINESS_TIME_ZONE }) ?? "",
           })}
         </p>
       )}
@@ -355,7 +357,7 @@ async function PendingRequestCard({
   const requestedAt =
     request.requested_at === undefined || request.requested_at === null
       ? null
-      : formatZonedDateTime(request.requested_at, locale, { timeZone: "UTC" });
+      : formatZonedDateTime(request.requested_at, locale, { timeZone: BUSINESS_TIME_ZONE });
 
   return (
     <Card elevation="flat" padding="md">

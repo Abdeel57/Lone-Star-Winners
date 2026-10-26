@@ -45,6 +45,7 @@ import {
   type AdminPromotionRow,
   type AdminRulesVersion,
 } from "@/lib/api";
+import { BUSINESS_TIME_ZONE } from "@/lib/time-zone";
 
 export const dynamic = "force-dynamic";
 
@@ -611,7 +612,8 @@ async function RulesVersionCard({
 
       <p className="mt-s2 text-caption text-text-subtle">
         {t("createdAt", {
-          instant: formatZonedDateTime(version.created_at, locale, { timeZone: "UTC" }) ?? "",
+          instant:
+            formatZonedDateTime(version.created_at, locale, { timeZone: BUSINESS_TIME_ZONE }) ?? "",
         })}
       </p>
 

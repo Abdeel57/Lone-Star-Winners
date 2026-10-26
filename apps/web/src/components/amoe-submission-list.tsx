@@ -11,6 +11,7 @@ import type { Locale } from "@/i18n/locales";
 import { IDLE } from "@/lib/action-result";
 import { cancelAmoeAction } from "@/lib/amoe-actions";
 import type { AmoeSubmission } from "@/lib/api";
+import { BUSINESS_TIME_ZONE } from "@/lib/time-zone";
 
 /**
  * Envios AMOE del participante.
@@ -65,7 +66,9 @@ function AmoeSubmissionCard({
           <p className="text-body-md text-text">
             {t("submittedAt", {
               instant:
-                formatZonedDateTime(submission.submitted_at, locale, { timeZone: "UTC" }) ?? "",
+                formatZonedDateTime(submission.submitted_at, locale, {
+                  timeZone: BUSINESS_TIME_ZONE,
+                }) ?? "",
             })}
           </p>
 
@@ -73,7 +76,9 @@ function AmoeSubmissionCard({
             <p className="mt-s1 text-caption text-text-subtle">
               {t("decidedAt", {
                 instant:
-                  formatZonedDateTime(submission.decided_at, locale, { timeZone: "UTC" }) ?? "",
+                  formatZonedDateTime(submission.decided_at, locale, {
+                    timeZone: BUSINESS_TIME_ZONE,
+                  }) ?? "",
               })}
             </p>
           )}

@@ -11,6 +11,7 @@ import { adminHref } from "@/i18n/admin-routing";
 import { formatMoney, formatZonedDate } from "@/i18n/formatters";
 import { isLocale } from "@/i18n/locales";
 import { fetchAdminOrders, type AdminOrderRow } from "@/lib/api";
+import { BUSINESS_TIME_ZONE } from "@/lib/time-zone";
 
 export const dynamic = "force-dynamic";
 
@@ -246,7 +247,9 @@ export default async function AdminOrdersPage({
                 {
                   id: "placed",
                   header: t("columnPlaced"),
-                  cell: (row) => formatZonedDate(row.placed_at, locale, { timeZone: "UTC" }) ?? "",
+                  // DEC-095: el dia del pedido en la hora del mostrador, no en UTC.
+                  cell: (row) =>
+                    formatZonedDate(row.placed_at, locale, { timeZone: BUSINESS_TIME_ZONE }) ?? "",
                 },
                 {
                   id: "total",

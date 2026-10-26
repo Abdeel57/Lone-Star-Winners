@@ -1,4 +1,5 @@
 import type { AdminDailyCutLine } from "@/lib/api";
+import { BUSINESS_TIME_ZONE } from "@/lib/time-zone";
 
 /**
  * Corte de caja diario (DEC-085) y de un rango de dias (DEC-091), del lado de
@@ -12,9 +13,10 @@ import type { AdminDailyCutLine } from "@/lib/api";
  * Hora del punto de venta: Nuevo Mexico, con su horario de verano. Es la MISMA
  * zona que usa la API para el corte (`DAILY_CUT_TIME_ZONE` en
  * `apps/api/src/services/daily-cut.ts`); si una cambiara, el selector de fecha
- * pediria un dia y la API devolveria otro.
+ * pediria un dia y la API devolveria otro. DEC-095: alias de la zona operativa
+ * del negocio, la misma en la que se pintan los pedidos y la auditoria.
  */
-export const DAILY_CUT_TIME_ZONE = "America/Denver";
+export const DAILY_CUT_TIME_ZONE = BUSINESS_TIME_ZONE;
 
 /** Fecha de calendario `YYYY-MM-DD` de `instant` en `timeZone`. */
 export function calendarDateIn(instant: Date, timeZone: string): string {
