@@ -5,7 +5,6 @@ import { getTranslations, setRequestLocale } from "next-intl/server";
 
 import { AmoeCallout } from "@/components/amoe-callout";
 import { ApiErrorState } from "@/components/api-error-state";
-import { ComingSoonBand } from "@/components/coming-soon-band";
 import { EntryOfferPanel } from "@/components/entry-offer-panel";
 import { EntryPackageBand } from "@/components/entry-package-band";
 import { MarqueeBand } from "@/components/marquee-band";
@@ -455,9 +454,10 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
           siguen en el menu y en el pie, y el pie ya lleva su propio bloque de
           Reglas Oficiales, que es lo ultimo que se lee antes de salir. */}
 
-      {/* PROXIMAMENTE (DEC-076): la gorra LSW Cap, que todavia no se vende.
-          Cierra la portada con expectativa: sin precio ni compra. */}
-      <ComingSoonBand />
+      {/* Aqui cerraba la portada el "Proximamente" de la gorra (DEC-076). Se
+          retira con DEC-096: la gorra ya se vende y vive en la tienda, como
+          cualquier otro articulo; la portada no anuncia lo que ya esta a la
+          venta. */}
     </>
   );
 }

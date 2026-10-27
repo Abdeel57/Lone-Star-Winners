@@ -3710,7 +3710,7 @@ Agreed by: pendiente — frontend-ux
 
 ## DEC-076
 
-Status: Proposed
+Status: Superseded (DEC-096: la gorra pasa a la tienda y la banda se retira)
 
 Date: 2026-10-05
 
@@ -4842,3 +4842,46 @@ páginas del panel y de la cuenta citadas arriba, pruebas).
 
 Proposed by: sesión del usuario (2026-10-26, petición del cliente)
 Agreed by: frontend-ux, security (petición directa del usuario)
+
+## DEC-096
+
+Status: Accepted
+
+Date: 2026-10-27
+
+Decision:
+**La gorra LSW deja de ser un "Próximamente" y pasa a la tienda como un
+producto más, en siete colores.** El cliente pidió quitar la sección de la
+portada y vender las gorras.
+
+1. **Se retira la banda** `ComingSoonBand` (DEC-076 queda sustituida), sus
+   textos `home.comingSoon`, su CSS (`.lsw-coming-soon`, `.lsw-outline-text`,
+   `.lsw-drift` y el efecto `data-reveal="lights"`, con su caso especial en
+   `scroll-reveal.tsx`) y las fotos de `public/coming-soon/`. Las fotos no se
+   pierden: son las del producto.
+2. **La gorra se da de alta por la API del panel**, con el mismo mecanismo que
+   el catálogo de octubre (`carga-productos/cargar-gorra.mjs`, fuera del
+   repositorio; lo ejecuta el usuario con la cuenta PROMOTION_MANAGER):
+   categoría `caps` ("Gorras" / "Caps", posición 5, la primera de la tienda),
+   producto `gorra-lsw` (`LSW-CAP-001`, MERCHANDISE) con siete variantes, una
+   por color y cada una con su foto, existencias no gestionadas, publicado al
+   final. **El precio se escribe al ejecutar**, el mismo para los siete
+   colores: no se inventa en código ni queda en el repositorio, y después se
+   ajusta desde el panel, color por color.
+3. **La portada no cambia de estructura.** "Mercancía destacada" ya toma los
+   artículos de la tienda, y la gorra aparece ahí por el orden de categorías
+   (DEC-064, DEC-088). Las participaciones que dé la gorra las decide la
+   versión de Reglas activa, como para cualquier mercancía (DEC-083).
+
+Alternatives considered: A — Dejar la banda y además vender la gorra
+(descartada: anunciaría como futuro lo que ya se vende). B — Una página propia
+de la gorra (descartada: la ficha de producto ya tiene selector de variantes).
+C — Sembrar la gorra con una migración (descartada: el catálogo es dato del
+panel, no esquema; DEC-027).
+
+Affected areas: `apps/web` (portada, `globals.css`, `scroll-reveal.tsx`,
+mensajes, `public/coming-soon/` y la prueba de la banda); fuera del repo,
+`carga-productos/` (`cargar-gorra.mjs`, `gorra.json`, `imagenes/gorra-lsw-*`).
+
+Proposed by: sesión del usuario (2026-10-27, petición del cliente)
+Agreed by: frontend-ux (petición directa del usuario)
