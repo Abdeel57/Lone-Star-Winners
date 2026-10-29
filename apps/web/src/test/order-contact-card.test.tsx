@@ -28,9 +28,10 @@ vi.mock("next-intl/server", async () => {
 });
 
 /*
- * El origen del enlace sale de `NEXT_PUBLIC_SITE_URL` y, sin ella, de las
- * cabeceras. Aqui se fija la variable y se dobla `headers()` por si acaso: el
- * enlace tiene que llevar el dominio canonico, no el de quien opera.
+ * El origen del enlace sale de `WEB_PUBLIC_URL` (la misma que usan los correos)
+ * y, sin ella, de `NEXT_PUBLIC_SITE_URL` o las cabeceras. Aqui se fija la
+ * variable y se dobla `headers()` con el host interno del panel: el enlace
+ * tiene que llevar el dominio canonico, NUNCA el de quien opera.
  */
 vi.mock("next/headers", () => ({
   headers: () => Promise.resolve(new Headers({ host: "panel.interno.test" })),
@@ -63,7 +64,10 @@ import esMessages from "../../messages/es-US.json";
 const SITE = "https://lonestarwinners.test";
 
 beforeAll(() => {
-  vi.stubEnv("NEXT_PUBLIC_SITE_URL", SITE);
+  // `WEB_PUBLIC_URL` es la fuente primaria en produccion; `panel.interno.test`
+  // (el host doblado) no debe aparecer nunca en el enlace.
+  vi.stubEnv("WEB_PUBLIC_URL", SITE);
+  vi.stubEnv("NEXT_PUBLIC_SITE_URL", "");
 });
 
 afterAll(() => {
