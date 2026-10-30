@@ -9,6 +9,7 @@ import {
   negotiateAdminLocale,
 } from "./i18n/admin-routing";
 import { routing } from "./i18n/routing";
+import { canonicalRedirectTarget } from "./lib/canonical-host";
 import { resolveMetaPixelId } from "./lib/meta-pixel";
 import { apiConnectOrigins, contentSecurityPolicy, createNonce } from "./lib/security-headers";
 
@@ -101,6 +102,25 @@ function requestHeadersWithCsp(request: NextRequest, csp: string): Headers {
 export default function middleware(request: NextRequest): NextResponse {
   const { pathname } = request.nextUrl;
   const { csp } = policyFor(request);
+
+  /*
+   * DEC-094: el dominio interno de Railway redirige al canonico ANTES de
+   * negociar nada. Un enlace que ya este en el telefono de un cliente con
+   * `web-production-....up.railway.app` tiene que aterrizar en
+   * lonestarwinners.com, que es donde carga el Turnstile. Sin `WEB_PUBLIC_URL`
+   * -desarrollo, CI- no hace nada; `/healthz` no pasa por aqui (ver `matcher`).
+   */
+  const canonical = canonicalRedirectTarget({
+    webPublicUrl: process.env.WEB_PUBLIC_URL,
+    requestHost: request.headers.get("x-forwarded-host") ?? request.headers.get("host"),
+    pathname,
+    search: request.nextUrl.search,
+  });
+  if (canonical !== null) {
+    const redirect = NextResponse.redirect(canonical, 308);
+    redirect.headers.set("content-security-policy", csp);
+    return redirect;
+  }
 
   if (!isAdminPath(pathname)) {
     /*

@@ -4772,6 +4772,16 @@ en la promoción.
    cuando lo hay) con exactamente el mismo texto, para quien no tiene WhatsApp.
    Los números de participación se ven en esa pantalla cuando
    `visible_entry_numbers_enabled` está encendido (DEC-080).
+5. **Addendum (2026-10-30, incidencia del cliente).** El enlace salía con el
+   dominio interno de Railway (`web-production-….up.railway.app`), donde el
+   Turnstile de Cloudflare no carga por estar atado al dominio público, y el
+   cliente no podía verificarse para entrar. Dos arreglos: (a) el origen del
+   enlace lee primero `WEB_PUBLIC_URL` —la misma que usan los correos, en
+   tiempo de ejecución— y esa variable debe existir en el servicio web; (b) el
+   middleware redirige (308) cualquier petición por `*.up.railway.app` a la
+   misma ruta en el dominio canónico (`lib/canonical-host.ts`), para que los
+   enlaces ya enviados también funcionen. Sin `WEB_PUBLIC_URL` no redirige;
+   `/healthz` queda fuera del `matcher`.
 
 Alternatives considered: A — Reutilizar `pii.view.full` (descartada: exige el
 segundo factor y el motivo que DEC-093 acaba de retirar de la anulación por
