@@ -369,6 +369,28 @@ export const CAPABILITIES = Object.freeze({
     "Ver el nombre, el celular y el correo del cliente de un pedido concreto, para entregarlo o avisarle de sus participaciones. Solo el contacto de ese pedido: la ficha completa sigue detras de pii.view.full.",
     { touchesPii: true },
   ),
+  /**
+   * Celular de CONTACTO de un cliente (DEC-097).
+   *
+   * Los clientes que se dieron de alta con correo antes de DEC-089 no tienen
+   * celular, y la tarjeta "Cliente" del pedido se queda sin WhatsApp ni SMS.
+   * Esta capacidad deja que el personal lo escriba en `participants.phone_e164`,
+   * que es un dato de contacto SIN verificar: NO da acceso a la cuenta. El
+   * celular con el que se entra (`identities.phone_e164`) solo lo puede poner el
+   * propio cliente, demostrando con un codigo SMS que el numero es suyo; si lo
+   * pudiera poner el personal, cualquiera con ese numero entraria en la cuenta.
+   *
+   * SENSITIVE, PII y auditada: cada cambio deja quien, cuando y los dos numeros
+   * enmascarados. Sin step-up ni motivo, por la misma razon que
+   * `order.contact.read`: es trabajo de atencion, del mismo volumen.
+   */
+  "participant.contact.update": define(
+    "participant.contact.update",
+    "participant",
+    "SENSITIVE",
+    "Anadir o cambiar el celular de CONTACTO de un cliente (para WhatsApp, SMS y llamadas). No es el celular de acceso: no deja entrar en la cuenta.",
+    { touchesPii: true },
+  ),
   "payment.webhook.read": define(
     "payment.webhook.read",
     "payment",

@@ -186,7 +186,10 @@
     "SIGN_IN_CODE_EXPIRED": "Ese código ya no sirve. Pide uno nuevo.",
     "SIGNUP_EXPIRED": "Pasó demasiado tiempo desde que escribiste el código. Vuelve a empezar con tu correo o tu celular.",
     "STAFF_ACCOUNT_USE_PANEL": "Esta cuenta es del personal. Entra desde el panel de administración.",
-    "ACCOUNT_UNAVAILABLE": "Esta cuenta no puede entrar ahora. Escríbenos a info@LoneStarWinners.com."
+    "ACCOUNT_UNAVAILABLE": "Esta cuenta no puede entrar ahora. Escríbenos a info@LoneStarWinners.com.",
+    "PHONE_ALREADY_SET": "Tu cuenta ya tiene un celular.",
+    "PHONE_IN_OTHER_ACCOUNT": "Ese celular ya está en otra cuenta. Escríbenos y la unimos con esta.",
+    "PARTICIPANT_ANONYMIZED": "Este cliente pidió borrar sus datos. No se le puede añadir un celular."
   },
   "availability": {
     "IN_STOCK": "Disponible",
@@ -960,7 +963,14 @@
       "saved": "Tus cambios están guardados.",
       "memberSince": "Cuenta creada el {date}",
       "securityHeading": "Cómo entras",
-      "securityBody": "Entras con un código que te enviamos a tu correo o a tu celular. No necesitas contraseña."
+      "securityBody": "Entras con un código que te enviamos a tu correo o a tu celular. No necesitas contraseña.",
+      "phoneHeading": "Tu celular",
+      "phoneIntro": "Añade tu celular para entrar también con él. Te enviamos un código por mensaje de texto para confirmar que es tuyo.",
+      "phoneCurrent": "Puedes entrar con tu celular {phone}.",
+      "phoneSend": "Enviar el código",
+      "phoneSave": "Guardar mi celular",
+      "phoneChange": "Usar otro número",
+      "phoneAdded": "Listo. Ya puedes entrar con tu celular."
     }
   },
   "entryType": {
@@ -1537,7 +1547,14 @@
       "messageEntriesNoPromotion": "Confirmamos tu pedido {order}: {entries, plural, one {# participación} other {# participaciones}}. ¡Mucha suerte!",
       "messageOrder": "Te contactamos por tu pedido {order}.",
       "entriesLink": "Aquí puedes ver todos tus números de participación: {link}",
-      "emailSubject": "Tu pedido {order} en Lone Star Winners"
+      "emailSubject": "Tu pedido {order} en Lone Star Winners",
+      "noPhoneIntro": "Este cliente no tiene celular. Si lo conoces, añádelo para escribirle por WhatsApp o SMS.",
+      "phoneFieldLabel": "Celular de contacto",
+      "phoneFieldHint": "Solo EE. UU., por ejemplo (505) 555-0123. Sirve para contactarle; no le da acceso a su cuenta.",
+      "addPhone": "Añadir celular",
+      "savePhone": "Guardar celular",
+      "changePhone": "Cambiar el celular de contacto",
+      "phoneSaved": "Celular guardado."
     },
     "orderFulfillment": {
       "saved": "Guardado.",

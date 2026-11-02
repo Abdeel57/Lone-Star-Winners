@@ -111,6 +111,8 @@ const orderVoidSql = readMigration("0041_card_pickup_and_order_void.sql");
 const orderVoidNoStepUpSql = readMigration("0042_order_void_without_step_up.sql");
 // DEC-094: `order.contact.read`, el contacto del cliente de un pedido.
 const orderContactSql = readMigration("0043_order_contact_read.sql");
+// DEC-097: `participant.contact.update`, el celular de contacto desde el panel.
+const participantContactSql = readMigration("0044_participant_contact_update.sql");
 
 const RBAC_SEED_MIGRATIONS = [
   rbacSql,
@@ -120,6 +122,7 @@ const RBAC_SEED_MIGRATIONS = [
   orderCancelSql,
   orderVoidSql,
   orderContactSql,
+  participantContactSql,
 ] as const;
 
 /** Las de arriba mas las que solo CORRIGEN filas ya sembradas. */
@@ -133,6 +136,7 @@ const RBAC_CATALOG_MIGRATIONS = [
   orderVoidSql,
   orderVoidNoStepUpSql,
   orderContactSql,
+  participantContactSql,
 ] as const;
 
 function parseSeedRowsAcross(table: string): string[][] {

@@ -1923,67 +1923,70 @@ partiría la cabecera e inyectaría cookies que nadie envió.
 Con el camino tal y como lo declara el código (`:slug`, no `{slug}`), que es lo
 que compara el test de contrato contra `apps/api/openapi/route-manifest.json`.
 
-| Método | Camino                                                                              | Authorization               |
-| ------ | ----------------------------------------------------------------------------------- | --------------------------- |
-| POST   | /api/v1/checkout/session                                                            | `PARTICIPANT_SELF`          |
-| GET    | /api/v1/checkout/sessions/:order_draft_id                                           | `PARTICIPANT_SELF`          |
-| POST   | /api/v1/checkout/cash-order                                                         | `PARTICIPANT_SELF`          |
-| GET    | /api/v1/account/orders                                                              | `order.self.read`           |
-| GET    | /api/v1/account/orders/:order_id                                                    | `order.self.read`           |
-| POST   | /api/v1/webhooks/payments/:provider                                                 | `PUBLIC`                    |
-| GET    | /api/v1/account/entry-summary                                                       | `entry.self.read`           |
-| GET    | /api/v1/account/entry-transactions                                                  | `entry.self.read`           |
-| GET    | /api/v1/account/entry-numbers                                                       | `entry.self.read`           |
-| GET    | /api/v1/account/award-holds                                                         | `entry.self.read`           |
-| GET    | /api/v1/me                                                                          | `participant.self.read`     |
-| PATCH  | /api/v1/me                                                                          | `participant.self.update`   |
-| GET    | /api/v1/me/checkout-defaults                                                        | `participant.self.read`     |
-| GET    | /api/v1/promotions/:slug/amoe-config                                                | `PUBLIC`                    |
-| POST   | /api/v1/promotions/:promotion_id/amoe-submissions                                   | `amoe.self.submit`          |
-| GET    | /api/v1/account/amoe-submissions                                                    | `PARTICIPANT_SELF`          |
-| GET    | /api/v1/admin/amoe-submissions                                                      | `amoe.review.read`          |
-| POST   | /api/v1/admin/amoe-submissions/:submission_id/approve                               | `amoe.review.approve`       |
-| POST   | /api/v1/admin/amoe-submissions/:submission_id/reject                                | `amoe.review.reject`        |
-| GET    | /api/v1/admin/entry-adjustments                                                     | `entry.ledger.read`         |
-| POST   | /api/v1/admin/entry-adjustments                                                     | `entry.adjust.create`       |
-| POST   | /api/v1/admin/entry-adjustments/preview                                             | `entry.adjust.create`       |
-| POST   | /api/v1/admin/entry-adjustments/:adjustment_id/approve                              | `entry.adjust.approve`      |
-| POST   | /api/v1/admin/entry-adjustments/:adjustment_id/reject                               | `entry.adjust.approve`      |
-| POST   | /api/v1/admin/participants/:participant_id/disqualify                               | `participant.disqualify`    |
-| POST   | /api/v1/admin/orders/:order_id/refund                                               | `order.refund.initiate`     |
-| GET    | /api/v1/admin/payment-webhooks                                                      | `payment.webhook.read`      |
-| POST   | /api/v1/admin/payment-webhooks/:event_id/replay                                     | `payment.webhook.replay`    |
-| GET    | /api/v1/admin/promotions/:promotion_id/draw-authorizations                          | `draw.result.read`          |
-| POST   | /api/v1/admin/promotions/:promotion_id/draw-authorizations                          | `draw.authorization.create` |
-| POST   | /api/v1/admin/promotions/:promotion_id/draw-authorizations/:authorization_id/revoke | `draw.authorization.create` |
-| POST   | /api/v1/admin/draws                                                                 | `draw.initiate`             |
-| GET    | /api/v1/admin/draws                                                                 | `draw.result.read`          |
-| GET    | /api/v1/admin/promotions/:promotion_id/potential-winners                            | `winner.workflow.read`      |
-| POST   | /api/v1/admin/potential-winners/:potential_winner_id/status                         | `winner.status.update`      |
-| POST   | /api/v1/admin/promotions/:promotion_id/export-snapshots                             | `export.snapshot.create`    |
-| GET    | /api/v1/admin/promotions/:promotion_id/export-snapshots                             | `export.snapshot.read`      |
-| GET    | /api/v1/admin/export-snapshots/:snapshot_id                                         | `export.snapshot.read`      |
-| POST   | /api/v1/admin/export-snapshots/:snapshot_id/validate                                | `export.snapshot.validate`  |
-| POST   | /api/v1/admin/export-snapshots/:snapshot_id/finalize                                | `export.finalize`           |
-| GET    | /api/v1/admin/export-snapshots/:snapshot_id/download                                | `export.download`           |
-| POST   | /api/v1/admin/export-snapshots/:snapshot_id/deliver                                 | `export.deliver`            |
-| POST   | /api/v1/admin/export-snapshots/:snapshot_id/results                                 | `winner.status.update`      |
-| GET    | /api/v1/admin/dashboard                                                             | `dashboard.read`            |
-| GET    | /api/v1/admin/orders                                                                | `order.read`                |
-| GET    | /api/v1/admin/orders/:order_id                                                      | `order.read`                |
-| GET    | /api/v1/admin/orders/:order_id/cash-payment                                         | `order.read`                |
-| POST   | /api/v1/admin/orders/:order_id/cash-payment/confirm                                 | `order.cash.confirm`        |
-| POST   | /api/v1/admin/orders/:order_id/cash-payment/entries                                 | `order.cash.confirm`        |
-| POST   | /api/v1/admin/orders/:order_id/cancel                                               | `order.cancel`              |
-| POST   | /api/v1/admin/orders/:order_id/fulfillment                                          | `order.fulfillment.update`  |
-| POST   | /api/v1/admin/orders/:order_id/void                                                 | `order.void` (DEC-091)      |
-| GET    | /api/v1/admin/orders/:order_id/void                                                 | `order.read` (DEC-091)      |
-| GET    | /api/v1/admin/orders/:order_id/contact                                              | `order.contact.read`        |
-| GET    | /api/v1/admin/reports/daily-cut                                                     | `order.read`                |
-| GET    | /api/v1/admin/participants                                                          | `participant.list`          |
-| GET    | /api/v1/admin/participants/:participant_id                                          | `participant.read`          |
-| GET    | /api/v1/admin/participants/:participant_id/pii                                      | `pii.view.full`             |
-| GET    | /api/v1/admin/audit-events                                                          | `audit.read`                |
+| Método | Camino                                                                              | Authorization                |
+| ------ | ----------------------------------------------------------------------------------- | ---------------------------- |
+| POST   | /api/v1/checkout/session                                                            | `PARTICIPANT_SELF`           |
+| GET    | /api/v1/checkout/sessions/:order_draft_id                                           | `PARTICIPANT_SELF`           |
+| POST   | /api/v1/checkout/cash-order                                                         | `PARTICIPANT_SELF`           |
+| GET    | /api/v1/account/orders                                                              | `order.self.read`            |
+| GET    | /api/v1/account/orders/:order_id                                                    | `order.self.read`            |
+| POST   | /api/v1/webhooks/payments/:provider                                                 | `PUBLIC`                     |
+| GET    | /api/v1/account/entry-summary                                                       | `entry.self.read`            |
+| GET    | /api/v1/account/entry-transactions                                                  | `entry.self.read`            |
+| GET    | /api/v1/account/entry-numbers                                                       | `entry.self.read`            |
+| GET    | /api/v1/account/award-holds                                                         | `entry.self.read`            |
+| GET    | /api/v1/me                                                                          | `participant.self.read`      |
+| PATCH  | /api/v1/me                                                                          | `participant.self.update`    |
+| GET    | /api/v1/me/checkout-defaults                                                        | `participant.self.read`      |
+| POST   | /api/v1/me/phone/start                                                              | `participant.self.update`    |
+| POST   | /api/v1/me/phone/verify                                                             | `participant.self.update`    |
+| GET    | /api/v1/promotions/:slug/amoe-config                                                | `PUBLIC`                     |
+| POST   | /api/v1/promotions/:promotion_id/amoe-submissions                                   | `amoe.self.submit`           |
+| GET    | /api/v1/account/amoe-submissions                                                    | `PARTICIPANT_SELF`           |
+| GET    | /api/v1/admin/amoe-submissions                                                      | `amoe.review.read`           |
+| POST   | /api/v1/admin/amoe-submissions/:submission_id/approve                               | `amoe.review.approve`        |
+| POST   | /api/v1/admin/amoe-submissions/:submission_id/reject                                | `amoe.review.reject`         |
+| GET    | /api/v1/admin/entry-adjustments                                                     | `entry.ledger.read`          |
+| POST   | /api/v1/admin/entry-adjustments                                                     | `entry.adjust.create`        |
+| POST   | /api/v1/admin/entry-adjustments/preview                                             | `entry.adjust.create`        |
+| POST   | /api/v1/admin/entry-adjustments/:adjustment_id/approve                              | `entry.adjust.approve`       |
+| POST   | /api/v1/admin/entry-adjustments/:adjustment_id/reject                               | `entry.adjust.approve`       |
+| POST   | /api/v1/admin/participants/:participant_id/disqualify                               | `participant.disqualify`     |
+| POST   | /api/v1/admin/orders/:order_id/refund                                               | `order.refund.initiate`      |
+| GET    | /api/v1/admin/payment-webhooks                                                      | `payment.webhook.read`       |
+| POST   | /api/v1/admin/payment-webhooks/:event_id/replay                                     | `payment.webhook.replay`     |
+| GET    | /api/v1/admin/promotions/:promotion_id/draw-authorizations                          | `draw.result.read`           |
+| POST   | /api/v1/admin/promotions/:promotion_id/draw-authorizations                          | `draw.authorization.create`  |
+| POST   | /api/v1/admin/promotions/:promotion_id/draw-authorizations/:authorization_id/revoke | `draw.authorization.create`  |
+| POST   | /api/v1/admin/draws                                                                 | `draw.initiate`              |
+| GET    | /api/v1/admin/draws                                                                 | `draw.result.read`           |
+| GET    | /api/v1/admin/promotions/:promotion_id/potential-winners                            | `winner.workflow.read`       |
+| POST   | /api/v1/admin/potential-winners/:potential_winner_id/status                         | `winner.status.update`       |
+| POST   | /api/v1/admin/promotions/:promotion_id/export-snapshots                             | `export.snapshot.create`     |
+| GET    | /api/v1/admin/promotions/:promotion_id/export-snapshots                             | `export.snapshot.read`       |
+| GET    | /api/v1/admin/export-snapshots/:snapshot_id                                         | `export.snapshot.read`       |
+| POST   | /api/v1/admin/export-snapshots/:snapshot_id/validate                                | `export.snapshot.validate`   |
+| POST   | /api/v1/admin/export-snapshots/:snapshot_id/finalize                                | `export.finalize`            |
+| GET    | /api/v1/admin/export-snapshots/:snapshot_id/download                                | `export.download`            |
+| POST   | /api/v1/admin/export-snapshots/:snapshot_id/deliver                                 | `export.deliver`             |
+| POST   | /api/v1/admin/export-snapshots/:snapshot_id/results                                 | `winner.status.update`       |
+| GET    | /api/v1/admin/dashboard                                                             | `dashboard.read`             |
+| GET    | /api/v1/admin/orders                                                                | `order.read`                 |
+| GET    | /api/v1/admin/orders/:order_id                                                      | `order.read`                 |
+| GET    | /api/v1/admin/orders/:order_id/cash-payment                                         | `order.read`                 |
+| POST   | /api/v1/admin/orders/:order_id/cash-payment/confirm                                 | `order.cash.confirm`         |
+| POST   | /api/v1/admin/orders/:order_id/cash-payment/entries                                 | `order.cash.confirm`         |
+| POST   | /api/v1/admin/orders/:order_id/cancel                                               | `order.cancel`               |
+| POST   | /api/v1/admin/orders/:order_id/fulfillment                                          | `order.fulfillment.update`   |
+| POST   | /api/v1/admin/orders/:order_id/void                                                 | `order.void` (DEC-091)       |
+| GET    | /api/v1/admin/orders/:order_id/void                                                 | `order.read` (DEC-091)       |
+| GET    | /api/v1/admin/orders/:order_id/contact                                              | `order.contact.read`         |
+| GET    | /api/v1/admin/reports/daily-cut                                                     | `order.read`                 |
+| GET    | /api/v1/admin/participants                                                          | `participant.list`           |
+| GET    | /api/v1/admin/participants/:participant_id                                          | `participant.read`           |
+| GET    | /api/v1/admin/participants/:participant_id/pii                                      | `pii.view.full`              |
+| PUT    | /api/v1/admin/participants/:participant_id/contact-phone                            | `participant.contact.update` |
+| GET    | /api/v1/admin/audit-events                                                          | `audit.read`                 |
 
 **Todas están `IMPLEMENTED`**, con dos matices que importan y que se detallan en
 cada bloque: las rutas de comercio dependen de un proveedor de pago que sigue sin
@@ -3323,6 +3326,49 @@ La misma fila más `phone` (enmascarado: `***34`), `preferred_locale`, `status` 
 para eso están `order.read` y `entry.ledger.read`, con sus propias rutas.
 
 401 · 403 · 404.
+
+### PUT /api/v1/admin/participants/:participant_id/contact-phone
+
+    Authorization: participant.contact.update (SENSITIVE, PII, auditada; sin step-up ni motivo)
+
+DEC-097. Cuerpo `{ "phone": "(505) 555-0123" }` → 200 `{ participant_id, phone }`
+con el número en E.164. Añade o cambia el celular de **contacto** del cliente
+(`participants.phone_e164`, sin verificar): el que activa WhatsApp, SMS y
+llamada en la tarjeta "Cliente" del pedido (DEC-094). **No** es el celular de
+acceso y no deja entrar en la cuenta: ese solo lo añade el propio cliente con un
+código SMS (`POST /me/phone/verify`). Solo números de EE. UU. Cada cambio emite
+`participant.contact_phone.updated` con el número anterior y el nuevo
+enmascarados.
+
+200 · 401 · 403 · 404 · 409 PARTICIPANT_ANONYMIZED (el cliente borró sus datos:
+no se le vuelve a poner un dato personal) · 422 PHONE_INVALID.
+
+### POST /api/v1/me/phone/start
+
+    Authorization: participant.self.update
+
+DEC-097. Para cuentas que entraron con correo y no tienen celular de acceso.
+Cuerpo `{ "phone": "(505) 555-0123", "bot_check_token": "…" }` → 200
+`{ "acknowledged": true }` y un SMS con el código (Twilio Verify). Mismo
+anti-bots y mismo tope por número que `POST /auth/code/start` (3 códigos sin
+acertar cada 15 minutos). **No** dice si el número es de otra cuenta: eso solo
+se sabe al acertar el código.
+
+200 · 401 · 409 PHONE_ALREADY_SET (la cuenta ya tiene celular) · 422
+PHONE_INVALID / BOT_CHECK_FAILED · 429 · 503 SMS_NOT_CONFIGURED.
+
+### POST /api/v1/me/phone/verify
+
+    Authorization: participant.self.update
+
+DEC-097. Cuerpo `{ "phone": "…", "code": "123456" }` → 200 `{ "phone": "+15055550123" }`.
+Con el código correcto el número queda como celular **verificado** de la cuenta:
+desde entonces se puede entrar con él, y entrar con él lleva a esta misma cuenta
+en vez de crear otra vacía. Solo añade, nunca cambia.
+
+200 · 401 · 409 PHONE_ALREADY_SET · 409 PHONE_IN_OTHER_ACCOUNT (el número ya
+entra en otra cuenta; solo se dice tras acertar el código) · 410
+SIGN_IN_CODE_EXPIRED · 422 SIGN_IN_CODE_INVALID / PHONE_INVALID · 503.
 
 ### GET /api/v1/admin/participants/:participant_id/pii
 

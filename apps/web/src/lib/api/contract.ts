@@ -2121,6 +2121,8 @@ export type AdminCapability =
   | "order.void"
   /** DEC-094: nombre, celular y correo del cliente de un pedido, para entregar y avisar. */
   | "order.contact.read"
+  /** DEC-097: anadir o cambiar el celular de CONTACTO de un cliente. No da acceso a su cuenta. */
+  | "participant.contact.update"
   | "entry.ledger.read"
   | "entry.adjust.create"
   | "entry.adjust.approve"
@@ -2179,6 +2181,7 @@ export const ADMIN_CAPABILITIES: readonly AdminCapability[] = [
   "order.fulfillment.update",
   "order.void",
   "order.contact.read",
+  "participant.contact.update",
   "entry.ledger.read",
   "entry.adjust.create",
   "entry.adjust.approve",

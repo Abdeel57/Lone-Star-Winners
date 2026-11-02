@@ -64,12 +64,27 @@ import type { AppDependencies } from "../app.js";
 import { ApiErrors, errorEnvelopeSchema } from "../http/errors.js";
 import { buildPage, decodeCursor, pageSchema, paginationQuerySchema } from "../http/pagination.js";
 import { maskEmail, maskPhone } from "../http/pii.js";
-import { requireStaff } from "../http/require-staff.js";
+import { requireStaff, requireStaffContext } from "../http/require-staff.js";
 import type { RouteDefinition } from "../http/route-registry.js";
 import { adminReadsFor } from "../services/admin-reads.js";
+import { domainServicesFor } from "../services/domain-registry.js";
+import { normalizeUsPhone } from "../services/phone.js";
 import type { AdminParticipantRow } from "@lsw/database";
+import type { DomainActor } from "@lsw/sweepstakes";
 
 const participantParamsSchema = z.object({ participant_id: z.uuid() });
+
+/**
+ * DEC-097: el celular de CONTACTO que teclea el personal. Mismo tope de forma
+ * que el de la tienda; lo que cuenta es `normalizeUsPhone` (solo EE. UU.).
+ */
+const contactPhoneBodySchema = z.object({ phone: z.string().trim().min(7).max(32) });
+
+const contactPhoneResponseSchema = z.object({
+  participant_id: z.uuid(),
+  /** El celular de contacto ya guardado, en E.164. */
+  phone: z.string(),
+});
 
 /**
  * Fila del listado.
@@ -235,6 +250,60 @@ export function buildAdminParticipantRoutes(dependencies: AppDependencies): Rout
           status: row.status,
           review_state: row.reviewState,
         };
+      },
+    },
+
+    {
+      method: "PUT",
+      url: "/api/v1/admin/participants/:participant_id/contact-phone",
+      operationId: "setAdminParticipantContactPhone",
+      summary: "Anadir o cambiar el celular de CONTACTO de un cliente.",
+      description:
+        "DEC-097. Para los clientes que se dieron de alta con correo y no tienen celular: activa WhatsApp, SMS y llamadas en la tarjeta del pedido. Es el celular de contacto (`participants.phone_e164`, sin verificar), NO el de acceso: no deja entrar en la cuenta; ese solo lo anade el propio cliente con un codigo SMS (`POST /me/phone/verify`). Solo numeros de EE. UU. (422 PHONE_INVALID). 409 PARTICIPANT_ANONYMIZED si el cliente borro sus datos: no se le vuelve a poner un dato personal. Cada cambio emite `participant.contact_phone.updated` con el numero anterior y el nuevo enmascarados.",
+      tags: ["admin"],
+      authorization: { kind: "PERMISSION", permission: "participant.contact.update" },
+      schema: {
+        params: participantParamsSchema,
+        body: contactPhoneBodySchema,
+        response: {
+          200: contactPhoneResponseSchema,
+          401: errorEnvelopeSchema,
+          403: errorEnvelopeSchema,
+          404: errorEnvelopeSchema,
+          409: errorEnvelopeSchema,
+          422: errorEnvelopeSchema,
+        },
+      },
+      handler: async (request) => {
+        const staff = await requireStaffContext(dependencies, request);
+        const params = request.params as z.infer<typeof participantParamsSchema>;
+        const body = request.body as z.infer<typeof contactPhoneBodySchema>;
+
+        const phone = normalizeUsPhone(body.phone);
+        if (phone === null) throw ApiErrors.phoneInvalid();
+
+        const domain = domainServicesFor(dependencies);
+        const result = await domain.participants.setContactPhone(params.participant_id, phone);
+        if (result === null) throw ApiErrors.notFound();
+        if (result === "ANONYMIZED") throw ApiErrors.participantAnonymized();
+
+        // Es PII y la capacidad se audita: quien cambio el contacto de quien,
+        // cuando, y los dos numeros ENMASCARADOS -la traza no guarda el dato
+        // que protege-.
+        const actor: DomainActor = { type: "ADMIN", adminUserId: staff.adminUserId };
+        await domain.audit.emit({
+          action: "participant.contact_phone.updated",
+          actor,
+          promotionId: null,
+          targetEntityType: "Participant",
+          targetEntityId: params.participant_id,
+          reasonKey: null,
+          reasonDetail: null,
+          occurredAt: domain.clock.now(),
+          metadata: { previous: maskPhone(result.previous), current: maskPhone(phone) },
+        });
+
+        return { participant_id: params.participant_id, phone };
       },
     },
   ];

@@ -47,6 +47,8 @@ const ADMIN_ID = "44444444-4444-4444-8444-444444444444";
 const ORDER_ID = "88888888-8888-4888-8888-888888888888";
 const OTHER_ORDER_ID = "99999999-9999-4999-8999-999999999999";
 const AUDIT_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+/** DEC-097: un participante que borro sus datos. */
+const ANONYMIZED_PARTICIPANT_ID = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
 const NOW = new Date("2026-09-15T12:00:00.000Z");
 
 /** Ver la nota de `amoe-adjustments.test.ts`: `vi.mock` se eleva sobre los imports. */
@@ -186,9 +188,15 @@ function buildDoubles(overrides: ReadsOverrides = {}): {
   entryTotalsCalls: number;
   /** DEC-094: lo que las rutas registraron en la auditoria. */
   audited: Record<string, unknown>[];
+  /** DEC-097: celulares de contacto escritos, por participante. */
+  contactPhones: { participantId: string; phone: string }[];
 } {
   const orders = overrides.orders ?? [orderFixture()];
-  const state = { entryTotalsCalls: 0, audited: [] as Record<string, unknown>[] };
+  const state = {
+    entryTotalsCalls: 0,
+    audited: [] as Record<string, unknown>[],
+    contactPhones: [] as { participantId: string; phone: string }[],
+  };
 
   shared.reads = {
     dashboardCounts: () =>
@@ -241,6 +249,16 @@ function buildDoubles(overrides: ReadsOverrides = {}): {
 
   shared.domain = {
     clock: { now: () => NOW },
+    // DEC-097: el celular de contacto. Solo existe el participante del fixture,
+    // que ya tenia uno.
+    participants: {
+      setContactPhone: (participantId: string, phone: string) => {
+        if (participantId === ANONYMIZED_PARTICIPANT_ID) return Promise.resolve("ANONYMIZED");
+        if (participantId !== PARTICIPANT_ID) return Promise.resolve(null);
+        state.contactPhones.push({ participantId, phone });
+        return Promise.resolve({ previous: "+15550101234" });
+      },
+    },
     // DEC-094: la ruta del contacto deja rastro; aqui se recoge lo que emite.
     audit: {
       emit: (event: Record<string, unknown>) => {
@@ -262,7 +280,12 @@ function buildDoubles(overrides: ReadsOverrides = {}): {
     },
   };
 
-  return { orders, entryTotalsCalls: state.entryTotalsCalls, audited: state.audited };
+  return {
+    orders,
+    entryTotalsCalls: state.entryTotalsCalls,
+    audited: state.audited,
+    contactPhones: state.contactPhones,
+  };
 }
 
 function auditFixture(overrides: Record<string, unknown> = {}): Record<string, unknown> {
@@ -636,6 +659,97 @@ describe("GET /admin/orders/:order_id/contact", () => {
       method: "GET",
       url: `/api/v1/admin/orders/${ORDER_ID}/contact`,
     });
+
+    expect(response.statusCode).toBe(401);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 3c. Celular de contacto de un cliente (DEC-097)
+// ---------------------------------------------------------------------------
+
+describe("PUT /admin/participants/:participant_id/contact-phone", () => {
+  const url = `/api/v1/admin/participants/${PARTICIPANT_ID}/contact-phone`;
+
+  it("guarda el numero normalizado y lo audita ENMASCARADO", async () => {
+    const doubles = buildDoubles();
+    shared.staff = staffWith(["participant.contact.update"]);
+
+    const app = await appAllowingPermissions();
+    const response = await app.inject({
+      method: "PUT",
+      url,
+      payload: { phone: "(505) 555-0123" },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ participant_id: PARTICIPANT_ID, phone: "+15055550123" });
+    expect(doubles.contactPhones).toEqual([
+      { participantId: PARTICIPANT_ID, phone: "+15055550123" },
+    ]);
+
+    expect(doubles.audited).toHaveLength(1);
+    const event = doubles.audited[0] ?? {};
+    expect(event.action).toBe("participant.contact_phone.updated");
+    expect(event.targetEntityType).toBe("Participant");
+    expect(event.targetEntityId).toBe(PARTICIPANT_ID);
+    // La traza no guarda el dato que protege: ni el numero nuevo ni el viejo.
+    const metadata = JSON.stringify(event.metadata);
+    expect(metadata).not.toContain("5055550123");
+    expect(metadata).not.toContain("5550101234");
+    // Mismo enmascarado que el resto del panel (`http/pii.ts`).
+    expect(event.metadata).toEqual({ previous: "***34", current: "***23" });
+  });
+
+  it("un numero que no es de EE. UU. es 422 y no escribe ni audita nada", async () => {
+    const doubles = buildDoubles();
+    shared.staff = staffWith(["participant.contact.update"]);
+
+    const app = await appAllowingPermissions();
+    const response = await app.inject({ method: "PUT", url, payload: { phone: "12345678" } });
+
+    expect(response.statusCode).toBe(422);
+    expect(response.json<{ error: { code: string } }>().error.code).toBe("PHONE_INVALID");
+    expect(doubles.contactPhones).toEqual([]);
+    expect(doubles.audited).toEqual([]);
+  });
+
+  it("404 si el participante no existe, y nada que auditar", async () => {
+    const doubles = buildDoubles();
+    shared.staff = staffWith(["participant.contact.update"]);
+
+    const app = await appAllowingPermissions();
+    const response = await app.inject({
+      method: "PUT",
+      url: `/api/v1/admin/participants/${OTHER_ORDER_ID}/contact-phone`,
+      payload: { phone: "5055550123" },
+    });
+
+    expect(response.statusCode).toBe(404);
+    expect(doubles.audited).toEqual([]);
+  });
+
+  it("a un cliente que borro sus datos no se le vuelve a poner un celular", async () => {
+    const doubles = buildDoubles();
+    shared.staff = staffWith(["participant.contact.update"]);
+
+    const app = await appAllowingPermissions();
+    const response = await app.inject({
+      method: "PUT",
+      url: `/api/v1/admin/participants/${ANONYMIZED_PARTICIPANT_ID}/contact-phone`,
+      payload: { phone: "5055550123" },
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json<{ error: { code: string } }>().error.code).toBe("PARTICIPANT_ANONYMIZED");
+    expect(doubles.audited).toEqual([]);
+  });
+
+  it("sin sesion de personal responde 401 con el autorizador por defecto", async () => {
+    buildDoubles();
+    const app = await createApp(buildDependencies());
+
+    const response = await app.inject({ method: "PUT", url, payload: { phone: "5055550123" } });
 
     expect(response.statusCode).toBe(401);
   });

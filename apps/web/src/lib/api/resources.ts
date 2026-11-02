@@ -178,6 +178,9 @@ export const API_PATHS = {
   meCheckoutDefaults: "/me/checkout-defaults",
   /** [PROVISIONAL] Perfil del participante. No esta en el contrato. */
   me: "/me",
+  /** DEC-097: anadir el celular de acceso a una cuenta que entro con correo. */
+  mePhoneStart: "/me/phone/start",
+  mePhoneVerify: "/me/phone/verify",
 
   // --- Portal del participante (seccion 6 del contrato).
   /** Saldo de participaciones por promocion. */
@@ -1081,6 +1084,38 @@ export function updateMe(
   });
 }
 
+/**
+ * DEC-097: pedir el codigo por SMS para anadir el celular de acceso a mi cuenta.
+ * Mismo anti-bots y mismo tope por numero que el codigo para entrar.
+ */
+export function startMyPhoneVerification(
+  input: { readonly phone: string; readonly bot_check_token?: string },
+  locale: Locale,
+  session: SessionContext,
+): Promise<ApiResult<{ readonly acknowledged: true }>> {
+  return apiRequest<{ readonly acknowledged: true }>("POST", API_PATHS.mePhoneStart, {
+    locale,
+    body: input,
+    ...sessionOptions(session),
+  });
+}
+
+/**
+ * DEC-097: comprobar el codigo y guardar el celular. Desde ese momento se entra
+ * con el y entrar con el lleva a ESTA cuenta, no a una nueva.
+ */
+export function verifyMyPhone(
+  input: { readonly phone: string; readonly code: string },
+  locale: Locale,
+  session: SessionContext,
+): Promise<ApiResult<{ readonly phone: string }>> {
+  return apiRequest<{ readonly phone: string }>("POST", API_PATHS.mePhoneVerify, {
+    locale,
+    body: input,
+    ...sessionOptions(session),
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Portal del participante
 // ---------------------------------------------------------------------------
@@ -1829,6 +1864,23 @@ export function fetchAdminOrderVoid(
     locale,
     ...sessionOptions(session),
   });
+}
+
+/**
+ * DEC-097: anadir o cambiar el celular de CONTACTO de un cliente desde el panel.
+ * No es el celular de acceso: no deja entrar en la cuenta.
+ */
+export function setAdminParticipantContactPhone(
+  participantId: string,
+  input: { readonly phone: string },
+  locale: Locale,
+  session: SessionContext,
+): Promise<ApiResult<{ readonly participant_id: string; readonly phone: string }>> {
+  return apiRequest<{ readonly participant_id: string; readonly phone: string }>(
+    "PUT",
+    `${API_PATHS.adminParticipants}/${encodeURIComponent(participantId)}/contact-phone`,
+    { locale, body: input, ...sessionOptions(session) },
+  );
 }
 
 /**

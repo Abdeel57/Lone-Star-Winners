@@ -542,6 +542,14 @@ export const mockRoutes: readonly MockRoute[] = [
     body: confirmedCashPayment,
   },
   { method: "GET", path: API_PATHS.adminParticipants, body: adminParticipantPage },
+  // DEC-097: celular de contacto desde el panel, y de acceso desde el perfil.
+  {
+    method: "PUT",
+    path: `${API_PATHS.adminParticipants}/:id/contact-phone`,
+    body: { participant_id: "par_0000000000000001", phone: "+15055550123" },
+  },
+  { method: "POST", path: API_PATHS.mePhoneStart, body: { acknowledged: true } },
+  { method: "POST", path: API_PATHS.mePhoneVerify, body: { phone: "+15055550123" } },
   { method: "GET", path: API_PATHS.adminAmoeSubmissions, body: adminAmoeSubmissionPage },
   {
     method: "POST",

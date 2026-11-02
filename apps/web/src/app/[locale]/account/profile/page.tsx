@@ -6,6 +6,7 @@ import { getTranslations, setRequestLocale } from "next-intl/server";
 import { AccountShell, MfaRequired, SignInRequired } from "@/components/account-shell";
 import { ApiErrorState } from "@/components/api-error-state";
 import { UnverifiedEmailNotice } from "@/components/email-verification";
+import { AddPhoneForm } from "@/components/add-phone-form";
 import { ProfileForm } from "@/components/profile-form";
 import { formatZonedDate } from "@/i18n/formatters";
 import { routing } from "@/i18n/routing";
@@ -67,6 +68,8 @@ export default async function AccountProfilePage({
   }
 
   const { participant } = state;
+  // El contrato lo declara opcional: una API anterior a DEC-060 no lo manda.
+  const accessPhone = participant.phone ?? null;
   const createdAt = formatZonedDate(participant.created_at, locale, {
     timeZone: BUSINESS_TIME_ZONE,
   });
@@ -82,6 +85,27 @@ export default async function AccountProfilePage({
         )}
 
         <ProfileForm participant={participant} locale={locale} />
+
+        {/*
+         * DEC-097: el celular de ACCESO. Quien entro con correo antes de DEC-089
+         * no lo tiene, y si entra con el celular el sistema le crea una cuenta
+         * nueva y vacia. Anadirlo aqui, con un codigo SMS, lo evita.
+         */}
+        <Card elevation="raised" padding="lg" className="max-w-[32rem]">
+          <CardTitle as="h2" size="sm">
+            {t("phoneHeading")}
+          </CardTitle>
+
+          {accessPhone === null ? (
+            <div className="mt-s4">
+              <AddPhoneForm locale={locale} />
+            </div>
+          ) : (
+            <p className="mt-s3 text-body-sm text-text-muted">
+              {t("phoneCurrent", { phone: accessPhone })}
+            </p>
+          )}
+        </Card>
 
         {/* DEC-089: la tienda entra con codigo; no hay contrasena que cambiar. */}
         <Card elevation="raised" padding="lg" className="max-w-[32rem]">

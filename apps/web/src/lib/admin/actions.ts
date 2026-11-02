@@ -46,6 +46,7 @@ import {
   fetchAdminPromotion,
   publishAdminProduct,
   scheduleAdminPromotion,
+  setAdminParticipantContactPhone,
   unscheduleAdminPromotion,
   updateAdminProduct,
   updateAdminPromotion,
@@ -494,6 +495,37 @@ export async function setOrderFulfillmentAction(
   );
 
   if (!result.ok) return fromFailure(result.error);
+
+  revalidatePath("/admin", "layout");
+  return SUCCEEDED;
+}
+
+/**
+ * DEC-097: anadir o cambiar el celular de CONTACTO de un cliente desde la
+ * tarjeta "Cliente" del pedido. Solo contacto: no da acceso a su cuenta. El
+ * numero lo normaliza y lo valida la API (solo EE. UU.).
+ */
+export async function setContactPhoneAction(
+  _previous: ActionResult,
+  formData: FormData,
+): Promise<ActionResult> {
+  const locale = localeFrom(formData);
+  if (locale === null) return invalid("VALIDATION_FAILED");
+
+  const participantId = textFrom(formData, "participant_id");
+  if (participantId === null) return invalid("VALIDATION_FAILED");
+
+  const phone = textFrom(formData, "phone");
+  if (phone === null) return invalid("FIELD_REQUIRED", "phone");
+  if (phone.length > 32) return invalid("FIELD_TOO_LONG", "phone");
+
+  const session = await mutableSession();
+  const result = await setAdminParticipantContactPhone(participantId, { phone }, locale, session);
+
+  if (!result.ok) {
+    const code = result.error.kind === "http" ? result.error.code : null;
+    return fromFailure(result.error, code === "PHONE_INVALID" ? "phone" : null);
+  }
 
   revalidatePath("/admin", "layout");
   return SUCCEEDED;

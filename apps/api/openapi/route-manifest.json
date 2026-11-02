@@ -399,6 +399,15 @@
       "summary": "Ficha de un participante, con el PII enmascarado."
     },
     {
+      "method": "PUT",
+      "path": "/api/v1/admin/participants/:participant_id/contact-phone",
+      "operation_id": "setAdminParticipantContactPhone",
+      "authorization": "participant.contact.update",
+      "requires_step_up": false,
+      "tags": ["admin"],
+      "summary": "Anadir o cambiar el celular de CONTACTO de un cliente."
+    },
+    {
       "method": "POST",
       "path": "/api/v1/admin/participants/:participant_id/disqualify",
       "operation_id": "disqualifyParticipant",
@@ -1072,6 +1081,24 @@
       "requires_step_up": false,
       "tags": ["portal"],
       "summary": "Declarar lo que falte: el estado, la fecha de nacimiento o las dos (DEC-067, DEC-089)."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/me/phone/start",
+      "operation_id": "startMyPhoneVerification",
+      "authorization": "participant.self.update",
+      "requires_step_up": false,
+      "tags": ["portal"],
+      "summary": "Enviar un codigo por SMS para anadir el celular de acceso a mi cuenta."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/me/phone/verify",
+      "operation_id": "verifyMyPhone",
+      "authorization": "participant.self.update",
+      "requires_step_up": false,
+      "tags": ["portal"],
+      "summary": "Comprobar el codigo y guardar el celular de acceso de mi cuenta."
     },
     {
       "method": "GET",

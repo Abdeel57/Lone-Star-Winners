@@ -4895,3 +4895,62 @@ mensajes, `public/coming-soon/` y la prueba de la banda); fuera del repo,
 
 Proposed by: sesión del usuario (2026-10-27, petición del cliente)
 Agreed by: frontend-ux (petición directa del usuario)
+
+## DEC-097
+
+Status: Accepted
+
+Date: 2026-11-02
+
+Decision:
+**Los clientes que se dieron de alta con correo pueden tener celular: el de
+contacto lo añade el personal y el de acceso lo añade el propio cliente con un
+código SMS.** Antes de DEC-089 la cuenta se creaba con correo. Esos clientes no
+tienen celular: la tarjeta "Cliente" del pedido (DEC-094) se queda sin WhatsApp
+ni SMS, y si intentan entrar con su celular el sistema no los reconoce y les
+crea una cuenta nueva y vacía, sin sus participaciones.
+
+Hay dos celulares distintos y la decisión los separa a propósito:
+
+1. **Celular de CONTACTO (`participants.phone_e164`, sin verificar).** Capacidad
+   nueva `participant.contact.update` (SENSITIVE, PII, auditada; sin step-up ni
+   motivo, como `order.contact.read`) para SUPPORT, PROMOTION_MANAGER y
+   COMPLIANCE_OFFICER; migración `0044`. Ruta
+   `PUT /admin/participants/:id/contact-phone` y formulario en la tarjeta
+   "Cliente": a la vista si no hay celular, plegado bajo "Cambiar" si lo hay.
+   Solo números de EE. UU. Cada cambio emite `participant.contact_phone.updated`
+   con el número anterior y el nuevo **enmascarados**. A un cliente anonimizado
+   (derecho de supresión) no se le vuelve a poner un dato personal: 409
+   `PARTICIPANT_ANONYMIZED`. Este celular **no da acceso** a la cuenta.
+2. **Celular de ACCESO (`identities.phone_e164`, verificado).** Solo lo añade el
+   propio cliente desde su perfil, en dos pasos (`POST /me/phone/start` y
+   `POST /me/phone/verify`): número con anti-bots, código SMS de Twilio Verify y
+   mismo tope por número que el código para entrar. Si lo pudiera poner el
+   personal, cualquiera con ese número entraría en la cuenta de otro. Solo
+   **añade** (409 `PHONE_ALREADY_SET` si ya hay uno). Que el número ya entra en
+   otra cuenta (409 `PHONE_IN_OTHER_ACCOUNT`) **solo se dice tras acertar el
+   código**, a quien demostró que el número es suyo: la ruta no sirve para
+   averiguar si un número ajeno tiene cuenta. Lo decide el índice único de
+   `0031`, no una lectura previa. Desde ese momento, entrar con el celular lleva
+   a esa misma cuenta.
+
+Alternatives considered: A — Que el personal ponga también el celular de acceso
+(descartada: abriría la cuenta a quien controle ese número sin que nadie lo
+haya demostrado). B — Unir automáticamente la cuenta duplicada que ya creó quien
+entró con su celular (descartada por ahora: mover pedidos y participaciones
+entre cuentas es una operación de ledger con su propia auditoría; hoy la
+respuesta `PHONE_IN_OTHER_ACCOUNT` le pide al cliente que escriba). C — Avisar
+del duplicado ANTES de enviar el SMS (descartada: revelaría si un número tiene
+cuenta a cualquiera con sesión).
+
+Affected areas: `packages/security` (`capabilities.ts`, `permissions.ts`),
+`packages/database` (`0044`, `parity.test.ts`), `apps/api`
+(`routes/auth.ts`, `routes/admin-participants.ts`, `services/identity-ports.ts`,
+`services/drizzle-identity.ts`, `services/participant-lookup.ts`,
+`http/errors.ts`, OpenAPI, pruebas), `apps/web` (`components/add-phone-form.tsx`,
+`components/admin/contact-phone-form.tsx`, tarjeta "Cliente", perfil, acciones,
+cliente de la API, mensajes, mocks, pruebas), `docs/API_CONTRACT.md`.
+
+Proposed by: sesión del usuario (2026-11-02, petición del cliente)
+Agreed by: backend, frontend-ux, security (petición directa del usuario; eligió
+"ambas cosas")

@@ -282,7 +282,28 @@ export interface IdentityRepository {
    * Si ya estaba verificado, conserva el instante original y devuelve `true`.
    */
   markEmailVerified(identityId: string, email: string, now: Date): Promise<boolean>;
+
+  /** DEC-097: la identidad de un participante, o `null` si no existe. */
+  findByParticipantId(participantId: string): Promise<IdentityRecord | null>;
+
+  /**
+   * DEC-097: fija el celular VERIFICADO de una identidad que no tenia ninguno.
+   *
+   * Solo ANADE: si la identidad ya tiene celular devuelve `ALREADY_SET` sin
+   * tocarlo -cambiar el celular con el que se entra es otro flujo-. Si el
+   * numero ya es el de acceso de OTRA identidad, `TAKEN`: lo decide el indice
+   * unico de `0031`, no una lectura previa, para que dos peticiones a la vez no
+   * puedan dejar el mismo numero en dos cuentas.
+   */
+  addVerifiedPhone(
+    identityId: string,
+    phoneE164: string,
+    now: Date,
+  ): Promise<AddVerifiedPhoneOutcome>;
 }
+
+/** DEC-097: resultado de anadir el celular de acceso a una cuenta. */
+export type AddVerifiedPhoneOutcome = "ADDED" | "ALREADY_SET" | "TAKEN";
 
 /** Para que sirve un enlace enviado por correo (DEC-058). */
 export type EmailTokenPurpose = "EMAIL_VERIFICATION" | "PASSWORD_RESET";

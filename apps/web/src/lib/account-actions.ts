@@ -3,10 +3,10 @@
 import { revalidatePath } from "next/cache";
 
 import { LOCALE_TAGS } from "@/i18n/locales";
-import { updateMe } from "@/lib/api";
+import { startMyPhoneVerification, updateMe, verifyMyPhone } from "@/lib/api";
 
 import { fromFailure, SUCCEEDED, invalid, type ActionResult } from "./action-result";
-import { localeFrom, textFrom } from "./form-input";
+import { botCheckTokenFrom, localeFrom, textFrom } from "./form-input";
 import { mutableSession } from "./session-server";
 
 /**
@@ -64,5 +64,68 @@ export async function updateProfileAction(
   // que invalidarlo o el cambio no se veria hasta la siguiente navegacion dura.
   revalidatePath("/", "layout");
 
+  return SUCCEEDED;
+}
+
+/**
+ * DEC-097, paso 1: pedir el codigo por SMS para anadir el celular de acceso.
+ *
+ * Para quien se dio de alta con correo antes de DEC-089. El numero no se
+ * guarda aqui: solo se envia el codigo. Lleva el token anti-bots porque cada
+ * SMS se paga.
+ */
+export async function startAddPhoneAction(
+  _previous: ActionResult,
+  formData: FormData,
+): Promise<ActionResult> {
+  const locale = localeFrom(formData);
+  if (locale === null) return invalid("VALIDATION_FAILED");
+
+  const phone = textFrom(formData, "phone");
+  if (phone === null) return invalid("FIELD_REQUIRED", "phone");
+
+  const token = botCheckTokenFrom(formData);
+  const session = await mutableSession();
+  const result = await startMyPhoneVerification(
+    { phone, ...(token === undefined ? {} : { bot_check_token: token }) },
+    locale,
+    session,
+  );
+
+  if (!result.ok) {
+    const code = result.error.kind === "http" ? result.error.code : null;
+    return fromFailure(result.error, code === "PHONE_INVALID" ? "phone" : null);
+  }
+
+  return SUCCEEDED;
+}
+
+/**
+ * DEC-097, paso 2: el codigo. Con el correcto, el numero queda como celular de
+ * acceso de la cuenta y desde entonces se entra con el a ESTA cuenta.
+ */
+export async function verifyAddPhoneAction(
+  _previous: ActionResult,
+  formData: FormData,
+): Promise<ActionResult> {
+  const locale = localeFrom(formData);
+  if (locale === null) return invalid("VALIDATION_FAILED");
+
+  const phone = textFrom(formData, "phone");
+  if (phone === null) return invalid("FIELD_REQUIRED", "phone");
+
+  const typed = textFrom(formData, "code");
+  if (typed === null) return invalid("FIELD_REQUIRED", "code");
+
+  const session = await mutableSession();
+  const result = await verifyMyPhone({ phone, code: typed.replace(/\s+/g, "") }, locale, session);
+
+  if (!result.ok) {
+    const code = result.error.kind === "http" ? result.error.code : null;
+    return fromFailure(result.error, code === "SIGN_IN_CODE_INVALID" ? "code" : null);
+  }
+
+  // El perfil y la cabecera leen el celular de la sesion: se refrescan.
+  revalidatePath("/", "layout");
   return SUCCEEDED;
 }

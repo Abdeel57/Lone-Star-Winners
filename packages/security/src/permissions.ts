@@ -47,6 +47,8 @@ export const ROLE_CAPABILITIES: Readonly<Record<RoleId, readonly CapabilityId[]>
     "order.fulfillment.update",
     // DEC-094: y quien entrega necesita poder llamar o escribir al cliente.
     "order.contact.read",
+    // DEC-097: y anadirle el celular de contacto si no lo tiene.
+    "participant.contact.update",
     "entry.ledger.read",
     "amoe.review.read",
   ],
@@ -70,6 +72,8 @@ export const ROLE_CAPABILITIES: Readonly<Record<RoleId, readonly CapabilityId[]>
     "order.void",
     // DEC-094: el contacto del cliente de un pedido, para entregar y avisar.
     "order.contact.read",
+    // DEC-097: y el celular de contacto de quien no lo tiene.
+    "participant.contact.update",
     "entry.ledger.read",
     "entry.adjust.create",
     "amoe.review.read",
@@ -117,6 +121,8 @@ export const ROLE_CAPABILITIES: Readonly<Record<RoleId, readonly CapabilityId[]>
     "order.void",
     // DEC-094: y los tres roles que despachan ven el contacto del cliente.
     "order.contact.read",
+    // DEC-097: y los mismos tres pueden anadir el celular de contacto.
+    "participant.contact.update",
     "payment.webhook.read",
     "entry.ledger.read",
     "entry.adjust.approve",
@@ -303,6 +309,8 @@ export const CAPABILITY_READ_COVERAGE: readonly ReadCoverageRule[] = Object.free
   { write: "order.cancel", read: "order.read" },
   { write: "order.fulfillment.update", read: "order.read" },
   { write: "order.void", read: "order.read" },
+  // DEC-097: se cambia el celular desde la tarjeta que lo ensena.
+  { write: "participant.contact.update", read: "order.contact.read" },
   { write: "payment.webhook.replay", read: "payment.webhook.read" },
   { write: "entry.adjust.create", read: "entry.ledger.read" },
   { write: "entry.adjust.approve", read: "entry.ledger.read" },

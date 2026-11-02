@@ -160,6 +160,24 @@ export const ApiErrors = {
   phoneInvalid: (): ApiError => new ApiError({ statusCode: 422, code: "PHONE_INVALID" }),
   phoneAlreadyRegistered: (): ApiError =>
     new ApiError({ statusCode: 409, code: "PHONE_ALREADY_REGISTERED" }),
+  /**
+   * DEC-097: anadir el celular de acceso desde el perfil.
+   *
+   * `PHONE_ALREADY_SET`: la cuenta ya tiene uno; cambiarlo no es este flujo.
+   * `PHONE_IN_OTHER_ACCOUNT`: ese numero ya entra en otra cuenta. Solo se dice
+   * DESPUES de acertar el codigo, es decir, a quien demostro que el numero es
+   * suyo: no sirve para averiguar si un numero ajeno tiene cuenta. Unir las dos
+   * cuentas lo hace una persona.
+   */
+  phoneAlreadySet: (): ApiError => new ApiError({ statusCode: 409, code: "PHONE_ALREADY_SET" }),
+  /**
+   * DEC-097: el cliente borro sus datos (derecho de supresion). No se le vuelve
+   * a poner un dato personal, ni siquiera desde el panel.
+   */
+  participantAnonymized: (): ApiError =>
+    new ApiError({ statusCode: 409, code: "PARTICIPANT_ANONYMIZED" }),
+  phoneInOtherAccount: (): ApiError =>
+    new ApiError({ statusCode: 409, code: "PHONE_IN_OTHER_ACCOUNT" }),
   smsCodeInvalid: (): ApiError => new ApiError({ statusCode: 422, code: "SMS_CODE_INVALID" }),
   botCheckFailed: (): ApiError => new ApiError({ statusCode: 422, code: "BOT_CHECK_FAILED" }),
 

@@ -65,6 +65,17 @@ export interface ParticipantLookup {
     participantId: string,
     patch: ParticipantProfilePatch,
   ): Promise<ParticipantProfileRecord | null>;
+  /**
+   * DEC-097: fija el celular de CONTACTO (`participants.phone_e164`), ya en
+   * E.164. Devuelve el que habia, `null` si el participante no existe, o
+   * `"ANONYMIZED"` si borro sus datos: a una cuenta anonimizada no se le vuelve
+   * a poner un dato personal (y la CHECK de 0001 tampoco lo dejaria). NO toca el
+   * celular de acceso (`identities.phone_e164`).
+   */
+  setContactPhone(
+    participantId: string,
+    phoneE164: string,
+  ): Promise<{ readonly previous: string | null } | "ANONYMIZED" | null>;
 }
 
 export function createParticipantLookup(db: Database): ParticipantLookup {
@@ -164,6 +175,29 @@ export function createParticipantLookup(db: Database): ParticipantLookup {
         return null;
       }
       return await readProfile(participantId);
+    },
+
+    setContactPhone: async (participantId, phoneE164) => {
+      const rows = await db
+        .select({ phone: participants.phoneE164, anonymizedAt: participants.anonymizedAt })
+        .from(participants)
+        .where(eq(participants.id, participantId))
+        .limit(1);
+
+      const row = rows[0];
+      if (row === undefined) {
+        return null;
+      }
+      if (row.anonymizedAt !== null) {
+        return "ANONYMIZED";
+      }
+
+      await db
+        .update(participants)
+        .set({ phoneE164, updatedAt: new Date() })
+        .where(eq(participants.id, participantId));
+
+      return { previous: row.phone };
     },
   };
 }

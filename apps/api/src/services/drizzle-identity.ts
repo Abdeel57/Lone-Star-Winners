@@ -17,6 +17,7 @@ import type { SessionAudience } from "@lsw/security";
 import { and, count, desc, eq, gt, gte, isNull, lt, sql } from "drizzle-orm";
 
 import type {
+  AddVerifiedPhoneOutcome,
   CartSessionRecord,
   ConsentAcceptanceInput,
   ConsumeEmailTokenResult,
@@ -644,6 +645,41 @@ export function createIdentityRepositories(db: Database): IdentityRepositories {
           .where(and(eq(identities.id, identityId), eq(identities.emailNormalized, normalized)));
 
         return (result.rowCount ?? 0) > 0;
+      },
+
+      async findByParticipantId(participantId: string): Promise<IdentityRecord | null> {
+        const rows = await db
+          .select(identityProjection)
+          .from(participants)
+          .innerJoin(identities, eq(identities.id, participants.identityId))
+          .where(eq(participants.id, participantId))
+          .limit(1);
+
+        const row = rows[0];
+        return row === undefined ? null : toIdentity(row);
+      },
+
+      async addVerifiedPhone(
+        identityId: string,
+        phoneE164: string,
+        now: Date,
+      ): Promise<AddVerifiedPhoneOutcome> {
+        try {
+          // `IS NULL` en el WHERE: este flujo solo anade. Una identidad que ya
+          // tiene celular no lo cambia por aqui, ni siquiera por el mismo.
+          const updated = await db
+            .update(identities)
+            .set({ phoneE164, phoneVerifiedAt: now, updatedAt: now })
+            .where(and(eq(identities.id, identityId), isNull(identities.phoneE164)))
+            .returning({ id: identities.id });
+
+          return updated.length > 0 ? "ADDED" : "ALREADY_SET";
+        } catch (error) {
+          // Solo el indice del celular se traduce: cualquier otra violacion es
+          // un fallo de verdad y tiene que verse.
+          if (violatedUniqueIndex(error) === PHONE_UNIQUE_INDEX) return "TAKEN";
+          throw error;
+        }
       },
     },
 

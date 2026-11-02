@@ -17,7 +17,7 @@ import { OrderLineList } from "@/components/order-line-list";
 import { adminHref } from "@/i18n/admin-routing";
 import { formatMoney, formatZonedDateTime } from "@/i18n/formatters";
 import { isLocale } from "@/i18n/locales";
-import { setOrderFulfillmentAction } from "@/lib/admin/actions";
+import { setContactPhoneAction, setOrderFulfillmentAction } from "@/lib/admin/actions";
 import { can } from "@/lib/admin/capabilities";
 import { DAILY_CUT_TIME_ZONE } from "@/lib/admin/daily-cut";
 import {
@@ -180,6 +180,9 @@ export default async function AdminOrderDetailPage({
               order={result.data}
               promotionName={promotionName}
               locale={locale}
+              phoneAction={
+                can(screen.actor, "participant.contact.update") ? setContactPhoneAction : null
+              }
             />
           ) : (
             <AdminSectionError failure={contact.error} headingLevel="h2" />

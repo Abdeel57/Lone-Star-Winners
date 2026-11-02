@@ -8,7 +8,10 @@ import {
   type LocalizedText,
   type OrderDetail,
 } from "@/lib/api";
+import type { ActionResult } from "@/lib/action-result";
 import { publicSiteOrigin } from "@/lib/site-origin";
+
+import { ContactPhoneForm } from "./contact-phone-form";
 
 /**
  * A donde lleva el enlace del mensaje: la pantalla de entrar con la vuelta a
@@ -42,12 +45,20 @@ export async function OrderContactCard({
   order,
   promotionName,
   locale,
+  phoneAction = null,
 }: {
   readonly contact: AdminOrderContact;
   readonly order: OrderDetail;
   /** Nombre publico de la promocion, o `null` si no se pudo leer. */
   readonly promotionName: LocalizedText | null;
   readonly locale: Locale;
+  /**
+   * DEC-097: la accion que guarda el celular de CONTACTO, o `null` si el actor
+   * no tiene `participant.contact.update`. Llega de la pagina, como en el
+   * formulario de envio: la tarjeta no decide quien puede escribir.
+   */
+  readonly phoneAction?:
+    ((previous: ActionResult, formData: FormData) => Promise<ActionResult>) | null;
 }) {
   const t = await getTranslations({ locale, namespace: "admin.orderContact" });
 
@@ -174,6 +185,15 @@ export async function OrderContactCard({
 
       {whatsappHref === null && smsHref === null && mailHref === null ? null : (
         <p className="mt-s3 text-caption text-text-subtle">{t("prefilledHint")}</p>
+      )}
+
+      {phoneAction === null ? null : (
+        <ContactPhoneForm
+          locale={locale}
+          participantId={contact.participant_id}
+          hasPhone={contact.phone !== null}
+          action={phoneAction}
+        />
       )}
     </Card>
   );

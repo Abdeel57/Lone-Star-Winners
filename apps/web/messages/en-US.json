@@ -186,7 +186,10 @@
     "SIGN_IN_CODE_EXPIRED": "That code no longer works. Ask for a new one.",
     "SIGNUP_EXPIRED": "Too much time has passed since you entered the code. Start again with your email or mobile number.",
     "STAFF_ACCOUNT_USE_PANEL": "This is a staff account. Sign in from the admin panel.",
-    "ACCOUNT_UNAVAILABLE": "This account can't sign in right now. Write to us at info@LoneStarWinners.com."
+    "ACCOUNT_UNAVAILABLE": "This account can't sign in right now. Write to us at info@LoneStarWinners.com.",
+    "PHONE_ALREADY_SET": "Your account already has a mobile number.",
+    "PHONE_IN_OTHER_ACCOUNT": "That mobile number is already on another account. Contact us and we'll merge it with this one.",
+    "PARTICIPANT_ANONYMIZED": "This customer asked for their data to be deleted. A mobile number can't be added."
   },
   "availability": {
     "IN_STOCK": "In stock",
@@ -960,7 +963,14 @@
       "saved": "Your changes are saved.",
       "memberSince": "Account created on {date}",
       "securityHeading": "How you sign in",
-      "securityBody": "You sign in with a code we send to your email or mobile number. No password needed."
+      "securityBody": "You sign in with a code we send to your email or mobile number. No password needed.",
+      "phoneHeading": "Your mobile number",
+      "phoneIntro": "Add your mobile number so you can also sign in with it. We'll text you a code to confirm it's yours.",
+      "phoneCurrent": "You can sign in with your mobile number {phone}.",
+      "phoneSend": "Send the code",
+      "phoneSave": "Save my mobile number",
+      "phoneChange": "Use another number",
+      "phoneAdded": "Done. You can now sign in with your mobile number."
     }
   },
   "entryType": {
@@ -1537,7 +1547,14 @@
       "messageEntriesNoPromotion": "We confirm your order {order}: {entries, plural, one {# entry} other {# entries}}. Good luck!",
       "messageOrder": "We are reaching out about your order {order}.",
       "entriesLink": "You can see all your entry numbers here: {link}",
-      "emailSubject": "Your order {order} at Lone Star Winners"
+      "emailSubject": "Your order {order} at Lone Star Winners",
+      "noPhoneIntro": "This customer has no mobile number. If you know it, add it to message them on WhatsApp or by text.",
+      "phoneFieldLabel": "Contact mobile number",
+      "phoneFieldHint": "US only, for example (505) 555-0123. It's for contacting them; it doesn't give access to their account.",
+      "addPhone": "Add mobile number",
+      "savePhone": "Save mobile number",
+      "changePhone": "Change the contact mobile number",
+      "phoneSaved": "Mobile number saved."
     },
     "orderFulfillment": {
       "saved": "Saved.",

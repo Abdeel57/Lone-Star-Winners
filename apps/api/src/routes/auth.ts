@@ -208,6 +208,25 @@ const phoneStartBodySchema = z.object({
   bot_check_token: z.string().min(1).max(2048).optional(),
 });
 
+/**
+ * DEC-097: anadir el celular de acceso a una cuenta que entro con correo.
+ * Mismo anti-bots y mismos topes que el codigo para entrar.
+ */
+const myPhoneStartBodySchema = z.object({
+  phone: phoneInputSchema,
+  bot_check_token: z.string().min(1).max(2048).optional(),
+});
+
+const myPhoneVerifyBodySchema = z.object({
+  phone: phoneInputSchema,
+  code: z.string().trim().min(4).max(32),
+});
+
+const myPhoneResponseSchema = z.object({
+  /** El celular de acceso ya guardado, en E.164. */
+  phone: z.string(),
+});
+
 const resetPasswordSmsBodySchema = z.object({
   phone: phoneInputSchema,
   code: smsCodeSchema,
@@ -629,6 +648,23 @@ export function buildAuthRoutes(dependencies: AppDependencies): RouteDefinition[
   }
 
   /** Comprobacion anti-bots de Turnstile, si esta configurada (DEC-060). */
+  /**
+   * DEC-097: la identidad del participante que hace la peticion.
+   *
+   * La ruta ya paso por el autorizador con `participant.self.update`; aqui se
+   * traduce el participante a su identidad, que es donde vive el celular de
+   * acceso. Sin participante -o con una identidad no activa- no hay a quien
+   * anadirle nada.
+   */
+  async function requireParticipantIdentity(request: FastifyRequest): Promise<IdentityRecord> {
+    const principal = await request.server.lswPrincipalResolver(request);
+    if (principal?.kind !== "PARTICIPANT") throw ApiErrors.unauthenticated();
+
+    const record = await identity.identities.findByParticipantId(principal.participantId);
+    if (record?.status !== "ACTIVE") throw ApiErrors.unauthenticated();
+    return record;
+  }
+
   async function requireHuman(token: string | undefined): Promise<void> {
     const checker = botCheck ?? null;
     if (checker === null) return;
@@ -1834,6 +1870,121 @@ export function buildAuthRoutes(dependencies: AppDependencies): RouteDefinition[
 
         void reply.code(201);
         return participantSessionOf(created);
+      },
+    },
+
+    // -----------------------------------------------------------------------
+    // DEC-097: anadir el celular de acceso a una cuenta que entro con correo.
+    // -----------------------------------------------------------------------
+
+    {
+      method: "POST",
+      url: "/api/v1/me/phone/start",
+      operationId: "startMyPhoneVerification",
+      summary: "Enviar un codigo por SMS para anadir el celular de acceso a mi cuenta.",
+      description:
+        "Para cuentas que entraron con correo antes de DEC-089 y no tienen celular. Mismo anti-bots y mismo tope por numero que `POST /auth/code/start` (3 codigos sin acertar cada 15 minutos). 409 PHONE_ALREADY_SET si la cuenta ya tiene celular. NO dice si el numero es de otra cuenta: eso solo se sabe al acertar el codigo.",
+      tags: ["portal"],
+      authorization: { kind: "PERMISSION", permission: "participant.self.update" },
+      schema: {
+        body: myPhoneStartBodySchema,
+        response: {
+          200: acknowledgedResponseSchema,
+          401: errorEnvelopeSchema,
+          403: errorEnvelopeSchema,
+          409: errorEnvelopeSchema,
+          422: errorEnvelopeSchema,
+          429: errorEnvelopeSchema,
+          503: errorEnvelopeSchema,
+        },
+      },
+      handler: async (request) => {
+        const body = request.body as z.infer<typeof myPhoneStartBodySchema>;
+        const now = new Date();
+        const record = await requireParticipantIdentity(request);
+        if (record.phoneE164 !== null) throw ApiErrors.phoneAlreadySet();
+
+        const verifier = requireSms();
+        const phone = requirePhone(body.phone);
+        await requireHuman(body.bot_check_token);
+
+        const { throttleWindowMinutes, throttleMaxCodes, ttlMinutes } = SIGN_IN_CODE_POLICY;
+        const since = new Date(now.getTime() - throttleWindowMinutes * 60_000);
+        const pending = await identity.signInCodes.countUnverifiedSince("SMS", phone, since);
+        if (pending >= throttleMaxCodes) throw ApiErrors.rateLimited(throttleWindowMinutes * 60);
+
+        // La fila va antes del SMS, como en el codigo para entrar: un envio que
+        // falla cuenta igual para el tope.
+        await identity.signInCodes.issue({
+          id: randomUUID(),
+          channel: "SMS",
+          contact: phone,
+          codeHash: null,
+          expiresAt: new Date(now.getTime() + ttlMinutes * 60_000),
+        });
+
+        let outcome;
+        try {
+          outcome = await verifier.start(
+            phone,
+            emailLocaleFrom(request.headers["accept-language"]),
+          );
+        } catch {
+          throw ApiErrors.serviceUnavailable();
+        }
+        if (outcome === "INVALID_NUMBER") throw ApiErrors.phoneInvalid();
+        if (outcome === "RATE_LIMITED") throw ApiErrors.rateLimited(600);
+
+        return ACKNOWLEDGED;
+      },
+    },
+
+    {
+      method: "POST",
+      url: "/api/v1/me/phone/verify",
+      operationId: "verifyMyPhone",
+      summary: "Comprobar el codigo y guardar el celular de acceso de mi cuenta.",
+      description:
+        "Con el codigo correcto, el numero queda como celular VERIFICADO de la cuenta: desde ese momento se puede entrar con el, y entrar con el lleva a esta misma cuenta en vez de crear otra. Solo anade: 409 PHONE_ALREADY_SET si ya habia uno. 409 PHONE_IN_OTHER_ACCOUNT si el numero ya entra en otra cuenta (solo se dice tras acertar el codigo). 422 SIGN_IN_CODE_INVALID y 410 SIGN_IN_CODE_EXPIRED como en `POST /auth/code/verify`.",
+      tags: ["portal"],
+      authorization: { kind: "PERMISSION", permission: "participant.self.update" },
+      schema: {
+        body: myPhoneVerifyBodySchema,
+        response: {
+          200: myPhoneResponseSchema,
+          401: errorEnvelopeSchema,
+          403: errorEnvelopeSchema,
+          409: errorEnvelopeSchema,
+          410: errorEnvelopeSchema,
+          422: errorEnvelopeSchema,
+          503: errorEnvelopeSchema,
+        },
+      },
+      handler: async (request) => {
+        const body = request.body as z.infer<typeof myPhoneVerifyBodySchema>;
+        const now = new Date();
+        const record = await requireParticipantIdentity(request);
+        if (record.phoneE164 !== null) throw ApiErrors.phoneAlreadySet();
+
+        const phone = requirePhone(body.phone);
+        const code = body.code.replace(/\s+/gu, "");
+
+        // Primero el codigo: que el numero tenga otra cuenta solo se le dice a
+        // quien demuestra que el numero es suyo.
+        const codeId = await verifySmsCode(phone, code, now);
+        const spent = await identity.signInCodes.markVerified(codeId, now, null);
+        if (!spent) throw ApiErrors.signInCodeExpired();
+
+        const added = await identity.identities.addVerifiedPhone(record.id, phone, now);
+        if (added === "ALREADY_SET") throw ApiErrors.phoneAlreadySet();
+        if (added === "TAKEN") throw ApiErrors.phoneInOtherAccount();
+
+        request.log.info(
+          { event: "identity.phone.added", identity_id: record.id, to: maskPhone(phone) },
+          "celular de acceso anadido a una cuenta",
+        );
+
+        return { phone };
       },
     },
   ];
