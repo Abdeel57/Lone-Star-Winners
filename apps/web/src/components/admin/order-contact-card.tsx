@@ -22,6 +22,19 @@ import { ContactPhoneForm } from "./contact-phone-form";
 const ENTRIES_RETURN_PATH = "/account/entries";
 
 /**
+ * Redes de la tienda, al final del mensaje (DEC-094, addendum 2026-11-05). Sin
+ * los parametros de rastreo con los que las comparte cada app: llevan a la misma
+ * pagina y el mensaje queda mas corto. Terminan en `/` para que ningun telefono
+ * deje fuera del enlace el `_` final del usuario. Son nombres propios: no se
+ * traducen.
+ */
+const SOCIAL_LINKS = [
+  { label: "📘 Facebook", url: "https://www.facebook.com/share/1EoeJLnhF8/" },
+  { label: "📸 Instagram", url: "https://www.instagram.com/lonestarwinners_/" },
+  { label: "🎵 TikTok", url: "https://www.tiktok.com/@lonestarwinners_/" },
+] as const;
+
+/**
  * Contacto del cliente de un pedido (DEC-094).
  *
  * EL CASO QUE LO PIDIO: el repartidor llega con la mercancia, el cliente no
@@ -30,8 +43,8 @@ const ENTRIES_RETURN_PATH = "/account/entries";
  * completo solo existia detras de `pii.view.full`, con segundo factor y motivo.
  *
  * LO QUE PINTA: nombre, celular y correo, y tres acciones a un toque. El
- * WhatsApp abre `wa.me` con el mensaje YA REDACTADO -confirmacion del pedido y
- * de sus participaciones, con el nombre del sorteo- EN EL IDIOMA DEL CLIENTE,
+ * WhatsApp abre `api.whatsapp.com/send` con el mensaje YA REDACTADO -confirmacion
+ * del pedido y de sus participaciones, con el nombre del sorteo- EN EL IDIOMA DEL CLIENTE,
  * que no tiene por que ser el del panel: `preferred_locale` viene de su cuenta.
  * Quien opera lo lee y lo manda desde su propio WhatsApp; aqui no se envia
  * nada ni se guarda nada.
@@ -77,9 +90,7 @@ export async function OrderContactCard({
    * el interruptor `visible_entry_numbers_enabled` esta encendido (DEC-080).
    */
   const origin = await publicSiteOrigin();
-  const entriesLink = `${origin}/${customerLocale}/account/login?next=${encodeURIComponent(
-    ENTRIES_RETURN_PATH,
-  )}`;
+  const entriesLink = `${origin}/${customerLocale}/account/login?next=${ENTRIES_RETURN_PATH}`;
 
   const greeting = name === null ? tc("greeting") : tc("greetingNamed", { name });
   const body =
@@ -88,12 +99,33 @@ export async function OrderContactCard({
       : promotion === null
         ? tc("messageEntriesNoPromotion", { order: order.order_number, entries })
         : tc("messageEntries", { order: order.order_number, entries, promotion });
-  const message = `${greeting} ${body} ${tc("entriesLink", { link: entriesLink })}`;
+  const message = [
+    greeting,
+    "",
+    body,
+    "",
+    tc("entriesLink", { link: entriesLink }),
+    "",
+    tc("socialsIntro"),
+    ...SOCIAL_LINKS.map(({ label, url }) => `${label}: ${url}`),
+  ].join("\n");
 
-  // `wa.me` quiere el numero en digitos, sin `+` ni separadores.
+  /*
+   * Los `*` son negritas de WhatsApp. SMS y correo no las entienden y pintarian
+   * los asteriscos tal cual, asi que esos dos canales los llevan sin ellos.
+   */
+  const plainMessage = message.replace(/\*/gu, "");
+
+  /*
+   * `api.whatsapp.com/send`, NO `wa.me`: la redireccion de `wa.me` cambia cada
+   * emoji por el caracter de reemplazo (�) en escritorio, iPhone y Android,
+   * comprobado el 2026-11-05. El numero va en digitos, sin `+` ni separadores.
+   */
   const digits = contact.phone === null ? "" : contact.phone.replace(/\D/gu, "");
   const whatsappHref =
-    digits === "" ? null : `https://wa.me/${digits}?text=${encodeURIComponent(message)}`;
+    digits === ""
+      ? null
+      : `https://api.whatsapp.com/send?phone=${digits}&text=${encodeURIComponent(message)}`;
   const telHref = contact.phone === null ? null : `tel:${contact.phone}`;
   /*
    * SMS (o iMessage, si el telefono de quien opera y el del cliente lo tienen):
@@ -101,13 +133,16 @@ export async function OrderContactCard({
    * es la forma que entienden a la vez iOS y Android.
    */
   const smsHref =
-    contact.phone === null ? null : `sms:${contact.phone}?&body=${encodeURIComponent(message)}`;
+    contact.phone === null
+      ? null
+      : `sms:${contact.phone}?&body=${encodeURIComponent(plainMessage)}`;
+  // `mailto:` pide los saltos de linea como CRLF (RFC 6068).
   const mailHref =
     contact.email === ""
       ? null
       : `mailto:${contact.email}?subject=${encodeURIComponent(
           tc("emailSubject", { order: order.order_number }),
-        )}&body=${encodeURIComponent(message)}`;
+        )}&body=${encodeURIComponent(plainMessage.replace(/\n/gu, "\r\n"))}`;
 
   return (
     <Card elevation="raised" padding="lg">

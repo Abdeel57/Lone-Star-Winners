@@ -56,9 +56,14 @@ import esMessages from "../../messages/es-US.json";
  *    REDACTADO en el idioma del cliente, con el pedido, sus participaciones,
  *    el nombre del sorteo y el enlace a "Mis participaciones" (por el login,
  *    con vuelta), aunque el panel este en el otro idioma.
- * 3. Que el SMS lleve exactamente el mismo mensaje.
+ * 3. Que el SMS lleve el mismo mensaje sin los asteriscos de las negritas.
  * 4. Que sin participaciones el mensaje no invente ninguna, y que sin celular
  *    no se ofrezca ni WhatsApp, ni SMS, ni llamar.
+ * 5. Que el mensaje termine con las tres redes de la tienda, despues del enlace
+ *    y en el idioma del cliente, tambien en el correo.
+ * 6. Que nada rompa la presentacion: WhatsApp por `api.whatsapp.com` (`wa.me`
+ *    estropea los emojis), negritas solo ahi, saltos CRLF en el correo, emojis
+ *    sin selector de variacion y enlaces de largo razonable.
  */
 
 const SITE = "https://lonestarwinners.test";
@@ -89,9 +94,10 @@ function renderIn(locale: Locale, ui: ReactNode) {
 const order = { ...cashPendingOrder, order_number: "LSW-10524", entries_granted: 430 };
 const promotionName = { "en-US": "2025 Chevrolet Silverado", "es-US": "Chevrolet Silverado 2025" };
 
-/** Texto del mensaje que lleva un enlace `wa.me/...?text=` o `sms:...?&body=`. */
+/** Texto del mensaje que lleva un enlace `...&text=` de WhatsApp o `sms:...?&body=`. */
 function messageText(href: string): string {
-  return decodeURIComponent(href.slice(href.indexOf("=") + 1));
+  const marker = href.startsWith("sms:") ? "&body=" : "&text=";
+  return decodeURIComponent(href.slice(href.indexOf(marker) + marker.length));
 }
 
 function hrefOf(name: string): string {
@@ -133,7 +139,7 @@ describe("contacto del cliente de un pedido", () => {
     const link = screen.getByRole("link", { name: enMessages.admin.orderContact.whatsapp });
     const href = link.getAttribute("href") ?? "";
 
-    expect(href.startsWith("https://wa.me/15055550123?text=")).toBe(true);
+    expect(href.startsWith("https://api.whatsapp.com/send?phone=15055550123&text=")).toBe(true);
     expect(link).toHaveAttribute("target", "_blank");
 
     const text = messageText(href);
@@ -156,11 +162,11 @@ describe("contacto del cliente de un pedido", () => {
 
     // Dominio canonico (la variable), no el host del panel; idioma del cliente;
     // login con vuelta a /account/entries, que es como entra quien no tiene sesion.
-    expect(text).toContain(`${SITE}/es/account/login?next=%2Faccount%2Fentries`);
+    expect(text).toContain(`${SITE}/es/account/login?next=/account/entries`);
     expect(text).not.toContain("panel.interno.test");
   });
 
-  it("el SMS abre la app de mensajes con el MISMO texto que el WhatsApp", async () => {
+  it("el SMS abre la app de mensajes con el texto del WhatsApp, sin los asteriscos", async () => {
     const ui = await OrderContactCard({
       contact: adminOrderContact,
       order,
@@ -171,7 +177,50 @@ describe("contacto del cliente de un pedido", () => {
 
     const sms = hrefOf(esMessages.admin.orderContact.sms);
     expect(sms.startsWith("sms:+15055550123?&body=")).toBe(true);
-    expect(messageText(sms)).toBe(messageText(hrefOf(esMessages.admin.orderContact.whatsapp)));
+
+    const whatsapp = messageText(hrefOf(esMessages.admin.orderContact.whatsapp));
+    expect(whatsapp).toContain("*LSW-10524*");
+    expect(whatsapp).toContain("*430 participaciones*");
+    expect(messageText(sms)).not.toContain("*");
+    expect(messageText(sms)).toBe(whatsapp.replace(/\*/gu, ""));
+  });
+
+  it("el mensaje se presenta bien en cualquier canal y dispositivo", async () => {
+    const ui = await OrderContactCard({
+      contact: adminOrderContact,
+      order,
+      promotionName,
+      locale: "es",
+    });
+    renderIn("es", ui);
+
+    const whatsappHref = hrefOf(esMessages.admin.orderContact.whatsapp);
+    const smsHref = hrefOf(esMessages.admin.orderContact.sms);
+    const mailHref = hrefOf(esMessages.admin.orderContact.email);
+
+    // `wa.me` cambia los emojis por el caracter de reemplazo al redirigir.
+    expect(whatsappHref).not.toContain("wa.me");
+
+    const whatsapp = messageText(whatsappHref);
+    expect(whatsapp).toContain("✅");
+    expect(whatsapp).not.toContain("�");
+    // El selector de variacion (FE0F) sale como cuadrito en telefonos viejos.
+    expect(whatsapp).not.toContain("️");
+
+    // Cada enlace en su linea, para que ningun telefono lo pegue al texto.
+    const lines = whatsapp.split("\n");
+    expect(lines).toContain(`${SITE}/es/account/login?next=/account/entries`);
+
+    // Correo: sin negritas y con saltos CRLF (RFC 6068).
+    const mail = decodeURIComponent(mailHref);
+    expect(mail).not.toContain("*");
+    expect(mail).toContain("\r\n\r\n");
+    expect(mail.replace(/\r\n/gu, "")).not.toContain("\n");
+
+    // Algunos navegadores y clientes de correo cortan los enlaces muy largos.
+    for (const href of [whatsappHref, smsHref, mailHref]) {
+      expect(href.length).toBeLessThan(2000);
+    }
   });
 
   it("un cliente en ingles recibe el mensaje y el enlace en ingles", async () => {
@@ -188,7 +237,43 @@ describe("contacto del cliente de un pedido", () => {
     expect(text).toContain("Hi Ada Lovelace");
     expect(text).toContain("430 entries");
     expect(text).toContain("2025 Chevrolet Silverado");
-    expect(text).toContain(`${SITE}/en/account/login?next=%2Faccount%2Fentries`);
+    expect(text).toContain(`${SITE}/en/account/login?next=/account/entries`);
+  });
+
+  it("el mensaje termina con las redes sociales, en el idioma del cliente", async () => {
+    const socials = [
+      "📘 Facebook: https://www.facebook.com/share/1EoeJLnhF8/",
+      "📸 Instagram: https://www.instagram.com/lonestarwinners_/",
+      "🎵 TikTok: https://www.tiktok.com/@lonestarwinners_/",
+    ].join("\n");
+
+    const uiEs = await OrderContactCard({
+      contact: adminOrderContact,
+      order,
+      promotionName,
+      locale: "en",
+    });
+    const { unmount } = renderIn("en", uiEs);
+
+    const textEs = messageText(hrefOf(enMessages.admin.orderContact.whatsapp));
+    expect(textEs.endsWith(`${esMessages.admin.orderContact.socialsIntro}\n${socials}`)).toBe(true);
+    expect(textEs.indexOf("/account/login")).toBeLessThan(textEs.indexOf("Facebook:"));
+
+    // El correo comparte el texto, con saltos CRLF: `decodeURIComponent` del enlace entero.
+    const mail = decodeURIComponent(hrefOf(enMessages.admin.orderContact.email));
+    expect(mail.endsWith(socials.replace(/\n/gu, "\r\n"))).toBe(true);
+    unmount();
+
+    const uiEn = await OrderContactCard({
+      contact: { ...adminOrderContact, preferred_locale: "en-US" },
+      order,
+      promotionName,
+      locale: "es",
+    });
+    renderIn("es", uiEn);
+
+    const textEn = messageText(hrefOf(esMessages.admin.orderContact.whatsapp));
+    expect(textEn.endsWith(`${enMessages.admin.orderContact.socialsIntro}\n${socials}`)).toBe(true);
   });
 
   it("sin participaciones todavia, el mensaje solo nombra el pedido", async () => {

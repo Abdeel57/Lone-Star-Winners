@@ -4782,6 +4782,19 @@ en la promoción.
    misma ruta en el dominio canónico (`lib/canonical-host.ts`), para que los
    enlaces ya enviados también funcionen. Sin `WEB_PUBLIC_URL` no redirige;
    `/healthz` queda fuera del `matcher`.
+6. **Addendum (2026-11-05, petición del cliente).** El mensaje termina con las
+   tres redes de la tienda (Facebook, Instagram y TikTok), tras una frase en el
+   idioma del cliente, en WhatsApp, SMS y correo. Los enlaces van sin los
+   parámetros de rastreo con los que se compartieron: se comprobó que llevan a
+   la misma página. Además se ordena por bloques, con emojis y negritas, para
+   que se lea bien en cualquier teléfono, y por eso: (a) el botón abre
+   **`api.whatsapp.com/send`, no `wa.me`** (sustituye a lo dicho en el punto 3):
+   comprobado con agentes de escritorio, iPhone y Android, la redirección de
+   `wa.me` cambia cada emoji por `U+FFFD` y `api.whatsapp.com` los conserva;
+   (b) los `*` de las negritas solo van a WhatsApp, SMS y correo los llevan sin
+   ellos; (c) el correo usa saltos CRLF (RFC 6068); (d) los emojis son de Unicode
+   6-7 y sin selector de variación, y (e) cada enlace va en su propia línea, con
+   `next=/account/entries` sin codificar, que la pantalla de entrar valida igual.
 
 Alternatives considered: A — Reutilizar `pii.view.full` (descartada: exige el
 segundo factor y el motivo que DEC-093 acaba de retirar de la anulación por
