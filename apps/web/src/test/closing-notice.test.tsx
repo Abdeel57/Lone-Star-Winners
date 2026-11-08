@@ -60,7 +60,7 @@ import enMessages from "../../messages/en-US.json";
 import esMessages from "../../messages/es-US.json";
 
 /**
- * Aviso de cierre de la primera edicion (DEC-099).
+ * Aviso de cierre de la primera edicion (DEC-100).
  *
  * Lo que importa es lo que el aviso NO puede decir: una fecha distinta de la del
  * reglamento, una invitacion a comprar o un ganador.

@@ -19,7 +19,7 @@ import { ClosingNoticeFrame } from "./closing-notice-frame";
 const TITLE_ID = "closing-notice-title";
 
 /**
- * Aviso de cierre de la primera edicion, arriba de la portada (DEC-099).
+ * Aviso de cierre de la primera edicion, arriba de la portada (DEC-100).
  *
  * Va EN EL FLUJO de la pagina, bajo la cabecera fija: no tapa nada ni bloquea
  * la compra o la navegacion, y al cerrarlo la pagina simplemente sube.

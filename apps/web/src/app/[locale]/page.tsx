@@ -242,7 +242,7 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
 
   return (
     <>
-      {/* DEC-099: aviso de cierre de la primera edicion. En el flujo de la
+      {/* DEC-100: aviso de cierre de la primera edicion. En el flujo de la
           pagina, sin tapar nada. */}
       {closingNotice === null ? null : <ClosingNoticeBody {...closingNotice} />}
 

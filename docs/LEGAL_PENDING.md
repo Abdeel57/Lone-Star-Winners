@@ -772,7 +772,7 @@ DEC-090, en su propia rama sin publicar.)
     debe mencionar este uso del celular y del correo; (d) cómo documentar que
     cada consulta del contacto queda en la auditoría.
 
-## Aviso de cierre de la primera edición (DEC-099, 2026-11-08)
+## Aviso de cierre de la primera edición (DEC-100, 2026-11-08)
 
 Del 33 al 41 quedan reservados para DEC-098 (rama sin publicar).
 

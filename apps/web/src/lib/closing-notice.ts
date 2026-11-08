@@ -1,7 +1,7 @@
 import type { PromotionStatus, PromotionSummary } from "./api/contract";
 
 /**
- * Aviso de cierre de la primera edicion (DEC-099).
+ * Aviso de cierre de la primera edicion (DEC-100).
  *
  * DE DONDE SALEN LAS FECHAS
  * -------------------------

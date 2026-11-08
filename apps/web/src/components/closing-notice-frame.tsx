@@ -10,7 +10,7 @@ import {
 } from "@/lib/closing-notice";
 
 /**
- * El marco del aviso de cierre y su boton de cerrar (DEC-099).
+ * El marco del aviso de cierre y su boton de cerrar (DEC-100).
  *
  * Lo unico del aviso que corre en el navegador. El texto llega ya compuesto del
  * servidor como `children`.

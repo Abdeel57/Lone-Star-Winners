@@ -4970,7 +4970,7 @@ Agreed by: backend, frontend-ux, security (petici√≥n directa del usuario; eligi√
 
 ---
 
-## DEC-099
+## DEC-100
 
 Status: Accepted
 
