@@ -643,6 +643,27 @@
       "title": "Ahora mismo no hay ninguna promoción abierta"
     }
   },
+  "closingNotice": {
+    "dismiss": "Cerrar aviso",
+    "rulesCta": "Ver reglas oficiales",
+    "entriesCta": "Mis participaciones",
+    "selection": "La selección de los dos ganadores está programada para el {selectionDate}.",
+    "ended": "El periodo de participación de nuestra primera edición terminó el {date} a las {time}, hora central.",
+    "open": {
+      "title": "Primera edición — Aviso de cierre",
+      "closes": "Nuestra primera edición cierra el {date} a las {time}, hora central.",
+      "review": "Consulta tus participaciones y revisa las Reglas Oficiales para conocer las condiciones, requisitos de elegibilidad y métodos de participación.",
+      "legal": "No es necesario comprar para participar o ganar. Una compra no mejora las probabilidades de ganar."
+    },
+    "closed": {
+      "title": "Primera edición — Periodo de participación terminado",
+      "review": "Consulta tus participaciones y revisa las Reglas Oficiales para conocer las condiciones de la selección."
+    },
+    "afterSelection": {
+      "title": "Primera edición — Cerrada",
+      "results": "Cualquier resultado se comunicará únicamente cuando exista confirmación oficial, conforme a las Reglas Oficiales."
+    }
+  },
   "announcement": {
     "withDeadline": "{status} — {when}",
     "opensOn": "abre el {date}",

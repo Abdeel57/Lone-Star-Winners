@@ -771,3 +771,27 @@ DEC-090, en su propia rama sin publicar.)
     de {promoción}" y "¡Mucha suerte!"); (c) si la Política de Privacidad
     debe mencionar este uso del celular y del correo; (d) cómo documentar que
     cada consulta del contacto queda en la auditoría.
+
+## Aviso de cierre de la primera edición (DEC-099, 2026-11-08)
+
+Del 33 al 41 quedan reservados para DEC-098 (rama sin publicar).
+
+42. **Texto del aviso.** Lo redactó el cliente y no lo ha revisado el abogado.
+    No menciona las exclusiones (Alaska, Florida, Hawái, Nueva York); remite a
+    las Reglas Oficiales. Confirmar si debe llevar "nulo donde esté prohibido" o
+    las exclusiones, y si la línea "no es necesario comprar" debe seguir después
+    del cierre (hoy se retira).
+43. **Los 59 segundos.** Las Reglas cierran a las 11:59:59 p.m. CT y la API a las
+    11:59:00 p.m. CT, con ventana `[inicio, fin)`. Un pago de ese último minuto
+    se cobra sin participaciones, aunque las Reglas lo incluyan. Decidir cómo
+    tratar cualquier pago de esa ventana.
+44. **Vía gratuita.** Las Reglas §4 (opción 3) la ofrecen por correo postal y
+    exigen recibir la ficha antes del cierre, pero `amoe_enabled` está apagado:
+    el personal no puede transcribir fichas y la página de la vía gratuita dice
+    que la promoción no la ofrece en este sitio. El aviso repite "no es necesario
+    comprar" y remite a los "métodos de participación" de las Reglas. Confirmar
+    cómo se tratan las fichas recibidas y si esa contradicción es aceptable.
+45. **Compras después del cierre.** La tienda sigue vendiendo paquetes de
+    participaciones cuando la edición ya cerró, y esa compra no da
+    participaciones. Confirmar si deben retirarse o llevar un aviso, y qué se
+    hace con quien pague después del cierre.

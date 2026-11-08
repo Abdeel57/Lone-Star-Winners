@@ -643,6 +643,27 @@
       "title": "No promotion is open right now"
     }
   },
+  "closingNotice": {
+    "dismiss": "Close notice",
+    "rulesCta": "View official rules",
+    "entriesCta": "My entries",
+    "selection": "The selection of the two winners is scheduled for {selectionDate}.",
+    "ended": "The entry period for our first edition ended on {date} at {time} Central Time.",
+    "open": {
+      "title": "First edition — Closing notice",
+      "closes": "Our first edition closes on {date} at {time} Central Time.",
+      "review": "Check your entries and review the Official Rules for the conditions, eligibility requirements, and methods of entry.",
+      "legal": "No purchase necessary to enter or win. A purchase will not improve your chances of winning."
+    },
+    "closed": {
+      "title": "First edition — Entry period ended",
+      "review": "Check your entries and review the Official Rules for the selection conditions."
+    },
+    "afterSelection": {
+      "title": "First edition — Closed",
+      "results": "Any results will be communicated only once officially confirmed, in accordance with the Official Rules."
+    }
+  },
   "announcement": {
     "withDeadline": "{status} — {when}",
     "opensOn": "opens {date}",

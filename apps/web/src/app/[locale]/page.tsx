@@ -5,6 +5,7 @@ import { getTranslations, setRequestLocale } from "next-intl/server";
 
 import { AmoeCallout } from "@/components/amoe-callout";
 import { ApiErrorState } from "@/components/api-error-state";
+import { ClosingNoticeBody, loadClosingNotice } from "@/components/closing-notice";
 import { EntryOfferPanel } from "@/components/entry-offer-panel";
 import { EntryPackageBand } from "@/components/entry-package-band";
 import { MarqueeBand } from "@/components/marquee-band";
@@ -203,6 +204,7 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
   const promotion =
     active ?? (promotionResult.ok ? await findUpcomingPromotion(locale, nowIso) : null);
   const presentation = promotion === null ? null : presentPromotion(promotion.status);
+  const closingNotice = await loadClosingNotice({ activePromotion: active, locale, nowIso });
 
   // El detalle solo se pide si hay promocion. Un fallo aqui NO tumba la
   // portada: la oferta es informacion adicional, y quedarse sin ella es peor
@@ -240,6 +242,10 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
 
   return (
     <>
+      {/* DEC-099: aviso de cierre de la primera edicion. En el flujo de la
+          pagina, sin tapar nada. */}
+      {closingNotice === null ? null : <ClosingNoticeBody {...closingNotice} />}
+
       {!promotionResult.ok ? (
         <div className="lsw-container py-s16">
           <ApiErrorState failure={promotionResult.error} headingLevel="h2" />

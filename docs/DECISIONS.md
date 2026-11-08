@@ -4967,3 +4967,49 @@ cliente de la API, mensajes, mocks, pruebas), `docs/API_CONTRACT.md`.
 Proposed by: sesión del usuario (2026-11-02, petición del cliente)
 Agreed by: backend, frontend-ux, security (petición directa del usuario; eligió
 "ambas cosas")
+
+---
+
+## DEC-099
+
+Status: Accepted
+
+Date: 2026-11-08
+
+Decision:
+**La portada lleva un aviso informativo sobre el cierre de la primera edición.**
+Es una banda en el flujo de la página, bajo la cabecera fija, en los dos
+idiomas. No toca compra, carrito, pagos, participaciones ni base de datos.
+
+1. **Tres fases, decididas en servidor** (`lib/closing-notice.ts`): `open` da la
+   fecha y la hora exactas; `closed` dice que el periodo terminó y que el sorteo
+   está programado; `afterSelection` solo dice que los resultados se comunicarán
+   con confirmación oficial. Con otra edición activa, o en `COMPLETED`,
+   `CANCELLED`, `DRAFT` o `SCHEDULED`, no se pinta.
+2. **Las fechas se fijan aquí, desde las Official Rules (§2 y §7).** Es una
+   excepción deliberada al principio 14: la API no publica fecha de sorteo y su
+   `ends_at` (05:59:00Z) es 59 segundos anterior al reglamento (05:59:59Z).
+   Pintar `ends_at` habría contradicho las Reglas. Como contrapeso, cada render
+   compara la fecha fija con la API (slug, `legal_timezone` y `ends_at` a menos
+   de 60 s); si el personal mueve el cierre, el aviso desaparece en vez de
+   anunciar una fecha falsa. Corregir `ends_at` a 05:59:59.999Z no lo apaga.
+3. **`ACTIVE` no basta para decir que sigue abierta.** La API no cierra sola: el
+   estado sigue `ACTIVE` hasta que el personal llama a `/close`. La fase combina
+   estado y reloj del servidor, y un cierre anticipado del personal se respeta.
+4. **Cerrar se recuerda en una cookie de sesión**
+   (`lsw_closing_notice_dismissed`, cuyo valor es la fase), no en
+   `sessionStorage`, para que el servidor no llegue a pintar un aviso ya cerrado
+   y no haya parpadeo. Sin identificador ni datos personales. Al cambiar de fase
+   el aviso vuelve.
+5. **Sin botón de compra en ninguna fase.** Después del cierre tampoco lleva la
+   línea "no es necesario comprar": ya no hay nada en lo que participar.
+
+Consecuencias: el texto es propuesta del cliente y está pendiente de abogado
+(`LEGAL_PENDING` 42-45). Este DEC no corrige los 59 segundos, ni cierra la
+promoción, ni retira los paquetes de la portada: eso son decisiones operativas.
+Afecta a: `apps/web` (`lib/closing-notice.ts`, `components/closing-notice.tsx`,
+`components/closing-notice-frame.tsx`, `i18n/formatters.ts`,
+`app/[locale]/page.tsx`, mensajes, pruebas).
+
+Proposed by: sesión del usuario (2026-11-08, petición del cliente)
+Agreed by: frontend-ux (petición directa del usuario)

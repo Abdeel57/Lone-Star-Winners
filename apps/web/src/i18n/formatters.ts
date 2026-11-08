@@ -195,11 +195,29 @@ export function formatZonedTime(
   isoInstant: string,
   locale: Locale,
   timeZone: string,
+  /** `medium` anade los segundos, para un plazo legal que los declara (DEC-099). */
+  timeStyle: "short" | "medium" = "short",
 ): string | null {
   const date = toDate(isoInstant);
   if (date === null) return null;
 
-  return new Intl.DateTimeFormat(localeTag(locale), { timeStyle: "short", timeZone }).format(date);
+  return new Intl.DateTimeFormat(localeTag(locale), { timeStyle, timeZone }).format(date);
+}
+
+/** Dia y mes en la zona legal, sin ano: "11 de noviembre" (DEC-099). */
+export function formatZonedMonthDay(
+  isoInstant: string,
+  locale: Locale,
+  timeZone: string,
+): string | null {
+  const date = toDate(isoInstant);
+  if (date === null) return null;
+
+  return new Intl.DateTimeFormat(localeTag(locale), {
+    month: "long",
+    day: "numeric",
+    timeZone,
+  }).format(date);
 }
 
 /**
