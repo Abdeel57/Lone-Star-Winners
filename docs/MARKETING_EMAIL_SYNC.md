@@ -7,21 +7,21 @@ importa contactos por sí solo.
 
 Cada puerta está impuesta en el código, no solo escrita aquí.
 
-| #   | Dependencia                                                                     | Quién decide | Dónde se aplica                                                                    |
-| --- | ------------------------------------------------------------------------------- | ------------ | ---------------------------------------------------------------------------------- |
-| 1   | Texto de la casilla en inglés y español (`LEGAL_PENDING` 33)                    | Abogado      | `MARKETING_EMAIL_CONSENT.legallyApproved`; sin él no arrancan ni casilla ni `live` |
-| 2   | Si un cambio de texto obliga a pedir otra vez el permiso (34)                   | Abogado      | Hoy solo cuenta la versión vigente: lo más prudente                                |
-| 3   | Contenido obligatorio de cada correo y plazos de la vía gratuita (35, 36)       | Abogado      | Revisión humana de cada broadcast                                                  |
-| 4   | Política de Privacidad: correo promocional, baja y medición de clics (37, 42)   | Abogado      | Antes de encender la casilla                                                       |
-| 5   | Si se escribe a quien vive en un estado excluido (35)                           | Abogado      | Hoy no se sincroniza a nadie de un estado excluido ni sin estado declarado         |
-| 6   | Autorización **escrita** de Resend para correo promocional de un sorteo         | Resend       | `RESEND_PROMOTIONAL_USE.authorizedInWriting`; sin ella `live` no arranca           |
-| 7   | Subdominio propio de marketing, verificado en Resend                            | Propietario  | `MARKETING_FROM_ADDRESS` debe estar en otro dominio que el de los códigos          |
-| 8   | Clave de API propia de marketing, distinta de la de los códigos                 | Propietario  | El arranque falla si son iguales                                                   |
-| 9   | Crear en Resend los dos segmentos y activar el seguimiento de clics             | Propietario  | `RESEND_SEGMENT_*`; sin ellos `live` no arranca                                    |
-| 10  | Elegir la edición que fija los estados excluidos                                | Negocio/ESG  | `MARKETING_TARGET_PROMOTION_SLUG`; sin ella o sin Reglas legibles no se sincroniza |
-| 11  | Ventana de atribución (días tras el clic; por defecto 7)                        | BISMARK      | `MARKETING_ATTRIBUTION_WINDOW_DAYS`                                                |
-| 12  | Crear y encender automatizaciones en Resend                                     | Negocio      | `MARKETING_AUTOMATION_EVENTS_ENABLED`, apagada; además la automatización es manual |
-| 13  | Plan de Resend: Marketing Free hasta 1,000 contactos; Transaccional Pro $20/mes | Propietario  | Fuera del código                                                                   |
+| #   | Dependencia                                                                                                  | Quién decide | Dónde se aplica                                                                    |
+| --- | ------------------------------------------------------------------------------------------------------------ | ------------ | ---------------------------------------------------------------------------------- |
+| 1   | Texto de la casilla en inglés y español (`LEGAL_PENDING` 33)                                                 | Abogado      | `MARKETING_EMAIL_CONSENT.legallyApproved`; sin él no arrancan ni casilla ni `live` |
+| 2   | Si un cambio de texto obliga a pedir otra vez el permiso (34)                                                | Abogado      | Hoy solo cuenta la versión vigente: lo más prudente                                |
+| 3   | Contenido obligatorio de cada correo y plazos de la vía gratuita (35, 36)                                    | Abogado      | Revisión humana de cada broadcast                                                  |
+| 4   | Política de Privacidad: correo promocional, baja y medición de clics (37, 42)                                | Abogado      | Antes de encender la casilla                                                       |
+| 5   | Si se escribe a quien vive en un estado excluido (35)                                                        | Abogado      | Hoy no se sincroniza a nadie de un estado excluido ni sin estado declarado         |
+| 6   | Autorización **escrita** de Resend para correo promocional de un sorteo                                      | Resend       | `RESEND_PROMOTIONAL_USE.authorizedInWriting`; sin ella `live` no arranca           |
+| 7   | Subdominio propio de marketing, verificado en Resend                                                         | Propietario  | `MARKETING_FROM_ADDRESS` debe estar en otro dominio que el de los códigos          |
+| 8   | Clave de API propia de marketing, distinta de la de los códigos                                              | Propietario  | El arranque falla si son iguales                                                   |
+| 9   | Crear en Resend los dos segmentos y las propiedades `locale` e `is_buyer`, y activar el seguimiento de clics | Propietario  | `RESEND_SEGMENT_*`; sin ellos `live` no arranca                                    |
+| 10  | Elegir la edición que fija los estados excluidos                                                             | Negocio/ESG  | `MARKETING_TARGET_PROMOTION_SLUG`; sin ella o sin Reglas legibles no se sincroniza |
+| 11  | Ventana de atribución (días tras el clic; por defecto 7)                                                     | BISMARK      | `MARKETING_ATTRIBUTION_WINDOW_DAYS`                                                |
+| 12  | Crear y encender automatizaciones en Resend                                                                  | Negocio      | `MARKETING_AUTOMATION_EVENTS_ENABLED`, apagada; además la automatización es manual |
+| 13  | Plan de Resend: Marketing Free hasta 1,000 contactos; Transaccional Pro $20/mes                              | Propietario  | Fuera del código                                                                   |
 
 ## Principios
 
