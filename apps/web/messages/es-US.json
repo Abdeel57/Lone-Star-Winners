@@ -189,7 +189,22 @@
     "ACCOUNT_UNAVAILABLE": "Esta cuenta no puede entrar ahora. Escríbenos a info@LoneStarWinners.com.",
     "PHONE_ALREADY_SET": "Tu cuenta ya tiene un celular.",
     "PHONE_IN_OTHER_ACCOUNT": "Ese celular ya está en otra cuenta. Escríbenos y la unimos con esta.",
-    "PARTICIPANT_ANONYMIZED": "Este cliente pidió borrar sus datos. No se le puede añadir un celular."
+    "PARTICIPANT_ANONYMIZED": "Este cliente pidió borrar sus datos. No se le puede añadir un celular.",
+    "MARKETING_CONSENT_NOT_OFFERED": "Por ahora no enviamos correos promocionales.",
+    "MARKETING_CONSENT_TEXT_OUTDATED": "El texto cambió. Léelo de nuevo antes de aceptar.",
+    "MARKETING_CONSENT_NEEDS_EMAIL": "Tu cuenta no tiene un correo confirmado al que escribirte.",
+    "EMAIL_QUOTA_EXHAUSTED": "Ahora mismo no podemos enviarte el código por correo. Entra con tu número de celular o inténtalo más tarde."
+  },
+  "marketingConsent": {
+    "checkbox": "Quiero recibir correos de Lone Star Winners con novedades, ofertas y promociones.",
+    "checkboxHint": "Opcional. No hace falta para comprar ni para participar, y puedes retirarlo cuando quieras desde tu cuenta.",
+    "heading": "Correos promocionales",
+    "statusNone": "No recibes correos promocionales.",
+    "statusGranted": "Aceptaste recibir correos promocionales el {date}.",
+    "statusWithdrawn": "Dejaste de recibir correos promocionales el {date}.",
+    "accept": "Aceptar",
+    "withdraw": "Dejar de recibirlos",
+    "saved": "Listo. Guardamos tu preferencia."
   },
   "availability": {
     "IN_STOCK": "Disponible",

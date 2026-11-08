@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   isIanaTimeZone,
   isoToZonedWallTime,
+  keepUntouchedInstant,
   minorUnitsToPriceText,
   priceToMinorUnits,
   zonedWallTimeToIso,
@@ -120,5 +121,34 @@ describe("isIanaTimeZone", () => {
     expect(isIanaTimeZone("UTC")).toBe(true);
     expect(isIanaTimeZone("Marte/Olympus")).toBe(false);
     expect(isIanaTimeZone("")).toBe(false);
+  });
+});
+
+describe("keepUntouchedInstant", () => {
+  const CHICAGO = "America/Chicago";
+  // 11:59:59 p. m. CT del 8 de noviembre de 2026 (CST, UTC-6).
+  const CLOSE_WITH_SECONDS = "2026-11-09T05:59:59.000Z";
+
+  it("una fecha que no se toco conserva sus segundos al guardar otra cosa", () => {
+    // El formulario la pinta a minutos (23:59) y la devuelve a minutos (:00).
+    const resubmitted = zonedWallTimeToIso("2026-11-08T23:59", CHICAGO);
+    expect(resubmitted).toBe("2026-11-09T05:59:00.000Z");
+
+    expect(keepUntouchedInstant(resubmitted, CLOSE_WITH_SECONDS, CHICAGO)).toBe(CLOSE_WITH_SECONDS);
+  });
+
+  it("una fecha cambiada a proposito se manda como se escribio", () => {
+    const moved = zonedWallTimeToIso("2026-11-09T00:00", CHICAGO);
+
+    expect(keepUntouchedInstant(moved, CLOSE_WITH_SECONDS, CHICAGO)).toBe(
+      "2026-11-09T06:00:00.000Z",
+    );
+  });
+
+  it("sin fecha anterior o sin fecha enviada no inventa nada", () => {
+    expect(keepUntouchedInstant(null, CLOSE_WITH_SECONDS, CHICAGO)).toBeNull();
+    expect(keepUntouchedInstant("2026-11-09T05:59:00.000Z", null, CHICAGO)).toBe(
+      "2026-11-09T05:59:00.000Z",
+    );
   });
 });

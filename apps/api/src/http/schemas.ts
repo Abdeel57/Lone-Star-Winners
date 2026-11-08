@@ -470,4 +470,17 @@ export const publicConfigSchema = z.object({
       required: z.boolean(),
     }),
   ),
+  /**
+   * DEC-098: casillas OPCIONALES del alta, desmarcadas por defecto. Hoy solo
+   * `MARKETING_EMAIL` (correo promocional), y solo cuando esta encendido; vacio
+   * en otro caso. La web la ofrece solo en el alta con correo.
+   */
+  optional_consents: z.array(
+    z.object({
+      key: z.string(),
+      version: z.string(),
+      text_key: z.string(),
+      required: z.boolean(),
+    }),
+  ),
 });

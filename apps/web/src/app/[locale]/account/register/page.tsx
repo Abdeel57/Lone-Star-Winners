@@ -61,10 +61,19 @@ export default async function RegisterPage({
   const consents: readonly ConsentRequirement[] = configResult.ok
     ? (configResult.data.required_consents ?? [])
     : [];
+  // DEC-098: casillas opcionales (hoy, correo promocional). Sin ellas, ninguna.
+  const optionalConsents: readonly ConsentRequirement[] = configResult.ok
+    ? (configResult.data.optional_consents ?? [])
+    : [];
 
   return (
     <AuthPanel title={t("register.title")} intro={t("code.registerIntro")}>
-      <SignInFlow locale={locale} consents={consents} returnPath={returnPath} />
+      <SignInFlow
+        locale={locale}
+        consents={consents}
+        optionalConsents={optionalConsents}
+        returnPath={returnPath}
+      />
     </AuthPanel>
   );
 }

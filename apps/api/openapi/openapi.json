@@ -9967,6 +9967,502 @@
         }
       }
     },
+    "/api/v1/admin/marketing/campaigns/{provider_broadcast_id}": {
+      "put": {
+        "description": "Solo guarda el nombre legible de un broadcast creado en Resend. No crea, programa ni envia nada.",
+        "operationId": "nameAdminMarketingCampaign",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "provider_broadcast_id",
+            "required": true,
+            "schema": {
+              "maxLength": 100,
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "name": {
+                    "maxLength": 120,
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "name"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "provider_broadcast_id": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "provider_broadcast_id",
+                    "name"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 200."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "additionalProperties": {},
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "request_id"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 401."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "additionalProperties": {},
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "request_id"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 403."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "additionalProperties": {},
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "request_id"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 422."
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Poner nombre a un broadcast para los informes (DEC-099).",
+        "tags": [
+          "admin"
+        ],
+        "x-lsw-authorization": {
+          "kind": "PERMISSION",
+          "permission": "promotion.update",
+          "requires_step_up": false
+        }
+      }
+    },
+    "/api/v1/admin/marketing/stats": {
+      "get": {
+        "description": "Permisos dados, retirados y sin permiso; audiencia por segmento; supresiones; bajas; y, por campana, entregas, aperturas y clics unicos, rebotes, quejas y pedidos confirmados atribuidos al ultimo clic dentro de la ventana. Solo cifras: ninguna direccion, nombre ni identificador de persona.",
+        "operationId": "getAdminMarketingStats",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "attribution_window_days": {
+                      "maximum": 9007199254740991,
+                      "minimum": -9007199254740991,
+                      "type": "integer"
+                    },
+                    "audience": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "buyers": {
+                          "maximum": 9007199254740991,
+                          "minimum": -9007199254740991,
+                          "type": "integer"
+                        },
+                        "excluded_by_territory": {
+                          "anyOf": [
+                            {
+                              "maximum": 9007199254740991,
+                              "minimum": -9007199254740991,
+                              "type": "integer"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "registered_no_purchase": {
+                          "maximum": 9007199254740991,
+                          "minimum": -9007199254740991,
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "buyers",
+                        "registered_no_purchase",
+                        "excluded_by_territory"
+                      ],
+                      "type": "object"
+                    },
+                    "campaigns": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "attributed": {
+                            "items": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "currency": {
+                                  "type": "string"
+                                },
+                                "net_minor": {
+                                  "type": "string"
+                                },
+                                "orders": {
+                                  "maximum": 9007199254740991,
+                                  "minimum": -9007199254740991,
+                                  "type": "integer"
+                                }
+                              },
+                              "required": [
+                                "currency",
+                                "orders",
+                                "net_minor"
+                              ],
+                              "type": "object"
+                            },
+                            "type": "array"
+                          },
+                          "bounced": {
+                            "maximum": 9007199254740991,
+                            "minimum": -9007199254740991,
+                            "type": "integer"
+                          },
+                          "clicked": {
+                            "maximum": 9007199254740991,
+                            "minimum": -9007199254740991,
+                            "type": "integer"
+                          },
+                          "complained": {
+                            "maximum": 9007199254740991,
+                            "minimum": -9007199254740991,
+                            "type": "integer"
+                          },
+                          "delivered": {
+                            "maximum": 9007199254740991,
+                            "minimum": -9007199254740991,
+                            "type": "integer"
+                          },
+                          "name": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "opened": {
+                            "maximum": 9007199254740991,
+                            "minimum": -9007199254740991,
+                            "type": "integer"
+                          },
+                          "provider_broadcast_id": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "provider_broadcast_id",
+                          "name",
+                          "delivered",
+                          "opened",
+                          "clicked",
+                          "bounced",
+                          "complained",
+                          "attributed"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "consent": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "granted": {
+                          "maximum": 9007199254740991,
+                          "minimum": -9007199254740991,
+                          "type": "integer"
+                        },
+                        "none": {
+                          "maximum": 9007199254740991,
+                          "minimum": -9007199254740991,
+                          "type": "integer"
+                        },
+                        "withdrawn": {
+                          "maximum": 9007199254740991,
+                          "minimum": -9007199254740991,
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "granted",
+                        "withdrawn",
+                        "none"
+                      ],
+                      "type": "object"
+                    },
+                    "generated_at": {
+                      "type": "string"
+                    },
+                    "suppressions": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "complaint": {
+                          "maximum": 9007199254740991,
+                          "minimum": -9007199254740991,
+                          "type": "integer"
+                        },
+                        "hard_bounce": {
+                          "maximum": 9007199254740991,
+                          "minimum": -9007199254740991,
+                          "type": "integer"
+                        },
+                        "provider_manual": {
+                          "maximum": 9007199254740991,
+                          "minimum": -9007199254740991,
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "hard_bounce",
+                        "complaint",
+                        "provider_manual"
+                      ],
+                      "type": "object"
+                    },
+                    "unsubscribes": {
+                      "maximum": 9007199254740991,
+                      "minimum": -9007199254740991,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "generated_at",
+                    "attribution_window_days",
+                    "consent",
+                    "audience",
+                    "suppressions",
+                    "unsubscribes",
+                    "campaigns"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 200."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "additionalProperties": {},
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "request_id"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 401."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "additionalProperties": {},
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "request_id"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 403."
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Cifras agregadas de correo promocional (DEC-099).",
+        "tags": [
+          "admin"
+        ],
+        "x-lsw-authorization": {
+          "kind": "PERMISSION",
+          "permission": "dashboard.read",
+          "requires_step_up": false
+        }
+      }
+    },
     "/api/v1/admin/media": {
       "post": {
         "description": "Acepta JPEG, PNG o WebP de hasta 5 MiB; el tipo se decide por la firma de los bytes, no por lo que declare el cliente. La imagen es inmutable: cambiar la foto de un producto es subir otra. Subir dos veces el mismo contenido devuelve la misma imagen. NO asocia nada: la ruta devuelta se manda despues como `image_url` en el alta o el PATCH del producto o la variante.",
@@ -33559,7 +34055,7 @@
     },
     "/api/v1/auth/code/register": {
       "post": {
-        "description": "Gasta la cookie `<base>_signup` que deja `POST /auth/code/verify` y crea la cuenta SIN contrasena con el contacto ya verificado: identidad ACTIVE, perfil con nombre y estado (DEC-067) y consentimientos. La fecha de nacimiento no se pide aqui: se declara en el checkout con la puerta de edad encendida (`PUT /me/eligibility`). Abre sesion de escaparate y adopta el carrito sin cuenta. 410 SIGNUP_EXPIRED si la cookie falta, caduco o ya se uso.",
+        "description": "Gasta la cookie `<base>_signup` que deja `POST /auth/code/verify` y crea la cuenta SIN contrasena con el contacto ya verificado: identidad ACTIVE, perfil con nombre y estado (DEC-067) y consentimientos. DEC-098: si `consents` trae `MARKETING_EMAIL` con la version de `optional_consents` (GET /config), se guarda el permiso de correo promocional en la misma transaccion, origen `SIGNUP`; con otra version, con el permiso apagado o en un alta por celular se ignora. La fecha de nacimiento no se pide aqui: se declara en el checkout con la puerta de edad encendida (`PUT /me/eligibility`). Abre sesion de escaparate y adopta el carrito sin cuenta. 410 SIGNUP_EXPIRED si la cookie falta, caduco o ya se uso.",
         "operationId": "registerWithSignInCode",
         "requestBody": {
           "content": {
@@ -39600,6 +40096,33 @@
                       },
                       "type": "object"
                     },
+                    "optional_consents": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "key": {
+                            "type": "string"
+                          },
+                          "required": {
+                            "type": "boolean"
+                          },
+                          "text_key": {
+                            "type": "string"
+                          },
+                          "version": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "key",
+                          "version",
+                          "text_key",
+                          "required"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
                     "password_policy": {
                       "additionalProperties": false,
                       "properties": {
@@ -39663,7 +40186,8 @@
                     "amoe_mode",
                     "supported_locales",
                     "password_policy",
-                    "required_consents"
+                    "required_consents",
+                    "optional_consents"
                   ],
                   "type": "object"
                 }
@@ -40665,6 +41189,418 @@
           }
         ],
         "summary": "Declarar lo que falte: el estado, la fecha de nacimiento o las dos (DEC-067, DEC-089).",
+        "tags": [
+          "portal"
+        ],
+        "x-lsw-authorization": {
+          "kind": "PERMISSION",
+          "permission": "participant.self.update",
+          "requires_step_up": false
+        }
+      }
+    },
+    "/api/v1/me/marketing-consent": {
+      "get": {
+        "description": "`NONE` si nunca lo dio (toda cuenta anterior a DEC-098: aceptar Reglas, Terminos o Privacidad no es permiso), `GRANTED` con la version del texto aceptado, o `WITHDRAWN`. `offer` es la version vigente que se puede aceptar ahora, o `null` si la casilla no se ofrece.",
+        "operationId": "getMarketingConsent",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "offer": {
+                      "anyOf": [
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "key": {
+                              "type": "string"
+                            },
+                            "text_key": {
+                              "type": "string"
+                            },
+                            "text_version": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "key",
+                            "text_version",
+                            "text_key"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "source": {
+                      "anyOf": [
+                        {
+                          "enum": [
+                            "SIGNUP",
+                            "ACCOUNT_SETTINGS",
+                            "UNSUBSCRIBE_LINK",
+                            "EMAIL_PROVIDER",
+                            "SUPPORT"
+                          ],
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "status": {
+                      "enum": [
+                        "NONE",
+                        "GRANTED",
+                        "WITHDRAWN"
+                      ],
+                      "type": "string"
+                    },
+                    "text_version": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "updated_at": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "status",
+                    "text_version",
+                    "source",
+                    "updated_at",
+                    "offer"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 200."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "additionalProperties": {},
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "request_id"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 401."
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Permiso de correo promocional de la cuenta (DEC-098).",
+        "tags": [
+          "portal"
+        ],
+        "x-lsw-authorization": {
+          "kind": "PERMISSION",
+          "permission": "participant.self.read",
+          "requires_step_up": false
+        }
+      },
+      "put": {
+        "description": "`granted: false` lo retira SIEMPRE, tambien con la casilla apagada; si no estaba dado no escribe nada. `granted: true` exige `text_version` (la vigente de `offer`) y `locale`: 409 MARKETING_CONSENT_NOT_OFFERED si la casilla no se ofrece, 409 MARKETING_CONSENT_TEXT_OUTDATED si el texto mostrado ya no es el vigente, 409 MARKETING_CONSENT_NEEDS_EMAIL si la cuenta no tiene correo verificado. Cada cambio real es una fila nueva de solo insercion con origen `ACCOUNT_SETTINGS`; repetir el mismo estado no escribe.",
+        "operationId": "setMarketingConsent",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "granted": {
+                    "type": "boolean"
+                  },
+                  "locale": {
+                    "enum": [
+                      "en-US",
+                      "es-US"
+                    ],
+                    "type": "string"
+                  },
+                  "text_version": {
+                    "maxLength": 100,
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "granted"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "offer": {
+                      "anyOf": [
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "key": {
+                              "type": "string"
+                            },
+                            "text_key": {
+                              "type": "string"
+                            },
+                            "text_version": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "key",
+                            "text_version",
+                            "text_key"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "source": {
+                      "anyOf": [
+                        {
+                          "enum": [
+                            "SIGNUP",
+                            "ACCOUNT_SETTINGS",
+                            "UNSUBSCRIBE_LINK",
+                            "EMAIL_PROVIDER",
+                            "SUPPORT"
+                          ],
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "status": {
+                      "enum": [
+                        "NONE",
+                        "GRANTED",
+                        "WITHDRAWN"
+                      ],
+                      "type": "string"
+                    },
+                    "text_version": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "updated_at": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "status",
+                    "text_version",
+                    "source",
+                    "updated_at",
+                    "offer"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 200."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "additionalProperties": {},
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "request_id"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 401."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "additionalProperties": {},
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "request_id"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 409."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "additionalProperties": {},
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "request_id"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 422."
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Dar o retirar el permiso de correo promocional (DEC-098).",
         "tags": [
           "portal"
         ],
@@ -44377,6 +45313,121 @@
         ],
         "x-lsw-authorization": {
           "justification": "Las Official Rules tienen que poder consultarse sin comprar y sin registrarse. Exigir sesion para leerlas seria incompatible con el proposito del documento.",
+          "kind": "PUBLIC",
+          "requires_step_up": false
+        }
+      }
+    },
+    "/api/v1/webhooks/email/resend": {
+      "post": {
+        "description": "Firma Svix sobre el cuerpo crudo, antes de parsear; tolerancia de 5 minutos. Una baja, una queja o un borrado retiran el permiso; un rebote permanente o una queja suprimen. Nunca da permiso: un `unsubscribed: false` no escribe nada. Idempotente por `svix-id`. No guarda direccion, IP, navegador ni asunto. 404 si `RESEND_WEBHOOK_SECRET` no esta configurado.",
+        "operationId": "receiveEmailProviderWebhook",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "received": {
+                      "const": true,
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "received"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 200."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "additionalProperties": {},
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "request_id"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 401."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "additionalProperties": {},
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "request_id"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 404."
+          }
+        },
+        "summary": "Bajas, rebotes, quejas y medicion del proveedor de correo (DEC-099).",
+        "tags": [
+          "commerce"
+        ],
+        "x-lsw-authorization": {
+          "justification": "El llamante es el proveedor de correo, que no tiene sesion. La autenticacion es CRIPTOGRAFICA: firma HMAC sobre el cuerpo crudo con un secreto compartido. Solo puede retirar permisos o registrar medidas, nunca darlos.",
           "kind": "PUBLIC",
           "requires_step_up": false
         }

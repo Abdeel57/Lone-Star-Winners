@@ -16,6 +16,7 @@
     "test": "vitest run --project unit",
     "test:integration": "vitest run --project integration",
     "contract:emit": "tsc -p tsconfig.build.json && node dist/scripts/emit-contract.js",
+    "marketing:sync": "node dist/scripts/marketing-sync.js",
     "contract:check": "pnpm run contract:emit && git diff --exit-code HEAD -- openapi"
   },
   "dependencies": {

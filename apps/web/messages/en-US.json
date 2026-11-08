@@ -189,7 +189,22 @@
     "ACCOUNT_UNAVAILABLE": "This account can't sign in right now. Write to us at info@LoneStarWinners.com.",
     "PHONE_ALREADY_SET": "Your account already has a mobile number.",
     "PHONE_IN_OTHER_ACCOUNT": "That mobile number is already on another account. Contact us and we'll merge it with this one.",
-    "PARTICIPANT_ANONYMIZED": "This customer asked for their data to be deleted. A mobile number can't be added."
+    "PARTICIPANT_ANONYMIZED": "This customer asked for their data to be deleted. A mobile number can't be added.",
+    "MARKETING_CONSENT_NOT_OFFERED": "We don't send promotional emails right now.",
+    "MARKETING_CONSENT_TEXT_OUTDATED": "The wording changed. Please read it again before agreeing.",
+    "MARKETING_CONSENT_NEEDS_EMAIL": "Your account doesn't have a confirmed email address to write to.",
+    "EMAIL_QUOTA_EXHAUSTED": "We can't email you a code right now. Sign in with your mobile number or try again later."
+  },
+  "marketingConsent": {
+    "checkbox": "Send me emails from Lone Star Winners with news, offers and promotions.",
+    "checkboxHint": "Optional. You don't need it to buy or to enter, and you can withdraw it at any time from your account.",
+    "heading": "Promotional emails",
+    "statusNone": "You don't receive promotional emails.",
+    "statusGranted": "You agreed to receive promotional emails on {date}.",
+    "statusWithdrawn": "You stopped receiving promotional emails on {date}.",
+    "accept": "I agree",
+    "withdraw": "Stop receiving them",
+    "saved": "Done. We saved your preference."
   },
   "availability": {
     "IN_STOCK": "In stock",

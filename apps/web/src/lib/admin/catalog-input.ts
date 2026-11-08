@@ -181,6 +181,26 @@ export function isoToZonedWallTime(iso: string, timeZone: string): string | null
 }
 
 /**
+ * Si la fecha del formulario NO se toco, el instante que ya tenia la promocion,
+ * con sus segundos; si se toco, el del formulario.
+ *
+ * El formulario trabaja a minutos (`datetime-local` sin segundos) y se envia
+ * entero al guardar cualquier cosa: el lema, una foto. Sin esto, guardar una
+ * foto movia un cierre de 23:59:59 a 23:59:00 y la ultima ventana de 59
+ * segundos dejaba de dar participaciones sin que nadie lo decidiera.
+ */
+export function keepUntouchedInstant(
+  submittedIso: string | null,
+  currentIso: string | null,
+  timeZone: string,
+): string | null {
+  if (submittedIso === null || currentIso === null) return submittedIso;
+  const shown = isoToZonedWallTime(currentIso, timeZone);
+  if (shown === null) return submittedIso;
+  return zonedWallTimeToIso(shown, timeZone) === submittedIso ? currentIso : submittedIso;
+}
+
+/**
  * Zonas que se ofrecen al crear una promocion.
  *
  * Son las de Estados Unidos continental mas Alaska y Hawai. NO hay valor por

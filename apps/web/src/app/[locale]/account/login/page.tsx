@@ -74,6 +74,10 @@ export default async function LoginPage({
   const consents: readonly ConsentRequirement[] = configResult.ok
     ? (configResult.data.required_consents ?? [])
     : [];
+  // DEC-098: casillas opcionales (hoy, correo promocional). Sin ellas, ninguna.
+  const optionalConsents: readonly ConsentRequirement[] = configResult.ok
+    ? (configResult.data.optional_consents ?? [])
+    : [];
 
   return (
     <AuthPanel title={t("code.loginTitle")} intro={t("code.loginIntro")}>
@@ -81,7 +85,12 @@ export default async function LoginPage({
         <p className="mb-s4 text-body-sm text-text-muted">{t("login.returnNotice")}</p>
       )}
 
-      <SignInFlow locale={locale} consents={consents} returnPath={returnPath} />
+      <SignInFlow
+        locale={locale}
+        consents={consents}
+        optionalConsents={optionalConsents}
+        returnPath={returnPath}
+      />
     </AuthPanel>
   );
 }

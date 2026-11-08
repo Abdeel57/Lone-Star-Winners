@@ -179,12 +179,19 @@ export async function completeSignupAction(
   const agreement = agreementFrom(formData);
   if (agreement.missing) return invalid("CONSENT_REQUIRED", "consent");
 
+  // DEC-098: la casilla OPCIONAL de correo promocional. Solo llega marcada, y
+  // su valor es la version del texto que se pinto; si no esta, no hay permiso.
+  const marketingVersion = textFrom(formData, "marketing_email");
+
   const session = await mutableSession();
   const result = await registerWithSignInCode(
     {
       display_name: displayName,
       residence_state: residenceState,
-      consents: agreement.accepted,
+      consents:
+        marketingVersion === null
+          ? agreement.accepted
+          : [...agreement.accepted, { key: "MARKETING_EMAIL", version: marketingVersion }],
       // El idioma de la cuenta es el que la persona esta usando ahora mismo, en
       // ETIQUETA BCP-47 (DEC-029). No se pregunta: ya se ha respondido eligiendo
       // en que idioma leer la pagina.

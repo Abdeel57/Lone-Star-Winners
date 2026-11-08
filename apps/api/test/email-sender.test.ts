@@ -145,6 +145,41 @@ describe("Resend", () => {
     expect(entries.at(-1)?.payload).toMatchObject({ event: "email.send.error", status: null });
   });
 
+  it("la cuota agotada tiene su propio evento y se distingue en el error", async () => {
+    const { fetchImpl } = capturingFetch(
+      429,
+      '{"statusCode":429,"name":"daily_quota_exceeded","message":"You have exceeded your daily email sending quota."}',
+    );
+    const { entries, logger } = capturingLogger();
+
+    const failure = await resendSender(fetchImpl, logger)
+      .send(MESSAGE)
+      .catch((error: unknown) => error);
+
+    expect(failure).toBeInstanceOf(EmailDeliveryError);
+    expect((failure as EmailDeliveryError).quotaExhausted).toBe(true);
+    expect(entries.at(-1)?.payload).toMatchObject({
+      event: "email.quota.exhausted",
+      status: 429,
+      provider_error: "daily_quota_exceeded",
+    });
+  });
+
+  it("demasiadas peticiones por segundo NO es cuota agotada", async () => {
+    const { fetchImpl } = capturingFetch(
+      429,
+      '{"statusCode":429,"name":"rate_limit_exceeded","message":"Too many requests."}',
+    );
+    const { entries, logger } = capturingLogger();
+
+    const failure = await resendSender(fetchImpl, logger)
+      .send(MESSAGE)
+      .catch((error: unknown) => error);
+
+    expect((failure as EmailDeliveryError).quotaExhausted).toBe(false);
+    expect(entries.at(-1)?.payload).toMatchObject({ event: "email.send.error", status: 429 });
+  });
+
   it("nunca registra el cuerpo, el asunto ni la clave", async () => {
     const { fetchImpl } = capturingFetch(200, '{"id":"x"}');
     const { entries, logger } = capturingLogger();

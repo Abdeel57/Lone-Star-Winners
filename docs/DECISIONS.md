@@ -5135,3 +5135,137 @@ vista de documentos legales).
 
 Proposed by: sesión del usuario (2026-11-12, petición del cliente)
 Agreed by: backend, frontend-ux (petición directa del usuario)
+
+## DEC-098
+
+Status: Proposed (rama `feat/marketing-consent`, sin desplegar)
+
+Date: 2026-11-07
+
+Decision:
+**Permiso OPCIONAL para correo promocional, separado de los documentos
+obligatorios, con tres estados (`NONE`, `GRANTED`, `WITHDRAWN`) y guardado como
+prueba de solo inserción. Queda APAGADO hasta que el abogado apruebe el texto.**
+Al auditar la recuperación de clientes se comprobó que la plataforma nunca pidió
+ni guardó permiso de publicidad: el alta solo guarda `OFFICIAL_RULES`, `TERMS` y
+`PRIVACY` (DEC-067) y descarta cualquier otra clave. Aceptar esos documentos no
+es aceptar publicidad, y Resend exige que cada destinatario haya dado su opt-in
+explícito. Hoy nadie tiene permiso demostrable.
+
+1. **Tabla propia `marketing_email_consent_events` (migración `0046`).** No va en
+   `participant_consents`: aquella es única por (participante, clave, versión) y
+   no se retira; esta se retira y se vuelve a dar con el mismo texto. Cada
+   evento guarda acción, versión del texto, idioma, origen y fecha; `seq`
+   ordena. `lsw_app` solo SELECT e INSERT y un trigger rechaza UPDATE/DELETE
+   (DEC-007). Una CHECK impide dar permiso sin versión e idioma, y otra que lo
+   **dé** alguien distinto de la persona: solo `SIGNUP` o `ACCOUNT_SETTINGS`.
+   Retirarlo puede llegar por cualquier vía (`UNSUBSCRIBE_LINK`,
+   `EMAIL_PROVIDER`, `SUPPORT`). Vista `marketing_email_consent_current`. **No
+   se rellena nada**: toda cuenta existente queda en `NONE`.
+2. **Texto versionado y bloqueado por el abogado.** `MARKETING_EMAIL_CONSENT` en
+   `apps/api/src/config/consents.ts` (versión `2026-11-07-borrador`,
+   `legallyApproved: false`). La variable `MARKETING_EMAIL_CONSENT_ENABLED`
+   (apagada por defecto) enciende la casilla; en producción el esquema de
+   entorno **no deja encenderla** mientras `legallyApproved` sea `false`.
+3. **Alta.** `GET /config` publica `optional_consents` (vacío si está apagado).
+   La web pinta la casilla desmarcada, debajo de los documentos y solo en un
+   alta con correo. `POST /auth/code/register` guarda el permiso en la MISMA
+   transacción que la cuenta solo si llega `MARKETING_EMAIL` con la versión
+   vigente; con otra versión, apagado o alta por celular, se ignora.
+4. **Cuenta.** `GET /me/marketing-consent` y `PUT /me/marketing-consent`.
+   Retirar funciona siempre, también apagado. Dar exige casilla encendida,
+   versión vigente (409 `MARKETING_CONSENT_TEXT_OUTDATED`) y correo verificado
+   (409 `MARKETING_CONSENT_NEEDS_EMAIL`). Repetir el mismo estado no escribe. La
+   tarjeta del perfil solo aparece si hay historia o la casilla se ofrece: con
+   todo apagado el perfil no cambia.
+5. **Fuera de esta decisión** y pendiente de otra: la sincronización con Resend
+   (contactos, segmentos, bajas, rebotes, quejas, medición), descrita en
+   `docs/MARKETING_EMAIL_SYNC.md`.
+
+En la misma rama, dos arreglos técnicos sin efecto legal:
+
+- **Cuota de correo agotada.** `EmailDeliveryError` lleva el `name` de Resend.
+  `daily_quota_exceeded` y `monthly_quota_exceeded` registran el evento
+  `email.quota.exhausted` y `POST /auth/code/start` responde 503
+  `EMAIL_QUOTA_EXHAUSTED`, que la web explica ofreciendo entrar con celular.
+- **El formulario de promoción ya no recorta segundos.** Trabaja a minutos y se
+  reenvía entero al guardar el lema o una foto; eso podía convertir un cierre
+  23:59:59 en 23:59:00. Ahora una fecha que no se tocó se manda tal como estaba
+  (`keepUntouchedInstant`).
+
+Alternatives considered: A — Reutilizar `participant_consents` con una clave
+`MARKETING` (descartada: su UNIQUE impide volver a dar el mismo texto tras
+retirarlo, y mezclaría un permiso opcional con documentos obligatorios). B —
+Una columna booleana en `participants` (descartada: no guarda qué texto se vio,
+cuándo ni desde dónde, y se sobrescribiría). C — Considerar con permiso a
+quien aceptó la Privacidad, que menciona "sweepstakes communications"
+(descartada: es un aviso, no un opt-in, y Resend exige opt-in explícito). D —
+Encender la casilla con un texto propio sin abogado (descartada: CLAUDE.md #2).
+
+Affected areas: `packages/database` (`0046`, `schema/marketing-consent.ts`,
+`migration-audit.test.ts`, integración), `apps/api` (`config/consents.ts`,
+`config/env.ts`, `routes/marketing-consent.ts`, `routes/auth.ts`,
+`routes/storefront.ts`, `services/drizzle-marketing-consent.ts`,
+`services/drizzle-identity.ts`, `services/identity-ports.ts`,
+`services/email.ts`, `http/errors.ts`, `http/schemas.ts`, OpenAPI, pruebas),
+`apps/web` (`components/marketing-consent.tsx`, `components/sign-in-flow.tsx`,
+alta, acceso y perfil, `lib/marketing-consent-actions.ts`, `lib/auth-actions.ts`,
+`lib/admin/catalog-input.ts`, `lib/admin/actions.ts`, cliente de la API,
+mensajes, mocks, pruebas), `docs/API_CONTRACT.md`, `docs/LEGAL_PENDING.md`.
+
+Proposed by: sesión del usuario (2026-11-07, auditoría de recuperación de
+clientes para BISMARK)
+Agreed by: pendiente (abogado: texto de la casilla; usuario: despliegue)
+
+## DEC-099
+
+Status: Proposed (rama local, sin desplegar; requiere DEC-098)
+
+Date: 2026-11-08
+
+Decision:
+**Segmentación, sincronización con Resend, bajas, rebotes, quejas, medición y
+atribución, todo apagado por defecto y con un único origen de a quién se le puede
+escribir.** Las dependencias legales, de proveedor y de negocio, y el orden de
+despliegue, están en `docs/MARKETING_EMAIL_SYNC.md`.
+
+1. **Una sola vista decide la audiencia** (`marketing_eligible_contacts`, migración
+   `0047`): último evento `GRANTED`, correo verificado, cuenta activa, sin
+   anonimizar, sin ser personal y sin supresión. El sincronizador añade la versión
+   vigente del texto y los estados excluidos por las Reglas de la edición elegida;
+   sin Reglas legibles no sincroniza a nadie.
+2. **El proveedor solo puede quitar permiso.** Una baja, una queja o un borrado
+   retiran; un rebote permanente o una queja suprimen. `unsubscribed: false` no
+   escribe nada. Las supresiones no se levantan solas.
+3. **El código no puede enviar correos.** El adaptador solo conoce `/contacts` y
+   `/events/send`. Los broadcasts los crea y envía una persona desde Resend.
+4. **Separación del correo de acceso.** Otra clave, otro dominio y un ritmo de 2.5
+   peticiones por segundo, porque el límite de Resend es de equipo. El arranque
+   rechaza compartir clave o dominio.
+5. **`live` bloqueado en todos los entornos** mientras
+   `MARKETING_EMAIL_CONSENT.legallyApproved` o
+   `RESEND_PROMOTIONAL_USE.authorizedInWriting` sean `false`. El sincronizador lo
+   vuelve a comprobar al ejecutarse.
+6. **Atribución sin cookies.** Un pedido confirmado se atribuye al último clic de
+   esa persona dentro de la ventana, cruzando `email_provider_events` con `orders`
+   por `participant_id`. No se toca el checkout ni ninguna fila de pedidos.
+7. **Sin datos personales en eventos ni informes.** No se guarda dirección, IP,
+   navegador ni asunto. Las estadísticas usan `dashboard.read` porque solo son
+   cifras.
+
+Alternatives considered: A — Cookie de campaña y columna en `orders` (descartada:
+tocaba el checkout en producción y añadía una cookie de seguimiento). B — Colocar
+las condiciones en el sincronizador (descartada: dos sitios que pueden discrepar).
+C — Enviar eventos de automatización con `email` (descartada: Resend crea el
+contacto, saltándose el permiso). D — Guardar la dirección en las supresiones
+(descartada: sobreviviría a una anonimización).
+
+Affected areas: `packages/database` (`0047`, `schema/marketing-sync.ts`), `apps/api`
+(`config/*`, `routes/marketing-webhook.ts`, `routes/admin-marketing.ts`,
+`routes/orders.ts`, `services/marketing-*.ts`, `services/resend-marketing.ts`,
+`services/drizzle-marketing.ts`, `scripts/marketing-sync.ts`, OpenAPI, pruebas),
+`docs/API_CONTRACT.md`, `docs/LEGAL_PENDING.md`, `docs/MARKETING_EMAIL_SYNC.md`,
+`.env.example`.
+
+Proposed by: sesión del usuario (2026-11-08, integración para BISMARK)
+Agreed by: pendiente (abogado, Resend, usuario)

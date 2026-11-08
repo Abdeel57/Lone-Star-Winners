@@ -76,6 +76,11 @@ const APPEND_ONLY_TABLES = [
   "cash_payment_entry_outcomes",
   // DEC-091: quien anulo un pedido cobrado, y por que.
   "order_voids",
+  // DEC-098: cada alta o retirada del permiso de correo promocional.
+  "marketing_email_consent_events",
+  // DEC-099: rebotes y quejas, y lo que informa el proveedor de correo.
+  "marketing_suppressions",
+  "email_provider_events",
 ];
 
 const migrations = loadMigrations();

@@ -412,4 +412,24 @@ describe("refuerzos que solo aplican en produccion", () => {
       }),
     ).toThrow(/marcador/iu);
   });
+
+  // Al final del archivo a proposito: `.gitleaksignore` fija lineas de arriba.
+  describe("DEC-098: permiso de correo promocional", () => {
+    it("apagado por defecto, tambien en produccion", () => {
+      expect(loadConfig(PRODUCTION_BASE).marketing.emailConsentEnabled).toBe(false);
+      expect(loadConfig(VALID_DEV_ENV).marketing.emailConsentEnabled).toBe(false);
+    });
+
+    it("en produccion no se enciende mientras el abogado no apruebe el texto", () => {
+      // `MARKETING_EMAIL_CONSENT.legallyApproved` es `false` en este commit.
+      expect(() =>
+        loadConfig({ ...PRODUCTION_BASE, MARKETING_EMAIL_CONSENT_ENABLED: "true" }),
+      ).toThrow(/MARKETING_EMAIL_CONSENT_ENABLED/u);
+    });
+
+    it("fuera de produccion se puede encender para probar el flujo", () => {
+      const config = loadConfig(withEnv({ MARKETING_EMAIL_CONSENT_ENABLED: "true" }));
+      expect(config.marketing.emailConsentEnabled).toBe(true);
+    });
+  });
 });

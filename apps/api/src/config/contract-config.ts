@@ -61,6 +61,19 @@ export const CONTRACT_GENERATION_CONFIG: ApiConfig = {
   privacy: {
     requestInbox: "privacy@localhost.invalid",
   },
+  marketing: {
+    emailConsentEnabled: false,
+    webhookSecret: null,
+    attributionWindowDays: 7,
+    sync: {
+      mode: "off",
+      apiKey: null,
+      buyersSegmentId: null,
+      registeredSegmentId: null,
+      targetPromotionSlug: null,
+      automationEventsEnabled: false,
+    },
+  },
   sms: { provider: "none" },
   botCheck: null,
   exposeOpenApiOverHttp: true,

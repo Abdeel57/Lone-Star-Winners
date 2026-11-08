@@ -7,9 +7,11 @@ import { AccountShell, MfaRequired, SignInRequired } from "@/components/account-
 import { ApiErrorState } from "@/components/api-error-state";
 import { UnverifiedEmailNotice } from "@/components/email-verification";
 import { AddPhoneForm } from "@/components/add-phone-form";
+import { MarketingConsentCard } from "@/components/marketing-consent";
 import { ProfileForm } from "@/components/profile-form";
 import { formatZonedDate } from "@/i18n/formatters";
 import { routing } from "@/i18n/routing";
+import { fetchMyMarketingConsent } from "@/lib/api";
 import { loadParticipant } from "@/lib/participant-server";
 import { BUSINESS_TIME_ZONE } from "@/lib/time-zone";
 
@@ -41,7 +43,8 @@ export default async function AccountProfilePage({
   setRequestLocale(locale);
 
   const t = await getTranslations("account.profile");
-  const { state } = await loadParticipant(locale);
+  const tMarketing = await getTranslations("marketingConsent");
+  const { session, state } = await loadParticipant(locale);
 
   if (state.kind === "anonymous") {
     return (
@@ -73,6 +76,20 @@ export default async function AccountProfilePage({
   const createdAt = formatZonedDate(participant.created_at, locale, {
     timeZone: BUSINESS_TIME_ZONE,
   });
+
+  // DEC-098: la tarjeta solo aparece si hay algo que ensenar: un permiso dado o
+  // retirado, o la casilla ofrecida. Con la casilla apagada y sin historia, el
+  // perfil queda como estaba. Si la lectura falla, no se pinta: no se adivina.
+  const marketingResult = await fetchMyMarketingConsent(locale, session);
+  const marketing =
+    marketingResult.ok &&
+    (marketingResult.data.status !== "NONE" || marketingResult.data.offer !== null)
+      ? marketingResult.data
+      : null;
+  const marketingDate =
+    marketing?.updated_at === null || marketing === null
+      ? null
+      : formatZonedDate(marketing.updated_at, locale, { timeZone: BUSINESS_TIME_ZONE });
 
   return (
     <AccountShell title={t("title")} current="/account/profile">
@@ -106,6 +123,17 @@ export default async function AccountProfilePage({
             </p>
           )}
         </Card>
+
+        {marketing === null ? null : (
+          <Card elevation="raised" padding="lg" className="max-w-[32rem]">
+            <CardTitle as="h2" size="sm">
+              {tMarketing("heading")}
+            </CardTitle>
+            <div className="mt-s3">
+              <MarketingConsentCard locale={locale} consent={marketing} date={marketingDate} />
+            </div>
+          </Card>
+        )}
 
         {/* DEC-089: la tienda entra con codigo; no hay contrasena que cambiar. */}
         <Card elevation="raised" padding="lg" className="max-w-[32rem]">

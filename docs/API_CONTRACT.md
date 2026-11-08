@@ -1933,6 +1933,7 @@ que compara el test de contrato contra `apps/api/openapi/route-manifest.json`.
 | GET    | /api/v1/account/orders/:order_id/receipt                                            | `order.self.read`            |
 | GET    | /api/v1/account/orders/:order_id/receipt.pdf                                        | `order.self.read`            |
 | POST   | /api/v1/webhooks/payments/:provider                                                 | `PUBLIC`                     |
+| POST   | /api/v1/webhooks/email/resend                                                       | `PUBLIC`                     |
 | GET    | /api/v1/account/entry-summary                                                       | `entry.self.read`            |
 | GET    | /api/v1/account/entry-transactions                                                  | `entry.self.read`            |
 | GET    | /api/v1/account/entry-numbers                                                       | `entry.self.read`            |
@@ -1942,6 +1943,8 @@ que compara el test de contrato contra `apps/api/openapi/route-manifest.json`.
 | GET    | /api/v1/me/checkout-defaults                                                        | `participant.self.read`      |
 | POST   | /api/v1/me/phone/start                                                              | `participant.self.update`    |
 | POST   | /api/v1/me/phone/verify                                                             | `participant.self.update`    |
+| GET    | /api/v1/me/marketing-consent                                                        | `participant.self.read`      |
+| PUT    | /api/v1/me/marketing-consent                                                        | `participant.self.update`    |
 | GET    | /api/v1/promotions/:slug/amoe-config                                                | `PUBLIC`                     |
 | POST   | /api/v1/promotions/:promotion_id/amoe-submissions                                   | `amoe.self.submit`           |
 | GET    | /api/v1/account/amoe-submissions                                                    | `PARTICIPANT_SELF`           |
@@ -1973,6 +1976,8 @@ que compara el test de contrato contra `apps/api/openapi/route-manifest.json`.
 | POST   | /api/v1/admin/export-snapshots/:snapshot_id/deliver                                 | `export.deliver`             |
 | POST   | /api/v1/admin/export-snapshots/:snapshot_id/results                                 | `winner.status.update`       |
 | GET    | /api/v1/admin/dashboard                                                             | `dashboard.read`             |
+| GET    | /api/v1/admin/marketing/stats                                                       | `dashboard.read`             |
+| PUT    | /api/v1/admin/marketing/campaigns/:provider_broadcast_id                            | `promotion.update`           |
 | GET    | /api/v1/admin/orders                                                                | `order.read`                 |
 | GET    | /api/v1/admin/orders/:order_id                                                      | `order.read`                 |
 | GET    | /api/v1/admin/orders/:order_id/cash-payment                                         | `order.read`                 |
@@ -3434,6 +3439,76 @@ en vez de crear otra vacía. Solo añade, nunca cambia.
 200 · 401 · 409 PHONE_ALREADY_SET · 409 PHONE_IN_OTHER_ACCOUNT (el número ya
 entra en otra cuenta; solo se dice tras acertar el código) · 410
 SIGN_IN_CODE_EXPIRED · 422 SIGN_IN_CODE_INVALID / PHONE_INVALID · 503.
+
+### GET /api/v1/me/marketing-consent
+
+    Authorization: participant.self.read
+
+DEC-098. Permiso de correo promocional de la cuenta:
+
+    { "status": "NONE" | "GRANTED" | "WITHDRAWN",
+      "text_version": "2026-11-07-borrador" | null,
+      "source": "SIGNUP" | "ACCOUNT_SETTINGS" | "UNSUBSCRIBE_LINK" | "EMAIL_PROVIDER" | "SUPPORT" | null,
+      "updated_at": "…" | null,
+      "offer": { "key": "MARKETING_EMAIL", "text_version": "…", "text_key": "MARKETING_EMAIL" } | null }
+
+`NONE` = nunca lo dio (toda cuenta anterior a DEC-098: aceptar Reglas, Términos
+o Privacidad **no** es permiso). `offer` es la versión vigente que se puede
+aceptar ahora, o `null` si la casilla no se ofrece.
+
+200 · 401.
+
+### PUT /api/v1/me/marketing-consent
+
+    Authorization: participant.self.update
+
+DEC-098. `{ "granted": false }` lo retira **siempre**, también con la casilla
+apagada; si no estaba dado no escribe nada. `{ "granted": true, "text_version":
+"…", "locale": "es-US" }` lo da con el texto vigente. Cada cambio real es una
+fila nueva de solo inserción con origen `ACCOUNT_SETTINGS`; repetir el mismo
+estado no escribe. Responde la misma forma que el `GET`.
+
+200 · 401 · 409 MARKETING_CONSENT_NOT_OFFERED (casilla apagada) · 409
+MARKETING_CONSENT_TEXT_OUTDATED (`details.current_text_version`) · 409
+MARKETING_CONSENT_NEEDS_EMAIL (sin correo verificado) · 422 VALIDATION_FAILED.
+
+**Alta (`POST /auth/code/register`).** Si `consents` trae `MARKETING_EMAIL` con
+la versión de `optional_consents` (`GET /config`), el permiso se guarda en la
+misma transacción que la cuenta, origen `SIGNUP`. Con otra versión, con la
+casilla apagada o en un alta por celular se ignora y el alta sigue igual.
+
+**`POST /auth/code/start`.** Si el proveedor de correo agotó la cuota del plan
+responde 503 `EMAIL_QUOTA_EXHAUSTED` en lugar de `SERVICE_UNAVAILABLE`.
+
+### POST /api/v1/webhooks/email/resend
+
+    Authorization: PUBLIC (firma Svix sobre el cuerpo crudo)
+
+DEC-099. Eventos del proveedor de correo. Retira permisos y suprime direcciones;
+nunca da permiso. Idempotente por `svix-id`. No guarda dirección, IP, navegador ni
+asunto. Detalle en `docs/MARKETING_EMAIL_SYNC.md`.
+
+200 `{ "received": true }` · 401 firma inválida o fuera de tolerancia · 404 sin
+`RESEND_WEBHOOK_SECRET`.
+
+### GET /api/v1/admin/marketing/stats
+
+    Authorization: dashboard.read
+
+DEC-099. Solo cifras: `consent`, `audience`, `suppressions`, `unsubscribes` y
+`campaigns[]` con entregas, aperturas, clics, rebotes, quejas y `attributed[]`
+(`currency`, `orders`, `net_minor`). Ninguna dirección ni identificador de persona.
+
+200 · 401 · 403.
+
+### PUT /api/v1/admin/marketing/campaigns/:provider_broadcast_id
+
+    Authorization: promotion.update
+
+DEC-099. `{ "name": "…" }`. Solo pone nombre a un broadcast para los informes; no
+crea, programa ni envía nada.
+
+200 · 401 · 403 · 422.
 
 ### GET /api/v1/admin/participants/:participant_id/pii
 

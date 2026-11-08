@@ -64,6 +64,9 @@ import { buildAdminParticipantRoutes } from "./routes/admin-participants.js";
 import { buildAmoeRoutes } from "./routes/amoe.js";
 import { buildDrawRoutes } from "./routes/draw.js";
 import { buildExportRoutes } from "./routes/export.js";
+import { buildAdminMarketingRoutes } from "./routes/admin-marketing.js";
+import { buildMarketingConsentRoutes } from "./routes/marketing-consent.js";
+import { buildMarketingWebhookRoutes } from "./routes/marketing-webhook.js";
 import { buildOrdersRoutes, installRawBodyForPaymentWebhooks } from "./routes/orders.js";
 import { buildPortalRoutes } from "./routes/portal.js";
 import { buildPrivacyRequestRoutes } from "./routes/privacy-requests.js";
@@ -161,6 +164,9 @@ export function collectRouteDefinitions(dependencies: AppDependencies): RouteDef
     ...buildPrivacyRequestRoutes(dependencies),
     ...buildAdminShippingRoutes(dependencies),
     ...buildAdminCatalogOrderRoutes(dependencies),
+    ...buildMarketingConsentRoutes(dependencies),
+    ...buildMarketingWebhookRoutes(dependencies),
+    ...buildAdminMarketingRoutes(dependencies),
   ];
 
   const metaRoutes = buildMetaRoutes({
@@ -202,6 +208,9 @@ export function collectContractRouteDefinitions(dependencies: AppDependencies): 
     ...buildPrivacyRequestRoutes(dependencies),
     ...buildAdminShippingRoutes(dependencies),
     ...buildAdminCatalogOrderRoutes(dependencies),
+    ...buildMarketingConsentRoutes(dependencies),
+    ...buildMarketingWebhookRoutes(dependencies),
+    ...buildAdminMarketingRoutes(dependencies),
   ];
   routes.push(
     ...buildMetaRoutes({ serverUrl: dependencies.config.http.publicUrl, allRoutes: () => routes }),

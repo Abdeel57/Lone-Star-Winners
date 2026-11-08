@@ -19,10 +19,10 @@ import { describe, expect, it } from "vitest";
 import { hashSessionToken, hashSignInCode, looksLikeSessionToken } from "@lsw/security";
 
 import { createApp, type AppDependencies } from "../src/app.js";
-import { REQUIRED_CONSENTS } from "../src/config/consents.js";
+import { MARKETING_EMAIL_CONSENT, REQUIRED_CONSENTS } from "../src/config/consents.js";
 import { CONTRACT_GENERATION_CONFIG } from "../src/config/contract-config.js";
 import type { BotCheck } from "../src/services/bot-check.js";
-import type { EmailMessage } from "../src/services/email.js";
+import { EmailDeliveryError, type EmailMessage } from "../src/services/email.js";
 import type {
   IdentityRecord,
   IdentityRepositories,
@@ -105,6 +105,10 @@ interface WorldOptions {
   readonly botCheck?: "none" | "pass" | "fail";
   readonly emailFails?: boolean;
   readonly contactTakenOnInsert?: boolean;
+  /** DEC-098: casilla de correo promocional encendida. */
+  readonly marketingConsent?: boolean;
+  /** El proveedor de correo agoto la cuota del plan. */
+  readonly emailQuotaExhausted?: boolean;
 }
 
 function world(options: WorldOptions = {}) {
@@ -273,7 +277,13 @@ function world(options: WorldOptions = {}) {
   } as unknown as IdentityRepositories;
 
   const appPromise = createApp({
-    config: CONTRACT_GENERATION_CONFIG,
+    config: {
+      ...CONTRACT_GENERATION_CONFIG,
+      marketing: {
+        ...CONTRACT_GENERATION_CONFIG.marketing,
+        emailConsentEnabled: options.marketingConsent === true,
+      },
+    },
     database: { role: "app", db: {}, pool: {}, close: () => Promise.resolve() },
     paymentProvider: { name: "none" },
     repositories: createFakeRepositories(),
@@ -282,6 +292,9 @@ function world(options: WorldOptions = {}) {
       provider: "fake",
       send: (message: EmailMessage) => {
         if (options.emailFails === true) return Promise.reject(new Error("proveedor caido"));
+        if (options.emailQuotaExhausted === true) {
+          return Promise.reject(new EmailDeliveryError(429, undefined, "daily_quota_exceeded"));
+        }
         sent.push(message);
         return Promise.resolve();
       },
@@ -462,6 +475,14 @@ describe("POST /auth/code/start", () => {
 
     expect(response.statusCode).toBe(503);
     expect(errorCode(response)).toBe("SERVICE_UNAVAILABLE");
+  });
+
+  it("si se agoto la cuota del correo, lo dice con su codigo para ofrecer el celular", async () => {
+    const w = world({ emailQuotaExhausted: true });
+    const response = await w.start(NEW_EMAIL);
+
+    expect(response.statusCode).toBe(503);
+    expect(errorCode(response)).toBe("EMAIL_QUOTA_EXHAUSTED");
   });
 });
 
@@ -719,5 +740,70 @@ describe("POST /auth/code/register", () => {
     expect(response.statusCode).toBe(409);
     expect(errorCode(response)).toBe("EMAIL_ALREADY_REGISTERED");
     expect(w.sessions).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// DEC-098: la casilla OPCIONAL de correo promocional en el alta
+// ---------------------------------------------------------------------------
+
+describe("POST /auth/code/register: permiso de correo promocional (DEC-098)", () => {
+  const MARKETING = { key: MARKETING_EMAIL_CONSENT.key, version: MARKETING_EMAIL_CONSENT.version };
+  const WITH_MARKETING = { ...PROFILE, consents: [...ACCEPTED_CONSENTS, MARKETING] };
+
+  it("marcada, con la casilla encendida y alta por correo: se guarda con la version vigente", async () => {
+    const w = world({ marketingConsent: true });
+    const ticket = await w.signupTicketFor(NEW_EMAIL);
+
+    expect((await w.register(WITH_MARKETING, ticket)).statusCode).toBe(201);
+    expect(w.registrations[0]?.marketingEmailOptInVersion).toBe(MARKETING_EMAIL_CONSENT.version);
+    // No se mezcla con los documentos obligatorios.
+    expect(w.registrations[0]?.consents).toStrictEqual(ACCEPTED_CONSENTS);
+  });
+
+  it("sin marcar no hay permiso: el alta funciona igual", async () => {
+    const w = world({ marketingConsent: true });
+    const ticket = await w.signupTicketFor(NEW_EMAIL);
+
+    expect((await w.register(PROFILE, ticket)).statusCode).toBe(201);
+    expect(w.registrations[0]?.marketingEmailOptInVersion).toBeNull();
+  });
+
+  it("con la casilla apagada se ignora, como cualquier clave que no se pidio", async () => {
+    const w = world();
+    const ticket = await w.signupTicketFor(NEW_EMAIL);
+
+    expect((await w.register(WITH_MARKETING, ticket)).statusCode).toBe(201);
+    expect(w.registrations[0]?.marketingEmailOptInVersion).toBeNull();
+  });
+
+  it("una casilla pintada con OTRO texto no es permiso, y no impide el alta", async () => {
+    const w = world({ marketingConsent: true });
+    const ticket = await w.signupTicketFor(NEW_EMAIL);
+    const stale = {
+      ...PROFILE,
+      consents: [...ACCEPTED_CONSENTS, { key: MARKETING.key, version: "2020-01-01" }],
+    };
+
+    expect((await w.register(stale, ticket)).statusCode).toBe(201);
+    expect(w.registrations[0]?.marketingEmailOptInVersion).toBeNull();
+  });
+
+  it("un alta por celular no guarda permiso de CORREO: no hay correo al que escribir", async () => {
+    const w = world({ marketingConsent: true });
+    const ticket = await w.signupTicketFor(NEW_PHONE);
+
+    expect((await w.register(WITH_MARKETING, ticket)).statusCode).toBe(201);
+    expect(w.registrations[0]?.marketingEmailOptInVersion).toBeNull();
+  });
+
+  it("marcar la casilla no sustituye a los documentos obligatorios", async () => {
+    const w = world({ marketingConsent: true });
+    const ticket = await w.signupTicketFor(NEW_EMAIL);
+
+    const response = await w.register({ ...PROFILE, consents: [MARKETING] }, ticket);
+    expect(response.statusCode).toBe(422);
+    expect(errorCode(response)).toBe("CONSENT_REQUIRED");
+    expect(w.registrations).toHaveLength(0);
   });
 });

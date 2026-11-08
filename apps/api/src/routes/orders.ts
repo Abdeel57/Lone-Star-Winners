@@ -70,6 +70,7 @@ import {
   orderSummarySchema,
   webhookAckSchema,
 } from "../http/schemas-b5.js";
+import { EMAIL_WEBHOOK_URL } from "./marketing-webhook.js";
 import { freezeOpenCart } from "../services/cart-freeze.js";
 import { createCashCheckout } from "../services/cash-payments.js";
 import { DAILY_CUT_TIME_ZONE } from "../services/daily-cut.js";
@@ -200,7 +201,10 @@ export function installRawBodyForPaymentWebhooks(app: FastifyInstance): void {
     "application/json",
     { parseAs: "buffer" },
     (request, body: Buffer, done) => {
-      if (request.routeOptions.url === PAYMENT_WEBHOOK_URL) {
+      if (
+        request.routeOptions.url === PAYMENT_WEBHOOK_URL ||
+        request.routeOptions.url === EMAIL_WEBHOOK_URL
+      ) {
         // El Buffer INTACTO. Reserializar el JSON invalidaria la firma.
         done(null, body);
         return;

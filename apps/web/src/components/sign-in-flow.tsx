@@ -15,6 +15,7 @@ import {
 
 import { FormError, LocaleField, useFieldError } from "./auth-form-shell";
 import { ConsentAgreement, ResidenceStateField } from "./eligibility-fields";
+import { MarketingOptInField, marketingOffer } from "./marketing-consent";
 import { TurnstileWidget } from "./turnstile-widget";
 
 /**
@@ -43,10 +44,13 @@ import { TurnstileWidget } from "./turnstile-widget";
 export function SignInFlow({
   locale,
   consents,
+  optionalConsents = [],
   returnPath,
 }: {
   readonly locale: Locale;
   readonly consents: readonly ConsentRequirement[];
+  /** DEC-098: casillas opcionales que publica `GET /config`. Vacio = ninguna. */
+  readonly optionalConsents?: readonly ConsentRequirement[];
   readonly returnPath: string | null;
 }) {
   const [contact, setContact] = useState("");
@@ -83,8 +87,17 @@ export function SignInFlow({
     );
   }
 
+  // DEC-098: la casilla de correo promocional solo para un alta con correo.
+  const offer = contact.includes("@") ? marketingOffer(optionalConsents) : null;
+
   return (
-    <ProfileStep locale={locale} consents={consents} returnPath={returnPath} onRestart={restart} />
+    <ProfileStep
+      locale={locale}
+      consents={consents}
+      marketingOffer={offer}
+      returnPath={returnPath}
+      onRestart={restart}
+    />
   );
 }
 
@@ -252,11 +265,13 @@ function CodeStep({
 function ProfileStep({
   locale,
   consents,
+  marketingOffer: offer,
   returnPath,
   onRestart,
 }: {
   readonly locale: Locale;
   readonly consents: readonly ConsentRequirement[];
+  readonly marketingOffer: ConsentRequirement | null;
   readonly returnPath: string | null;
   readonly onRestart: () => void;
 }) {
@@ -291,6 +306,9 @@ function ProfileStep({
         <ResidenceStateField result={state} />
 
         <ConsentAgreement result={state} consents={consents} />
+
+        {/* DEC-098: opcional, desmarcada, separada de los documentos. */}
+        {offer === null ? null : <MarketingOptInField offer={offer} />}
 
         <Button type="submit" variant="accent" size="lg" fullWidth loading={pending}>
           {t("create")}

@@ -47,14 +47,29 @@ export interface EmailSender {
   send(message: EmailMessage): Promise<void>;
 }
 
-/** Error de envio. Lleva el status del proveedor, nunca el mensaje. */
+/**
+ * Codigos de Resend que dicen que se acabo la CUOTA del plan, no que el envio
+ * estuviera mal: el diario se reinicia a medianoche UTC; el mensual, no.
+ * Con ellos ningun correo sale hasta entonces, tampoco los codigos de acceso.
+ */
+const QUOTA_ERRORS = new Set(["daily_quota_exceeded", "monthly_quota_exceeded"]);
+
+/** Error de envio. Lleva el status y el codigo del proveedor, nunca el mensaje. */
 export class EmailDeliveryError extends Error {
   public readonly status: number | null;
+  /** `name` de Resend (`daily_quota_exceeded`, ...), o `null`. No es un dato personal. */
+  public readonly providerError: string | null;
 
-  public constructor(status: number | null, cause?: unknown) {
+  public constructor(status: number | null, cause?: unknown, providerError: string | null = null) {
     super(`email_delivery_failed${status === null ? "" : `_${String(status)}`}`, { cause });
     this.name = "EmailDeliveryError";
     this.status = status;
+    this.providerError = providerError;
+  }
+
+  /** La cuota del plan esta agotada: reintentar ahora no sirve. */
+  public get quotaExhausted(): boolean {
+    return this.providerError !== null && QUOTA_ERRORS.has(this.providerError);
   }
 }
 
@@ -146,20 +161,24 @@ export function createResendEmailSender(options: {
 
       if (!response.ok) {
         // 401 clave, 403 dominio sin verificar, 422 remitente o destinatario
-        // invalido, 429 cuota. `name` y `message` son los de Resend, con
-        // cualquier direccion enmascarada.
+        // invalido, 429 cuota o ritmo. `name` y `message` son los de Resend,
+        // con cualquier direccion enmascarada.
+        const providerError = typeof body.name === "string" ? body.name : null;
+        const failure = new EmailDeliveryError(response.status, undefined, providerError);
         logger.error(
           {
-            event: "email.send.error",
+            // Un evento propio para la cuota: es la alarma que hay que vigilar,
+            // porque sin cuota tampoco salen los codigos de acceso.
+            event: failure.quotaExhausted ? "email.quota.exhausted" : "email.send.error",
             ...context,
             status: response.status,
-            provider_error: typeof body.name === "string" ? body.name : null,
+            provider_error: providerError,
             provider_message:
               typeof body.message === "string" ? maskEmailsIn(body.message).slice(0, 300) : null,
           },
           "el proveedor de correo rechazo el envio",
         );
-        throw new EmailDeliveryError(response.status);
+        throw failure;
       }
 
       logger.info(

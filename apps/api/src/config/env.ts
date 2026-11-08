@@ -19,6 +19,8 @@
 
 import { z } from "zod";
 
+import { MARKETING_EMAIL_CONSENT, RESEND_PROMOTIONAL_USE } from "./consents.js";
+
 const LOG_LEVELS = ["trace", "debug", "info", "warn", "error", "fatal"] as const;
 const NODE_ENVS = ["development", "test", "production"] as const;
 const SSL_MODES = ["disable", "require", "verify-ca", "verify-full"] as const;
@@ -235,6 +237,34 @@ export const environmentSchema = z
      */
     WEB_PUBLIC_URL: z.url().default("http://localhost:3000"),
 
+    // ----- Permiso de correo promocional (DEC-098) -----
+    //
+    // Apagado por defecto: ni se ofrece la casilla ni se acepta un permiso
+    // nuevo. Retirar uno ya dado funciona siempre. En produccion no se puede
+    // encender mientras el texto de la casilla no este aprobado por el
+    // abogado (`MARKETING_EMAIL_CONSENT.legallyApproved`).
+    MARKETING_EMAIL_CONSENT_ENABLED: booleanFromEnv.default(false),
+
+    // ----- Sincronizacion con el proveedor de correo (DEC-099) -----
+    //
+    // `off` por defecto. Separado a proposito del correo transaccional: otra
+    // clave y otro dominio, para que una queja o un exceso de ritmo en una
+    // campana no alcance a los codigos de acceso.
+    MARKETING_SYNC_MODE: z.enum(["off", "dry_run", "live"]).default("off"),
+    RESEND_MARKETING_API_KEY: z.string().trim().min(1).optional(),
+    RESEND_WEBHOOK_SECRET: z
+      .string()
+      .trim()
+      .regex(/^whsec_[A-Za-z0-9+/=]+$/u, { error: "must_be_a_whsec_secret" })
+      .optional(),
+    MARKETING_FROM_ADDRESS: z.email().optional(),
+    RESEND_SEGMENT_BUYERS_ID: z.string().trim().min(1).optional(),
+    RESEND_SEGMENT_REGISTERED_ID: z.string().trim().min(1).optional(),
+    /** La edicion cuyas Reglas fijan los estados excluidos. Sin ella no se sincroniza. */
+    MARKETING_TARGET_PROMOTION_SLUG: z.string().trim().min(1).optional(),
+    MARKETING_AUTOMATION_EVENTS_ENABLED: booleanFromEnv.default(false),
+    MARKETING_ATTRIBUTION_WINDOW_DAYS: integerFromEnv(1, 60).default(7),
+
     // ----- Celular verificado por SMS (DEC-060) -----
     //
     // `none` (defecto) apaga el registro y el inicio de sesion con celular:
@@ -352,6 +382,83 @@ export const environmentSchema = z
         message:
           "En produccion WEB_PUBLIC_URL es la direccion HTTPS del portal: los enlaces de los correos apuntan ahi.",
       });
+    }
+
+    // DEC-098. Un permiso dado con un texto que el abogado no aprobo no
+    // sirve como prueba: se pediria a la gente algo que luego no se podria usar.
+    if (env.MARKETING_EMAIL_CONSENT_ENABLED && !MARKETING_EMAIL_CONSENT.legallyApproved) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["MARKETING_EMAIL_CONSENT_ENABLED"],
+        message:
+          "DEC-098: el texto de la casilla de correo promocional no esta aprobado por el abogado (MARKETING_EMAIL_CONSENT.legallyApproved). No se puede ofrecer en produccion.",
+      });
+    }
+  })
+  // ----- Sincronizacion de correo promocional (DEC-099), en TODOS los entornos -----
+  .superRefine((env, ctx) => {
+    const issue = (path: string, message: string): void => {
+      ctx.addIssue({ code: "custom", path: [path], message });
+    };
+    const domainOf = (address: string): string =>
+      address.slice(address.lastIndexOf("@") + 1).toLowerCase();
+
+    // La separacion vale aunque la sincronizacion este apagada: una clave
+    // compartida no se descubre el dia que ya hace dano.
+    if (
+      env.RESEND_MARKETING_API_KEY !== undefined &&
+      env.RESEND_MARKETING_API_KEY === env.EMAIL_PROVIDER_API_KEY
+    ) {
+      issue(
+        "RESEND_MARKETING_API_KEY",
+        "DEC-099: la clave de marketing no puede ser la de los correos de acceso.",
+      );
+    }
+    if (
+      env.MARKETING_FROM_ADDRESS !== undefined &&
+      domainOf(env.MARKETING_FROM_ADDRESS) === domainOf(env.EMAIL_FROM_ADDRESS)
+    ) {
+      issue(
+        "MARKETING_FROM_ADDRESS",
+        "DEC-099: el marketing sale de un dominio distinto al de los correos de acceso.",
+      );
+    }
+
+    if (env.MARKETING_SYNC_MODE !== "off" && env.MARKETING_TARGET_PROMOTION_SLUG === undefined) {
+      issue(
+        "MARKETING_TARGET_PROMOTION_SLUG",
+        "DEC-099: sin la edicion que fija los estados excluidos no se puede calcular la audiencia.",
+      );
+    }
+
+    if (env.MARKETING_AUTOMATION_EVENTS_ENABLED && env.MARKETING_SYNC_MODE !== "live") {
+      issue(
+        "MARKETING_AUTOMATION_EVENTS_ENABLED",
+        "DEC-099: los eventos de automatizacion solo existen con MARKETING_SYNC_MODE=live.",
+      );
+    }
+
+    if (env.MARKETING_SYNC_MODE !== "live") return;
+
+    if (!MARKETING_EMAIL_CONSENT.legallyApproved) {
+      issue(
+        "MARKETING_SYNC_MODE",
+        "DEC-099: el texto del permiso no esta aprobado por el abogado (MARKETING_EMAIL_CONSENT.legallyApproved).",
+      );
+    }
+    if (!RESEND_PROMOTIONAL_USE.authorizedInWriting) {
+      issue(
+        "MARKETING_SYNC_MODE",
+        "DEC-099: Resend no ha autorizado por escrito este uso (RESEND_PROMOTIONAL_USE.authorizedInWriting).",
+      );
+    }
+    for (const [name, value] of [
+      ["RESEND_MARKETING_API_KEY", env.RESEND_MARKETING_API_KEY],
+      ["MARKETING_FROM_ADDRESS", env.MARKETING_FROM_ADDRESS],
+      ["RESEND_SEGMENT_BUYERS_ID", env.RESEND_SEGMENT_BUYERS_ID],
+      ["RESEND_SEGMENT_REGISTERED_ID", env.RESEND_SEGMENT_REGISTERED_ID],
+    ] as const) {
+      if (value === undefined) issue(name, "DEC-099: MARKETING_SYNC_MODE=live la necesita.");
     }
   })
   // ----- Coherencia del SMS y del anti-bots (DEC-060) -----
@@ -493,6 +600,16 @@ export const environmentSchema = z
 
 export type Environment = z.infer<typeof environmentSchema>;
 
+/** DEC-099: sincronizacion con el proveedor de correo. */
+export interface MarketingSyncConfig {
+  readonly mode: "off" | "dry_run" | "live";
+  readonly apiKey: string | null;
+  readonly buyersSegmentId: string | null;
+  readonly registeredSegmentId: string | null;
+  readonly targetPromotionSlug: string | null;
+  readonly automationEventsEnabled: boolean;
+}
+
 export interface ApiConfig {
   readonly nodeEnv: Environment["NODE_ENV"];
   readonly isProduction: boolean;
@@ -565,6 +682,14 @@ export interface ApiConfig {
   /** Solicitudes de privacidad (`POST /privacy-requests`): a que buzon llegan. */
   readonly privacy: {
     readonly requestInbox: string;
+  };
+  /** DEC-098: si se ofrece y se acepta el permiso de correo promocional. */
+  readonly marketing: {
+    readonly emailConsentEnabled: boolean;
+    /** DEC-099. `null` = el webhook del proveedor responde 404. */
+    readonly webhookSecret: string | null;
+    readonly attributionWindowDays: number;
+    readonly sync: MarketingSyncConfig;
   };
   /** DEC-060: verificacion de celular por SMS. `none` apaga el registro con celular. */
   readonly sms:
@@ -691,6 +816,19 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): ApiConfig {
     },
     privacy: {
       requestInbox: env.PRIVACY_REQUEST_INBOX,
+    },
+    marketing: {
+      emailConsentEnabled: env.MARKETING_EMAIL_CONSENT_ENABLED,
+      webhookSecret: env.RESEND_WEBHOOK_SECRET ?? null,
+      attributionWindowDays: env.MARKETING_ATTRIBUTION_WINDOW_DAYS,
+      sync: {
+        mode: env.MARKETING_SYNC_MODE,
+        apiKey: env.RESEND_MARKETING_API_KEY ?? null,
+        buyersSegmentId: env.RESEND_SEGMENT_BUYERS_ID ?? null,
+        registeredSegmentId: env.RESEND_SEGMENT_REGISTERED_ID ?? null,
+        targetPromotionSlug: env.MARKETING_TARGET_PROMOTION_SLUG ?? null,
+        automationEventsEnabled: env.MARKETING_AUTOMATION_EVENTS_ENABLED,
+      },
     },
     sms:
       twilioConfig(env) ??

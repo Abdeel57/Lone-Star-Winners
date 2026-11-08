@@ -34,3 +34,7 @@ export * from "./guest-cart-and-shipping.js";
 export * from "./sign-in-codes.js";
 // DEC-091: anulacion de un pedido ya cobrado. Al final.
 export * from "./order-voids.js";
+// DEC-098: permiso opcional para correo promocional. Al final.
+export * from "./marketing-consent.js";
+// DEC-099: sincronizacion con el proveedor de correo y medicion. Al final.
+export * from "./marketing-sync.js";

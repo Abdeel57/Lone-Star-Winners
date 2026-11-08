@@ -71,6 +71,7 @@ import type { FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 
 import type { AppDependencies } from "../app.js";
+import { marketingEmailOptIn } from "../config/consents.js";
 import { clearCartSessionCookie, resolveCartSession } from "../http/cart-session.js";
 import {
   assertConsents,
@@ -89,7 +90,7 @@ import {
   signupCookieOptions,
   type SessionCookieConfig,
 } from "../http/session-cookie.js";
-import { maskEmail } from "../services/email.js";
+import { EmailDeliveryError, maskEmail } from "../services/email.js";
 import { maskPhone, normalizeUsPhone } from "../services/phone.js";
 import type { SmsVerifier } from "../services/sms.js";
 import {
@@ -1686,6 +1687,11 @@ export function buildAuthRoutes(dependencies: AppDependencies): RouteDefinition[
               { event: "email.sign_in_code.failed", to: maskEmail(target.contact), err: error },
               "envio del codigo fallido",
             );
+            // Cuota del plan agotada: decirlo para que la web ofrezca entrar con
+            // el celular en vez de "intentalo de nuevo", que no serviria.
+            if (error instanceof EmailDeliveryError && error.quotaExhausted) {
+              throw ApiErrors.emailQuotaExhausted();
+            }
             throw ApiErrors.serviceUnavailable();
           }
         } else {
@@ -1810,7 +1816,7 @@ export function buildAuthRoutes(dependencies: AppDependencies): RouteDefinition[
       operationId: "registerWithSignInCode",
       summary: "Crear la cuenta tras acertar el codigo: nombre, estado y documentos.",
       description:
-        "Gasta la cookie `<base>_signup` que deja `POST /auth/code/verify` y crea la cuenta SIN contrasena con el contacto ya verificado: identidad ACTIVE, perfil con nombre y estado (DEC-067) y consentimientos. La fecha de nacimiento no se pide aqui: se declara en el checkout con la puerta de edad encendida (`PUT /me/eligibility`). Abre sesion de escaparate y adopta el carrito sin cuenta. 410 SIGNUP_EXPIRED si la cookie falta, caduco o ya se uso.",
+        "Gasta la cookie `<base>_signup` que deja `POST /auth/code/verify` y crea la cuenta SIN contrasena con el contacto ya verificado: identidad ACTIVE, perfil con nombre y estado (DEC-067) y consentimientos. DEC-098: si `consents` trae `MARKETING_EMAIL` con la version de `optional_consents` (GET /config), se guarda el permiso de correo promocional en la misma transaccion, origen `SIGNUP`; con otra version, con el permiso apagado o en un alta por celular se ignora. La fecha de nacimiento no se pide aqui: se declara en el checkout con la puerta de edad encendida (`PUT /me/eligibility`). Abre sesion de escaparate y adopta el carrito sin cuenta. 410 SIGNUP_EXPIRED si la cookie falta, caduco o ya se uso.",
       tags: ["auth"],
       authorization: {
         kind: "PUBLIC",
@@ -1855,6 +1861,12 @@ export function buildAuthRoutes(dependencies: AppDependencies): RouteDefinition[
           preferredLocale: body.language_preference,
           residenceState: body.residence_state,
           consents,
+          // DEC-098: la casilla opcional de correo promocional. Una cuenta que
+          // entra con celular no tiene correo al que escribir: no se guarda.
+          marketingEmailOptInVersion:
+            ticket.channel === "EMAIL"
+              ? marketingEmailOptIn(body.consents, config.marketing.emailConsentEnabled)
+              : null,
         });
 
         // Otra alta con el mismo contacto gano la carrera. La persona entra con

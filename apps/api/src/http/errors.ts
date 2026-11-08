@@ -178,6 +178,26 @@ export const ApiErrors = {
     new ApiError({ statusCode: 409, code: "PARTICIPANT_ANONYMIZED" }),
   phoneInOtherAccount: (): ApiError =>
     new ApiError({ statusCode: 409, code: "PHONE_IN_OTHER_ACCOUNT" }),
+  /**
+   * DEC-098: permiso de correo promocional.
+   *
+   * `MARKETING_CONSENT_NOT_OFFERED`: la casilla no se ofrece (apagada hasta que
+   * el abogado apruebe el texto). Retirar un permiso NUNCA da este error.
+   * `MARKETING_CONSENT_TEXT_OUTDATED`: la casilla se pinto con un texto que ya
+   * no es el vigente; aceptar ese no prueba que acepto este. La web recarga.
+   * `MARKETING_CONSENT_NEEDS_EMAIL`: la cuenta no tiene correo verificado al
+   * que escribir.
+   */
+  marketingConsentNotOffered: (): ApiError =>
+    new ApiError({ statusCode: 409, code: "MARKETING_CONSENT_NOT_OFFERED" }),
+  marketingConsentTextOutdated: (currentVersion: string): ApiError =>
+    new ApiError({
+      statusCode: 409,
+      code: "MARKETING_CONSENT_TEXT_OUTDATED",
+      details: { current_text_version: currentVersion },
+    }),
+  marketingConsentNeedsEmail: (): ApiError =>
+    new ApiError({ statusCode: 409, code: "MARKETING_CONSENT_NEEDS_EMAIL" }),
   smsCodeInvalid: (): ApiError => new ApiError({ statusCode: 422, code: "SMS_CODE_INVALID" }),
   botCheckFailed: (): ApiError => new ApiError({ statusCode: 422, code: "BOT_CHECK_FAILED" }),
 
@@ -252,6 +272,16 @@ export const ApiErrors = {
     new ApiError({
       statusCode: 503,
       code: "SERVICE_UNAVAILABLE",
+    }),
+  /**
+   * El proveedor de correo agoto la cuota del plan (Resend: diaria o mensual).
+   * Ningun correo sale hasta que se reinicie: la web ofrece entrar con el
+   * celular en vez de "intentalo de nuevo".
+   */
+  emailQuotaExhausted: (): ApiError =>
+    new ApiError({
+      statusCode: 503,
+      code: "EMAIL_QUOTA_EXHAUSTED",
     }),
 
   // -------------------------------------------------------------------------

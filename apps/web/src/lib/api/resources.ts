@@ -49,6 +49,7 @@ import type {
   PromotionDetail,
   PromotionListResponse,
   LogoutResponse,
+  MarketingConsent,
   PromotionSummary,
   SessionState,
   SignInCodeSent,
@@ -182,6 +183,8 @@ export const API_PATHS = {
   /** DEC-097: anadir el celular de acceso a una cuenta que entro con correo. */
   mePhoneStart: "/me/phone/start",
   mePhoneVerify: "/me/phone/verify",
+  /** DEC-098: permiso de correo promocional (leer, dar, retirar). */
+  meMarketingConsent: "/me/marketing-consent",
 
   // --- Portal del participante (seccion 6 del contrato).
   /** Saldo de participaciones por promocion. */
@@ -1124,6 +1127,39 @@ export function verifyMyPhone(
   session: SessionContext,
 ): Promise<ApiResult<{ readonly phone: string }>> {
   return apiRequest<{ readonly phone: string }>("POST", API_PATHS.mePhoneVerify, {
+    locale,
+    body: input,
+    ...sessionOptions(session),
+  });
+}
+
+/** DEC-098: el permiso de correo promocional de mi cuenta. */
+export function fetchMyMarketingConsent(
+  locale: Locale,
+  session: SessionContext,
+): Promise<ApiResult<MarketingConsent>> {
+  return apiGet<MarketingConsent>(API_PATHS.meMarketingConsent, {
+    locale,
+    ...sessionOptions(session),
+  });
+}
+
+/**
+ * DEC-098: dar (`granted: true`, con la version del texto mostrado y su
+ * idioma) o retirar (`granted: false`) el permiso. Retirar funciona siempre.
+ */
+export function setMyMarketingConsent(
+  input:
+    | {
+        readonly granted: true;
+        readonly text_version: string;
+        readonly locale: "en-US" | "es-US";
+      }
+    | { readonly granted: false },
+  locale: Locale,
+  session: SessionContext,
+): Promise<ApiResult<MarketingConsent>> {
+  return apiRequest<MarketingConsent>("PUT", API_PATHS.meMarketingConsent, {
     locale,
     body: input,
     ...sessionOptions(session),

@@ -60,7 +60,12 @@ import {
   type ActionResult,
 } from "@/lib/action-result";
 import { checkboxFrom, localeFrom, secretFrom, textFrom } from "@/lib/form-input";
-import { isIanaTimeZone, priceToMinorUnits, zonedWallTimeToIso } from "@/lib/admin/catalog-input";
+import {
+  isIanaTimeZone,
+  keepUntouchedInstant,
+  priceToMinorUnits,
+  zonedWallTimeToIso,
+} from "@/lib/admin/catalog-input";
 import { checkImage, imageFrom } from "@/lib/admin/image-upload";
 import { ADMIN_HERO_GALLERY_MAX } from "@/lib/api/admin-contract";
 import {
@@ -1301,8 +1306,10 @@ export async function updatePromotionAction(
     {
       internal_name: internalName,
       public_name: publicName.value,
-      starts_at: startsAt.value,
-      ends_at: endsAt.value,
+      // El formulario no tiene segundos: una fecha que no se toco se manda tal
+      // como estaba (p. ej. un cierre a las 23:59:59 sigue en :59).
+      starts_at: keepUntouchedInstant(startsAt.value, current.data.starts_at, timeZone),
+      ends_at: keepUntouchedInstant(endsAt.value, current.data.ends_at, timeZone),
       tagline: tagline.value,
       hero_image_alt: heroAlt.value,
       ...(heroImage.value === undefined ? {} : { hero_image_url: heroImage.value }),

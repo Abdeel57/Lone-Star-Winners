@@ -30,6 +30,11 @@ import type {
   MfaFactorRecord,
   SessionRecord,
 } from "./identity-ports.js";
+import {
+  createMarketingConsentRepository,
+  marketingEventRow,
+} from "./drizzle-marketing-consent.js";
+import { createMarketingRepository } from "./drizzle-marketing.js";
 
 const {
   identities,
@@ -43,6 +48,7 @@ const {
   adminUserRoles,
   adminUsers,
   signInCodes,
+  marketingEmailConsentEvents,
 } = schema;
 
 function toCartSession(row: {
@@ -351,6 +357,24 @@ export function createIdentityRepositories(db: Database): IdentityRepositories {
                     input.verifiedAt,
                   ),
                 );
+            }
+
+            // DEC-098: la casilla OPCIONAL de correo promocional, en la misma
+            // transaccion: si el alta no se guarda, el permiso tampoco.
+            if (
+              input.marketingEmailOptInVersion !== undefined &&
+              input.marketingEmailOptInVersion !== null
+            ) {
+              await tx.insert(marketingEmailConsentEvents).values(
+                marketingEventRow({
+                  participantId: participant.id,
+                  action: "GRANTED",
+                  textVersion: input.marketingEmailOptInVersion,
+                  locale: input.preferredLocale,
+                  source: "SIGNUP",
+                  occurredAt: input.verifiedAt,
+                }),
+              );
             }
 
             return toIdentity(identity);
@@ -983,5 +1007,10 @@ export function createIdentityRepositories(db: Database): IdentityRepositories {
           .where(and(eq(cartSessions.id, sessionId), isNull(cartSessions.revokedAt)));
       },
     },
+
+    // DEC-098: permiso opcional para correo promocional.
+    marketingConsent: createMarketingConsentRepository(db),
+    // DEC-099: audiencia, sincronizacion, eventos del proveedor y cifras.
+    marketing: createMarketingRepository(db),
   };
 }

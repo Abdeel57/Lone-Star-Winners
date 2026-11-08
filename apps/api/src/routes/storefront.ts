@@ -28,7 +28,7 @@ import { MAXIMUM_PASSWORD_LENGTH, MINIMUM_PASSWORD_LENGTH } from "@lsw/security"
 import { z } from "zod";
 
 import type { AppDependencies } from "../app.js";
-import { REQUIRED_CONSENTS } from "../config/consents.js";
+import { MARKETING_EMAIL_CONSENT, REQUIRED_CONSENTS } from "../config/consents.js";
 import { ApiErrors, errorEnvelopeSchema } from "../http/errors.js";
 import { buildPage, decodeCursor, pageSchema, paginationQuerySchema } from "../http/pagination.js";
 import type { RouteDefinition } from "../http/route-registry.js";
@@ -229,6 +229,17 @@ export function buildStorefrontRoutes(dependencies: AppDependencies): RouteDefin
             maximum_length: MAXIMUM_PASSWORD_LENGTH,
           },
           required_consents: REQUIRED_CONSENTS.map((consent) => ({ ...consent })),
+          // DEC-098: sin el permiso encendido no se ofrece la casilla.
+          optional_consents: dependencies.config.marketing.emailConsentEnabled
+            ? [
+                {
+                  key: MARKETING_EMAIL_CONSENT.key,
+                  version: MARKETING_EMAIL_CONSENT.version,
+                  text_key: MARKETING_EMAIL_CONSENT.text_key,
+                  required: MARKETING_EMAIL_CONSENT.required,
+                },
+              ]
+            : [],
         };
       },
     },

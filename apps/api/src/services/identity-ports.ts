@@ -13,6 +13,8 @@
 
 import type { SessionAudience } from "@lsw/security";
 
+import type { MarketingRepository } from "./marketing-ports.js";
+
 /** Lo minimo para autenticar. Nunca incluye el hash fuera de este puerto. */
 export interface CredentialRecord {
   readonly identityId: string;
@@ -143,6 +145,12 @@ export interface RegisterVerifiedParticipantInput {
   /** Codigo USPS. La fecha de nacimiento no se pregunta en el alta. */
   readonly residenceState: string;
   readonly consents: readonly ConsentAcceptanceInput[];
+  /**
+   * DEC-098: version del texto de la casilla de correo promocional si llego
+   * marcada, o `null`/ausente. Con valor, el permiso se guarda en la MISMA
+   * transaccion que la cuenta, con origen `SIGNUP`.
+   */
+  readonly marketingEmailOptInVersion?: string | null;
 }
 
 export interface RegisterParticipantInput {
@@ -464,4 +472,61 @@ export interface IdentityRepositories {
   readonly emailTokens: EmailTokenRepository;
   /** DEC-089: codigos para entrar sin contrasena y permisos de alta. */
   readonly signInCodes: SignInCodeRepository;
+  /** DEC-098: permiso opcional para correo promocional. */
+  readonly marketingConsent: MarketingConsentRepository;
+  /** DEC-099: audiencia, sincronizacion, eventos del proveedor y cifras. */
+  readonly marketing: MarketingRepository;
+}
+
+/**
+ * DEC-098: estado del permiso de correo promocional.
+ *
+ * `NONE` = nunca dio permiso. Es el estado de toda cuenta sin eventos, y no es
+ * lo mismo que `WITHDRAWN`: este lo dio y lo retiro.
+ */
+export type MarketingConsentStatus = "NONE" | "GRANTED" | "WITHDRAWN";
+
+export type MarketingConsentSource =
+  "SIGNUP" | "ACCOUNT_SETTINGS" | "UNSUBSCRIBE_LINK" | "EMAIL_PROVIDER" | "SUPPORT";
+
+export interface MarketingConsentState {
+  readonly status: MarketingConsentStatus;
+  /** Version del texto aceptado. Solo con `GRANTED`. */
+  readonly textVersion: string | null;
+  /** Desde donde llego el ultimo evento. `null` con `NONE`. */
+  readonly source: MarketingConsentSource | null;
+  /** Instante del ultimo evento. `null` con `NONE`. */
+  readonly updatedAt: Date | null;
+}
+
+export type MarketingConsentEventInput =
+  | {
+      readonly participantId: string;
+      readonly action: "GRANTED";
+      readonly textVersion: string;
+      readonly locale: "en-US" | "es-US";
+      /** La CHECK de 0046 solo deja dar permiso desde aqui. */
+      readonly source: "SIGNUP" | "ACCOUNT_SETTINGS";
+      readonly occurredAt: Date;
+    }
+  | {
+      readonly participantId: string;
+      readonly action: "WITHDRAWN";
+      readonly source: MarketingConsentSource;
+      readonly occurredAt: Date;
+    };
+
+export interface MarketingConsentRepository {
+  /** El ultimo evento del participante, o `NONE` si no tiene ninguno. */
+  current(participantId: string): Promise<MarketingConsentState>;
+
+  /**
+   * Anade un evento SOLO si cambia el estado y devuelve el estado resultante.
+   *
+   * Dar permiso con el mismo texto que ya esta dado, o retirar uno que no esta
+   * dado, no escribe nada: la tabla es la prueba, no un registro de clics.
+   * Dar permiso con OTRO texto si escribe: la prueba tiene que ser del texto
+   * vigente.
+   */
+  record(input: MarketingConsentEventInput): Promise<MarketingConsentState>;
 }

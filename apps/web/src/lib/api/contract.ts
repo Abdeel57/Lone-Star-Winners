@@ -1110,6 +1110,13 @@ export interface SiteConfigResponse {
    */
   readonly required_consents?: readonly ConsentRequirement[];
   /**
+   * [CONTRATO] DEC-098: casillas OPCIONALES del alta, desmarcadas por defecto.
+   * Hoy solo `MARKETING_EMAIL`, y solo cuando el backend la ofrece. Ausente o
+   * vacio = no se pinta ninguna: la web nunca ofrece por su cuenta una casilla
+   * de publicidad cuyo texto no aprobo el abogado.
+   */
+  readonly optional_consents?: readonly ConsentRequirement[];
+  /**
    * [CONTRATO] Politica de contrasenas de `packages/security`.
    *
    * Opcional en el tipo por la misma razon que `feature_flags` es `Partial`: una
@@ -1323,6 +1330,26 @@ export interface ConsentRequirement {
    * aqui llegue `false` no autoriza a la interfaz a decidir nada.
    */
   readonly required: boolean;
+}
+
+/**
+ * [CONTRATO] DEC-098: permiso de correo promocional de la cuenta.
+ *
+ * `NONE` = nunca lo dio (aceptar Reglas, Terminos o Privacidad no es permiso);
+ * `WITHDRAWN` = lo dio y lo retiro. `offer` es lo que se puede aceptar ahora,
+ * o `null` si la casilla no se ofrece. Retirar no depende de `offer`.
+ */
+export interface MarketingConsent {
+  readonly status: "NONE" | "GRANTED" | "WITHDRAWN";
+  readonly text_version: string | null;
+  readonly source:
+    "SIGNUP" | "ACCOUNT_SETTINGS" | "UNSUBSCRIBE_LINK" | "EMAIL_PROVIDER" | "SUPPORT" | null;
+  readonly updated_at: string | null;
+  readonly offer: {
+    readonly key: string;
+    readonly text_version: string;
+    readonly text_key: string;
+  } | null;
 }
 
 /** [PROVISIONAL] Consentimiento aceptado, tal como se envia en el alta. */

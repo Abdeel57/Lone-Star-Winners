@@ -772,9 +772,44 @@ DEC-090, en su propia rama sin publicar.)
     debe mencionar este uso del celular y del correo; (d) cómo documentar que
     cada consulta del contacto queda en la auditoría.
 
-## Aviso de cierre de la primera edición (DEC-100, 2026-11-08)
+## Correo promocional con permiso opcional (DEC-098, 2026-11-07)
 
-Del 33 al 41 quedan reservados para DEC-098 (rama sin publicar).
+Al auditar la recuperación de clientes se comprobó que **ningún cliente tiene
+permiso demostrable para recibir publicidad**: el alta solo guarda las Reglas,
+los Términos y la Privacidad. DEC-098 prepara una casilla opcional, pero queda
+apagada hasta estas respuestas.
+
+33. **Texto de la casilla en inglés y en español.** Borrador hoy en la web: "Send
+    me emails from Lone Star Winners with news, offers and promotions." /
+    "Quiero recibir correos de Lone Star Winners con novedades, ofertas y
+    promociones.", con la ayuda "Opcional. No hace falta para comprar ni para
+    participar, y puedes retirarlo cuando quieras desde tu cuenta." Aprobar o
+    redactar. Al aprobarlo se cambia la versión y `legallyApproved` en el código.
+34. **Si cambia el texto, ¿vale el permiso dado con el anterior?** Hoy se
+    conserva y se guarda con qué versión se dio. Confirmar si hay que volver a
+    pedirlo.
+35. **Correos promocionales de un sorteo.** Qué tiene que llevar cada correo:
+    "No purchase necessary", la vía gratuita, los estados excluidos, edad,
+    enlace a las Reglas, dirección postal del remitente y baja (CAN-SPAM).
+    Confirmar también si se puede escribir a residentes de AK, FL, HI y NY
+    sobre la tienda aunque no puedan participar.
+36. **Plazo de la vía gratuita en las campañas.** Las tarjetas deben
+    **recibirse** antes del cierre. Una campaña de "última oportunidad" enviada
+    pocos días antes del cierre empuja a comprar cuando la vía gratuita ya no
+    llega a tiempo. ¿Con cuánta antelación mínima se puede enviar?
+37. **La Política de Privacidad** dice que el correo se usa para "account,
+    purchase, sweepstakes, and customer service communications". ¿Hay que
+    añadir el correo promocional con permiso y cómo darse de baja?
+38. **Recordatorios a participantes sin permiso promocional.** Un aviso sin
+    contenido de venta ("tu saldo y la fecha de cierre"), ¿cuenta como
+    comunicación de la relación y no como publicidad? No se enviará nada así
+    sin respuesta por escrito.
+39. **Medir aperturas y clics por persona.** La integración registra qué persona
+    abrió o pulsó cada campaña y atribuye sus compras (DEC-099). No guarda IP ni
+    navegador y no usa cookies. Confirmar qué debe decir la Política de Privacidad
+    y si hace falta mencionarlo en el texto de la casilla.
+
+## Aviso de cierre de la primera edición (DEC-100, 2026-11-08)
 
 42. **Texto del aviso.** Lo redactó el cliente y no lo ha revisado el abogado.
     No menciona las exclusiones (Alaska, Florida, Hawái, Nueva York); remite a

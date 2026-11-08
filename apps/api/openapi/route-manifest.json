@@ -291,6 +291,24 @@
       "summary": "Cambiar un flag NO legalmente material, con motivo."
     },
     {
+      "method": "PUT",
+      "path": "/api/v1/admin/marketing/campaigns/:provider_broadcast_id",
+      "operation_id": "nameAdminMarketingCampaign",
+      "authorization": "promotion.update",
+      "requires_step_up": false,
+      "tags": ["admin"],
+      "summary": "Poner nombre a un broadcast para los informes (DEC-099)."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/marketing/stats",
+      "operation_id": "getAdminMarketingStats",
+      "authorization": "dashboard.read",
+      "requires_step_up": false,
+      "tags": ["admin"],
+      "summary": "Cifras agregadas de correo promocional (DEC-099)."
+    },
+    {
       "method": "POST",
       "path": "/api/v1/admin/media",
       "operation_id": "uploadAdminMedia",
@@ -1101,6 +1119,24 @@
       "summary": "Declarar lo que falte: el estado, la fecha de nacimiento o las dos (DEC-067, DEC-089)."
     },
     {
+      "method": "GET",
+      "path": "/api/v1/me/marketing-consent",
+      "operation_id": "getMarketingConsent",
+      "authorization": "participant.self.read",
+      "requires_step_up": false,
+      "tags": ["portal"],
+      "summary": "Permiso de correo promocional de la cuenta (DEC-098)."
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/me/marketing-consent",
+      "operation_id": "setMarketingConsent",
+      "authorization": "participant.self.update",
+      "requires_step_up": false,
+      "tags": ["portal"],
+      "summary": "Dar o retirar el permiso de correo promocional (DEC-098)."
+    },
+    {
       "method": "POST",
       "path": "/api/v1/me/phone/start",
       "operation_id": "startMyPhoneVerification",
@@ -1225,6 +1261,15 @@
       "requires_step_up": false,
       "tags": ["promotions"],
       "summary": "La promocion activa, para la portada."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/webhooks/email/resend",
+      "operation_id": "receiveEmailProviderWebhook",
+      "authorization": "PUBLIC",
+      "requires_step_up": false,
+      "tags": ["commerce"],
+      "summary": "Bajas, rebotes, quejas y medicion del proveedor de correo (DEC-099)."
     },
     {
       "method": "POST",

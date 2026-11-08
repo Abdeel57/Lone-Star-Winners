@@ -559,6 +559,24 @@ export const mockRoutes: readonly MockRoute[] = [
   },
   { method: "POST", path: API_PATHS.mePhoneStart, body: { acknowledged: true } },
   { method: "POST", path: API_PATHS.mePhoneVerify, body: { phone: "+15055550123" } },
+  // DEC-098: permiso de correo promocional. Como en produccion hoy: sin
+  // historia y sin casilla ofrecida, asi el perfil no pinta la tarjeta.
+  {
+    method: "GET",
+    path: API_PATHS.meMarketingConsent,
+    body: { status: "NONE", text_version: null, source: null, updated_at: null, offer: null },
+  },
+  {
+    method: "PUT",
+    path: API_PATHS.meMarketingConsent,
+    body: {
+      status: "WITHDRAWN",
+      text_version: null,
+      source: "ACCOUNT_SETTINGS",
+      updated_at: "2026-11-07T18:00:00.000Z",
+      offer: null,
+    },
+  },
   { method: "GET", path: API_PATHS.adminAmoeSubmissions, body: adminAmoeSubmissionPage },
   {
     method: "POST",
