@@ -869,6 +869,14 @@
       "signIn": "Iniciar sesión",
       "register": "Crear una cuenta"
     },
+    "endedEdition": {
+      "title": "Periodo de participación terminado",
+      "body": "Tus participaciones siguen registradas en tu cuenta. Su validez se rige por las Reglas Oficiales.",
+      "heading": "Última edición",
+      "closedLabel": "Cerró",
+      "emptyTitle": "No tienes participaciones en esta edición",
+      "emptyBody": "El periodo de participación de esta edición ya terminó."
+    },
     "overview": {
       "greeting": "Hola, {name}",
       "promotionHeading": "Promoción vigente",

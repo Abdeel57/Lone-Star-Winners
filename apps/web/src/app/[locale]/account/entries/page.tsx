@@ -5,16 +5,13 @@ import { getTranslations, setRequestLocale } from "next-intl/server";
 
 import { AccountShell, MfaRequired, SignInRequired } from "@/components/account-shell";
 import { ApiErrorState } from "@/components/api-error-state";
+import { EndedEditionNotice } from "@/components/ended-edition-notice";
 import { EntryNumberList } from "@/components/entry-number-list";
 import { EntrySummaryCards } from "@/components/entry-summary-cards";
 import { Link } from "@/i18n/navigation";
 import { routing } from "@/i18n/routing";
-import {
-  fetchActivePromotion,
-  fetchEntryNumbers,
-  fetchEntrySummary,
-  pickLocalized,
-} from "@/lib/api";
+import { loadAccountPromotion } from "@/lib/account-promotion";
+import { fetchEntryNumbers, fetchEntrySummary, pickLocalized } from "@/lib/api";
 import { isFeatureEnabled } from "@/lib/flags";
 import { loadFeatureFlags } from "@/lib/flags-server";
 import { loadParticipant } from "@/lib/participant-server";
@@ -79,14 +76,12 @@ export default async function AccountEntriesPage({
     );
   }
 
-  const [promotionResult, flags] = await Promise.all([
-    fetchActivePromotion(locale),
+  const [accountPromotion, flags] = await Promise.all([
+    loadAccountPromotion(locale),
     loadFeatureFlags(locale),
   ]);
 
-  const promotion = promotionResult.ok ? promotionResult.data : null;
-
-  if (promotion === null) {
+  if (accountPromotion === null) {
     return (
       <AccountShell title={t("title")} current="/account/entries">
         <Alert tone="info">{tAccount("overview.noPromotion")}</Alert>
@@ -94,6 +89,8 @@ export default async function AccountEntriesPage({
     );
   }
 
+  const { promotion, ended } = accountPromotion;
+  const nowIso = new Date().toISOString();
   const numbersVisible = isFeatureEnabled(flags, "visible_entry_numbers_enabled");
 
   const query = await searchParams;
@@ -113,6 +110,10 @@ export default async function AccountEntriesPage({
   return (
     <AccountShell title={t("title")} current="/account/entries">
       <div className="flex flex-col gap-s8">
+        {ended ? (
+          <EndedEditionNotice promotion={promotion} locale={locale} nowIso={nowIso} />
+        ) : null}
+
         <section aria-labelledby="entries-summary">
           <h2 id="entries-summary" className="lsw-display text-heading-lg text-text">
             {pickLocalized(promotion.title, locale)}
@@ -124,14 +125,18 @@ export default async function AccountEntriesPage({
             {!summaryResult.ok ? (
               <ApiErrorState failure={summaryResult.error} headingLevel="h3" />
             ) : summaryResult.data.active_entries === 0 ? (
+              // Con la edicion terminada no se invita a comprar: ya no daria
+              // participaciones en ella.
               <EmptyState
                 headingLevel="h3"
-                title={t("emptyTitle")}
-                description={t("emptyBody")}
+                title={ended ? tAccount("endedEdition.emptyTitle") : t("emptyTitle")}
+                description={ended ? tAccount("endedEdition.emptyBody") : t("emptyBody")}
                 action={
-                  <Link href="/shop" className={buttonVariants({ variant: "accent" })}>
-                    {tAccount("overview.browseShop")}
-                  </Link>
+                  ended ? undefined : (
+                    <Link href="/shop" className={buttonVariants({ variant: "accent" })}>
+                      {tAccount("overview.browseShop")}
+                    </Link>
+                  )
                 }
               />
             ) : (

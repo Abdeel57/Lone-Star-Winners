@@ -6,12 +6,14 @@ import { getTranslations, setRequestLocale } from "next-intl/server";
 import { AccountShell, MfaRequired, SignInRequired } from "@/components/account-shell";
 import { ApiErrorState } from "@/components/api-error-state";
 import { UnverifiedEmailNotice } from "@/components/email-verification";
+import { EndedEditionNotice } from "@/components/ended-edition-notice";
 import { EntrySummaryCards } from "@/components/entry-summary-cards";
 import { OrderCard } from "@/components/order-card";
 import { formatZonedDate } from "@/i18n/formatters";
 import { Link } from "@/i18n/navigation";
 import { routing } from "@/i18n/routing";
-import { fetchActivePromotion, fetchEntrySummary, fetchOrders, pickLocalized } from "@/lib/api";
+import { loadAccountPromotion } from "@/lib/account-promotion";
+import { fetchEntrySummary, fetchOrders, pickLocalized } from "@/lib/api";
 import { loadParticipant } from "@/lib/participant-server";
 import { BUSINESS_TIME_ZONE } from "@/lib/time-zone";
 
@@ -76,12 +78,13 @@ export default async function AccountOverviewPage({
 
   const { participant } = state;
 
-  const [promotionResult, ordersResult] = await Promise.all([
-    fetchActivePromotion(locale),
+  const [accountPromotion, ordersResult] = await Promise.all([
+    loadAccountPromotion(locale),
     fetchOrders({ limit: 3 }, locale, session),
   ]);
 
-  const promotion = promotionResult.ok ? promotionResult.data : null;
+  const promotion = accountPromotion?.promotion ?? null;
+  const ended = accountPromotion?.ended === true;
 
   const summaryResult =
     promotion === null ? null : await fetchEntrySummary(promotion.id, locale, session);
@@ -124,7 +127,7 @@ export default async function AccountOverviewPage({
 
         <section aria-labelledby="account-promotion">
           <h2 id="account-promotion" className="lsw-display text-heading-lg text-text">
-            {t("overview.promotionHeading")}
+            {ended ? t("endedEdition.heading") : t("overview.promotionHeading")}
           </h2>
 
           {promotion === null ? (
@@ -133,13 +136,23 @@ export default async function AccountOverviewPage({
             </Alert>
           ) : (
             <Card elevation="raised" padding="lg" className="mt-s4">
+              {ended ? (
+                <div className="mb-s5">
+                  <EndedEditionNotice
+                    promotion={promotion}
+                    locale={locale}
+                    nowIso={new Date().toISOString()}
+                  />
+                </div>
+              ) : null}
+
               <CardTitle as="h3" size="sm">
                 {pickLocalized(promotion.title, locale)}
               </CardTitle>
 
               {closesAt === null ? null : (
                 <p className="mt-s2 text-caption text-text-subtle">
-                  {t("overview.closesLabel")}: {closesAt}
+                  {ended ? t("endedEdition.closedLabel") : t("overview.closesLabel")}: {closesAt}
                 </p>
               )}
 

@@ -5,10 +5,12 @@ import { getTranslations, setRequestLocale } from "next-intl/server";
 
 import { AccountShell, MfaRequired, SignInRequired } from "@/components/account-shell";
 import { ApiErrorState } from "@/components/api-error-state";
+import { EndedEditionNotice } from "@/components/ended-edition-notice";
 import { EntryLedgerList } from "@/components/entry-ledger-list";
 import { Link } from "@/i18n/navigation";
 import { routing } from "@/i18n/routing";
-import { fetchActivePromotion, fetchEntryTransactions } from "@/lib/api";
+import { loadAccountPromotion } from "@/lib/account-promotion";
+import { fetchEntryTransactions } from "@/lib/api";
 import { loadParticipant } from "@/lib/participant-server";
 
 export const dynamic = "force-dynamic";
@@ -71,16 +73,18 @@ export default async function AccountLedgerPage({
     );
   }
 
-  const promotionResult = await fetchActivePromotion(locale);
-  const promotion = promotionResult.ok ? promotionResult.data : null;
+  const accountPromotion = await loadAccountPromotion(locale);
 
-  if (promotion === null) {
+  if (accountPromotion === null) {
     return (
       <AccountShell title={t("title")} current="/account/entries">
         <Alert tone="info">{tAccount("overview.noPromotion")}</Alert>
       </AccountShell>
     );
   }
+
+  const { promotion, ended } = accountPromotion;
+  const nowIso = new Date().toISOString();
 
   const query = await searchParams;
   const cursor = typeof query.cursor === "string" && query.cursor.length > 0 ? query.cursor : null;
@@ -94,6 +98,10 @@ export default async function AccountLedgerPage({
   return (
     <AccountShell title={t("title")} current="/account/entries">
       <div className="flex flex-col gap-s6">
+        {ended ? (
+          <EndedEditionNotice promotion={promotion} locale={locale} nowIso={nowIso} />
+        ) : null}
+
         <p className="max-w-[52rem] text-body-sm text-text-muted">{t("intro")}</p>
 
         {!result.ok ? (
@@ -101,12 +109,14 @@ export default async function AccountLedgerPage({
         ) : result.data.items.length === 0 ? (
           <EmptyState
             headingLevel="h2"
-            title={t("emptyTitle")}
-            description={t("emptyBody")}
+            title={ended ? tAccount("endedEdition.emptyTitle") : t("emptyTitle")}
+            description={ended ? tAccount("endedEdition.emptyBody") : t("emptyBody")}
             action={
-              <Link href="/shop" className={buttonVariants({ variant: "accent" })}>
-                {tAccount("overview.browseShop")}
-              </Link>
+              ended ? undefined : (
+                <Link href="/shop" className={buttonVariants({ variant: "accent" })}>
+                  {tAccount("overview.browseShop")}
+                </Link>
+              )
             }
           />
         ) : (

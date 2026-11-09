@@ -869,6 +869,14 @@
       "signIn": "Sign in",
       "register": "Create an account"
     },
+    "endedEdition": {
+      "title": "Entry period ended",
+      "body": "Your entries remain recorded in your account. Their validity is governed by the Official Rules.",
+      "heading": "Latest edition",
+      "closedLabel": "Closed",
+      "emptyTitle": "You have no entries in this edition",
+      "emptyBody": "The entry period for this edition has ended."
+    },
     "overview": {
       "greeting": "Hello, {name}",
       "promotionHeading": "Current promotion",

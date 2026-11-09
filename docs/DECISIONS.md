@@ -5013,3 +5013,34 @@ Afecta a: `apps/web` (`lib/closing-notice.ts`, `components/closing-notice.tsx`,
 
 Proposed by: sesión del usuario (2026-11-08, petición del cliente)
 Agreed by: frontend-ux (petición directa del usuario)
+
+---
+
+## DEC-102
+
+Status: Accepted
+
+Date: 2026-11-09
+
+Decision:
+**La cuenta del participante sigue mostrando la última edición terminada cuando
+no hay ninguna activa.** Resumen, "Mis participaciones" e historial buscaban solo
+la promoción activa, y al pasar a `CLOSED` decían que no había ninguna, aunque
+las participaciones seguían en el ledger y la API las sirve por `promotion_id`.
+
+`lib/account-promotion.ts` decide la edición: la activa, o la terminada más
+reciente con reglas publicadas. Nunca una `SCHEDULED`, `DRAFT` o `CANCELLED`. Si
+la API falla al preguntar por la activa, no se muestra otra edición.
+
+Con la edición terminada, la cuenta avisa que el periodo acabó, que la validez se
+rige por las Reglas Oficiales y no ofrece ir a la tienda desde un estado vacío.
+
+Consecuencias: solo cambia la web; no toca API, base de datos ni participaciones.
+Al abrirse otra edición, la cuenta pasará a mostrar esa: consultar ediciones
+anteriores exigirá un selector con una ruta nueva. DEC-101 está reservado por una
+rama sin publicar.
+Afecta a: `apps/web` (`lib/account-promotion.ts`,
+`components/ended-edition-notice.tsx`, páginas de cuenta, mensajes, pruebas).
+
+Proposed by: sesión del usuario (2026-11-09, petición del cliente)
+Agreed by: frontend-ux (petición directa del usuario)
