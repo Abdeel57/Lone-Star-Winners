@@ -5163,7 +5163,7 @@ explícito. Hoy nadie tiene permiso demostrable.
    `EMAIL_PROVIDER`, `SUPPORT`). Vista `marketing_email_consent_current`. **No
    se rellena nada**: toda cuenta existente queda en `NONE`.
 2. **Texto versionado y bloqueado por el abogado.** `MARKETING_EMAIL_CONSENT` en
-   `apps/api/src/config/consents.ts` (versión `2026-11-07-borrador`,
+   `apps/api/src/config/consents.ts` (versión `2026-11-12`, aprobada por el usuario el 2026-11-12,
    `legallyApproved: false`). La variable `MARKETING_EMAIL_CONSENT_ENABLED`
    (apagada por defecto) enciende la casilla; en producción el esquema de
    entorno **no deja encenderla** mientras `legallyApproved` sea `false`.

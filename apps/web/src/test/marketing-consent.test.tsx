@@ -56,7 +56,7 @@ import enMessages from "../../messages/en-US.json";
 import esMessages from "../../messages/es-US.json";
 
 const API = apiBaseUrl().replace(/\/+$/, "");
-const VERSION = "2026-11-07-borrador";
+const VERSION = "2026-11-12";
 const OFFER = {
   key: "MARKETING_EMAIL",
   version: VERSION,

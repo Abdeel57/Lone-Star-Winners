@@ -6,6 +6,7 @@
 import { describe, expect, it } from "vitest";
 
 import { EnvironmentValidationError, loadConfig } from "../src/config/env.js";
+import { MARKETING_EMAIL_CONSENT, RESEND_PROMOTIONAL_USE } from "../src/config/consents.js";
 
 const VALID_DEV_ENV: NodeJS.ProcessEnv = {
   NODE_ENV: "development",
@@ -420,11 +421,14 @@ describe("refuerzos que solo aplican en produccion", () => {
       expect(loadConfig(VALID_DEV_ENV).marketing.emailConsentEnabled).toBe(false);
     });
 
-    it("en produccion no se enciende mientras el abogado no apruebe el texto", () => {
-      // `MARKETING_EMAIL_CONSENT.legallyApproved` es `false` en este commit.
-      expect(() =>
-        loadConfig({ ...PRODUCTION_BASE, MARKETING_EMAIL_CONSENT_ENABLED: "true" }),
-      ).toThrow(/MARKETING_EMAIL_CONSENT_ENABLED/u);
+    it("con el texto aprobado (2026-11-12) se puede encender en produccion", () => {
+      expect(MARKETING_EMAIL_CONSENT.legallyApproved).toBe(true);
+      const config = loadConfig({ ...PRODUCTION_BASE, MARKETING_EMAIL_CONSENT_ENABLED: "true" });
+      expect(config.marketing.emailConsentEnabled).toBe(true);
+    });
+
+    it("el envio real sigue bloqueado mientras Resend no lo autorice por escrito", () => {
+      expect(RESEND_PROMOTIONAL_USE.authorizedInWriting).toBe(false);
     });
 
     it("fuera de produccion se puede encender para probar el flujo", () => {

@@ -274,7 +274,8 @@ describe("el arranque impone la separacion", () => {
   });
 
   it("en este commit `live` no arranca, ni con toda la configuracion", () => {
-    expect(() => load(FULL_LIVE)).toThrow(/legallyApproved/u);
+    // El texto del permiso ya esta aprobado (2026-11-12); lo que falta es Resend.
+    expect(() => load(FULL_LIVE)).not.toThrow(/legallyApproved/u);
     expect(() => load(FULL_LIVE)).toThrow(/authorizedInWriting/u);
   });
 

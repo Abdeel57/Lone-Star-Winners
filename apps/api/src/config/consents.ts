@@ -33,16 +33,18 @@ export const REQUIRED_CONSENTS = [
  * `marketingConsent.checkboxHint`, en los dos idiomas). Si cambia el texto,
  * cambia la version en el mismo commit; quien acepto la anterior la conserva.
  *
- * `legallyApproved` es `false` mientras el abogado no apruebe ese texto en
- * ingles y en espanol (`docs/LEGAL_PENDING.md`). Con `false`, el esquema de
- * entorno no deja encender `MARKETING_EMAIL_CONSENT_ENABLED` en produccion.
+ * `legallyApproved` era `false` mientras nadie aprobara ese texto en ingles y
+ * en espanol (`docs/LEGAL_PENDING.md`, 33). El 2026-11-12 lo aprobo el usuario
+ * (operador de la tienda) tal cual, pendiente de ratificar por el abogado. Con
+ * `false`, el esquema de entorno no deja encender
+ * `MARKETING_EMAIL_CONSENT_ENABLED` en produccion.
  */
 export const MARKETING_EMAIL_CONSENT = {
   key: "MARKETING_EMAIL",
-  version: "2026-11-07-borrador",
+  version: "2026-11-12",
   text_key: "MARKETING_EMAIL",
   required: false,
-  legallyApproved: false,
+  legallyApproved: true,
 } as const;
 
 /**

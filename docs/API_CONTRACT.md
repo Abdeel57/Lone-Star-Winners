@@ -3447,7 +3447,7 @@ SIGN_IN_CODE_EXPIRED · 422 SIGN_IN_CODE_INVALID / PHONE_INVALID · 503.
 DEC-098. Permiso de correo promocional de la cuenta:
 
     { "status": "NONE" | "GRANTED" | "WITHDRAWN",
-      "text_version": "2026-11-07-borrador" | null,
+      "text_version": "2026-11-12" | null,
       "source": "SIGNUP" | "ACCOUNT_SETTINGS" | "UNSUBSCRIBE_LINK" | "EMAIL_PROVIDER" | "SUPPORT" | null,
       "updated_at": "…" | null,
       "offer": { "key": "MARKETING_EMAIL", "text_version": "…", "text_key": "MARKETING_EMAIL" } | null }
