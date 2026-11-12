@@ -67,6 +67,24 @@
     },
     {
       "method": "GET",
+      "path": "/api/v1/account/orders/:order_id/receipt",
+      "operation_id": "getAccountOrderReceipt",
+      "authorization": "order.self.read",
+      "requires_step_up": false,
+      "tags": ["portal"],
+      "summary": "Comprobante de pago de un pedido propio (DEC-103)."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/account/orders/:order_id/receipt.pdf",
+      "operation_id": "downloadAccountOrderReceipt",
+      "authorization": "order.self.read",
+      "requires_step_up": false,
+      "tags": ["portal"],
+      "summary": "Comprobante de pago en PDF (DEC-103)."
+    },
+    {
+      "method": "GET",
       "path": "/api/v1/admin/amoe-submissions",
       "operation_id": "listAmoeReviewQueue",
       "authorization": "amoe.review.read",

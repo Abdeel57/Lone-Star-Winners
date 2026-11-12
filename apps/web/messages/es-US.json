@@ -1143,6 +1143,59 @@
       "pendingBody": "Da este número de orden en un punto de venta y paga {total} en efectivo. Todavía no se ha cobrado nada: tu pedido está pendiente de pago, y tus participaciones se generan cuando la tienda lo confirme.",
       "paidBody": "La tienda confirmó tu pago en efectivo. Tus participaciones se generan con las mismas reglas que una compra con tarjeta.",
       "pickupBody": "Te entregan tu pedido ahí mismo, al pagar. Sin envío."
+    },
+    "receipt": {
+      "successTitle": "✅ ¡Pago realizado!",
+      "successThanks": "¡Gracias por tu compra!",
+      "successBody": "Tu pago está confirmado y tu pedido está completo.",
+      "changedTitle": {
+        "PARTIALLY_REFUNDED": "Este pedido tuvo un reembolso parcial",
+        "REFUNDED": "Este pedido fue reembolsado",
+        "CHARGEBACK": "Este pago está en disputa",
+        "VOIDED": "Este pedido fue anulado"
+      },
+      "changedBody": "Los datos de abajo están al día. Los números de participación que quitó este cambio aparecen como anulados y ya no cuentan.",
+      "detailsHeading": "Comprobante",
+      "orderNumber": "Número de pedido",
+      "paymentDate": "Fecha de pago",
+      "customerName": "Nombre",
+      "product": "Producto / paquete",
+      "lineQuantity": "{name} × {quantity}",
+      "amountPaid": "Importe pagado (USD)",
+      "amountRefunded": "Importe reembolsado",
+      "paymentStatus": "Estado del pago",
+      "paymentMethod": "Forma de pago",
+      "entries": "Participaciones",
+      "status": {
+        "PAID": "Pagado",
+        "PARTIALLY_REFUNDED": "Reembolso parcial",
+        "REFUNDED": "Reembolsado",
+        "CHARGEBACK": "En disputa",
+        "VOIDED": "Anulado"
+      },
+      "method": {
+        "CARD": "Tarjeta",
+        "CASH": "Efectivo"
+      },
+      "entriesPending": "Pendientes",
+      "entriesNone": "Ninguna en este pedido",
+      "download": "Descargar comprobante",
+      "viewReceipt": "Ver comprobante",
+      "downloadHint": "Comprobante en PDF (en inglés). Puedes volver a descargarlo cuando quieras desde tu historial de pedidos.",
+      "verify": "Verificar mis participaciones",
+      "home": "Volver al inicio",
+      "viewOrder": "Ver el pedido completo",
+      "numbersHeading": "Tus números de participación",
+      "numbersSummary": "{active, plural, one {# número vigente} other {# números vigentes}}",
+      "voidSummary": "{count, plural, one {# anulado} other {# anulados}}",
+      "numbersRange": "Del {from} al {to} de {total}",
+      "previous": "Anterior",
+      "next": "Siguiente",
+      "voidLabel": "Anulado",
+      "pendingTitle": "Estamos registrando tus participaciones",
+      "pendingBody": "Tu pago está confirmado. Tus participaciones aparecen aquí en cuanto quedan registradas. Esta página vuelve a comprobarlo sola durante un minuto; después, recárgala.",
+      "noneBody": "Este pedido no incluye participaciones para el sorteo.",
+      "numbersHidden": "Tus participaciones están registradas. Puedes consultarlas en Verificar mis participaciones."
     }
   },
   "admin": {

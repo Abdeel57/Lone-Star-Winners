@@ -2010,6 +2010,915 @@
         }
       }
     },
+    "/api/v1/account/orders/{order_id}/receipt": {
+      "get": {
+        "description": "Solo de un pedido COBRADO: `paid_at` lo escribe el webhook firmado de la pasarela, nunca la URL de vuelta. De un pedido pendiente, fallido o cancelado responde 409 `RECEIPT_NOT_AVAILABLE`. De un pedido ajeno, 404 (el `participantId` va en el `WHERE`). `payment_status` refleja devoluciones y contracargos en cada lectura, y `entry_numbers` son solo los de este pedido, con la misma vigencia que `GET /account/entry-numbers`. Leer no genera ni asigna participaciones.",
+        "operationId": "getAccountOrderReceipt",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "order_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "numbers_limit",
+            "required": false,
+            "schema": {
+              "default": 200,
+              "maximum": 1000,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "numbers_offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "maximum": 9007199254740991,
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "customer_name": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "entry_numbers": {
+                      "anyOf": [
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "active_count": {
+                              "maximum": 9007199254740991,
+                              "minimum": -9007199254740991,
+                              "type": "integer"
+                            },
+                            "digits": {
+                              "maximum": 9007199254740991,
+                              "minimum": -9007199254740991,
+                              "type": "integer"
+                            },
+                            "next_offset": {
+                              "anyOf": [
+                                {
+                                  "maximum": 9007199254740991,
+                                  "minimum": -9007199254740991,
+                                  "type": "integer"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "numbers": {
+                              "items": {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "active": {
+                                    "type": "boolean"
+                                  },
+                                  "number": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "number",
+                                  "active"
+                                ],
+                                "type": "object"
+                              },
+                              "type": "array"
+                            },
+                            "offset": {
+                              "maximum": 9007199254740991,
+                              "minimum": -9007199254740991,
+                              "type": "integer"
+                            },
+                            "void_count": {
+                              "maximum": 9007199254740991,
+                              "minimum": -9007199254740991,
+                              "type": "integer"
+                            }
+                          },
+                          "required": [
+                            "digits",
+                            "active_count",
+                            "void_count",
+                            "offset",
+                            "next_offset",
+                            "numbers"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "order": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "entries_granted": {
+                          "anyOf": [
+                            {
+                              "maximum": 9007199254740991,
+                              "minimum": -9007199254740991,
+                              "type": "integer"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "entry_calculation": {
+                          "anyOf": [
+                            {
+                              "additionalProperties": false,
+                              "properties": {
+                                "engine_version": {
+                                  "maximum": 9007199254740991,
+                                  "minimum": -9007199254740991,
+                                  "type": "integer"
+                                },
+                                "evaluated_at": {
+                                  "type": "string"
+                                },
+                                "final_entries": {
+                                  "maximum": 9007199254740991,
+                                  "minimum": -9007199254740991,
+                                  "type": "integer"
+                                },
+                                "rules_version_id": {
+                                  "format": "uuid",
+                                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                                  "type": "string"
+                                },
+                                "trace": {
+                                  "additionalProperties": {},
+                                  "propertyNames": {
+                                    "type": "string"
+                                  },
+                                  "type": "object"
+                                }
+                              },
+                              "required": [
+                                "rules_version_id",
+                                "engine_version",
+                                "evaluated_at",
+                                "final_entries",
+                                "trace"
+                              ],
+                              "type": "object"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "entry_state": {
+                          "enum": [
+                            "NOT_APPLICABLE",
+                            "PENDING_QUALIFICATION",
+                            "GRANTED",
+                            "PARTIALLY_REVERSED",
+                            "REVERSED"
+                          ],
+                          "type": "string"
+                        },
+                        "fulfillment": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "carrier": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "delivered_at": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "state": {
+                              "enum": [
+                                "NOT_APPLICABLE",
+                                "UNFULFILLED",
+                                "PARTIALLY_FULFILLED",
+                                "FULFILLED",
+                                "RETURNED"
+                              ],
+                              "type": "string"
+                            },
+                            "tracking_number": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            }
+                          },
+                          "required": [
+                            "state",
+                            "delivered_at",
+                            "carrier",
+                            "tracking_number"
+                          ],
+                          "type": "object"
+                        },
+                        "fulfillment_method": {
+                          "enum": [
+                            "DELIVERY",
+                            "PICKUP"
+                          ],
+                          "type": "string"
+                        },
+                        "id": {
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                          "type": "string"
+                        },
+                        "item_count": {
+                          "maximum": 9007199254740991,
+                          "minimum": -9007199254740991,
+                          "type": "integer"
+                        },
+                        "items": {
+                          "items": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "line_id": {
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                                "type": "string"
+                              },
+                              "line_total": {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "amount_minor": {
+                                    "type": "string"
+                                  },
+                                  "currency": {
+                                    "maxLength": 3,
+                                    "minLength": 3,
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "amount_minor",
+                                  "currency"
+                                ],
+                                "type": "object"
+                              },
+                              "product_kind": {
+                                "enum": [
+                                  "MERCHANDISE",
+                                  "ENTRY_PACKAGE"
+                                ],
+                                "type": "string"
+                              },
+                              "product_name": {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "en-US": {
+                                    "type": "string"
+                                  },
+                                  "es-US": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "en-US",
+                                  "es-US"
+                                ],
+                                "type": "object"
+                              },
+                              "product_slug": {
+                                "type": "string"
+                              },
+                              "quantity": {
+                                "maximum": 9007199254740991,
+                                "minimum": -9007199254740991,
+                                "type": "integer"
+                              },
+                              "refunded_quantity": {
+                                "maximum": 9007199254740991,
+                                "minimum": -9007199254740991,
+                                "type": "integer"
+                              },
+                              "sku": {
+                                "type": "string"
+                              },
+                              "sweepstakes_eligible": {
+                                "type": "boolean"
+                              },
+                              "unit_price": {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "amount_minor": {
+                                    "type": "string"
+                                  },
+                                  "currency": {
+                                    "maxLength": 3,
+                                    "minLength": 3,
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "amount_minor",
+                                  "currency"
+                                ],
+                                "type": "object"
+                              }
+                            },
+                            "required": [
+                              "line_id",
+                              "sku",
+                              "product_slug",
+                              "product_name",
+                              "quantity",
+                              "unit_price",
+                              "line_total",
+                              "sweepstakes_eligible",
+                              "refunded_quantity",
+                              "product_kind"
+                            ],
+                            "type": "object"
+                          },
+                          "type": "array"
+                        },
+                        "order_number": {
+                          "type": "string"
+                        },
+                        "payment_method": {
+                          "enum": [
+                            "CARD",
+                            "CASH"
+                          ],
+                          "type": "string"
+                        },
+                        "placed_at": {
+                          "type": "string"
+                        },
+                        "promotion_id": {
+                          "anyOf": [
+                            {
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "shipping_address": {
+                          "anyOf": [
+                            {
+                              "additionalProperties": false,
+                              "properties": {
+                                "city": {
+                                  "type": "string"
+                                },
+                                "country": {
+                                  "type": "string"
+                                },
+                                "full_name": {
+                                  "type": "string"
+                                },
+                                "line1": {
+                                  "type": "string"
+                                },
+                                "line2": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "postal_code": {
+                                  "type": "string"
+                                },
+                                "region": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "full_name",
+                                "line1",
+                                "line2",
+                                "city",
+                                "region",
+                                "postal_code",
+                                "country"
+                              ],
+                              "type": "object"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "shipping_total": {
+                          "anyOf": [
+                            {
+                              "additionalProperties": false,
+                              "properties": {
+                                "amount_minor": {
+                                  "type": "string"
+                                },
+                                "currency": {
+                                  "maxLength": 3,
+                                  "minLength": 3,
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "amount_minor",
+                                "currency"
+                              ],
+                              "type": "object"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "status": {
+                          "enum": [
+                            "PENDING_PAYMENT",
+                            "PAID",
+                            "FULFILLED",
+                            "CANCELLED",
+                            "REFUNDED",
+                            "PARTIALLY_REFUNDED",
+                            "CHARGEBACK",
+                            "VOIDED"
+                          ],
+                          "type": "string"
+                        },
+                        "subtotal": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "amount_minor": {
+                              "type": "string"
+                            },
+                            "currency": {
+                              "maxLength": 3,
+                              "minLength": 3,
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "amount_minor",
+                            "currency"
+                          ],
+                          "type": "object"
+                        },
+                        "tax_total": {
+                          "anyOf": [
+                            {
+                              "additionalProperties": false,
+                              "properties": {
+                                "amount_minor": {
+                                  "type": "string"
+                                },
+                                "currency": {
+                                  "maxLength": 3,
+                                  "minLength": 3,
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "amount_minor",
+                                "currency"
+                              ],
+                              "type": "object"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "total": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "amount_minor": {
+                              "type": "string"
+                            },
+                            "currency": {
+                              "maxLength": 3,
+                              "minLength": 3,
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "amount_minor",
+                            "currency"
+                          ],
+                          "type": "object"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "order_number",
+                        "status",
+                        "placed_at",
+                        "total",
+                        "item_count",
+                        "promotion_id",
+                        "entry_state",
+                        "entries_granted",
+                        "payment_method",
+                        "items",
+                        "subtotal",
+                        "shipping_total",
+                        "tax_total",
+                        "shipping_address",
+                        "fulfillment_method",
+                        "fulfillment",
+                        "entry_calculation"
+                      ],
+                      "type": "object"
+                    },
+                    "paid_at": {
+                      "type": "string"
+                    },
+                    "payment_status": {
+                      "enum": [
+                        "PAID",
+                        "PARTIALLY_REFUNDED",
+                        "REFUNDED",
+                        "CHARGEBACK",
+                        "VOIDED"
+                      ],
+                      "type": "string"
+                    },
+                    "refunded_total": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "amount_minor": {
+                          "type": "string"
+                        },
+                        "currency": {
+                          "maxLength": 3,
+                          "minLength": 3,
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "amount_minor",
+                        "currency"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "order",
+                    "payment_status",
+                    "paid_at",
+                    "customer_name",
+                    "refunded_total",
+                    "entry_numbers"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 200."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "additionalProperties": {},
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "request_id"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 401."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "additionalProperties": {},
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "request_id"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 404."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "additionalProperties": {},
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "request_id"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 409."
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Comprobante de pago de un pedido propio (DEC-103).",
+        "tags": [
+          "portal"
+        ],
+        "x-lsw-authorization": {
+          "kind": "PERMISSION",
+          "permission": "order.self.read",
+          "requires_step_up": false
+        }
+      }
+    },
+    "/api/v1/account/orders/{order_id}/receipt.pdf": {
+      "get": {
+        "description": "El mismo comprobante que `GET …/receipt`, en PDF, generado en el servidor con los datos verificados. Mismas reglas: solo el dueno (404 si no) y solo pedidos cobrados (409 si no). `Content-Disposition: attachment` y `no-store`.",
+        "operationId": "downloadAccountOrderReceipt",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "order_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/pdf": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Respuesta 200."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "additionalProperties": {},
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "request_id"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 401."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "additionalProperties": {},
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "request_id"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 404."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "error": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "additionalProperties": {},
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "type": "object"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "request_id"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Respuesta 409."
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Comprobante de pago en PDF (DEC-103).",
+        "tags": [
+          "portal"
+        ],
+        "x-lsw-authorization": {
+          "kind": "PERMISSION",
+          "permission": "order.self.read",
+          "requires_step_up": false
+        }
+      }
+    },
     "/api/v1/admin/amoe-submissions": {
       "get": {
         "description": "Sin `status` devuelve la COLA DE TRABAJO: lo que espera decision -`SUBMITTED` y `PENDING_REVIEW`-, que es el valor por defecto `PENDING_REVIEW`. Con `status` consulta ese estado exacto, y es asi como se vuelve a mirar un envio ya decidido: sin el filtro, una aprobacion se llevaba consigo `granted_entries` y `applied_cap`, que son la unica explicacion de por que concedio menos de lo anunciado. Nunca devuelve el payload del envio.",

@@ -6,6 +6,7 @@ import { getTranslations, setRequestLocale } from "next-intl/server";
 import { MfaRequired, SignInRequired } from "@/components/account-shell";
 import { ApiErrorState } from "@/components/api-error-state";
 import { OrderLineList } from "@/components/order-line-list";
+import { PaymentReceipt, RECEIPT_NUMBERS_PAGE_SIZE } from "@/components/payment-receipt";
 import {
   useOrderEntryStateBody,
   useOrderEntryStateLabel,
@@ -15,7 +16,7 @@ import { formatEntryCount, formatMoney, formatZonedDate } from "@/i18n/formatter
 import type { Locale } from "@/i18n/locales";
 import { Link } from "@/i18n/navigation";
 import { routing } from "@/i18n/routing";
-import { fetchActivePromotion, fetchOrder, type OrderDetail } from "@/lib/api";
+import { fetchActivePromotion, fetchOrder, fetchOrderReceipt, type OrderDetail } from "@/lib/api";
 import { loadParticipant } from "@/lib/participant-server";
 import { BUSINESS_TIME_ZONE } from "@/lib/time-zone";
 
@@ -42,13 +43,24 @@ export const dynamic = "force-dynamic";
  * `/orders/{id}` -que es la URL que alguien guarda o comparte consigo mismo-
  * pero el pedido se pide con la sesion, y sin ella se pide iniciarla. Un
  * identificador de pedido no autoriza a ver un pedido.
+ *
+ * DEC-103: COMPROBANTE DE PAGO. Es la pagina a la que llega el comprador al
+ * volver de Stripe (`/checkout/return` redirige aqui cuando el BACKEND da el
+ * pago por confirmado). Si el pedido esta cobrado se pinta el comprobante -
+ * "Payment Successful!", datos, numeros de participacion y PDF-, que pide a la
+ * API; de un pedido pendiente, fallido o cancelado la API no da comprobante
+ * (409) y se pinta la vista de siempre. Recargar no cambia nada: solo vuelve a
+ * leer.
  */
 export default async function OrderConfirmationPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ locale: string; id: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { locale, id } = await params;
+  const query = await searchParams;
   if (!hasLocale(routing.locales, locale)) notFound();
   setRequestLocale(locale);
 
@@ -95,6 +107,32 @@ export default async function OrderConfirmationPage({
   }
 
   const order = result.data;
+
+  if (order.status !== "PENDING_PAYMENT" && order.status !== "CANCELLED") {
+    const receipt = await fetchOrderReceipt(
+      order.id,
+      { numbersOffset: numbersOffset(query.numbers), numbersLimit: RECEIPT_NUMBERS_PAGE_SIZE },
+      locale,
+      session,
+    );
+    if (receipt.ok) {
+      return (
+        <div className="lsw-container py-s10 pb-s16">
+          <div className="mx-auto w-full max-w-[44rem]">
+            <PaymentReceipt
+              receipt={receipt.data}
+              locale={locale}
+              numbersPath={`/orders/${order.id}/confirmation`}
+            />
+            <p className="mt-s6 text-caption text-text-subtle">{t("rulesNote")}</p>
+          </div>
+        </div>
+      );
+    }
+    // Sin comprobante (409, o la API no lo sirve todavia): la vista de siempre,
+    // que no promete nada que el backend no haya dicho.
+  }
+
   const timeZone =
     promotionResult.ok && promotionResult.data !== null
       ? promotionResult.data.legal_timezone
@@ -128,6 +166,11 @@ export default async function OrderConfirmationPage({
       </div>
     </ConfirmationShell>
   );
+}
+
+/** `?numbers=` de los enlaces de tramo. Cualquier otra cosa es el principio. */
+function numbersOffset(value: string | string[] | undefined): number {
+  return typeof value === "string" && /^d{1,7}$/u.test(value) ? Number(value) : 0;
 }
 
 function OrderSummaryCard({

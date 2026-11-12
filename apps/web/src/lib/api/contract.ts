@@ -1696,6 +1696,34 @@ export interface OrderDetail extends OrderSummary {
   readonly entry_calculation: EntryCalculationSnapshot | null;
 }
 
+/**
+ * DEC-103: comprobante de pago de un pedido propio
+ * (`GET /account/orders/{id}/receipt`). Solo existe si el pedido esta COBRADO:
+ * de uno pendiente, fallido o cancelado la API responde 409
+ * `RECEIPT_NOT_AVAILABLE`, y de uno ajeno, 404.
+ */
+export interface OrderReceipt {
+  readonly order: OrderDetail;
+  readonly payment_status: "PAID" | "PARTIALLY_REFUNDED" | "REFUNDED" | "CHARGEBACK" | "VOIDED";
+  /** Cuando se cobro (ISO-8601 UTC). */
+  readonly paid_at: string;
+  readonly customer_name: string | null;
+  readonly refunded_total: MoneyMinor;
+  /**
+   * Numeros de ESTE pedido, por tramos: los vigentes primero y despues los
+   * anulados. `null` si los numeros visibles estan apagados o el pedido aun no
+   * tiene participaciones.
+   */
+  readonly entry_numbers: {
+    readonly digits: number;
+    readonly active_count: number;
+    readonly void_count: number;
+    readonly offset: number;
+    readonly next_offset: number | null;
+    readonly numbers: readonly EntryNumber[];
+  } | null;
+}
+
 /** DEC-085: estado de la entrega de la mercancia de un pedido. */
 export interface OrderFulfillment {
   readonly state:

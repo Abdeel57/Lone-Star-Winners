@@ -1143,6 +1143,59 @@
       "pendingBody": "Give this order number at a store location and pay {total} in cash. Nothing has been charged yet: your order is pending payment, and your entries are generated when the store confirms it.",
       "paidBody": "The store confirmed your cash payment. Your entries are generated with the same rules as a card purchase.",
       "pickupBody": "Your order is handed to you right there when you pay. No shipping."
+    },
+    "receipt": {
+      "successTitle": "✅ Payment Successful!",
+      "successThanks": "Thank you for your purchase!",
+      "successBody": "Your payment has been confirmed and your order is complete.",
+      "changedTitle": {
+        "PARTIALLY_REFUNDED": "This order was partially refunded",
+        "REFUNDED": "This order was refunded",
+        "CHARGEBACK": "This payment is disputed",
+        "VOIDED": "This order was voided"
+      },
+      "changedBody": "The details below are up to date. Entry numbers removed by this change are marked as void and no longer count.",
+      "detailsHeading": "Receipt",
+      "orderNumber": "Order Number",
+      "paymentDate": "Payment Date",
+      "customerName": "Customer Name",
+      "product": "Product / Package",
+      "lineQuantity": "{name} × {quantity}",
+      "amountPaid": "Amount Paid (USD)",
+      "amountRefunded": "Amount Refunded",
+      "paymentStatus": "Payment Status",
+      "paymentMethod": "Payment Method",
+      "entries": "Number of Entries",
+      "status": {
+        "PAID": "Paid",
+        "PARTIALLY_REFUNDED": "Partially refunded",
+        "REFUNDED": "Refunded",
+        "CHARGEBACK": "Disputed",
+        "VOIDED": "Voided"
+      },
+      "method": {
+        "CARD": "Card",
+        "CASH": "Cash"
+      },
+      "entriesPending": "Pending",
+      "entriesNone": "None for this order",
+      "download": "Download Receipt",
+      "viewReceipt": "View receipt",
+      "downloadHint": "PDF receipt. You can download it again anytime from your order history.",
+      "verify": "Verify My Entries",
+      "home": "Back to Home",
+      "viewOrder": "See the full order",
+      "numbersHeading": "Your entry numbers",
+      "numbersSummary": "{active, plural, one {# active entry number} other {# active entry numbers}}",
+      "voidSummary": "{count, plural, one {# void} other {# void}}",
+      "numbersRange": "Showing {from}–{to} of {total}",
+      "previous": "Previous",
+      "next": "Next",
+      "voidLabel": "Void",
+      "pendingTitle": "Your entries are being processed",
+      "pendingBody": "Your payment is confirmed. Your entries appear here as soon as they are recorded. This page checks again on its own for a minute; after that, reload it.",
+      "noneBody": "This order does not include sweepstakes entries.",
+      "numbersHidden": "Your entries are recorded. You can check them in Verify My Entries."
     }
   },
   "admin": {

@@ -36,6 +36,7 @@ import type {
   EntryTransactionPage,
   OfficialRulesResponse,
   OrderDetail,
+  OrderReceipt,
   OrderPage,
   OrderSummary,
   ParticipantProfile,
@@ -326,6 +327,19 @@ export function cartItemPath(lineId: string): string {
 /** Ruta del detalle de un pedido del propio participante. */
 export function orderPath(orderId: string): string {
   return `${API_PATHS.orders}/${encodeURIComponent(orderId)}`;
+}
+
+/** DEC-103: comprobante de un pedido del propio participante. */
+export function orderReceiptPath(orderId: string): string {
+  return `${orderPath(orderId)}/receipt`;
+}
+
+/**
+ * DEC-103: el mismo comprobante en PDF. Lo pide el manejador de
+ * `/receipts/{id}.pdf` de la web, nunca el navegador directamente.
+ */
+export function orderReceiptPdfPath(orderId: string): string {
+  return `${orderPath(orderId)}/receipt.pdf`;
 }
 
 /** Ruta del estado de una sesion de pago. */
@@ -1203,6 +1217,26 @@ export function fetchOrder(
   session: SessionContext,
 ): Promise<ApiResult<OrderDetail>> {
   return apiGet<OrderDetail>(orderPath(orderId), { locale, ...sessionOptions(session) });
+}
+
+/**
+ * DEC-103: comprobante de pago de un pedido propio, con un tramo de sus
+ * numeros de participacion. 409 `RECEIPT_NOT_AVAILABLE` si no esta cobrado.
+ */
+export function fetchOrderReceipt(
+  orderId: string,
+  query: { readonly numbersOffset?: number; readonly numbersLimit?: number },
+  locale: Locale,
+  session: SessionContext,
+): Promise<ApiResult<OrderReceipt>> {
+  const search = queryString({
+    numbers_offset: query.numbersOffset,
+    numbers_limit: query.numbersLimit,
+  });
+  return apiGet<OrderReceipt>(`${orderReceiptPath(orderId)}${search}`, {
+    locale,
+    ...sessionOptions(session),
+  });
 }
 
 // ---------------------------------------------------------------------------

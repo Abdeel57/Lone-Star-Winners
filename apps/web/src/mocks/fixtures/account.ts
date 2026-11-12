@@ -9,6 +9,7 @@ import type {
   OrderDetail,
   OrderLine,
   OrderPage,
+  OrderReceipt,
   OrderSummary,
   ParticipantProfile,
   PostalAddress,
@@ -705,3 +706,27 @@ export const orderDetails: readonly OrderDetail[] = [
   orderWithoutPromotion,
   cashPendingOrder,
 ];
+
+/**
+ * DEC-103: comprobante del pedido con participaciones otorgadas. Trae el PRIMER
+ * tramo de numeros (100 de 250) para que la vista previa ensene tambien el paso
+ * al siguiente. Numeros inventados: no salen de ninguna permutacion real.
+ */
+export const grantedOrderReceipt: OrderReceipt = {
+  order: grantedOrder,
+  payment_status: "PAID",
+  paid_at: "2026-09-01T18:11:00.000Z",
+  customer_name: "Ada Lovelace",
+  refunded_total: { amount_minor: "0", currency: "USD" },
+  entry_numbers: {
+    digits: 8,
+    active_count: 250,
+    void_count: 0,
+    offset: 0,
+    next_offset: 100,
+    numbers: Array.from({ length: 100 }, (_, index) => ({
+      number: String(40_000_000 + index * 7_919).padStart(8, "0"),
+      active: true,
+    })),
+  },
+};

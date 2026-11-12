@@ -1,4 +1,4 @@
-import { Alert, Badge, Card, CardTitle } from "@lsw/ui";
+import { Alert, Badge, buttonVariants, Card, CardTitle } from "@lsw/ui";
 import { notFound } from "next/navigation";
 import { hasLocale, useTranslations } from "next-intl";
 import { getTranslations, setRequestLocale } from "next-intl/server";
@@ -105,6 +105,10 @@ export default async function AccountOrderPage({
       <div className="flex flex-col gap-s8">
         <OrderHeader order={order} locale={locale} timeZone={timeZone} />
 
+        {order.status === "PENDING_PAYMENT" || order.status === "CANCELLED" ? null : (
+          <ReceiptLinks orderId={order.id} />
+        )}
+
         <section aria-labelledby="order-entries">
           <h2 id="order-entries" className="lsw-display text-heading-lg text-text">
             {t("entriesHeading")}
@@ -151,6 +155,32 @@ export default async function AccountOrderPage({
         </div>
       </div>
     </AccountShell>
+  );
+}
+
+/**
+ * DEC-103: volver a descargar el comprobante desde el historial. Solo se ofrece
+ * para un pedido cobrado; aun asi, quien decide es la API (409 si no lo esta).
+ */
+function ReceiptLinks({ orderId }: { readonly orderId: string }) {
+  const t = useTranslations("orderConfirmation.receipt");
+
+  return (
+    <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+      <a
+        href={`/receipts/${orderId}.pdf`}
+        download
+        className={`${buttonVariants({ variant: "accent", fullWidth: true })} sm:w-auto`}
+      >
+        {t("download")}
+      </a>
+      <Link
+        href={`/orders/${orderId}/confirmation`}
+        className={`${buttonVariants({ variant: "secondary", fullWidth: true })} sm:w-auto`}
+      >
+        {t("viewReceipt")}
+      </Link>
+    </div>
   );
 }
 

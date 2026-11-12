@@ -97,7 +97,12 @@ interface Scenario {
     | "voidCard"
     | "packageCard"
     | "packageCash"
-    | "texan",
+    | "texan"
+    | "receiptCard"
+    | "receiptOther"
+    | "receiptFailed"
+    | "receiptCancelled"
+    | "receiptRefund",
     string
   >;
   /** DEC-092: un paquete de participaciones, que no se envia. */
@@ -238,6 +243,12 @@ async function seed(config: ApiConfig): Promise<Scenario> {
     packageCard: await insertParticipant("package-card@example.invalid"),
     packageCash: await insertParticipant("package-cash@example.invalid"),
     texan: await insertParticipant("texan@example.invalid", "TX"),
+    // DEC-103: comprobante de pago.
+    receiptCard: await insertParticipant("receipt-card@example.invalid"),
+    receiptOther: await insertParticipant("receipt-other@example.invalid"),
+    receiptFailed: await insertParticipant("receipt-failed@example.invalid"),
+    receiptCancelled: await insertParticipant("receipt-cancelled@example.invalid"),
+    receiptRefund: await insertParticipant("receipt-refund@example.invalid"),
   };
 
   // DEC-079: sin tarifa, un carrito con mercancia no se puede pagar (409).
@@ -2018,5 +2029,408 @@ describe("el checkout se rellena con lo que la cuenta ya sabe (DEC-092)", () => 
   it("sin sesion no hay nada que sugerir", async () => {
     const anonymous = await app.inject({ method: "GET", url: "/api/v1/me/checkout-defaults" });
     expect(anonymous.statusCode).toBe(401);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 16. Comprobante de pago (DEC-103)
+// ---------------------------------------------------------------------------
+
+interface ReceiptBody {
+  order: {
+    id: string;
+    order_number: string;
+    status: string;
+    payment_method: string;
+    entry_state: string;
+    entries_granted: number | null;
+  };
+  payment_status: string;
+  paid_at: string;
+  customer_name: string | null;
+  refunded_total: { amount_minor: string; currency: string };
+  entry_numbers: {
+    digits: number;
+    active_count: number;
+    void_count: number;
+    offset: number;
+    next_offset: number | null;
+    numbers: { number: string; active: boolean }[];
+  } | null;
+}
+
+/** Lo que firma Stripe al cobrar una sesion de Checkout. */
+function checkoutCompleted(
+  orderId: string,
+  sessionId: string,
+  paymentIntent: string,
+): Record<string, unknown> {
+  return {
+    type: "checkout.session.completed",
+    data: {
+      object: {
+        id: sessionId,
+        client_reference_id: orderId,
+        payment_status: "paid",
+        payment_intent: paymentIntent,
+        amount_total: ORDER_TOTAL_MINOR,
+        currency: "usd",
+        metadata: { order_id: orderId },
+      },
+    },
+  };
+}
+
+/**
+ * Un webhook firmado a partir de un cuerpo YA serializado: para reenviar
+ * exactamente los mismos bytes, como hace Stripe al reintentar.
+ */
+function signedRaw(raw: string): Promise<LightMyRequestResponse> {
+  const created = Math.floor(Date.now() / 1000);
+  return app.inject({
+    method: "POST",
+    url: "/api/v1/webhooks/payments/stripe",
+    headers: {
+      "content-type": "application/json",
+      "stripe-signature": `t=${String(created)},v1=${provider.sign(Buffer.from(raw), created)}`,
+    },
+    payload: raw,
+  });
+}
+
+/** Los numeros del pedido segun el verificador ("mis numeros", DEC-080). */
+async function verifierNumbers(
+  browser: Browser,
+  orderId: string,
+): Promise<{ number: string; active: boolean }[]> {
+  const award = await one<string>(
+    sql`SELECT id FROM entry_transactions
+         WHERE source_type = 'PURCHASE' AND source_ref = ${`order:${orderId}`}`,
+  );
+  const batch = await one<string>(
+    sql`SELECT id FROM entry_batches WHERE entry_transaction_id = ${award}`,
+  );
+  const page = await browser.request(
+    "GET",
+    `/api/v1/account/entry-numbers?promotion_id=${scenario.promotionId}&limit=1000`,
+  );
+  expect(page.statusCode, page.body).toBe(200);
+  const body = page.json<{
+    items: { batch_id: string; numbers: { number: string; active: boolean }[] }[];
+  }>();
+  return body.items.find((item) => item.batch_id === batch)?.numbers ?? [];
+}
+
+describe("comprobante de pago con tarjeta (DEC-103)", () => {
+  let receiptOrder = { orderId: "", sessionId: "", paymentIntent: "" };
+  let paidEventRaw = "";
+
+  it("antes del webhook NO hay comprobante: ni JSON ni PDF dicen pagado", async () => {
+    const { orderId, sessionId } = await openCardCheckout("receipt-card@example.invalid");
+    receiptOrder = { orderId, sessionId, paymentIntent: `pi_${randomUUID().replaceAll("-", "")}` };
+    const buyer = await participantBrowser("receipt-card@example.invalid");
+
+    // Lo que hay al volver de Stripe ANTES de que llegue el webhook: la URL de
+    // vuelta no convierte nada en pagado.
+    const state = await buyer.request("GET", `/api/v1/checkout/sessions/${orderId}`);
+    expect(state.json<{ status: string }>().status).toBe("PENDING");
+
+    for (const path of ["receipt", "receipt.pdf"]) {
+      const response = await buyer.request("GET", `/api/v1/account/orders/${orderId}/${path}`);
+      expect(response.statusCode, path).toBe(409);
+      expect(response.json<{ error: { code: string } }>().error.code).toBe("RECEIPT_NOT_AVAILABLE");
+    }
+    expect(await purchaseAwards(orderId)).toHaveLength(0);
+  });
+
+  it("pago confirmado por el webhook firmado: el retorno lleva al pedido y hay comprobante", async () => {
+    const { orderId, sessionId, paymentIntent } = receiptOrder;
+    paidEventRaw = JSON.stringify({
+      id: `evt_${randomUUID().replaceAll("-", "")}`,
+      created: Math.floor(Date.now() / 1000),
+      ...checkoutCompleted(orderId, sessionId, paymentIntent),
+    });
+    const webhook = await signedRaw(paidEventRaw);
+    expect(webhook.statusCode, webhook.body).toBe(200);
+
+    const buyer = await participantBrowser("receipt-card@example.invalid");
+    // Lo que consulta `/checkout/return` para redirigir a la confirmacion.
+    const state = await buyer.request("GET", `/api/v1/checkout/sessions/${orderId}`);
+    expect(state.json()).toEqual({
+      order_draft_id: orderId,
+      status: "COMPLETED",
+      order_id: orderId,
+    });
+
+    const response = await buyer.request("GET", `/api/v1/account/orders/${orderId}/receipt`);
+    expect(response.statusCode, response.body).toBe(200);
+    expect(response.headers["cache-control"]).toBe("private, no-store");
+    const receipt = response.json<ReceiptBody>();
+    expect(receipt.payment_status).toBe("PAID");
+    expect(receipt.order.status).toBe("PAID");
+    expect(receipt.order.payment_method).toBe("CARD");
+    expect(receipt.order.entry_state).toBe("GRANTED");
+    expect(receipt.order.entries_granted).toBe(EXPECTED_ENTRIES);
+    expect(receipt.customer_name).toBe("Participante receipt-card@example.invalid");
+    expect(Date.parse(receipt.paid_at)).not.toBeNaN();
+    // Sin datos de la tarjeta ni identificadores de Stripe.
+    expect(response.body).not.toMatch(/pi_|cs_test_|last4|"brand"/u);
+  });
+
+  it("los numeros del comprobante son EXACTAMENTE los del verificador", async () => {
+    const buyer = await participantBrowser("receipt-card@example.invalid");
+    const receipt = (
+      await buyer.request(
+        "GET",
+        `/api/v1/account/orders/${receiptOrder.orderId}/receipt?numbers_limit=1000`,
+      )
+    ).json<ReceiptBody>();
+
+    expect(receipt.entry_numbers?.active_count).toBe(EXPECTED_ENTRIES);
+    expect(receipt.entry_numbers?.void_count).toBe(0);
+    expect(receipt.entry_numbers?.numbers).toHaveLength(EXPECTED_ENTRIES);
+    expect(new Set(receipt.entry_numbers?.numbers.map((row) => row.number)).size).toBe(
+      EXPECTED_ENTRIES,
+    );
+    expect(receipt.entry_numbers?.numbers).toEqual(
+      await verifierNumbers(buyer, receiptOrder.orderId),
+    );
+  });
+
+  it("los numeros van por tramos: ninguno repetido ni perdido", async () => {
+    const buyer = await participantBrowser("receipt-card@example.invalid");
+    const seen: string[] = [];
+    let offset: number | null = 0;
+    while (offset !== null) {
+      const page: ReceiptBody = (
+        await buyer.request(
+          "GET",
+          `/api/v1/account/orders/${receiptOrder.orderId}/receipt?numbers_offset=${String(offset)}&numbers_limit=20`,
+        )
+      ).json<ReceiptBody>();
+      expect(page.entry_numbers?.offset).toBe(offset);
+      seen.push(...(page.entry_numbers?.numbers ?? []).map((row) => row.number));
+      offset = page.entry_numbers?.next_offset ?? null;
+    }
+    expect(seen).toHaveLength(EXPECTED_ENTRIES);
+    expect(new Set(seen).size).toBe(EXPECTED_ENTRIES);
+
+    const tooMany = await buyer.request(
+      "GET",
+      `/api/v1/account/orders/${receiptOrder.orderId}/receipt?numbers_limit=5000`,
+    );
+    expect(tooMany.statusCode).toBe(422);
+  });
+
+  it("webhook duplicado (mismo evento y otro evento del mismo cobro): una sola concesion", async () => {
+    const { orderId, sessionId, paymentIntent } = receiptOrder;
+    // El MISMO evento otra vez: ya procesado, se acusa con 202 y no hace nada.
+    const replay = await signedRaw(paidEventRaw);
+    expect(replay.statusCode, replay.body).toBe(202);
+    const other = await signedWebhook(checkoutCompleted(orderId, sessionId, paymentIntent));
+    expect(other.statusCode, other.body).toBe(200);
+
+    expect(await purchaseAwards(orderId)).toHaveLength(1);
+    const buyer = await participantBrowser("receipt-card@example.invalid");
+    const receipt = (
+      await buyer.request("GET", `/api/v1/account/orders/${orderId}/receipt`)
+    ).json<ReceiptBody>();
+    expect(receipt.order.entries_granted).toBe(EXPECTED_ENTRIES);
+    expect(receipt.entry_numbers?.active_count).toBe(EXPECTED_ENTRIES);
+  });
+
+  it("recargar no cambia nada ni concede nada", async () => {
+    const buyer = await participantBrowser("receipt-card@example.invalid");
+    const url = `/api/v1/account/orders/${receiptOrder.orderId}/receipt`;
+    const first = (await buyer.request("GET", url)).body;
+    const ledgerBefore = await count(sql`SELECT count(*)::text FROM entry_transactions`);
+    const batchesBefore = await count(sql`SELECT count(*)::text FROM entry_batches`);
+    for (let index = 0; index < 5; index += 1) {
+      expect((await buyer.request("GET", url)).body).toBe(first);
+      expect((await buyer.request("GET", `${url}.pdf`)).statusCode).toBe(200);
+    }
+    expect(await count(sql`SELECT count(*)::text FROM entry_transactions`)).toBe(ledgerBefore);
+    expect(await count(sql`SELECT count(*)::text FROM entry_batches`)).toBe(batchesBefore);
+  });
+
+  it("el PDF: descarga privada, con los datos del pedido y todos sus numeros", async () => {
+    const buyer = await participantBrowser("receipt-card@example.invalid");
+    const receipt = (
+      await buyer.request(
+        "GET",
+        `/api/v1/account/orders/${receiptOrder.orderId}/receipt?numbers_limit=1000`,
+      )
+    ).json<ReceiptBody>();
+
+    const response = await buyer.request(
+      "GET",
+      `/api/v1/account/orders/${receiptOrder.orderId}/receipt.pdf`,
+    );
+    expect(response.statusCode).toBe(200);
+    expect(response.headers["content-type"]).toBe("application/pdf");
+    expect(response.headers["content-disposition"]).toBe(
+      `attachment; filename="LoneStarWinners-Receipt-${receipt.order.order_number}.pdf"`,
+    );
+    expect(response.headers["cache-control"]).toBe("private, no-store");
+    expect(response.headers["x-content-type-options"]).toBe("nosniff");
+
+    const pdf = response.rawPayload.toString("latin1");
+    expect(pdf.startsWith("%PDF-1.4")).toBe(true);
+    expect(pdf.trimEnd().endsWith("%%EOF")).toBe(true);
+    for (const text of [
+      "(LONE STAR WINNERS LLC)",
+      "(PAYMENT RECEIPT)",
+      `(${receipt.order.order_number})`,
+      "(Participante receipt-card@example.invalid)",
+      "($57.99 USD)",
+      "(Paid)",
+      "(Card)",
+      `(${String(EXPECTED_ENTRIES)})`,
+      "/en/account/entries)",
+      "info@LoneStarWinners.com",
+      "This receipt confirms your purchase.",
+    ]) {
+      expect(pdf, text).toContain(text);
+    }
+    for (const row of receipt.entry_numbers?.numbers ?? []) {
+      expect(pdf).toContain(`(${row.number})`);
+    }
+    expect(pdf).not.toMatch(/pi_|cs_test_/u);
+  });
+
+  it("otro comprador, cambiando el id de la URL, no ve ni descarga nada (404)", async () => {
+    const intruder = await participantBrowser("receipt-other@example.invalid");
+    for (const path of ["receipt", "receipt.pdf"]) {
+      const response = await intruder.request(
+        "GET",
+        `/api/v1/account/orders/${receiptOrder.orderId}/${path}`,
+      );
+      expect(response.statusCode, path).toBe(404);
+      expect(response.body).not.toContain("receipt-card");
+    }
+    // Un id inventado tampoco, y uno mal formado ni llega al handler.
+    expect(
+      (await intruder.request("GET", `/api/v1/account/orders/${randomUUID()}/receipt`)).statusCode,
+    ).toBe(404);
+    expect(
+      (await intruder.request("GET", "/api/v1/account/orders/LSW-00000001/receipt")).statusCode,
+    ).toBeGreaterThanOrEqual(400);
+  });
+
+  it("sin sesion: 401", async () => {
+    for (const path of ["receipt", "receipt.pdf"]) {
+      const response = await app.inject({
+        method: "GET",
+        url: `/api/v1/account/orders/${receiptOrder.orderId}/${path}`,
+      });
+      expect(response.statusCode, path).toBe(401);
+    }
+  });
+
+  it("pago rechazado: sesion FAILED, sin comprobante ni participaciones", async () => {
+    const { orderId, sessionId } = await openCardCheckout("receipt-failed@example.invalid");
+    const failed = await signedWebhook({
+      type: "checkout.session.async_payment_failed",
+      data: {
+        object: {
+          id: sessionId,
+          client_reference_id: orderId,
+          payment_status: "unpaid",
+          amount_total: ORDER_TOTAL_MINOR,
+          currency: "usd",
+          metadata: { order_id: orderId },
+        },
+      },
+    });
+    expect(failed.statusCode, failed.body).toBe(200);
+
+    const buyer = await participantBrowser("receipt-failed@example.invalid");
+    const state = await buyer.request("GET", `/api/v1/checkout/sessions/${orderId}`);
+    expect(state.json<{ status: string }>().status).toBe("FAILED");
+    for (const path of ["receipt", "receipt.pdf"]) {
+      const response = await buyer.request("GET", `/api/v1/account/orders/${orderId}/${path}`);
+      expect(response.statusCode, path).toBe(409);
+    }
+    expect(await purchaseAwards(orderId)).toHaveLength(0);
+  });
+
+  it("pago cancelado (sesion caducada): sin comprobante ni participaciones", async () => {
+    const { orderId, sessionId } = await openCardCheckout("receipt-cancelled@example.invalid");
+    const expired = await signedWebhook({
+      type: "checkout.session.expired",
+      data: {
+        object: {
+          id: sessionId,
+          client_reference_id: orderId,
+          payment_status: "unpaid",
+          amount_total: ORDER_TOTAL_MINOR,
+          currency: "usd",
+          metadata: { order_id: orderId },
+        },
+      },
+    });
+    expect(expired.statusCode, expired.body).toBe(200);
+
+    const buyer = await participantBrowser("receipt-cancelled@example.invalid");
+    const state = await buyer.request("GET", `/api/v1/checkout/sessions/${orderId}`);
+    expect(state.json<{ status: string }>().status).toBe("CANCELLED");
+    for (const path of ["receipt", "receipt.pdf"]) {
+      const response = await buyer.request("GET", `/api/v1/account/orders/${orderId}/${path}`);
+      expect(response.statusCode, path).toBe(409);
+    }
+    expect(await purchaseAwards(orderId)).toHaveLength(0);
+  });
+
+  it("reembolso desde Stripe: el comprobante dice Refunded y los numeros salen anulados", async () => {
+    const { orderId, sessionId } = await openCardCheckout("receipt-refund@example.invalid");
+    const paymentIntent = `pi_${randomUUID().replaceAll("-", "")}`;
+    const paid = await signedWebhook(checkoutCompleted(orderId, sessionId, paymentIntent));
+    expect(paid.statusCode, paid.body).toBe(200);
+
+    const buyer = await participantBrowser("receipt-refund@example.invalid");
+    const before = (
+      await buyer.request("GET", `/api/v1/account/orders/${orderId}/receipt?numbers_limit=1000`)
+    ).json<ReceiptBody>();
+    expect(before.payment_status).toBe("PAID");
+    expect(before.entry_numbers?.active_count).toBe(EXPECTED_ENTRIES);
+
+    const refunded = await signedWebhook({
+      type: "refund.created",
+      data: {
+        object: {
+          id: `re_${randomUUID().replaceAll("-", "")}`,
+          object: "refund",
+          status: "succeeded",
+          amount: ORDER_TOTAL_MINOR,
+          currency: "usd",
+          payment_intent: paymentIntent,
+          metadata: { order_id: orderId },
+        },
+      },
+    });
+    expect(refunded.statusCode, refunded.body).toBe(200);
+
+    const after = (
+      await buyer.request("GET", `/api/v1/account/orders/${orderId}/receipt?numbers_limit=1000`)
+    ).json<ReceiptBody>();
+    expect(after.payment_status).toBe("REFUNDED");
+    expect(after.refunded_total.amount_minor).toBe(String(ORDER_TOTAL_MINOR));
+    expect(after.order.entry_state).toBe("REVERSED");
+    expect(after.order.entries_granted).toBe(0);
+    expect(after.entry_numbers?.active_count).toBe(0);
+    expect(after.entry_numbers?.void_count).toBe(EXPECTED_ENTRIES);
+    // Los MISMOS numeros, ahora anulados; y el verificador dice lo mismo.
+    expect(after.entry_numbers?.numbers.map((row) => row.number)).toEqual(
+      before.entry_numbers?.numbers.map((row) => row.number),
+    );
+    expect(after.entry_numbers?.numbers.every((row) => !row.active)).toBe(true);
+    expect(after.entry_numbers?.numbers).toEqual(await verifierNumbers(buyer, orderId));
+
+    const pdf = (
+      await buyer.request("GET", `/api/v1/account/orders/${orderId}/receipt.pdf`)
+    ).rawPayload.toString("latin1");
+    expect(pdf).not.toContain("(Payment Successful)");
+    expect(pdf).toContain("(Refunded)");
+    expect(pdf).toContain("(No active entry numbers remain for this order.)");
   });
 });

@@ -20,6 +20,7 @@ import {
   checkoutSessionPath,
   officialRulesPath,
   orderPath,
+  orderReceiptPath,
   productPath,
   promotionPath,
 } from "@/lib/api";
@@ -30,6 +31,7 @@ import {
   entrySummary,
   entryNumbersPage,
   entryTransactionPage,
+  grantedOrderReceipt,
   orderDetails,
   orderPage,
   participant,
@@ -269,6 +271,13 @@ export const mockRoutes: readonly MockRoute[] = [
     path: orderPath(order.id),
     body: order,
   })),
+  // DEC-103: comprobante de un pedido cobrado. Los demas no tienen ruta (404) y
+  // la confirmacion pinta su vista de siempre, como con un 409 de la API.
+  {
+    method: "GET",
+    path: orderReceiptPath(grantedOrderReceipt.order.id),
+    body: grantedOrderReceipt,
+  },
 
   // Checkout
   { method: "POST", path: API_PATHS.checkoutSession, body: hostedRedirectSession },

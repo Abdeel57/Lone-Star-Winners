@@ -65,11 +65,14 @@ import {
   checkoutSessionResponseSchema,
   checkoutSessionStateSchema,
   orderDetailSchema,
+  orderReceiptQuerySchema,
+  orderReceiptSchema,
   orderSummarySchema,
   webhookAckSchema,
 } from "../http/schemas-b5.js";
 import { freezeOpenCart } from "../services/cart-freeze.js";
 import { createCashCheckout } from "../services/cash-payments.js";
+import { DAILY_CUT_TIME_ZONE } from "../services/daily-cut.js";
 import { domainServicesFor } from "../services/domain-registry.js";
 import { toCommerceOrder } from "../services/domain-services.js";
 import {
@@ -77,6 +80,12 @@ import {
   presentOrderDetail,
   presentOrderSummary,
 } from "../services/order-presenter.js";
+import {
+  buildOrderReceipt,
+  type NumbersWindow,
+  type OrderReceipt,
+} from "../services/order-receipt.js";
+import { renderReceiptPdf } from "../services/receipt-pdf.js";
 import {
   createPurchaseQualifier,
   settleWithoutQualifying,
@@ -94,6 +103,9 @@ export {
 
 /** Camino de la ruta del webhook. Lo necesita el parser de cuerpo crudo. */
 export const PAYMENT_WEBHOOK_URL = "/api/v1/webhooks/payments/:provider";
+
+/** DEC-103: el mismo buzon que la web ensena en sus mensajes de ayuda. */
+const RECEIPT_CONTACT_EMAIL = "info@LoneStarWinners.com";
 
 const UUID_SHAPE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
 
@@ -225,6 +237,32 @@ export function buildOrdersRoutes(dependencies: AppDependencies): RouteDefinitio
   // efectivo. Ver la cabecera de `services/purchase-qualification.ts`.
   const qualifier = createPurchaseQualifier(dependencies, domain);
   const cashCheckout = createCashCheckout(dependencies, domain);
+
+  /**
+   * DEC-103: el comprobante de un pedido del participante de la sesion.
+   *
+   * 404 si el pedido no es suyo -el `participantId` va en el `WHERE`, asi que
+   * cambiar el identificador en la URL no lleva al pedido de otro- y 409 si no
+   * esta cobrado: un pedido pendiente o fallido nunca se presenta como pagado.
+   */
+  async function receiptFor(
+    request: FastifyRequest,
+    window: NumbersWindow | null,
+  ): Promise<OrderReceipt> {
+    const principal = await requirePrincipal(request);
+    const params = request.params as z.infer<typeof orderIdParamsSchema>;
+
+    const order = await orders.findForParticipant(params.order_id, principal.participantId);
+    if (order === null) {
+      throw new ApiError({ statusCode: 404, code: "ORDER_NOT_FOUND" });
+    }
+
+    const outcome = await buildOrderReceipt(domain, order, window);
+    if (outcome.kind === "unavailable") {
+      throw new ApiError({ statusCode: 409, code: "RECEIPT_NOT_AVAILABLE" });
+    }
+    return outcome.receipt;
+  }
 
   /**
    * Procesa un evento ya verificado y normalizado.
@@ -929,6 +967,77 @@ export function buildOrdersRoutes(dependencies: AppDependencies): RouteDefinitio
         }
 
         return await presentOrderDetail(domain, order);
+      },
+    },
+
+    {
+      method: "GET",
+      url: "/api/v1/account/orders/:order_id/receipt",
+      operationId: "getAccountOrderReceipt",
+      summary: "Comprobante de pago de un pedido propio (DEC-103).",
+      description:
+        "Solo de un pedido COBRADO: `paid_at` lo escribe el webhook firmado de la pasarela, nunca la URL de vuelta. De un pedido pendiente, fallido o cancelado responde 409 `RECEIPT_NOT_AVAILABLE`. De un pedido ajeno, 404 (el `participantId` va en el `WHERE`). `payment_status` refleja devoluciones y contracargos en cada lectura, y `entry_numbers` son solo los de este pedido, con la misma vigencia que `GET /account/entry-numbers`. Leer no genera ni asigna participaciones.",
+      tags: ["portal"],
+      authorization: { kind: "PERMISSION", permission: "order.self.read" },
+      schema: {
+        params: orderIdParamsSchema,
+        querystring: orderReceiptQuerySchema,
+        response: {
+          200: orderReceiptSchema,
+          401: errorEnvelopeSchema,
+          404: errorEnvelopeSchema,
+          409: errorEnvelopeSchema,
+        },
+      },
+      handler: async (request, reply) => {
+        const query = request.query as z.infer<typeof orderReceiptQuerySchema>;
+        const receipt = await receiptFor(request, {
+          offset: query.numbers_offset,
+          limit: query.numbers_limit,
+        });
+        void reply.header("cache-control", "private, no-store");
+        return receipt;
+      },
+    },
+
+    {
+      method: "GET",
+      url: "/api/v1/account/orders/:order_id/receipt.pdf",
+      operationId: "downloadAccountOrderReceipt",
+      summary: "Comprobante de pago en PDF (DEC-103).",
+      description:
+        "El mismo comprobante que `GET …/receipt`, en PDF, generado en el servidor con los datos verificados. Mismas reglas: solo el dueno (404 si no) y solo pedidos cobrados (409 si no). `Content-Disposition: attachment` y `no-store`.",
+      tags: ["portal"],
+      authorization: { kind: "PERMISSION", permission: "order.self.read" },
+      binaryResponses: { 200: ["application/pdf"] },
+      schema: {
+        params: orderIdParamsSchema,
+        response: {
+          401: errorEnvelopeSchema,
+          404: errorEnvelopeSchema,
+          409: errorEnvelopeSchema,
+        },
+      },
+      handler: async (request, reply) => {
+        // El PDF lleva TODOS los numeros del pedido: es el documento que se guarda.
+        const receipt = await receiptFor(request, null);
+        const website = new URL(dependencies.config.web.publicUrl);
+        const pdf = renderReceiptPdf({
+          receipt,
+          verifierUrl: new URL("/en/account/entries", website).toString(),
+          websiteUrl: website.host,
+          contactEmail: RECEIPT_CONTACT_EMAIL,
+          timeZone: DAILY_CUT_TIME_ZONE,
+        });
+        // El numero de pedido es `LSW-` y digitos; aun asi se filtra antes de
+        // ponerlo en una cabecera.
+        const fileName = `LoneStarWinners-Receipt-${receipt.order.order_number.replace(/[^A-Za-z0-9-]/gu, "")}.pdf`;
+        return reply
+          .header("content-type", "application/pdf")
+          .header("content-disposition", `attachment; filename="${fileName}"`)
+          .header("x-content-type-options", "nosniff")
+          .header("cache-control", "private, no-store")
+          .send(pdf);
       },
     },
 

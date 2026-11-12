@@ -186,6 +186,30 @@ export function formatZonedDateTime(
 }
 
 /**
+ * Fecha y hora SIN segundos y con el nombre corto de la zona:
+ * "November 10, 2026 at 1:00 PM MST" (DEC-103, comprobante de pago). Es la
+ * misma forma que imprime el PDF, para que pantalla y documento coincidan.
+ */
+export function formatZonedPaymentTime(
+  isoInstant: string,
+  locale: Locale,
+  timeZone: string,
+): string | null {
+  const date = toDate(isoInstant);
+  if (date === null) return null;
+
+  return new Intl.DateTimeFormat(localeTag(locale), {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZoneName: "short",
+    timeZone,
+  }).format(date);
+}
+
+/**
  * Solo la hora de un instante en una zona: "2:35 p.m." (DEC-085).
  *
  * Para el corte de caja, donde el dia ya esta escrito arriba y repetirlo en

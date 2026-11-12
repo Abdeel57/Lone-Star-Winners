@@ -330,6 +330,47 @@ export const entryNumbersPageSchema = z.object({
   next_cursor: z.string().nullable(),
 });
 
+/**
+ * DEC-103: comprobante de pago de UN pedido del propio participante.
+ *
+ * Solo existe para un pedido COBRADO (`paid_at` no nulo): de uno pendiente,
+ * fallido o cancelado la API responde 409 y nada se pinta como pago correcto.
+ * `payment_status` sale de la misma proyeccion que `status`, asi que una
+ * devolucion o un contracargo cambian el comprobante en la siguiente lectura.
+ * `entry_numbers` son SOLO los de este pedido, con la misma regla de vigencia
+ * que `GET /account/entry-numbers`; `null` si el flag DEC-080 esta apagado o el
+ * pedido todavia no tiene participaciones.
+ */
+export const orderReceiptSchema = z.object({
+  order: orderDetailSchema,
+  payment_status: z.enum(["PAID", "PARTIALLY_REFUNDED", "REFUNDED", "CHARGEBACK", "VOIDED"]),
+  paid_at: z.string(),
+  /** Nombre de la cuenta o, si no hay, el de la direccion del pedido. */
+  customer_name: z.string().nullable(),
+  refunded_total: moneySchema,
+  entry_numbers: z
+    .object({
+      digits: z.number().int(),
+      active_count: z.number().int(),
+      void_count: z.number().int(),
+      /**
+       * Un TRAMO de la lista: los vigentes primero y despues los anulados, cada
+       * uno como cadena (DEC-010). Empieza en `offset`; `next_offset` es el
+       * siguiente tramo o `null` si no hay mas. Un pedido con miles de
+       * participaciones no se manda -ni se pinta- de una vez.
+       */
+      offset: z.number().int(),
+      next_offset: z.number().int().nullable(),
+      numbers: z.array(entryNumberSchema),
+    })
+    .nullable(),
+});
+
+export const orderReceiptQuerySchema = z.object({
+  numbers_offset: z.coerce.number().int().min(0).default(0),
+  numbers_limit: z.coerce.number().int().min(1).max(1000).default(200),
+});
+
 export const awardHoldSchema = z.object({
   id: z.uuid(),
   order_id: z.uuid(),

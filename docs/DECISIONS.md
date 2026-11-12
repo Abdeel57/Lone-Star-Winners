@@ -5044,3 +5044,54 @@ Afecta a: `apps/web` (`lib/account-promotion.ts`,
 
 Proposed by: sesión del usuario (2026-11-09, petición del cliente)
 Agreed by: frontend-ux (petición directa del usuario)
+
+## DEC-103
+
+Status: Accepted
+
+Date: 2026-11-11
+
+Decision:
+**Comprobante de pago digital: pantalla de pago correcto, PDF y numeros del
+pedido, sin tocar el cobro ni las participaciones.** Lo encargo el cliente: al
+pagar con tarjeta en Stripe, el comprador vuelve a la tienda, ve su comprobante
+con sus participaciones, lo descarga en PDF y va al verificador.
+
+El retorno de Stripe NO cambia: `/checkout/return?draft=` pregunta al backend
+y, cuando el webhook firmado ya registro el cobro, redirige a
+`/orders/{id}/confirmation`. Esa pagina pinta ahora el comprobante si la API lo
+da: "✅ Payment Successful!", numero de pedido, fecha de pago (hora de Nuevo
+Mexico, como el corte), nombre, productos, importe, estado, forma de pago,
+participaciones y sus numeros por tramos de 200, y los botones Download Receipt,
+Verify My Entries (`/account/entries`, el verificador de DEC-080) y Back to
+Home. Si el pedido no esta cobrado, la API responde 409 y la pagina sigue como
+antes: nada pendiente, fallido o cancelado se pinta como pagado.
+
+`GET /account/orders/:id/receipt` y `…/receipt.pdf`: solo el dueno (el
+participante va en el `WHERE`; un id ajeno da 404) y solo pedidos con
+`paid_at`. El estado sale de la proyeccion de siempre, asi que una devolucion o
+un contracargo se ven en la siguiente lectura y sus numeros salen anulados. Los
+numeros son los del lote de la compra de ESE pedido, con la vigencia calculada
+sobre todo el ledger del participante, igual que "mis numeros".
+
+El PDF se genera en el servidor, escrito a mano con las fuentes estandar de PDF
+(sin dependencias nuevas): cabecera "LONE STAR WINNERS LLC / PAYMENT RECEIPT",
+los datos del pedido, todos sus numeros, el enlace al verificador, el contacto
+(info@LoneStarWinners.com) y el pie que pidio el cliente. Va en ingles. La web lo
+sirve en `/receipts/{id}.pdf` reenviando la cookie, y se puede volver a
+descargar desde la ficha del pedido.
+
+La pantalla tiene textos en ingles y en espanol: el cliente pidio ingles, y en
+`/en` es exactamente su texto; quien navega en `/es` la ve en espanol, como el
+resto del sitio (DEC-030).
+
+Consecuencias: no hay migraciones, ni variables de entorno, ni cambios en Stripe
+ni en su Dashboard, ni en la concesion de participaciones. Leer un comprobante no
+escribe nada. No se guarda ningun dato nuevo.
+Afecta a: `apps/api` (`services/order-receipt.ts`, `services/receipt-pdf.ts`,
+`routes/orders.ts`, `http/schemas-b5.ts`, OpenAPI), `apps/web`
+(`components/payment-receipt.tsx`, `app/receipts/[file]/route.ts`, confirmacion
+y ficha del pedido, mensajes) y pruebas.
+
+Proposed by: sesion del usuario (2026-11-11, encargo del cliente)
+Agreed by: backend, frontend-ux (peticion directa del usuario)

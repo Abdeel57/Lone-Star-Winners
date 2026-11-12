@@ -1930,6 +1930,8 @@ que compara el test de contrato contra `apps/api/openapi/route-manifest.json`.
 | POST   | /api/v1/checkout/cash-order                                                         | `PARTICIPANT_SELF`           |
 | GET    | /api/v1/account/orders                                                              | `order.self.read`            |
 | GET    | /api/v1/account/orders/:order_id                                                    | `order.self.read`            |
+| GET    | /api/v1/account/orders/:order_id/receipt                                            | `order.self.read`            |
+| GET    | /api/v1/account/orders/:order_id/receipt.pdf                                        | `order.self.read`            |
 | POST   | /api/v1/webhooks/payments/:provider                                                 | `PUBLIC`                     |
 | GET    | /api/v1/account/entry-summary                                                       | `entry.self.read`            |
 | GET    | /api/v1/account/entry-transactions                                                  | `entry.self.read`            |
@@ -2396,6 +2398,69 @@ final_entries, trace } leído del EntryCalculationSnapshot persistido, con la
 versión de motor de ESE movimiento y no la vigente hoy.
 
 Errors: 404 ORDER_NOT_FOUND
+
+Authorization: order.self.read
+
+Owner: backend
+
+Status: IMPLEMENTED
+```
+
+```text
+Method: GET
+Endpoint: /api/v1/account/orders/{order_id}/receipt
+
+Purpose: comprobante de pago de un pedido propio (DEC-103). Es lo que pinta la
+confirmacion del pedido al volver de Stripe.
+
+Query: numbers_offset (>= 0, por defecto 0), numbers_limit (1-1000, por
+defecto 200). Solo afectan al tramo de `entry_numbers.numbers`.
+
+Response: 200 { order: OrderDetail, payment_status, paid_at, customer_name,
+refunded_total, entry_numbers }
+
+payment_status: PAID | PARTIALLY_REFUNDED | REFUNDED | CHARGEBACK | VOIDED, de la
+misma proyeccion que `status` (FULFILLED cuenta como PAID). Cambia con una
+devolucion o un contracargo en la siguiente lectura.
+
+paid_at: el instante del cobro que registro el webhook firmado (o el cobro en
+efectivo del personal). La URL de vuelta de Stripe no lo escribe.
+
+customer_name: nombre de la cuenta o, si falta, el de la direccion del pedido;
+null si no hay ninguno. Sin datos de la tarjeta ni identificadores de Stripe.
+
+entry_numbers: null si visible_entry_numbers_enabled esta apagado o el pedido
+no tiene participaciones. Si no, { digits, active_count, void_count, offset,
+next_offset, numbers[{ number, active }] }: SOLO los numeros de este pedido, los
+vigentes primero y despues los anulados, con la misma vigencia que
+GET /api/v1/account/entry-numbers. Leer no genera ni asigna nada.
+
+Cache-Control: private, no-store
+
+Errors: 401, 404 ORDER_NOT_FOUND (tambien si el pedido es de otro),
+409 RECEIPT_NOT_AVAILABLE (pedido sin cobrar: pendiente, fallido o cancelado),
+422 VALIDATION_FAILED
+
+Authorization: order.self.read
+
+Owner: backend
+
+Status: IMPLEMENTED
+```
+
+```text
+Method: GET
+Endpoint: /api/v1/account/orders/{order_id}/receipt.pdf
+
+Purpose: el mismo comprobante en PDF (DEC-103), tamaño carta y en ingles, con
+TODOS los numeros del pedido. Lo pide la web desde /receipts/{order_id}.pdf
+reenviando la cookie de sesion; el navegador no llama a la API.
+
+Response: 200 application/pdf, Content-Disposition: attachment;
+filename="LoneStarWinners-Receipt-<order_number>.pdf", Cache-Control: private,
+no-store, X-Content-Type-Options: nosniff.
+
+Errors: 401, 404 ORDER_NOT_FOUND, 409 RECEIPT_NOT_AVAILABLE
 
 Authorization: order.self.read
 
