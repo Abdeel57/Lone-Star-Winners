@@ -42,8 +42,11 @@ export interface LegalDocument {
    * cuando alguien acepta el documento.
    */
   readonly version: string;
-  /** Los documentos del abogado solo existen en ingles. */
-  readonly language: "en-US";
+  /**
+   * Los documentos del abogado existen en ingles. DEC-104: los Terminos de la
+   * Segunda Edicion llegaron tambien en espanol, como traduccion.
+   */
+  readonly language: "en-US" | "es-US";
   readonly title: string;
   /** La linea tal como la escribe el documento. */
   readonly lastUpdated: string;

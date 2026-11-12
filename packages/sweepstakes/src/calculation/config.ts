@@ -195,6 +195,21 @@ export const purchaseEntryFormulaSchema = z
        */
       rates: entryRatesByProductKindSchema,
       /**
+       * DEC-104: participaciones FIJAS por unidad para SKUs concretos, que
+       * sustituyen a la tasa de su tipo. Es lo que dicen las Reglas de la
+       * segunda edicion: "participaciones fijas por paquete" (Bronce $15 = 20,
+       * Diamante $200 = 500), cifras que ninguna tasa unica por dolar produce.
+       *
+       * OPCIONAL: sin esta clave el calculo es identico al de antes, y las
+       * versiones de reglas ya activas no cambian ni en una participacion. Un
+       * SKU de la lista es elegible aunque su tipo no tenga tasa (`null`); uno
+       * que no este en la lista sigue la tasa de su tipo. Los multiplicadores
+       * se aplican igual que sobre una tasa.
+       */
+      fixed_entries_per_unit_by_sku: z
+        .record(z.string().min(1).max(100), nonNegativeInt)
+        .optional(),
+      /**
        * UNA SOLA politica de redondeo para el pedido entero, no una por tipo.
        *
        * El redondeo del motor ocurre UNA VEZ, al final, sobre la fraccion
@@ -227,7 +242,8 @@ export const purchaseEntryFormulaSchema = z
   .superRefine((formula, ctx) => {
     if (formula.mode === "ENTRIES_PER_CURRENCY_UNIT_BY_PRODUCT_KIND") {
       const declared = PRODUCT_KINDS.filter((kind) => formula.rates[kind] !== null);
-      if (declared.length === 0) {
+      const fixedSkus = Object.keys(formula.fixed_entries_per_unit_by_sku ?? {});
+      if (declared.length === 0 && fixedSkus.length === 0) {
         ctx.addIssue({
           code: "custom",
           path: ["rates"],

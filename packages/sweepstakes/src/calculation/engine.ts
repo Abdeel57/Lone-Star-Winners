@@ -569,8 +569,19 @@ export function calculateEntries(input: CalculationInput, rawConfig: unknown): C
    * pedido. Resolverla mas tarde obligaria a restar despues, y un subtotal que
    * se corrige a posteriori es un subtotal del que hay que fiarse dos veces.
    */
-  const eligible: { readonly item: CalculationItemInput; readonly rate: EntryRateConfig | null }[] =
-    [];
+  const eligible: {
+    readonly item: CalculationItemInput;
+    readonly rate: EntryRateConfig | null;
+    /** DEC-104: participaciones fijas por unidad de este SKU, o `null`. */
+    readonly fixedPerUnit: number | null;
+  }[] = [];
+
+  // DEC-104: las cifras fijas por SKU sustituyen a la tasa de su tipo.
+  const fixedBySku = new Map<string, number>(
+    formula.mode === "ENTRIES_PER_CURRENCY_UNIT_BY_PRODUCT_KIND"
+      ? Object.entries(formula.fixed_entries_per_unit_by_sku ?? {})
+      : [],
+  );
   const ineligibleItems: IneligibleItemBreakdown[] = [];
 
   for (const item of orderedItems) {
@@ -592,6 +603,11 @@ export function calculateEntries(input: CalculationInput, rawConfig: unknown): C
       });
       continue;
     }
+    const fixedPerUnit = fixedBySku.get(item.sku);
+    if (fixedPerUnit !== undefined) {
+      eligible.push({ item, rate: null, fixedPerUnit });
+      continue;
+    }
     const resolution = resolveRate(formula, item.productKind);
     if (resolution.outcome === "PRODUCT_KIND_NOT_RATED") {
       ineligibleItems.push({
@@ -602,7 +618,11 @@ export function calculateEntries(input: CalculationInput, rawConfig: unknown): C
       });
       continue;
     }
-    eligible.push({ item, rate: resolution.outcome === "RATE" ? resolution.rate : null });
+    eligible.push({
+      item,
+      rate: resolution.outcome === "RATE" ? resolution.rate : null,
+      fixedPerUnit: null,
+    });
   }
 
   let eligibleSubtotalMinor = 0n;
@@ -687,11 +707,14 @@ export function calculateEntries(input: CalculationInput, rawConfig: unknown): C
       });
     }
   } else {
-    for (const { item, rate } of eligible) {
+    for (const { item, rate, fixedPerUnit } of eligible) {
       const lineSubtotal = item.unitAmountMinor * BigInt(item.quantity);
 
       let base: Fraction;
-      if (formula.mode === "FIXED_PER_PRODUCT") {
+      if (fixedPerUnit !== null) {
+        // DEC-104: cifra fija por unidad de este SKU.
+        base = { numerator: BigInt(fixedPerUnit) * BigInt(item.quantity), denominator: 1n };
+      } else if (formula.mode === "FIXED_PER_PRODUCT") {
         // El unico modo por linea que no se expresa por importe.
         base = {
           numerator: BigInt(formula.entries_per_unit) * BigInt(item.quantity),

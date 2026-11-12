@@ -5095,3 +5095,43 @@ y ficha del pedido, mensajes) y pruebas.
 
 Proposed by: sesion del usuario (2026-11-11, encargo del cliente)
 Agreed by: backend, frontend-ux (peticion directa del usuario)
+
+## DEC-104
+
+Status: Accepted
+
+Date: 2026-11-12
+
+Decision:
+**Segunda Edición: paquetes con participaciones fijas y Términos en español.**
+Las Reglas Oficiales de la Segunda Edición (12-nov a 20-dic de 2026, hora de la
+montaña) dan 1 participación por cada $1.00 completo de mercancía y cifras FIJAS
+por paquete: Bronce $15 = 20, Plata $50 = 100, Oro $100 = 200, Diamante $200 = 500. Ninguna tasa única por dólar produce esas cifras.
+
+El motor acepta en `ENTRIES_PER_CURRENCY_UNIT_BY_PRODUCT_KIND` una clave
+opcional, `fixed_entries_per_unit_by_sku`: participaciones por unidad para SKUs
+concretos, que sustituyen a la tasa de su tipo. Un SKU de la lista es elegible
+aunque su tipo no tenga tasa; los multiplicadores se aplican igual. Sin la clave,
+el cálculo es idéntico al anterior: la versión de reglas de la primera edición
+no cambia. La versión de motor no sube porque ningún resultado previo cambia.
+
+Los Términos y Condiciones de la Segunda Edición llegaron solo en español: se
+publican en `/es/terms` tal cual (versión 2026-11-12). `/en/terms` sigue con el
+texto del abogado (2026-09-30), que según el propio documento prevalece. El
+consentimiento del registro sigue registrando la versión 2026-09-30.
+
+La edición se crea y se activa con los scripts de `carga-edicion-2/` (fuera del
+repositorio), que ejecuta el personal con su sesión.
+
+Consecuencias: el texto en inglés de las Reglas de la Segunda Edición es una
+traducción del PDF en español del cliente y debe revisarlo el abogado. Las
+Reglas exigen publicar VIN, millaje y valor de los vehículos antes de ofrecer el
+premio. Al activarse la edición, "Mis participaciones" pasa a mostrarla
+(DEC-102); los números de la primera edición siguen en el comprobante de cada
+pedido (DEC-103).
+Afecta a: `packages/sweepstakes` (`calculation/config.ts`, `calculation/engine.ts`,
+pruebas), `apps/web` (`legal/terms-and-conditions-es.ts`, página de Términos,
+vista de documentos legales).
+
+Proposed by: sesión del usuario (2026-11-12, petición del cliente)
+Agreed by: backend, frontend-ux (petición directa del usuario)

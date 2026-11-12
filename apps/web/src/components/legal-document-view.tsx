@@ -21,7 +21,7 @@ import type { LegalBlock, LegalDocument, LegalRun } from "@/legal/types";
  */
 export function LegalDocumentView({ document }: { readonly document: LegalDocument }) {
   return (
-    <article lang="en" className="flex flex-col gap-s5">
+    <article lang={document.language === "es-US" ? "es" : "en"} className="flex flex-col gap-s5">
       {document.blocks.map((block, index) => (
         <Block key={index} block={block} />
       ))}

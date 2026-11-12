@@ -50,7 +50,9 @@ export async function LegalPage({
             <p className="text-body-sm text-text-muted">{t("effective", { date: effective })}</p>
           )}
 
-          {locale === "en" ? null : <Alert tone="info">{t("englishOnly")}</Alert>}
+          {locale === "en" || document.language !== "en-US" ? null : (
+            <Alert tone="info">{t("englishOnly")}</Alert>
+          )}
         </div>
 
         <div className="mt-s8 border-t border-border pt-s8">
